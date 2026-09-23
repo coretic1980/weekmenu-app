@@ -1,4 +1,4 @@
-# Weekmenu App — standalone deployment
+# Balanza — standalone deployment
 
 Losstaande versie van de weekmenu-app. Geen build-stap, geen npm-dependencies
 (gebruikt alleen Node's ingebouwde modules) — één server, één API-key.

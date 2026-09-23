@@ -5,13 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Weekmenu">
+<meta name="apple-mobile-web-app-title" content="Balanza">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="theme-color" content="#16305C">
+<meta name="theme-color" content="#0E1A30">
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
-<title>Weekmenu</title>
+<title>Balanza</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Public+Sans:wght@400;500;600;700&display=swap">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
@@ -19,57 +19,57 @@
     box-sizing: border-box;
     padding-top: env(safe-area-inset-top, 0px);
     padding-bottom: env(safe-area-inset-bottom, 0px);
-    --bg: #EEF5EA;
-    --surface: #FFFFFF;
-    --ink: #16233F;
-    --muted: #5B6478;
-    --label: #8892A6;
-    --line: #C7D3E5;
-    --accent: #16305C;
-    --accent-ink: #FFFFFF;
-    --accent2: #F5821F;
-    --accent2-ink: #3A1E00;
-    --tag-kh-bg: #E8EEF7; --tag-kh-ink: #1E3A66;
-    --tag-eiwit-bg: #EEF0F4; --tag-eiwit-ink: #3A4257;
-    --tag-vet-bg: #FDECDA; --tag-vet-ink: #B4590A;
-    --dark-panel: #0F1E38;
-    --dark-panel-ink: #FFFFFF;
+    --bg: #F7F2E7;
+    --surface: #FFFDF8;
+    --ink: #10182B;
+    --muted: #6B6152;
+    --label: #8C8270;
+    --line: #E7DFCC;
+    --accent: #0E1A30;
+    --accent-ink: #F7F2E7;
+    --accent2: #B8863B;
+    --accent2-ink: #2A1C00;
+    --tag-kh-bg: #E9E7DE; --tag-kh-ink: #10182B;
+    --tag-eiwit-bg: #EDEAE1; --tag-eiwit-ink: #4A4438;
+    --tag-vet-bg: #F3E6D0; --tag-vet-ink: #8A6220;
+    --dark-panel: #0A1120;
+    --dark-panel-ink: #F7F2E7;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-      --bg: #0E1610;
-      --surface: #16201A;
-      --ink: #F2F4F8;
-      --muted: #A7B0C2;
-      --label: #8892A6;
-      --line: #263A2C;
-      --accent: #4F7FD1;
-      --accent-ink: #0B1120;
-      --accent2: #FF9E45;
-      --accent2-ink: #2A1500;
-      --tag-kh-bg: #1B2C4A; --tag-kh-ink: #B9CDEE;
-      --tag-eiwit-bg: #232A3D; --tag-eiwit-ink: #C9CEDC;
-      --tag-vet-bg: #3A2A15; --tag-vet-ink: #FFCB93;
-      --dark-panel: #060B16;
-      --dark-panel-ink: #F2F4F8;
+      --bg: #14110C;
+      --surface: #1E1A13;
+      --ink: #F3EEE2;
+      --muted: #B3A991;
+      --label: #8C8270;
+      --line: #33291B;
+      --accent: #C6A15B;
+      --accent-ink: #14110C;
+      --accent2: #D4A24A;
+      --accent2-ink: #241800;
+      --tag-kh-bg: #23241E; --tag-kh-ink: #DCD7C6;
+      --tag-eiwit-bg: #221F19; --tag-eiwit-ink: #D6CFBC;
+      --tag-vet-bg: #302512; --tag-vet-ink: #E8C583;
+      --dark-panel: #0A0805;
+      --dark-panel-ink: #F3EEE2;
     }
   }
   :root[data-theme="dark"] {
-    --bg: #0E1610;
-    --surface: #16201A;
-    --ink: #F2F4F8;
-    --muted: #A7B0C2;
-    --label: #8892A6;
-    --line: #263A2C;
-    --accent: #4F7FD1;
-    --accent-ink: #0B1120;
-    --accent2: #FF9E45;
-    --accent2-ink: #2A1500;
-    --tag-kh-bg: #1B2C4A; --tag-kh-ink: #B9CDEE;
-    --tag-eiwit-bg: #232A3D; --tag-eiwit-ink: #C9CEDC;
-    --tag-vet-bg: #3A2A15; --tag-vet-ink: #FFCB93;
-    --dark-panel: #060B16;
-    --dark-panel-ink: #F2F4F8;
+    --bg: #14110C;
+    --surface: #1E1A13;
+    --ink: #F3EEE2;
+    --muted: #B3A991;
+    --label: #8C8270;
+    --line: #33291B;
+    --accent: #C6A15B;
+    --accent-ink: #14110C;
+    --accent2: #D4A24A;
+    --accent2-ink: #241800;
+    --tag-kh-bg: #23241E; --tag-kh-ink: #DCD7C6;
+    --tag-eiwit-bg: #221F19; --tag-eiwit-ink: #D6CFBC;
+    --tag-vet-bg: #302512; --tag-vet-ink: #E8C583;
+    --dark-panel: #0A0805;
+    --dark-panel-ink: #F3EEE2;
   }
   html, body { height: 100%; }
   html { scroll-padding-top: env(safe-area-inset-top, 0px); }
@@ -92,13 +92,13 @@
   }
   .backbtn {
     appearance: none; border: 1px solid var(--line); background: var(--surface); color: var(--ink);
-    width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center;
+    width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center;
     cursor: pointer; flex: none;
   }
-  .backbtn:hover { border-color: var(--accent); }
-  .topbar h1 { font-family: "Fraunces", serif; font-weight: 700; font-size: 21px; margin: 0; flex: 1; }
-  main { flex: 1; padding: 24px 20px 64px; display: flex; flex-direction: column; gap: 16px; }
-  .eyebrow { font-size: 12px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); }
+  .backbtn:hover { border-color: var(--accent2); color: var(--accent2); }
+  .topbar h1 { font-family: "Fraunces", serif; font-weight: 700; font-size: 22px; margin: 0; flex: 1; letter-spacing: -0.01em; }
+  main { flex: 1; padding: 26px 22px 64px; display: flex; flex-direction: column; gap: 20px; }
+  .eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: var(--accent); }
   .dish-thumb {
     width: 100%; height: 140px; object-fit: cover; border-radius: 12px; background: var(--bg);
     display: block; margin: -4px 0 2px;
@@ -109,14 +109,14 @@
   }
   .photo-credit { font-size: 11px; color: var(--muted); margin-top: -8px; display: none; }
   .card {
-    background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 22px;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 13px; padding: 26px;
     display: flex; flex-direction: column; gap: 10px; text-align: left; cursor: pointer;
     font-family: inherit; color: inherit; width: 100%;
-    box-shadow: 0 1px 2px rgba(22, 35, 63, 0.04);
+    box-shadow: 0 2px 14px rgba(20, 16, 8, 0.055);
   }
   button.card { appearance: none; }
-  .card:hover { border-color: var(--accent); }
-  .card h2 { font-family: "Fraunces", serif; font-weight: 600; font-size: 22px; margin: 0; }
+  .card:hover { border-color: var(--accent2); }
+  .card h2 { font-family: "Fraunces", serif; font-weight: 600; font-size: 24px; margin: 0; letter-spacing: -0.01em; }
   .card .sub { color: var(--muted); font-size: 14px; }
   .tagrow { display: flex; gap: 8px; flex-wrap: wrap; }
   .tag { display: inline-flex; align-items: center; padding: 5px 12px; border-radius: 999px; font-size: 12.5px; font-weight: 600; }
@@ -125,22 +125,23 @@
   .tag.eiwit { background: var(--tag-eiwit-bg); color: var(--tag-eiwit-ink); }
   .tag.vet { background: var(--tag-vet-bg); color: var(--tag-vet-ink); }
   .tag.balans { background: var(--accent2); color: var(--accent2-ink); }
-  .section-label { font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--label); margin: 4px 0 4px; }
-  .prepcard { background: var(--dark-panel); color: var(--dark-panel-ink); border-radius: 18px; padding: 22px; display: flex; flex-direction: column; gap: 10px; cursor: pointer; border: none; text-align: left; width: 100%; font-family: inherit; }
-  .prepcard h2 { font-family: "Fraunces", serif; font-weight: 600; font-size: 22px; margin: 0; color: inherit; }
+  .section-label { font-size: 11px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: var(--label); margin: 4px 0 4px; }
+  .prepcard { background: var(--dark-panel); color: var(--dark-panel-ink); border-radius: 13px; padding: 26px; display: flex; flex-direction: column; gap: 10px; cursor: pointer; border: none; text-align: left; width: 100%; font-family: inherit; }
+  .prepcard h2 { font-family: "Fraunces", serif; font-weight: 600; font-size: 24px; margin: 0; color: inherit; }
   .ingr-list { margin: 0; padding-left: 18px; font-size: 15px; line-height: 1.8; }
   .plainbox { font-size: 15px; line-height: 1.7; }
   .primary-btn {
     appearance: none; border: none; background: var(--accent); color: var(--accent-ink);
-    font-family: "Public Sans", sans-serif; font-weight: 700; font-size: 15px;
-    padding: 15px 22px; border-radius: 14px; cursor: pointer; width: 100%;
+    font-family: "Public Sans", sans-serif; font-weight: 700; font-size: 15px; letter-spacing: 0.01em;
+    padding: 15px 22px; border-radius: 11px; cursor: pointer; width: 100%;
   }
-  .primary-btn:hover { filter: brightness(1.06); }
+  .primary-btn:hover { filter: brightness(1.1); }
   .ghost-btn {
     appearance: none; border: 1px solid var(--line); background: transparent; color: var(--ink);
     font-family: "Public Sans", sans-serif; font-weight: 600; font-size: 15px;
-    padding: 13px 20px; border-radius: 14px; cursor: pointer;
+    padding: 13px 20px; border-radius: 11px; cursor: pointer;
   }
+  .ghost-btn:hover { border-color: var(--accent2); color: var(--accent2); }
   .cook-progress { display: flex; gap: 6px; }
   .cook-dot { flex: 1; height: 5px; border-radius: 999px; background: var(--line); }
   .cook-dot.done { background: var(--accent); }
@@ -157,11 +158,16 @@
   .empty-hint { color: var(--muted); font-size: 14px; text-align: center; padding: 40px 0; }
   .busybar {
     position: fixed; left: 0; right: 0; bottom: env(safe-area-inset-bottom, 0px);
-    height: 3px; overflow: hidden; background: transparent;
+    display: flex; flex-direction: column; align-items: center; gap: 0;
     opacity: 0; pointer-events: none; transition: opacity 0.25s ease;
     z-index: 50;
   }
   .busybar.active { opacity: 1; }
+  .busybar-text {
+    background: var(--ink); color: var(--bg); font-size: 12.5px; font-weight: 600;
+    padding: 6px 14px; border-radius: 999px 999px 0 0; margin-bottom: -1px;
+  }
+  .busybar-track { position: relative; width: 100%; height: 3px; overflow: hidden; background: var(--line); }
   .busybar-fill {
     position: absolute; top: 0; bottom: 0; width: 40%; left: -40%;
     background: var(--accent);
@@ -172,6 +178,39 @@
     50% { left: 60%; }
     100% { left: 100%; }
   }
+  .toast {
+    position: fixed; top: calc(env(safe-area-inset-top, 0px) + 12px); left: 50%;
+    transform: translateX(-50%) translateY(-20px);
+    max-width: min(90vw, 420px); background: var(--tag-kh-bg); color: var(--tag-kh-ink);
+    font-size: 14px; font-weight: 600; padding: 14px 18px; border-radius: 14px;
+    box-shadow: 0 8px 24px rgba(10, 18, 36, 0.18);
+    opacity: 0; pointer-events: none; transition: opacity 0.25s ease, transform 0.25s ease;
+    z-index: 60; text-align: center;
+  }
+  .toast.active { opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto; }
+  .guide-step { display: flex; gap: 16px; align-items: flex-start; }
+  .guide-num {
+    flex: none; width: 34px; height: 34px; border-radius: 50%; background: var(--accent); color: var(--accent-ink);
+    font-family: "Fraunces", serif; font-weight: 700; font-size: 15px;
+    display: flex; align-items: center; justify-content: center; margin-top: 2px;
+  }
+  .guide-body { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+  .guide-body h2 { font-family: "Fraunces", serif; font-weight: 600; font-size: 19px; margin: 0; }
+  .guide-body p { margin: 0; font-size: 14.5px; line-height: 1.65; color: var(--muted); }
+  .guide-divider { height: 1px; background: var(--line); margin: 2px 0; }
+  .pdf-preview-overlay {
+    position: fixed; inset: 0; z-index: 70; background: var(--bg);
+    display: flex; flex-direction: column;
+    opacity: 0; pointer-events: none; transition: opacity 0.2s ease;
+  }
+  .pdf-preview-overlay.active { opacity: 1; pointer-events: auto; }
+  .pdf-preview-header {
+    flex: none; display: flex; align-items: center; justify-content: space-between;
+    padding: calc(14px + env(safe-area-inset-top, 0px)) 18px 12px;
+    border-bottom: 1px solid var(--line); background: var(--surface);
+  }
+  .pdf-preview-title { font-family: "Fraunces", serif; font-weight: 600; font-size: 17px; }
+  .pdf-preview-frame { flex: 1; width: 100%; border: none; background: #525659; }
   .confirm-overlay {
     position: fixed; inset: 0; background: rgba(22, 35, 63, 0.5);
     display: flex; align-items: center; justify-content: center; padding: 20px;
@@ -179,8 +218,8 @@
   }
   .confirm-overlay.active { opacity: 1; pointer-events: auto; }
   .confirm-box {
-    background: var(--surface); border-radius: 18px; padding: 24px; max-width: 360px; width: 100%;
-    box-shadow: 0 12px 36px rgba(10, 18, 36, 0.3);
+    background: var(--surface); border-radius: 13px; padding: 26px; max-width: 360px; width: 100%;
+    box-shadow: 0 12px 36px rgba(16, 12, 4, 0.25);
   }
   .confirm-msg { font-size: 15px; line-height: 1.6; color: var(--ink); margin-bottom: 18px; }
   .confirm-actions { display: flex; gap: 10px; }
@@ -234,14 +273,14 @@
   .variant-btn { flex: 1; min-width: 140px; }
   .tilerow { display: flex; gap: 12px; }
   .tile {
-    flex: 1; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 20px;
+    flex: 1; background: var(--surface); border: 1px solid var(--line); border-radius: 13px; padding: 22px;
     display: flex; flex-direction: column; gap: 10px; align-items: flex-start; cursor: pointer;
     font-family: inherit; color: inherit; appearance: none; text-align: left;
-    box-shadow: 0 1px 2px rgba(22, 35, 63, 0.04);
+    box-shadow: 0 2px 14px rgba(20, 16, 8, 0.055);
   }
-  .tile:hover { border-color: var(--accent); }
+  .tile:hover { border-color: var(--accent2); }
   .ticon {
-    width: 38px; height: 38px; border-radius: 11px; background: var(--bg); color: var(--accent);
+    width: 38px; height: 38px; border-radius: 10px; background: var(--bg); color: var(--accent2);
     display: flex; align-items: center; justify-content: center; flex: none;
   }
   .tile h2 { font-family: "Fraunces", serif; font-weight: 600; font-size: 17px; margin: 0; }
@@ -249,10 +288,10 @@
   .plan-day { display: flex; flex-direction: column; gap: 8px; margin-bottom: 4px; }
   .plan-slot {
     appearance: none; width: 100%; display: flex; align-items: center; justify-content: space-between;
-    background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 11px; padding: 14px 16px;
     cursor: pointer; font-family: inherit; color: inherit; text-align: left; gap: 12px;
   }
-  .plan-slot:hover { border-color: var(--accent); }
+  .plan-slot:hover { border-color: var(--accent2); }
   .plan-slot.has-macros { flex-direction: column; align-items: stretch; gap: 10px; }
   .plan-slot .mealname { font-size: 11.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--label); }
   .plan-slot .dishname { font-size: 15px; font-weight: 600; margin-top: 2px; }
@@ -261,20 +300,24 @@
   .plan-slot-row { display: flex; gap: 8px; align-items: stretch; }
   .plan-slot-row .plan-slot { flex: 1; }
   .plan-edit-btn {
-    width: 44px; flex: none; border-radius: 14px; border: 1px solid var(--line); background: var(--surface);
+    width: 44px; flex: none; border-radius: 11px; border: 1px solid var(--line); background: var(--surface);
     color: var(--ink); display: flex; align-items: center; justify-content: center; cursor: pointer;
   }
-  .plan-edit-btn:hover { border-color: var(--accent); color: var(--accent); }
-  .weekrow { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 22px; display: flex; flex-direction: column; gap: 14px; box-shadow: 0 1px 2px rgba(22, 35, 63, 0.04); }
+  .plan-edit-btn:hover { border-color: var(--accent2); color: var(--accent2); }
+  .weekrow { background: var(--surface); border: 1px solid var(--line); border-radius: 13px; padding: 26px; display: flex; flex-direction: column; gap: 14px; box-shadow: 0 2px 14px rgba(20, 16, 8, 0.055); }
   .weekrow-head { appearance: none; border: none; background: transparent; padding: 0; margin: 0; text-align: left; cursor: pointer; color: inherit; font-family: inherit; display: flex; flex-direction: column; gap: 6px; width: 100%; }
-  .weekrow-head h2 { font-family: "Fraunces", serif; font-weight: 600; font-size: 22px; margin: 0; }
+  .weekrow-head h2 { font-family: "Fraunces", serif; font-weight: 600; font-size: 24px; margin: 0; }
   .weekrow-head .sub { color: var(--muted); font-size: 14px; }
-  .weekrow-head:hover h2 { color: var(--accent); }
+  .weekrow-head:hover h2 { color: var(--accent2); }
 </style>
 </head>
 <body>
 <div id="app"></div>
-<div id="busyBar" class="busybar" aria-hidden="true"><div class="busybar-fill"></div></div>
+<div id="busyBar" class="busybar" aria-hidden="true">
+  <div id="busyText" class="busybar-text"></div>
+  <div class="busybar-track"><div class="busybar-fill"></div></div>
+</div>
+<div id="toast" class="toast"><span id="toastText"></span></div>
 <div id="confirmOverlay" class="confirm-overlay">
   <div class="confirm-box">
     <div id="confirmMsg" class="confirm-msg"></div>
@@ -283,6 +326,15 @@
       <button id="confirmOkBtn" class="primary-btn">Bevestigen</button>
     </div>
   </div>
+</div>
+<div id="pdfPreviewOverlay" class="pdf-preview-overlay">
+  <div class="pdf-preview-header">
+    <span class="pdf-preview-title">Voorbeeld</span>
+    <button id="pdfPreviewClose" class="backbtn" aria-label="Sluiten">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+    </button>
+  </div>
+  <iframe id="pdfPreviewFrame" class="pdf-preview-frame"></iframe>
 </div>
 <script>
 (function () {
@@ -388,22 +440,33 @@
   });
 
   var pendingConfirmAction = null;
-  function askConfirm(message, onConfirm) {
+  var pendingCancelAction = null;
+  function askConfirm(message, onConfirm, okLabel, cancelLabel, onCancel) {
     pendingConfirmAction = onConfirm;
+    pendingCancelAction = onCancel || null;
     var overlay = document.getElementById("confirmOverlay");
     var msgEl = document.getElementById("confirmMsg");
+    var okBtn = document.getElementById("confirmOkBtn");
+    var cancelBtn = document.getElementById("confirmCancelBtn");
     if (msgEl) msgEl.textContent = message;
+    if (okBtn) okBtn.textContent = okLabel || "Bevestigen";
+    if (cancelBtn) cancelBtn.textContent = cancelLabel || "Annuleren";
     if (overlay) overlay.classList.add("active");
   }
   function closeConfirm() {
     pendingConfirmAction = null;
+    pendingCancelAction = null;
     var overlay = document.getElementById("confirmOverlay");
     if (overlay) overlay.classList.remove("active");
   }
   (function wireConfirmOverlay() {
     var cancelBtn = document.getElementById("confirmCancelBtn");
     var okBtn = document.getElementById("confirmOkBtn");
-    if (cancelBtn) cancelBtn.onclick = function () { closeConfirm(); };
+    if (cancelBtn) cancelBtn.onclick = function () {
+      var fn = pendingCancelAction;
+      closeConfirm();
+      if (fn) fn();
+    };
     if (okBtn) okBtn.onclick = function () {
       var fn = pendingConfirmAction;
       closeConfirm();
@@ -413,18 +476,40 @@
 
   var state = { view: "weeks", weekId: null, dayId: null, stepIndex: 0, generating: false, genError: null, genSuccess: null, variating: false, variateError: null, planWeekId: null, planSlotKey: null, planDayName: null, dayServings: null, dayBackView: null, dayBackWeekId: null, dayBackDayName: null };
   var busyCount = 0;
-  function busyStart() {
-    busyCount++;
+  var busyMessages = [];
+  function updateBusyUI() {
     var el = document.getElementById("busyBar");
-    if (el) el.classList.add("active");
+    var textEl = document.getElementById("busyText");
+    if (!el) return;
+    if (busyCount > 0) {
+      el.classList.add("active");
+      if (textEl) textEl.textContent = busyMessages.length ? busyMessages[busyMessages.length - 1] : "Bezig…";
+    } else {
+      el.classList.remove("active");
+    }
+  }
+  function busyStart(message) {
+    busyCount++;
+    busyMessages.push(message || "Bezig…");
+    updateBusyUI();
   }
   function busyEnd() {
     busyCount = Math.max(0, busyCount - 1);
-    if (busyCount === 0) {
-      var el = document.getElementById("busyBar");
-      if (el) el.classList.remove("active");
-    }
+    busyMessages.pop();
+    updateBusyUI();
   }
+
+  var toastTimer = null;
+  function showToast(message) {
+    var el = document.getElementById("toast");
+    var textEl = document.getElementById("toastText");
+    if (!el || !textEl) return;
+    textEl.textContent = message;
+    el.classList.add("active");
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { el.classList.remove("active"); }, 4500);
+  }
+
   var completed = {};
   var shoppingChecked = {};
   var plannedWeeks = [];
@@ -461,8 +546,8 @@
     level: "Home-style",
     equipment: EQUIPMENT.slice(),
     exclude: "",
-    count: 5,
-    mealTypes: ["Diner"],
+    count: 7,
+    mealTypes: ["Ontbijt", "Lunch", "Diner", "Snack"],
     gender: "",
     heightCm: "",
     weightKg: "",
@@ -577,8 +662,23 @@
   function renderWeeks() {
     var app = document.getElementById("app");
     app.innerHTML = "";
-    app.appendChild(renderTopbar("Weekmenu", false));
+    app.appendChild(renderTopbar("Ontwerp je gebalanceerde maaltijden", false));
     var main = document.createElement("main");
+
+    var logoWrap = document.createElement("div");
+    logoWrap.style.display = "flex";
+    logoWrap.style.justifyContent = "center";
+    logoWrap.style.padding = "4px 0 2px";
+    logoWrap.innerHTML =
+      '<svg width="46" height="46" viewBox="0 0 512 512" fill="none" stroke="var(--accent2)" stroke-width="11" stroke-linecap="round">' +
+      '<line x1="256" y1="134" x2="256" y2="350"/><line x1="186" y1="376" x2="256" y2="350"/>' +
+      '<line x1="326" y1="376" x2="256" y2="350"/><line x1="186" y1="376" x2="326" y2="376"/>' +
+      '<line x1="126" y1="120" x2="386" y2="120"/>' +
+      '<line x1="126" y1="120" x2="126" y2="220" stroke-width="7"/><line x1="386" y1="120" x2="386" y2="220" stroke-width="7"/>' +
+      '<circle cx="256" cy="120" r="14" fill="var(--accent2)" stroke="none"/>' +
+      '<circle cx="126" cy="220" r="34" fill="none" stroke-width="8"/><circle cx="386" cy="220" r="34" fill="none" stroke-width="8"/>' +
+      '</svg>';
+    main.appendChild(logoWrap);
 
     var tiles = document.createElement("div");
     tiles.className = "tilerow";
@@ -598,7 +698,13 @@
       '<span class="ticon"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="3"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></span>' +
       '<h2>Plannen</h2>' +
       '<div class="sub">Verdeel gerechten over ontbijt, lunch, diner en snacks per dag</div>';
-    planTile.onclick = function () { goto("plan"); };
+    planTile.onclick = function () {
+      if (!hasAnyDishes()) {
+        askConfirm("Let op: er zijn nog geen recepten beschikbaar. Navigeer naar gerechten ontwerpen.", function () { goto("prefs"); }, "Ok", "Nee");
+      } else {
+        goto("plan");
+      }
+    };
     tiles.appendChild(planTile);
 
     main.appendChild(tiles);
@@ -626,6 +732,10 @@
     curCard.appendChild(curH2);
     curCard.appendChild(curSub);
     curCard.onclick = function () {
+      if (!hasAnyDishes()) {
+        askConfirm("Let op: er zijn nog geen recepten beschikbaar. Navigeer naar gerechten ontwerpen.", function () { goto("prefs"); }, "Ok", "Nee");
+        return;
+      }
       var pw = curPw || addOrOpenPlannedWeek(curMonday);
       goto("planweek", { planWeekId: pw.id });
     };
@@ -639,11 +749,72 @@
       '<span class="ticon"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></span>' +
       '<h2>Opgeslagen gerechten</h2>' +
       '<div class="sub">Blader door alle eerder ontworpen en gegenereerde gerechten</div>';
-    libTile.onclick = function () { goto("library"); };
+    libTile.onclick = function () {
+      if (!hasAnyDishes()) {
+        askConfirm("Let op: er zijn nog geen recepten beschikbaar. Navigeer naar gerechten ontwerpen.", function () { goto("prefs"); }, "Ok", "Nee");
+      } else {
+        goto("library");
+      }
+    };
     libRow.appendChild(libTile);
     main.appendChild(libRow);
 
+    var guideRow = document.createElement("div");
+    guideRow.className = "tilerow";
+    var guideTile = document.createElement("button");
+    guideTile.className = "tile";
+    guideTile.innerHTML =
+      '<span class="ticon"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.2a2.5 2.5 0 0 1 4.9.8c0 1.7-2.4 2-2.4 3.6"/><circle cx="12" cy="16.6" r="0.6" fill="currentColor" stroke="none"/></svg></span>' +
+      '<h2>Hoe werkt Balanza</h2>' +
+      '<div class="sub">Stap voor stap uitgelegd wat je allemaal kunt doen</div>';
+    guideTile.onclick = function () { goto("guide"); };
+    guideRow.appendChild(guideTile);
+    main.appendChild(guideRow);
+
+    var resetSpacer = document.createElement("div");
+    resetSpacer.style.height = "8px";
+    main.appendChild(resetSpacer);
+
+    var resetBtn = document.createElement("button");
+    resetBtn.className = "ghost-btn";
+    resetBtn.textContent = "Reset app — begin opnieuw";
+    resetBtn.onclick = function () { resetEverything(); };
+    main.appendChild(resetBtn);
+
     app.appendChild(main);
+  }
+
+  function resetEverything() {
+    askConfirm("Alles wissen en opnieuw beginnen? Dit verwijdert al je opgeslagen gerechten, voorkeuren en planning, en kan niet ongedaan worden gemaakt.", function () {
+      WEEKS.length = 0;
+      clearAllDishesFromDb();
+
+      prefs.cuisines = [];
+      prefs.flavors = [];
+      prefs.level = "Home-style";
+      prefs.equipment = EQUIPMENT.slice();
+      prefs.exclude = "";
+      prefs.count = 7;
+      prefs.mealTypes = ["Ontbijt", "Lunch", "Diner", "Snack"];
+      prefs.gender = "";
+      prefs.heightCm = "";
+      prefs.weightKg = "";
+      prefs.age = "";
+      prefs.activityLevel = "Gemiddeld actief";
+      prefs.goal = "Onderhoud";
+      savePrefs();
+
+      plannedWeeks.length = 0;
+      savePlannedWeeks();
+
+      completed = {};
+      shoppingChecked = {};
+      libraryFilter = "Alle";
+      libraryGoalFilter = "Alle";
+
+      showToast("Alles is gewist — je begint weer helemaal opnieuw.");
+      goto("weeks");
+    });
   }
 
   function toggleInArray(arr, val) {
@@ -941,7 +1112,7 @@
     state.genError = null;
     state.genSuccess = null;
     state.generating = true;
-    busyStart();
+    busyStart("Gerechten worden gegenereerd…");
     savePrefs();
     render();
 
@@ -991,8 +1162,10 @@
         persistDishesToDb(days);
         state.generating = false;
         busyEnd();
-        state.genSuccess = days.length + (days.length === 1 ? " gerecht is" : " gerechten zijn") +
+        var successMsg = days.length + (days.length === 1 ? " gerecht is" : " gerechten zijn") +
           " gegenereerd en toegevoegd aan de lijst met opgeslagen gerechten.";
+        state.genSuccess = successMsg;
+        showToast(successMsg);
         render();
       }).catch(function (e) {
         state.generating = false;
@@ -1037,6 +1210,77 @@
 
   function isCurrentWeek(monday) {
     return isoDateKey(monday) === isoDateKey(getMonday(new Date()));
+  }
+
+  var GUIDE_STEPS = [
+    { title: "Stel je voorkeuren in", body: "Ga naar \u201cGerechten ontwerpen\u201d en vul in wat voor jou relevant is: keukenstijl, smaakprofiel, culinair niveau, apparatuur, uitsluitingen, en optioneel je lichaamsprofiel (geslacht, lengte, gewicht, leeftijd, activiteitsniveau) en je doel (Onderhoud, Vetverlies, Cutting, Spieropbouw of Atleet)." },
+    { title: "Genereer gerechten", body: "Kies bij welk maaltijdmoment(en) het gaat (Ontbijt/Lunch/Diner/Snack) en hoeveel gerechten je per moment wilt, en tik op \u201cGenereer gerechten\u201d. Elk gerecht krijgt een Balans-score: hoe dichter bij het streefpercentage van jouw doel, hoe hoger de score." },
+    { title: "Bekijk je bibliotheek", body: "Onder \u201cOpgeslagen gerechten\u201d vind je alles wat je ooit heb ontworpen of gegenereerd, gegroepeerd per maaltijdmoment. Filter op maaltijdmoment of doel, of verwijder gerechten die je niet meer wilt." },
+    { title: "Plan een week", body: "Onder \u201cPlannen\u201d kies je de huidige week of een week in de toekomst. Elke dag heeft 6 momenten: Ontbijt, Snack na ontbijt, Lunch, Snack na lunch, Diner en Snack na diner. Tik een moment aan om er een gerecht aan toe te wijzen." },
+    { title: "Stel het aantal personen in", body: "Bij een ingevuld moment kun je met + en \u2212 aangeven voor hoeveel personen je kookt. Dat aantal telt automatisch mee in de boodschappenlijst en de prepdag \u2014 handig als je bijvoorbeeld voor het avondeten met het hele gezin kookt." },
+    { title: "Vul een week automatisch in", body: "Liever niet elk moment los kiezen? \u201cVul week automatisch in\u201d kijkt eerst wat je al hebt opgeslagen en vult daarmee aan; alleen het tekort wordt nieuw gegenereerd \u2014 dat scheelt tijd en onnodige aanroepen." },
+    { title: "Bekijk je boodschappenlijst", body: "Vanuit een geplande week open je de boodschappenlijst \u2014 kies \u201cPer week (samengevoegd)\u201d om dezelfde ingredi\u00ebnten uit verschillende gerechten automatisch bij elkaar op te laten tellen en gegroepeerd per winkelcategorie te zien, of \u201cPer dag\u201d voor de ongecombineerde lijst." },
+    { title: "Laat een prepdag samenstellen", body: "Bovenaan een ingeplande week kun je een prepdag laten samenstellen: een geconsolideerd plan om zondag in bulk voor te bereiden, gebaseerd op precies de gerechten die je die week hebt gepland." },
+    { title: "Varieer een gerecht", body: "Op het receptdetailscherm kun je een gerecht laten aanpassen: Pittiger, Simpeler, Fine dining, of de koolhydraatbron laten wisselen \u2014 de macro's en balansscore worden automatisch herberekend." },
+    { title: "Start het kookproces", body: "Vanuit een receptdetail start je de stap-voor-stap kookmodus, met een voortgangsbalk en een timer bij stappen die wachttijd hebben (koken, bakken, grillen, oven, sudderen)." },
+    { title: "Exporteer als PDF", body: "Zowel een boodschappenlijst als een compleet weekmenu kun je exporteren als PDF, opgemaakt als een echt kookboek \u2014 met omslagpagina, inhoudsopgave en een gerecht dat nooit halverwege afbreekt over een pagina." },
+    { title: "Begin opnieuw", body: "Onderaan het startscherm staat \u201cReset app \u2014 begin opnieuw\u201d: dit wist al je opgeslagen gerechten, voorkeuren en planning in \u00e9\u00e9n keer, mocht je helemaal fris willen beginnen." }
+  ];
+
+  function renderGuide() {
+    var app = document.getElementById("app");
+    app.innerHTML = "";
+    app.appendChild(renderTopbar("Hoe werkt Balanza", true, function () { goto("weeks"); }));
+    var main = document.createElement("main");
+
+    var eyebrow = document.createElement("div");
+    eyebrow.className = "eyebrow";
+    eyebrow.textContent = "In het kort";
+    main.appendChild(eyebrow);
+
+    var intro = document.createElement("p");
+    intro.style.margin = "0";
+    intro.style.fontSize = "15px";
+    intro.style.lineHeight = "1.7";
+    intro.style.color = "var(--muted)";
+    intro.textContent = "Balanza ontwerpt macro-gebalanceerde maaltijden op basis van jouw voorkeuren, en helpt je ze in te plannen, klaar te maken en ervoor te boodschappen. Hieronder staat alles stap voor stap.";
+    main.appendChild(intro);
+
+    GUIDE_STEPS.forEach(function (step, idx) {
+      if (idx > 0) {
+        var divider = document.createElement("div");
+        divider.className = "guide-divider";
+        main.appendChild(divider);
+      }
+      var row = document.createElement("div");
+      row.className = "guide-step";
+      var num = document.createElement("div");
+      num.className = "guide-num";
+      num.textContent = String(idx + 1);
+      var body = document.createElement("div");
+      body.className = "guide-body";
+      var h2 = document.createElement("h2");
+      h2.textContent = step.title;
+      var p = document.createElement("p");
+      p.textContent = step.body;
+      body.appendChild(h2);
+      body.appendChild(p);
+      row.appendChild(num);
+      row.appendChild(body);
+      main.appendChild(row);
+    });
+
+    var spacer = document.createElement("div");
+    spacer.style.height = "4px";
+    main.appendChild(spacer);
+
+    var startBtn = document.createElement("button");
+    startBtn.className = "primary-btn";
+    startBtn.textContent = "Ga naar Gerechten ontwerpen";
+    startBtn.onclick = function () { goto("prefs"); };
+    main.appendChild(startBtn);
+
+    app.appendChild(main);
   }
 
   function renderLibrary() {
@@ -1417,7 +1661,15 @@
     autoBtn.className = "ghost-btn";
     autoBtn.disabled = pw.autoFilling;
     autoBtn.textContent = pw.autoFilling ? "Week wordt ingevuld…" : "Vul week automatisch in";
-    autoBtn.onclick = function () { generateAutoWeek(pw); };
+    autoBtn.onclick = function () {
+      askConfirm(
+        "Gebruik alleen opgeslagen gerechten, of vul ontbrekende recepten aan op basis van je voorkeuren? (langere wachttijd)",
+        function () { generateAutoWeek(pw, false); },
+        "Ook aanvullen",
+        "Alleen opgeslagen",
+        function () { generateAutoWeek(pw, true); }
+      );
+    };
     actions.appendChild(autoBtn);
     var clearWeekBtn = document.createElement("button");
     clearWeekBtn.className = "ghost-btn";
@@ -2426,7 +2678,32 @@
     return doc.output("blob");
   }
 
+  var pdfPreviewUrl = null;
+  function showPdfPreview(blob) {
+    try {
+      if (pdfPreviewUrl) { URL.revokeObjectURL(pdfPreviewUrl); pdfPreviewUrl = null; }
+      var url = URL.createObjectURL(blob);
+      pdfPreviewUrl = url;
+      var frame = document.getElementById("pdfPreviewFrame");
+      var overlay = document.getElementById("pdfPreviewOverlay");
+      if (frame) frame.src = url;
+      if (overlay) overlay.classList.add("active");
+    } catch (e) {}
+  }
+  function closePdfPreview() {
+    var overlay = document.getElementById("pdfPreviewOverlay");
+    if (overlay) overlay.classList.remove("active");
+    var frame = document.getElementById("pdfPreviewFrame");
+    if (frame) frame.src = "about:blank";
+    if (pdfPreviewUrl) { URL.revokeObjectURL(pdfPreviewUrl); pdfPreviewUrl = null; }
+  }
+  (function wirePdfPreviewOverlay() {
+    var closeBtn = document.getElementById("pdfPreviewClose");
+    if (closeBtn) closeBtn.onclick = function () { closePdfPreview(); };
+  })();
+
   function downloadPdf(blob, filenameBase, btn, resetLabel) {
+    showPdfPreview(blob);
     claude.use("downloads").then(function (downloads) {
       if (!downloads) {
         if (btn) btn.textContent = "Downloaden niet beschikbaar hier";
@@ -2621,7 +2898,7 @@
     if (state.variating) return;
     state.variateError = null;
     state.variating = true;
-    busyStart();
+    busyStart("Variant wordt gemaakt…");
     render();
 
     claude.use("sample").then(function (sample) {
@@ -2655,6 +2932,7 @@
         day.profile = currentProfileSnapshot();
         state.variating = false;
         busyEnd();
+        showToast("Variant van \"" + day.name + "\" is klaar.");
         render();
       }).catch(function (e) {
         state.variating = false;
@@ -2710,7 +2988,7 @@
     if (!dishes.length) return;
     pw.prepError = null;
     pw.prepGenerating = true;
-    busyStart();
+    busyStart("Prepdag wordt samengesteld…");
     render();
 
     claude.use("sample").then(function (sample) {
@@ -2738,6 +3016,7 @@
         pw.prepGenerating = false;
         busyEnd();
         savePlannedWeeks();
+        showToast("Prepdag is samengesteld.");
         render();
       }).catch(function (e) {
         pw.prepGenerating = false;
@@ -2749,6 +3028,16 @@
   }
 
   var AUTOWEEK_COUNTS = { "Ontbijt": 3, "Lunch": 3, "Diner": 4, "Snack": 4 };
+
+  function hasAnyDishes() {
+    for (var i = 0; i < WEEKS.length; i++) {
+      var days = WEEKS[i].days;
+      for (var j = 0; j < days.length; j++) {
+        if (!days[j].prep) return true;
+      }
+    }
+    return false;
+  }
 
   function collectExistingByType() {
     var byType = {};
@@ -2765,7 +3054,7 @@
     return byType;
   }
 
-  function generateAutoWeek(pw, btn) {
+  function generateAutoWeek(pw, onlyExisting) {
     if (pw.autoFilling) return;
     pw.autoFillError = null;
 
@@ -2804,17 +3093,18 @@
         });
         pw.autoFilling = false;
         savePlannedWeeks();
+        showToast("Week is automatisch ingevuld.");
         render();
       };
 
-      if (!anyNeeded) {
-        // Everything needed is already available from previously saved/generated dishes — no generation required.
+      if (!anyNeeded || onlyExisting) {
+        // Everything needed is already available, or the user chose to use only saved dishes — no generation.
         finishFill([]);
         return;
       }
 
       pw.autoFilling = true;
-      busyStart();
+      busyStart("Week wordt automatisch ingevuld…");
       render();
 
       claude.use("sample").then(function (sample) {
@@ -3126,7 +3416,7 @@
   function backgroundGenerate(needed) {
     claude.use("sample").then(function (sample) {
       if (!sample) return;
-      busyStart();
+      busyStart("Gerechten worden aangevuld op de achtergrond…");
       var prompt = buildBackgroundPrompt(needed);
       sample.json(prompt, { modelTier: "default" }).then(function (result) {
         busyEnd();
@@ -3135,6 +3425,7 @@
         var days = dishesFromAiList(list, "bg");
         addToCacheLibrary(days);
         persistDishesToDb(days);
+        showToast(days.length + " nieuwe gerechten zijn toegevoegd aan je bibliotheek.");
         render();
       }).catch(function () { busyEnd(); });
     });
@@ -3194,10 +3485,6 @@
             if (cached.length) {
               addToCacheLibrary(cached);
               render();
-            } else {
-              var needed = {};
-              PLAN_MEALS.forEach(function (m) { needed[m] = 7; });
-              backgroundGenerate(needed);
             }
           }).catch(function () {});
         }).catch(function () {});
@@ -3314,6 +3601,7 @@
     try {
       if (state.view === "weeks") renderWeeks();
       else if (state.view === "library") renderLibrary();
+      else if (state.view === "guide") renderGuide();
       else if (state.view === "prefs") renderPrefs();
       else if (state.view === "plan") renderPlan();
       else if (state.view === "planadd") renderPlanAdd();
