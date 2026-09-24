@@ -677,9 +677,9 @@
     }
     var items = [
       ["neutral", day.kcal + " kcal"],
-      ["kh", "KH " + day.kh + "%"],
-      ["eiwit", "Eiwit " + day.eiwit + "%"],
-      ["vet", "Vet " + day.vet + "%"],
+      ["kh", "KH " + day.kh + "%" + (day.khG !== undefined ? " (" + day.khG + "g)" : "")],
+      ["eiwit", "Eiwit " + day.eiwit + "%" + (day.eiwitG !== undefined ? " (" + day.eiwitG + "g)" : "")],
+      ["vet", "Vet " + day.vet + "%" + (day.vetG !== undefined ? " (" + day.vetG + "g)" : "")],
       ["balans", "Balans " + day.balans + "%"]
     ];
     if (day.mealType && !(opts && opts.hideMealType)) items.unshift(["neutral", day.mealType]);
@@ -1458,6 +1458,7 @@
             label: "Gerecht " + (idx + 1),
             name: String(d.name || "Naamloos gerecht"),
             kcal: kcal, kh: khPct, eiwit: eiwitPct, vet: vetPct, balans: balans,
+            khG: khG, eiwitG: eiwitG, vetG: vetG,
             mealType: dishMealType,
             benodigdheden: String(d.benodigdheden || ""),
             ingredienten: Array.isArray(d.ingredienten) ? d.ingredienten.map(String) : [],
@@ -1867,7 +1868,9 @@
     var khPct = totalKcal ? Math.round((totalKhG * 4 / totalKcal) * 100) : 0;
     var eiwitPct = totalKcal ? Math.round((totalEiwitG * 4 / totalKcal) * 100) : 0;
     var vetPct = totalKcal ? Math.round((totalVetG * 9 / totalKcal) * 100) : 0;
-    return { kcal: Math.round(totalKcal), kh: khPct, eiwit: eiwitPct, vet: vetPct, balans: Math.round(totalBalans / count), count: count };
+    return { kcal: Math.round(totalKcal), kh: khPct, eiwit: eiwitPct, vet: vetPct,
+      khG: Math.round(totalKhG), eiwitG: Math.round(totalEiwitG), vetG: Math.round(totalVetG),
+      balans: Math.round(totalBalans / count), count: count };
   }
 
   function aggregateWeekMacros(pw) {
@@ -1891,7 +1894,9 @@
     var khPct = totalKcal ? Math.round((totalKhG * 4 / totalKcal) * 100) : 0;
     var eiwitPct = totalKcal ? Math.round((totalEiwitG * 4 / totalKcal) * 100) : 0;
     var vetPct = totalKcal ? Math.round((totalVetG * 9 / totalKcal) * 100) : 0;
-    return { kcal: Math.round(totalKcal), kh: khPct, eiwit: eiwitPct, vet: vetPct, balans: Math.round(totalBalans / count), count: count };
+    return { kcal: Math.round(totalKcal), kh: khPct, eiwit: eiwitPct, vet: vetPct,
+      khG: Math.round(totalKhG), eiwitG: Math.round(totalEiwitG), vetG: Math.round(totalVetG),
+      balans: Math.round(totalBalans / count), count: count };
   }
 
   function renderPlanWeek() {
@@ -1909,7 +1914,7 @@
 
     var weekTotals = aggregateWeekMacros(pw);
     if (weekTotals) {
-      main.appendChild(macroTags({ kcal: weekTotals.kcal, kh: weekTotals.kh, eiwit: weekTotals.eiwit, vet: weekTotals.vet, balans: weekTotals.balans }, { hideMealType: true }));
+      main.appendChild(macroTags({ kcal: weekTotals.kcal, kh: weekTotals.kh, eiwit: weekTotals.eiwit, vet: weekTotals.vet, khG: weekTotals.khG, eiwitG: weekTotals.eiwitG, vetG: weekTotals.vetG, balans: weekTotals.balans }, { hideMealType: true }));
     }
 
     var weekDishes = collectWeekDishes(pw);
@@ -2026,7 +2031,7 @@
       card.appendChild(sub);
 
       if (totals) {
-        card.appendChild(macroTags({ kcal: totals.kcal, kh: totals.kh, eiwit: totals.eiwit, vet: totals.vet, balans: totals.balans }, { hideMealType: true }));
+        card.appendChild(macroTags({ kcal: totals.kcal, kh: totals.kh, eiwit: totals.eiwit, vet: totals.vet, khG: totals.khG, eiwitG: totals.eiwitG, vetG: totals.vetG, balans: totals.balans }, { hideMealType: true }));
       } else {
         var h2 = document.createElement("h2");
         h2.textContent = "Nog niets gepland";
@@ -2092,7 +2097,7 @@
 
     var dayTotals = aggregateDayMacros(pw, d);
     if (dayTotals) {
-      main.appendChild(macroTags({ kcal: dayTotals.kcal, kh: dayTotals.kh, eiwit: dayTotals.eiwit, vet: dayTotals.vet, balans: dayTotals.balans }, { hideMealType: true }));
+      main.appendChild(macroTags({ kcal: dayTotals.kcal, kh: dayTotals.kh, eiwit: dayTotals.eiwit, vet: dayTotals.vet, khG: dayTotals.khG, eiwitG: dayTotals.eiwitG, vetG: dayTotals.vetG, balans: dayTotals.balans }, { hideMealType: true }));
     }
 
     var col = document.createElement("div");
@@ -2927,7 +2932,10 @@
 
     entries.forEach(function (entry) {
       var day = entry.day;
-      var meta = day.prep ? "" : (day.kcal + " kcal  ·  KH " + day.kh + "% / Eiwit " + day.eiwit + "% / Vet " + day.vet + "%  ·  Balans " + day.balans + "%");
+      var meta = day.prep ? "" : (day.kcal + " kcal  ·  KH " + day.kh + "%" + (day.khG !== undefined ? " (" + day.khG + "g)" : "") +
+        " / Eiwit " + day.eiwit + "%" + (day.eiwitG !== undefined ? " (" + day.eiwitG + "g)" : "") +
+        " / Vet " + day.vet + "%" + (day.vetG !== undefined ? " (" + day.vetG + "g)" : "") +
+        "  ·  Balans " + day.balans + "%");
       var benodigdhedenText = "Benodigdheden: " + day.benodigdheden;
 
       var estHeight = 26 + (20 + 8) + 26 + 4 + 4 + 10;
@@ -2959,9 +2967,9 @@
         bx = drawBadge(bx, y, day.benodigdheden, NEUTRAL_BG, INK);
       } else {
         bx = drawBadge(bx, y, day.kcal + " kcal", NEUTRAL_BG, INK);
-        bx = drawBadge(bx, y, "KH " + day.kh + "%", KH_BG, KH_INK);
-        bx = drawBadge(bx, y, "Eiwit " + day.eiwit + "%", EIWIT_BG, EIWIT_INK);
-        bx = drawBadge(bx, y, "Vet " + day.vet + "%", VET_BG, VET_INK);
+        bx = drawBadge(bx, y, "KH " + day.kh + "%" + (day.khG !== undefined ? " (" + day.khG + "g)" : ""), KH_BG, KH_INK);
+        bx = drawBadge(bx, y, "Eiwit " + day.eiwit + "%" + (day.eiwitG !== undefined ? " (" + day.eiwitG + "g)" : ""), EIWIT_BG, EIWIT_INK);
+        bx = drawBadge(bx, y, "Vet " + day.vet + "%" + (day.vetG !== undefined ? " (" + day.vetG + "g)" : ""), VET_BG, VET_INK);
         bx = drawBadge(bx, y, "Balans " + day.balans + "%", ORANGE, ORANGE_INK);
       }
       y += 16 + 12;
@@ -3236,6 +3244,7 @@
         day.name = String(d.name || day.name);
         day.kcal = kcal;
         day.kh = khPct; day.eiwit = eiwitPct; day.vet = vetPct;
+        day.khG = khG; day.eiwitG = eiwitG; day.vetG = vetG;
         day.balans = computeBalance(khPct, eiwitPct, vetPct);
         day.benodigdheden = String(d.benodigdheden || day.benodigdheden);
         day.ingredienten = Array.isArray(d.ingredienten) ? d.ingredienten.map(String) : day.ingredienten;
@@ -3539,6 +3548,7 @@
     return {
       id: day.id, label: day.label, name: day.name,
       kcal: day.kcal, kh: day.kh, eiwit: day.eiwit, vet: day.vet, balans: day.balans,
+      khG: day.khG, eiwitG: day.eiwitG, vetG: day.vetG,
       mealType: day.mealType, benodigdheden: day.benodigdheden,
       ingredienten: day.ingredienten, steps: day.steps,
       profile: day.profile || null,
@@ -3721,6 +3731,7 @@
         label: "Gerecht " + (idx + 1),
         name: String(d.name || "Naamloos gerecht"),
         kcal: kcal, kh: khPct, eiwit: eiwitPct, vet: vetPct, balans: computeBalance(khPct, eiwitPct, vetPct),
+        khG: khG, eiwitG: eiwitG, vetG: vetG,
         mealType: dishMealType,
         benodigdheden: String(d.benodigdheden || ""),
         ingredienten: Array.isArray(d.ingredienten) ? d.ingredienten.map(String) : [],
