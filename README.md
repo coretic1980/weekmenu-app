@@ -55,6 +55,32 @@ kostenniveau je acceptabel vindt. Elke generatie-aanroep kost ruwweg een paar
 cent tot een paar dubbeltjes, afhankelijk van hoeveel gerechten er in één
 keer worden opgevraagd.
 
+## Blijvende opslag (belangrijk!)
+
+Standaard slaat de server data op in een lokaal bestand
+(`data/store.json`). Dat werkt prima op je eigen computer, maar op vrijwel
+elk hostingplatform — inclusief Render's gratis laag — wordt het
+bestandssysteem **gewist bij elke herstart of redeploy**. Render's gratis
+services gaan bovendien na 15 minuten zonder verkeer automatisch "slapen"
+en herstarten bij het volgende bezoek — dus zonder verdere actie ben je
+vroeg of laat alles kwijt.
+
+De oplossing: verbind de server met een gratis MongoDB Atlas-database, die
+wél blijft bestaan. Zonder deze stap werkt de app prima, maar niet-blijvend.
+
+1. Maak een gratis account op https://www.mongodb.com/cloud/atlas/register
+2. Maak een nieuw, gratis "M0"-cluster aan (kies een regio bij je gebruikers in de buurt)
+3. Ga naar "Database Access" → maak een database-gebruiker aan (naam + wachtwoord)
+4. Ga naar "Network Access" → "Add IP Address" → kies "Allow Access from Anywhere" (0.0.0.0/0) — nodig omdat Render's IP-adres kan wisselen
+5. Ga naar je cluster → "Connect" → "Drivers" → kopieer de connection string (ziet eruit als `mongodb+srv://gebruiker:wachtwoord@cluster0.xxxxx.mongodb.net/`)
+6. Vul je wachtwoord in op de plek van `<password>` in die string
+7. Zet die complete string in `.env` (lokaal) of als environment variable op Render, bij `MONGODB_URI`
+
+Zodra `MONGODB_URI` is ingesteld, herkent de server dat automatisch en
+gebruikt hij MongoDB in plaats van het lokale bestand — er is verder niets
+aan te passen. Zonder `MONGODB_URI` valt de server terug op het lokale
+bestand (prima voor snel lokaal testen, niet voor een echte deployment).
+
 ## Belangrijk: dit is een eenvoudige, persoonlijke opzet
 
 - **Geen accounts/login.** Elke browser krijgt bij het eerste bezoek een
@@ -62,14 +88,9 @@ keer worden opgevraagd.
   is hij zijn opgeslagen gerechten en planning kwijt. Voor een klein aantal
   bekende gebruikers is dit prima; voor een grotere, publieke uitrol zou je
   echte accounts willen toevoegen.
-- **`data/store.json` is een simpel JSON-bestand,** geen echte database.
-  Prima voor persoonlijk gebruik of een kleine test, maar niet gemaakt voor
-  veel gelijktijdige gebruikers. Voor meer schaal: vervang de
-  `loadStore()`/`saveStore()`-functies in `server.js` door een echte database
-  (bijv. SQLite of Postgres) — de rest van de server hoeft niet te veranderen.
-- **De rate limiter is in-memory** en reset bij elke herstart van de server.
-  Prima voor "voor nu"-gebruik; bij hoge verwachte belasting zou je dit naar
-  de database willen verplaatsen zodat het herstarts overleeft.
+- **De rate limiter voor IP-adressen is in-memory** en reset bij elke
+  herstart van de server (de dagelijkse generatielimiet zelf staat wél veilig
+  in MongoDB als je dat hebt ingesteld, en overleeft dus herstarts).
 
 ## Progressive Web App (PWA)
 
@@ -103,10 +124,8 @@ Voor een kleine testgroep is dit de snelste route:
    kunnen hem meteen als app installeren (zie hierboven).
 3. Iedereen krijgt automatisch zijn eigen, aparte set voorkeuren/gerechten/
    planning — er is geen gedeelde data tussen testers.
-4. Wil je zelf kunnen zien hoeveel de testgroep de app gebruikt? Kijk in
-   `data/store.json` op de server — daar staat alles in (let op: bij de
-   gratis Render-tier kan dit bestand verdwijnen bij een herstart, zie de
-   opmerking daarover verderop).
+4. Stel `MONGODB_URI` in (zie "Blijvende opslag" hierboven) zodat niemands
+   data verdwijnt als de server een keer herstart.
 
 ## Deployen
 
@@ -115,20 +134,15 @@ Elk platform dat een Node.js-proces kan draaien werkt. Twee simpele opties:
 ### Render.com (gratis tier, makkelijkst)
 1. Zet deze map in een git-repository (GitHub/GitLab).
 2. Maak op Render een nieuwe "Web Service", koppel de repo.
-3. Build command: (leeg laten — geen build nodig)
+3. Build command: `npm install`
 4. Start command: `node server.js`
 5. Zet de environment variables uit `.env.example` in Render's dashboard
-   (Settings → Environment).
-6. **Let op:** de gratis tier van Render heeft een *ephemeral* filesystem —
-   `data/store.json` kan verdwijnen bij een herstart/redeploy. Voor iets
-   persistenter: kies een betaald plan met een "Persistent Disk", of
-   gebruik Railway/Fly.io met een volume.
+   (Settings → Environment) — vergeet `MONGODB_URI` niet voor blijvende opslag.
 
-### Railway.app / Fly.io (met persistente opslag)
-Beide platforms bieden een volume die je aan `/app/data` kunt koppelen, zodat
-`store.json` blijft bestaan tussen deploys. Stappen zijn platform-specifiek;
-de app zelf heeft geen aanpassingen nodig — alleen de env-variabelen instellen
-en een volume mounten op de `data/`-map.
+### Railway.app / Fly.io
+Werken ook prima. Met `MONGODB_URI` ingesteld maakt het niet uit of het
+platform zelf een blijvend bestandssysteem heeft — de data staat toch al
+in MongoDB, niet lokaal.
 
 ### Eigen VPS
 ```bash

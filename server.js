@@ -5,6 +5,7 @@
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
+const { MongoClient } = require("mongodb");
 
 // ---------- Minimal .env loader (no dependency) ----------
 // Reads KEY=VALUE lines from .env in this folder and applies them to
@@ -35,6 +36,8 @@ const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6";
 const DAILY_GENERATE_CAP = parseInt(process.env.DAILY_GENERATE_CAP || "300", 10);
 const PER_IP_HOURLY_CAP = parseInt(process.env.PER_IP_HOURLY_CAP || "20", 10);
 const UNSPLASH_ACCESS_KEY = process.env.UNSPLASH_ACCESS_KEY || "";
+const MONGODB_URI = process.env.MONGODB_URI || "";
+const MONGODB_DB_NAME = process.env.MONGODB_DB || "weekmenu";
 
 const DATA_DIR = path.join(__dirname, "data");
 const DATA_FILE = path.join(DATA_DIR, "store.json");
@@ -58,6 +61,72 @@ function saveStore(store) {
 }
 function todayKey() {
   return new Date().toISOString().slice(0, 10);
+}
+
+// ---------- Persistent storage: MongoDB Atlas if configured, else the local file above ----------
+// The local file works for quick local testing, but on most hosting platforms (including
+// Render's free tier) the filesystem is wiped on every restart/redeploy — so for anything
+// long-lived, set MONGODB_URI (see .env.example / README) to use a real persistent database.
+
+var mongoReady = MONGODB_URI
+  ? new MongoClient(MONGODB_URI).connect().then(function (client) {
+      console.log("Verbonden met MongoDB — data blijft nu bewaard tussen herstarts.");
+      return client.db(MONGODB_DB_NAME);
+    }).catch(function (err) {
+      console.error("Kon niet verbinden met MongoDB (" + err.message + ") — val terug op lokale, niet-blijvende opslag.");
+      return null;
+    })
+  : Promise.resolve(null);
+
+function dbGetDoc(docPath) {
+  return mongoReady.then(function (db) {
+    if (!db) {
+      var store = loadStore();
+      var exists = Object.prototype.hasOwnProperty.call(store.docs, docPath);
+      return { exists: exists, value: exists ? store.docs[docPath] : null };
+    }
+    return db.collection("docs").findOne({ _id: docPath }).then(function (doc) {
+      return { exists: !!doc, value: doc ? doc.value : null };
+    });
+  });
+}
+
+function dbSetDoc(docPath, value) {
+  return mongoReady.then(function (db) {
+    if (!db) {
+      var store = loadStore();
+      store.docs[docPath] = value;
+      saveStore(store);
+      return;
+    }
+    return db.collection("docs").updateOne({ _id: docPath }, { $set: { value: value } }, { upsert: true });
+  });
+}
+
+function getUsageToday() {
+  var today = todayKey();
+  return mongoReady.then(function (db) {
+    if (!db) {
+      var store = loadStore();
+      return store.usage[today] || 0;
+    }
+    return db.collection("usage").findOne({ _id: today }).then(function (doc) {
+      return doc ? doc.count : 0;
+    });
+  });
+}
+
+function incrementUsageToday() {
+  var today = todayKey();
+  return mongoReady.then(function (db) {
+    if (!db) {
+      var store = loadStore();
+      store.usage[today] = (store.usage[today] || 0) + 1;
+      saveStore(store);
+      return;
+    }
+    return db.collection("usage").updateOne({ _id: today }, { $inc: { count: 1 } }, { upsert: true });
+  });
 }
 
 // ---------- Simple in-memory per-IP rate limiter (resets on restart) ----------
@@ -140,84 +209,85 @@ function handleGenerate(req, res) {
     return sendJSON(res, 429, { code: "rate_limited", message: "Te veel verzoeken vanaf dit adres. Probeer later opnieuw." });
   }
 
-  var store = loadStore();
-  var today = todayKey();
-  var usedToday = store.usage[today] || 0;
-  if (usedToday >= DAILY_GENERATE_CAP) {
-    return sendJSON(res, 429, { code: "rate_limited", message: "De dagelijkse limiet voor het genereren van gerechten is bereikt. Probeer het morgen opnieuw." });
-  }
-
   if (!ANTHROPIC_API_KEY) {
     return sendJSON(res, 500, { code: "not_configured", message: "Server heeft nog geen ANTHROPIC_API_KEY ingesteld." });
   }
 
-  readBody(req).then(function (body) {
-    var prompt = body && body.prompt;
-    if (!prompt || typeof prompt !== "string") {
-      return sendJSON(res, 400, { code: "bad_request", message: "Geen prompt meegegeven." });
+  getUsageToday().then(function (usedToday) {
+    if (usedToday >= DAILY_GENERATE_CAP) {
+      return sendJSON(res, 429, { code: "rate_limited", message: "De dagelijkse limiet voor het genereren van gerechten is bereikt. Probeer het morgen opnieuw." });
     }
 
-    return fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key": ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json"
-      },
-      body: JSON.stringify({
-        model: ANTHROPIC_MODEL,
-        max_tokens: 64000,
-        messages: [{ role: "user", content: prompt }]
-      })
-    }).then(function (apiRes) {
-      if (!apiRes.ok) {
-        return apiRes.text().then(function (t) {
-          throw new Error("Anthropic API error " + apiRes.status + ": " + t.slice(0, 300));
-        });
+    readBody(req).then(function (body) {
+      var prompt = body && body.prompt;
+      if (!prompt || typeof prompt !== "string") {
+        return sendJSON(res, 400, { code: "bad_request", message: "Geen prompt meegegeven." });
       }
-      return apiRes.json();
-    }).then(function (data) {
-      var textBlock = (data.content || []).filter(function (b) { return b.type === "text"; })[0];
-      if (!textBlock) throw new Error("Geen tekst in antwoord van model");
-      var parsed;
-      try {
-        parsed = extractJson(textBlock.text);
-      } catch (parseErr) {
-        if (data.stop_reason === "max_tokens") {
-          throw new Error("Antwoord werd afgekapt (te lang voor de ingestelde limiet). Probeer minder gerechten tegelijk te genereren, of verhoog max_tokens in server.js.");
+
+      return fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "x-api-key": ANTHROPIC_API_KEY,
+          "anthropic-version": "2023-06-01",
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({
+          model: ANTHROPIC_MODEL,
+          max_tokens: 64000,
+          messages: [{ role: "user", content: prompt }]
+        })
+      }).then(function (apiRes) {
+        if (!apiRes.ok) {
+          return apiRes.text().then(function (t) {
+            throw new Error("Anthropic API error " + apiRes.status + ": " + t.slice(0, 300));
+          });
         }
-        throw parseErr;
-      }
+        return apiRes.json();
+      }).then(function (data) {
+        var textBlock = (data.content || []).filter(function (b) { return b.type === "text"; })[0];
+        if (!textBlock) throw new Error("Geen tekst in antwoord van model");
+        var parsed;
+        try {
+          parsed = extractJson(textBlock.text);
+        } catch (parseErr) {
+          if (data.stop_reason === "max_tokens") {
+            throw new Error("Antwoord werd afgekapt (te lang voor de ingestelde limiet). Probeer minder gerechten tegelijk te genereren, of verhoog max_tokens in server.js.");
+          }
+          throw parseErr;
+        }
 
-      store.usage[today] = usedToday + 1;
-      saveStore(store);
+        incrementUsageToday();
 
-      sendJSON(res, 200, { result: parsed });
-    }).catch(function (err) {
-      sendJSON(res, 502, { code: "error", message: "Genereren mislukt: " + err.message });
+        sendJSON(res, 200, { result: parsed });
+      }).catch(function (err) {
+        sendJSON(res, 502, { code: "error", message: "Genereren mislukt: " + err.message });
+      });
+    }).catch(function () {
+      sendJSON(res, 400, { code: "bad_request", message: "Ongeldige aanvraag." });
     });
-  }).catch(function () {
-    sendJSON(res, 400, { code: "bad_request", message: "Ongeldige aanvraag." });
+  }).catch(function (err) {
+    sendJSON(res, 502, { code: "error", message: "Opslag niet bereikbaar: " + (err && err.message ? err.message : "onbekende fout") });
   });
 }
 
 function handleDbGet(req, res, query) {
   var p = query.get("path");
   if (!p) return sendJSON(res, 400, { message: "path ontbreekt" });
-  var store = loadStore();
-  var exists = Object.prototype.hasOwnProperty.call(store.docs, p);
-  sendJSON(res, 200, { exists: exists, value: exists ? store.docs[p] : null });
+  dbGetDoc(p).then(function (result) {
+    sendJSON(res, 200, result);
+  }).catch(function (err) {
+    sendJSON(res, 500, { message: "Opslag niet bereikbaar: " + err.message });
+  });
 }
 
 function handleDbSet(req, res) {
   readBody(req).then(function (body) {
     if (!body || !body.path) return sendJSON(res, 400, { message: "path ontbreekt" });
-    var store = loadStore();
-    store.docs[body.path] = body.value;
-    saveStore(store);
-    sendJSON(res, 200, { ok: true });
-  }).catch(function () {
-    sendJSON(res, 400, { message: "Ongeldige aanvraag." });
+    return dbSetDoc(body.path, body.value).then(function () {
+      sendJSON(res, 200, { ok: true });
+    });
+  }).catch(function (err) {
+    sendJSON(res, 400, { message: err && err.message ? err.message : "Ongeldige aanvraag." });
   });
 }
 
@@ -313,5 +383,8 @@ server.listen(PORT, function () {
   }
   if (!UNSPLASH_ACCESS_KEY) {
     console.log("Info: UNSPLASH_ACCESS_KEY niet ingesteld — de app werkt gewoon door, maar zonder gerechtfoto's.");
+  }
+  if (!MONGODB_URI) {
+    console.warn("WAARSCHUWING: MONGODB_URI is niet ingesteld — data wordt lokaal opgeslagen en gaat verloren bij een herstart/redeploy (bijv. op Render's gratis laag).");
   }
 });
