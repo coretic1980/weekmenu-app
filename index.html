@@ -198,25 +198,6 @@
   .guide-body h2 { font-family: "Fraunces", serif; font-weight: 600; font-size: 19px; margin: 0; }
   .guide-body p { margin: 0; font-size: 14.5px; line-height: 1.65; color: var(--muted); }
   .guide-divider { height: 1px; background: var(--line); margin: 2px 0; }
-  .wizard-progress { display: flex; gap: 6px; justify-content: center; }
-  .wizard-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--line); transition: background 0.2s; }
-  .wizard-dot.active { background: var(--accent2); }
-  .wizard-dot.done { background: var(--accent); }
-  .wizard-skip {
-    appearance: none; background: none; border: none; text-align: center; font-size: 13px;
-    color: var(--muted); text-decoration: underline; cursor: pointer; padding: 6px;
-  }
-  .wizard-nav { display: flex; gap: 12px; margin-top: auto; padding-top: 8px; }
-  .wizard-nav .primary-btn, .wizard-nav .ghost-btn { flex: 1; }
-  .fact-card {
-    background: var(--dark-panel); color: var(--dark-panel-ink); border-radius: 13px; padding: 24px;
-    display: flex; flex-direction: column; gap: 14px;
-  }
-  .fact-card .eyebrow { color: var(--accent2); }
-  .fact-card p { margin: 0; font-family: "Fraunces", serif; font-size: 17px; line-height: 1.5; font-style: italic; min-height: 3.2em; }
-  .fact-dots { display: flex; gap: 6px; justify-content: center; }
-  .fact-dot { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,0.25); }
-  .fact-dot.active { background: var(--accent2); }
   .pdf-preview-overlay {
     position: fixed; inset: 0; z-index: 70; background: var(--bg);
     display: flex; flex-direction: column;
@@ -493,7 +474,7 @@
     };
   })();
 
-  var state = { view: "weeks", weekId: null, dayId: null, stepIndex: 0, generating: false, genError: null, genSuccess: null, variating: false, variateError: null, planWeekId: null, planSlotKey: null, planDayName: null, dayServings: null, dayBackView: null, dayBackWeekId: null, dayBackDayName: null, wizardStep: 0 };
+  var state = { view: "weeks", weekId: null, dayId: null, stepIndex: 0, generating: false, genError: null, genSuccess: null, variating: false, variateError: null, planWeekId: null, planSlotKey: null, planDayName: null, dayServings: null, dayBackView: null, dayBackWeekId: null, dayBackDayName: null };
   var busyCount = 0;
   var busyMessages = [];
   function updateBusyUI() {
@@ -555,7 +536,6 @@
   var FLAVORS = ["Fris", "Romig", "Pittig", "Kruidig", "Hartig", "Umami"];
   var LEVELS = ["Basic", "Home-style", "Gastronomisch"];
   var EQUIPMENT = ["Gasfornuis", "Oven", "Airfryer", "Vleesgrill"];
-  var DIET_STYLES = ["Omnivoor", "Flexitarisch", "Vegetarisch", "Veganistisch"];
 
   var GENDERS = ["Man", "Vrouw", "Anders"];
   var ACTIVITY_LEVELS = ["Zittend", "Licht actief", "Gemiddeld actief", "Zeer actief"];
@@ -564,7 +544,6 @@
     cuisines: [],
     flavors: [],
     level: "Home-style",
-    dietStyle: "",
     equipment: EQUIPMENT.slice(),
     exclude: "",
     count: 7,
@@ -576,17 +555,6 @@
     activityLevel: "Gemiddeld actief",
     goal: "Onderhoud"
   };
-
-  function dietStyleInstructionText() {
-    if (!prefs.dietStyle) return "";
-    var notes = {
-      "Omnivoor": "geen beperkingen, alle voedingsmiddelen zijn toegestaan.",
-      "Flexitarisch": "overwegend plantaardig; vlees of vis mag af en toe voorkomen, maar niet in elk gerecht.",
-      "Vegetarisch": "geen vlees en geen vis; zuivel en eieren zijn wel toegestaan.",
-      "Veganistisch": "volledig plantaardig; geen vlees, vis, zuivel, eieren, honing of andere dierlijke producten."
-    };
-    return "- Voedingsstijl: " + prefs.dietStyle + " (" + notes[prefs.dietStyle] + ")\n";
-  }
 
   function findWeek(id) { return WEEKS.filter(function (w) { return w.id === id; })[0]; }
   function findDay(week, id) { return week.days.filter(function (d) { return d.id === id; })[0]; }
@@ -633,7 +601,6 @@
 
   function goto(view, extra) {
     stopTimer();
-    if (view !== "weeks") stopFactCarousel();
     state.view = view;
     if (extra) { for (var k in extra) { state[k] = extra[k]; } }
     render();
@@ -692,62 +659,11 @@
     return wrap;
   }
 
-  var FUN_FACTS = [
-    "Wist je dat? Eiwitrijke maaltijden houden je langer verzadigd dan koolhydraatrijke maaltijden met evenveel calorieën.",
-    "Balanza-tip: de Balans-score op elk gerecht laat zien hoe dicht de macroverdeling bij jouw doel zit — hoe hoger, hoe beter passend.",
-    "Wist je dat? Bij \u201cCutting\u201d ligt de nadruk bewust op meer eiwit, om spierbehoud te ondersteunen tijdens een calorietekort.",
-    "Balanza-tip: je kunt bij elk maaltijdmoment aangeven voor hoeveel personen je kookt — handig bij het avondeten met het gezin.",
-    "Wist je dat? Vezels uit groente en volkoren producten dragen niet alleen bij aan verzadiging, maar ook aan een gezonde spijsvertering.",
-    "Balanza-tip: sta je iets te haasten met koken? Kies \u201cBasic\u201d als culinair niveau voor snellere, eenvoudigere recepten.",
-    "Wist je dat? Bij \u201cSpieropbouw (lean bulk)\u201d ligt het accent bewust op meer koolhydraten, als brandstof voor training en herstel.",
-    "Balanza-tip: de boodschappenlijst kan dezelfde ingrediënten uit verschillende gerechten automatisch voor je bij elkaar optellen.",
-    "Wist je dat? Vet is niet de vijand — het is nodig voor de opname van vitamines A, D, E en K, en voor hormoonproductie.",
-    "Balanza-tip: een prepdag stelt een geconsolideerd plan samen om in bulk voor te bereiden, gebaseerd op precies jouw geplande week.",
-    "Wist je dat? Op \u201cOnderhoud\u201d streven we naar een gelijke verdeling tussen koolhydraten, eiwit en vet — duurzaam vol te houden.",
-    "Balanza-tip: niet tevreden met een gerecht? Laat het pittiger, simpeler of juist fine dining maken — de macro's blijven kloppen."
-  ];
-
-  var factInterval = null;
-  function startFactCarousel() {
-    if (factInterval) return;
-    factInterval = setInterval(function () {
-      state.factIndex = ((state.factIndex || 0) + 1) % FUN_FACTS.length;
-      render();
-    }, 8000);
-  }
-  function stopFactCarousel() {
-    if (factInterval) { clearInterval(factInterval); factInterval = null; }
-  }
-
   function renderWeeks() {
     var app = document.getElementById("app");
     app.innerHTML = "";
     app.appendChild(renderTopbar("Ontwerp je gebalanceerde maaltijden", false));
     var main = document.createElement("main");
-
-    if (state.generating) {
-      startFactCarousel();
-      var factCard = document.createElement("div");
-      factCard.className = "fact-card";
-      var factEyebrow = document.createElement("div");
-      factEyebrow.className = "eyebrow";
-      factEyebrow.textContent = "Terwijl je wacht…";
-      var factText = document.createElement("p");
-      factText.textContent = FUN_FACTS[(state.factIndex || 0) % FUN_FACTS.length];
-      var factDots = document.createElement("div");
-      factDots.className = "fact-dots";
-      FUN_FACTS.forEach(function (f, i) {
-        var d = document.createElement("div");
-        d.className = "fact-dot" + (i === (state.factIndex || 0) ? " active" : "");
-        factDots.appendChild(d);
-      });
-      factCard.appendChild(factEyebrow);
-      factCard.appendChild(factText);
-      factCard.appendChild(factDots);
-      main.appendChild(factCard);
-    } else {
-      stopFactCarousel();
-    }
 
     var logoWrap = document.createElement("div");
     logoWrap.style.display = "flex";
@@ -876,7 +792,6 @@
       prefs.cuisines = [];
       prefs.flavors = [];
       prefs.level = "Home-style";
-      prefs.dietStyle = "";
       prefs.equipment = EQUIPMENT.slice();
       prefs.exclude = "";
       prefs.count = 7;
@@ -898,190 +813,13 @@
       libraryGoalFilter = "Alle";
 
       showToast("Alles is gewist — je begint weer helemaal opnieuw.");
-      goto("wizard", { wizardStep: 0 });
+      goto("weeks");
     });
   }
 
   function toggleInArray(arr, val) {
     var i = arr.indexOf(val);
     if (i === -1) arr.push(val); else arr.splice(i, 1);
-  }
-
-  var WIZARD_STEP_COUNT = 6;
-
-  function finishWizard(goHome) {
-    savePrefs();
-    goto(goHome ? "weeks" : "prefs");
-  }
-
-  function renderWizard() {
-    var app = document.getElementById("app");
-    app.innerHTML = "";
-    app.appendChild(renderTopbar("Welkom", state.wizardStep > 0, function () { state.wizardStep -= 1; render(); }));
-    var main = document.createElement("main");
-
-    var progress = document.createElement("div");
-    progress.className = "wizard-progress";
-    for (var i = 0; i < WIZARD_STEP_COUNT; i++) {
-      var dot = document.createElement("div");
-      dot.className = "wizard-dot" + (i === state.wizardStep ? " active" : i < state.wizardStep ? " done" : "");
-      progress.appendChild(dot);
-    }
-    main.appendChild(progress);
-
-    function heading(title, sub) {
-      var h = document.createElement("h2");
-      h.style.fontFamily = "Fraunces, serif";
-      h.style.fontWeight = "600";
-      h.style.fontSize = "24px";
-      h.style.margin = "0";
-      h.textContent = title;
-      main.appendChild(h);
-      if (sub) {
-        var p = document.createElement("p");
-        p.style.margin = "0";
-        p.style.fontSize = "14.5px";
-        p.style.color = "var(--muted)";
-        p.style.lineHeight = "1.6";
-        p.textContent = sub;
-        main.appendChild(p);
-      }
-    }
-    function labelEl(text, hint) {
-      var l = document.createElement("div");
-      l.className = "field-label";
-      l.textContent = text;
-      main.appendChild(l);
-      if (hint) {
-        var h = document.createElement("div");
-        h.className = "field-hint";
-        h.textContent = hint;
-        main.appendChild(h);
-      }
-    }
-    function chipGroupMulti(options, selectedArr) {
-      var row = document.createElement("div");
-      row.className = "chiprow";
-      options.forEach(function (opt) {
-        var chip = document.createElement("button");
-        chip.className = "chip" + (selectedArr.indexOf(opt) > -1 ? " selected" : "");
-        chip.textContent = opt;
-        chip.onclick = function () { toggleInArray(selectedArr, opt); render(); };
-        row.appendChild(chip);
-      });
-      main.appendChild(row);
-    }
-    function chipGroupSingle(pairs, current, onPick) {
-      var row = document.createElement("div");
-      row.className = "chiprow";
-      pairs.forEach(function (pair) {
-        var chip = document.createElement("button");
-        chip.className = "chip" + (current === pair[0] ? " selected" : "");
-        chip.textContent = pair[1];
-        chip.onclick = function () { onPick(pair[0]); render(); };
-        row.appendChild(chip);
-      });
-      main.appendChild(row);
-    }
-
-    if (state.wizardStep === 0) {
-      heading("Welkom bij Balanza", "Laten we in een paar korte stapjes je voorkeuren instellen, zodat de gerechten die we voor je maken meteen goed passen. Dit duurt minder dan een minuut.");
-      labelEl("Voor welke maaltijdmomenten wil je gerechten?", "Meerdere mogelijk");
-      chipGroupMulti(PLAN_MEALS, prefs.mealTypes);
-    } else if (state.wizardStep === 1) {
-      heading("Wat is je doel?", "Dit bepaalt de macroverdeling (koolhydraten/eiwit/vet) waar we naar streven.");
-      var goalPairs = Object.keys(GOAL_DESCRIPTIONS).map(function (g) { return [g, g]; });
-      chipGroupSingle(goalPairs, prefs.goal, function (g) { prefs.goal = g; });
-      var descBox = document.createElement("div");
-      descBox.className = "plainbox";
-      descBox.textContent = GOAL_DESCRIPTIONS[prefs.goal];
-      main.appendChild(descBox);
-    } else if (state.wizardStep === 2) {
-      heading("Heb je een voedingsstijl?", "Kies \u201cGeen voorkeur\u201d als dit niet van toepassing is.");
-      var dietPairs = [["", "Geen voorkeur"]].concat(DIET_STYLES.map(function (d) { return [d, d]; }));
-      chipGroupSingle(dietPairs, prefs.dietStyle, function (d) { prefs.dietStyle = d; });
-    } else if (state.wizardStep === 3) {
-      heading("Smaak en niveau", "Ook dit mag je overslaan als je geen voorkeur hebt.");
-      labelEl("Keukenstijl", "Meerdere mogelijk, of laat leeg");
-      chipGroupMulti(CUISINES, prefs.cuisines);
-      labelEl("Culinair niveau");
-      chipGroupSingle(LEVELS.map(function (l) { return [l, l]; }), prefs.level, function (l) { prefs.level = l; });
-    } else if (state.wizardStep === 4) {
-      heading("Lichaamsprofiel", "Optioneel \u2014 helpt om de porties nauwkeuriger af te stemmen. Mag je leeg laten.");
-      var bioRow = document.createElement("div");
-      bioRow.className = "segrow";
-      bioRow.style.flexWrap = "wrap";
-      [["heightCm", "Lengte (cm)"], ["weightKg", "Gewicht (kg)"], ["age", "Leeftijd"]].forEach(function (pair) {
-        var inp = document.createElement("input");
-        inp.className = "textinput";
-        inp.type = "number";
-        inp.placeholder = pair[1];
-        inp.value = prefs[pair[0]];
-        inp.style.flex = "1";
-        inp.style.minWidth = "104px";
-        inp.oninput = function (e) { prefs[pair[0]] = e.target.value; };
-        bioRow.appendChild(inp);
-      });
-      main.appendChild(bioRow);
-      labelEl("Geslacht");
-      chipGroupSingle([["", "Geen voorkeur"]].concat(GENDERS.map(function (g) { return [g, g]; })), prefs.gender, function (g) { prefs.gender = g; });
-      labelEl("Activiteitsniveau");
-      chipGroupSingle(ACTIVITY_LEVELS.map(function (a) { return [a, a]; }), prefs.activityLevel, function (a) { prefs.activityLevel = a; });
-    } else if (state.wizardStep === 5) {
-      heading("Alvast aan de slag?", "Wil je nu meteen gerechten laten genereren op basis van je voorkeuren?");
-
-      var plannedCount = plannedGenerationCount();
-
-      var withImgBtn = document.createElement("button");
-      withImgBtn.className = "primary-btn";
-      withImgBtn.textContent = "Ja, met afbeeldingen (" + formatEstimateRange(estimateGenerationSeconds(plannedCount, true)) + ")";
-      withImgBtn.onclick = function () { savePrefs(); goto("weeks"); generateMeals(true); };
-      main.appendChild(withImgBtn);
-
-      var noImgBtn = document.createElement("button");
-      noImgBtn.className = "ghost-btn";
-      noImgBtn.textContent = "Ja, zonder afbeeldingen (" + formatEstimateRange(estimateGenerationSeconds(plannedCount, false)) + ")";
-      noImgBtn.onclick = function () { savePrefs(); goto("weeks"); generateMeals(false); };
-      main.appendChild(noImgBtn);
-
-      var laterSpacer = document.createElement("div");
-      laterSpacer.style.flex = "1";
-      main.appendChild(laterSpacer);
-
-      var laterBtn = document.createElement("button");
-      laterBtn.className = "wizard-skip";
-      laterBtn.textContent = "Nee, ik doe dit later zelf";
-      laterBtn.onclick = function () { finishWizard(false); };
-      main.appendChild(laterBtn);
-
-      app.appendChild(main);
-      return;
-    }
-
-    var spacer = document.createElement("div");
-    spacer.style.flex = "1";
-    main.appendChild(spacer);
-
-    var skipBtn = document.createElement("button");
-    skipBtn.className = "wizard-skip";
-    skipBtn.textContent = "Overslaan, gebruik standaardinstellingen";
-    skipBtn.onclick = function () { finishWizard(false); };
-    main.appendChild(skipBtn);
-
-    var nav = document.createElement("div");
-    nav.className = "wizard-nav";
-    var nextBtn = document.createElement("button");
-    nextBtn.className = "primary-btn";
-    var isLast = state.wizardStep === WIZARD_STEP_COUNT - 1;
-    nextBtn.textContent = isLast ? "Aan de slag!" : "Volgende";
-    nextBtn.onclick = function () {
-      if (isLast) { finishWizard(false); }
-      else { state.wizardStep += 1; render(); }
-    };
-    nav.appendChild(nextBtn);
-    main.appendChild(nav);
-
-    app.appendChild(main);
   }
 
   function renderPrefs() {
@@ -1127,19 +865,6 @@
     labelEl("Keukenstijl", "Meerdere mogelijk, of laat leeg voor geen voorkeur");
     chipGroup(CUISINES, prefs.cuisines);
 
-    labelEl("Voedingsstijl");
-    var dietSeg = document.createElement("div");
-    dietSeg.className = "segrow";
-    dietSeg.style.flexWrap = "wrap";
-    [["", "Geen voorkeur"]].concat(DIET_STYLES.map(function (d) { return [d, d]; })).forEach(function (pair) {
-      var chip = document.createElement("button");
-      chip.className = "chip" + (prefs.dietStyle === pair[0] ? " selected" : "");
-      chip.textContent = pair[1];
-      chip.onclick = function () { prefs.dietStyle = pair[0]; render(); };
-      dietSeg.appendChild(chip);
-    });
-    main.appendChild(dietSeg);
-
     labelEl("Smaakprofiel");
     chipGroup(FLAVORS, prefs.flavors);
 
@@ -1167,10 +892,10 @@
     excl.oninput = function (e) { prefs.exclude = e.target.value; };
     main.appendChild(excl);
 
-    labelEl("Aantal gerechten per maaltijdmoment");
+    labelEl("Aantal gerechten");
     var sel = document.createElement("select");
     sel.className = "selectinput";
-    [1, 2, 3, 4, 5, 6, 7].forEach(function (n) {
+    [3, 4, 5, 6, 7].forEach(function (n) {
       var o = document.createElement("option");
       o.value = n; o.textContent = n;
       if (n === prefs.count) o.selected = true;
@@ -1273,11 +998,8 @@
     var goBtn = document.createElement("button");
     goBtn.className = "primary-btn";
     goBtn.disabled = state.generating;
-    var estSecs = estimateGenerationSeconds(plannedGenerationCount(), false);
-    goBtn.textContent = state.generating
-      ? "Bezig met genereren… (" + formatEstimateRange(estSecs) + ")"
-      : "Genereer gerechten (" + formatEstimateRange(estSecs) + ")";
-    goBtn.onclick = function () { generateMeals(false); };
+    goBtn.textContent = state.generating ? "Bezig met genereren… (kan 10-30 sec duren)" : "Genereer gerechten";
+    goBtn.onclick = generateMeals;
     main.appendChild(goBtn);
 
     app.appendChild(main);
@@ -1370,7 +1092,6 @@
       "- Keukenstijl: " + cuisineTxt + "\n" +
       "- Smaakprofiel: " + flavorTxt + "\n" +
       "- Culinair niveau: " + prefs.level + "\n" +
-      dietStyleInstructionText() +
       "- Beschikbare apparatuur: " + equipTxt + "\n" +
       "- Uitgesloten ingrediënten: " + excludeTxt + "\n" +
       buildBodyProfileLine() +
@@ -1386,41 +1107,12 @@
       "timer_seconds alleen toevoegen bij stappen met wachttijd (koken, bakken, grillen, oven, sudderen); anders weglaten.";
   }
 
-  function plannedGenerationCount() {
-    var n = prefs.mealTypes.length || 1;
-    return prefs.count * n;
-  }
-
-  function estimateGenerationSeconds(count, withImages) {
-    var base = 4;
-    var perDish = 4.5;
-    var imageOverhead = withImages ? 3 : 0;
-    return base + count * perDish + imageOverhead;
-  }
-  function formatEstimateRange(seconds) {
-    var low = Math.max(3, Math.round(seconds * 0.7));
-    var high = Math.round(seconds * 1.4);
-    return "~" + low + "-" + high + " sec";
-  }
-
-  function fetchImageForDish(day) {
-    return fetch("/api/image?query=" + encodeURIComponent(day.name)).then(function (res) {
-      return res.ok ? res.json() : { url: null, credit: null };
-    }).then(function (data) {
-      day.imageUrl = data.url || null;
-      day.imageCredit = data.credit || null;
-    }).catch(function () {
-      day.imageUrl = null;
-    });
-  }
-
-  function generateMeals(withImages) {
+  function generateMeals() {
     if (state.generating) return;
     state.genError = null;
     state.genSuccess = null;
     state.generating = true;
-    var estRange = formatEstimateRange(estimateGenerationSeconds(plannedGenerationCount(), withImages));
-    busyStart("Gerechten worden gegenereerd… (" + estRange + ")");
+    busyStart("Gerechten worden gegenereerd…");
     savePrefs();
     render();
 
@@ -1466,21 +1158,15 @@
           };
         });
 
-        if (withImages) {
-          busyEnd();
-          busyStart("Afbeeldingen worden opgehaald…");
-        }
-        Promise.resolve(withImages ? Promise.all(days.map(fetchImageForDish)) : null).then(function () {
-          busyEnd();
-          addToCacheLibrary(days);
-          persistDishesToDb(days);
-          state.generating = false;
-          var successMsg = days.length + (days.length === 1 ? " gerecht is" : " gerechten zijn") +
-            " gegenereerd en toegevoegd aan de lijst met opgeslagen gerechten.";
-          state.genSuccess = successMsg;
-          showToast(successMsg);
-          render();
-        });
+        addToCacheLibrary(days);
+        persistDishesToDb(days);
+        state.generating = false;
+        busyEnd();
+        var successMsg = days.length + (days.length === 1 ? " gerecht is" : " gerechten zijn") +
+          " gegenereerd en toegevoegd aan de lijst met opgeslagen gerechten.";
+        state.genSuccess = successMsg;
+        showToast(successMsg);
+        render();
       }).catch(function (e) {
         state.generating = false;
         busyEnd();
@@ -3201,7 +2887,6 @@
     return "Hier is een bestaand gerecht in JSON: " + JSON.stringify(current) + "\n\n" +
       "Opdracht: " + instructionMap[kind] + "\n" +
       "Streef naar een macroverdeling passend bij het doel \"" + prefs.goal + "\": " + GOAL_DESCRIPTIONS[prefs.goal] + "\n" +
-      (prefs.dietStyle ? dietStyleInstructionText() : "") +
       "Geef ALLEEN geldig JSON terug, exact dit schema, geen markdown, geen uitleg erbuiten:\n" +
       '{"name": "gerechtnaam", "kcal": 600, "kh_g": 50, "eiwit_g": 48, "vet_g": 22, ' +
       '"benodigdheden": "korte tekst met keukenapparatuur", "ingredienten": ["ingredient 1", "ingredient 2"], ' +
@@ -3485,7 +3170,6 @@
         cuisines: prefs.cuisines,
         flavors: prefs.flavors,
         level: prefs.level,
-        dietStyle: prefs.dietStyle,
         equipment: prefs.equipment,
         exclude: prefs.exclude,
         count: prefs.count,
@@ -3688,7 +3372,6 @@
     return "Je bent een voedingskundige chef-kok. Genereer in totaal " + totalCount + " macro-gebalanceerde " +
       "gerechten (per 1 persoon), verdeeld als: " + countTxt + ". Precies deze aantallen per maaltijdmoment.\n" +
       "- Keukenstijl: " + cuisineTxt + "\n- Smaakprofiel: " + flavorTxt + "\n- Culinair niveau: " + prefs.level + "\n" +
-      dietStyleInstructionText() +
       "- Beschikbare apparatuur: " + equipTxt + "\n" +
       buildBodyProfileLine() +
       goalInstructionText() + "\n" +
@@ -3759,12 +3442,9 @@
           if (!uid) return;
           var prefsRef = db.doc("data/users/" + uid + "/prefs");
           prefsRef.get().then(function (psnap) {
-            if (!psnap.exists) {
-              if (state.view === "weeks") { state.wizardStep = 0; state.view = "wizard"; render(); }
-              return;
-            }
+            if (!psnap.exists) return;
             var pdata = psnap.data() || {};
-            ["cuisines", "flavors", "level", "dietStyle", "equipment", "exclude", "count", "mealTypes", "gender", "heightCm", "weightKg", "age", "activityLevel", "goal"].forEach(function (k) {
+            ["cuisines", "flavors", "level", "equipment", "exclude", "count", "mealTypes", "gender", "heightCm", "weightKg", "age", "activityLevel", "goal"].forEach(function (k) {
               if (pdata[k] !== undefined) prefs[k] = deepClone(pdata[k]);
             });
             render();
@@ -3922,7 +3602,6 @@
       if (state.view === "weeks") renderWeeks();
       else if (state.view === "library") renderLibrary();
       else if (state.view === "guide") renderGuide();
-      else if (state.view === "wizard") renderWizard();
       else if (state.view === "prefs") renderPrefs();
       else if (state.view === "plan") renderPlan();
       else if (state.view === "planadd") renderPlanAdd();
