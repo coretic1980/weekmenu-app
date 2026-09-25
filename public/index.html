@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Balanza">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="theme-color" content="#0E1A30">
+<meta name="theme-color" content="#0A0805">
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
@@ -19,13 +19,30 @@
     box-sizing: border-box;
     padding-top: env(safe-area-inset-top, 0px);
     padding-bottom: env(safe-area-inset-bottom, 0px);
+    --bg: #0A0805;
+    --surface: #17130C;
+    --ink: #F3EEE2;
+    --muted: #A89A80;
+    --label: #8C8270;
+    --line: #2E2517;
+    --accent: #C6A15B;
+    --accent-ink: #14110C;
+    --accent2: #D4A24A;
+    --accent2-ink: #241800;
+    --tag-kh-bg: #1C1912; --tag-kh-ink: #DCD7C6;
+    --tag-eiwit-bg: #1A1712; --tag-eiwit-ink: #D6CFBC;
+    --tag-vet-bg: #241A0C; --tag-vet-ink: #E8C583;
+    --dark-panel: #241C0E;
+    --dark-panel-ink: #F3EEE2;
+  }
+  :root[data-theme="light"] {
     --bg: #F7F2E7;
     --surface: #FFFDF8;
     --ink: #10182B;
     --muted: #6B6152;
     --label: #8C8270;
     --line: #E7DFCC;
-    --accent: #0E1A30;
+    --accent: #0A0805;
     --accent-ink: #F7F2E7;
     --accent2: #B8863B;
     --accent2-ink: #2A1C00;
@@ -34,42 +51,6 @@
     --tag-vet-bg: #F3E6D0; --tag-vet-ink: #8A6220;
     --dark-panel: #0A1120;
     --dark-panel-ink: #F7F2E7;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-      --bg: #14110C;
-      --surface: #1E1A13;
-      --ink: #F3EEE2;
-      --muted: #B3A991;
-      --label: #8C8270;
-      --line: #33291B;
-      --accent: #C6A15B;
-      --accent-ink: #14110C;
-      --accent2: #D4A24A;
-      --accent2-ink: #241800;
-      --tag-kh-bg: #23241E; --tag-kh-ink: #DCD7C6;
-      --tag-eiwit-bg: #221F19; --tag-eiwit-ink: #D6CFBC;
-      --tag-vet-bg: #302512; --tag-vet-ink: #E8C583;
-      --dark-panel: #0A0805;
-      --dark-panel-ink: #F3EEE2;
-    }
-  }
-  :root[data-theme="dark"] {
-    --bg: #14110C;
-    --surface: #1E1A13;
-    --ink: #F3EEE2;
-    --muted: #B3A991;
-    --label: #8C8270;
-    --line: #33291B;
-    --accent: #C6A15B;
-    --accent-ink: #14110C;
-    --accent2: #D4A24A;
-    --accent2-ink: #241800;
-    --tag-kh-bg: #23241E; --tag-kh-ink: #DCD7C6;
-    --tag-eiwit-bg: #221F19; --tag-eiwit-ink: #D6CFBC;
-    --tag-vet-bg: #302512; --tag-vet-ink: #E8C583;
-    --dark-panel: #0A0805;
-    --dark-panel-ink: #F3EEE2;
   }
   html, body { height: 100%; }
   html { scroll-padding-top: env(safe-area-inset-top, 0px); }
@@ -493,6 +474,17 @@
     };
   })();
 
+  var currentTheme = (function () {
+    try { return localStorage.getItem("weekmenu_theme") || "dark"; } catch (e) { return "dark"; }
+  })();
+  try { document.documentElement.setAttribute("data-theme", currentTheme); } catch (e) {}
+  function toggleTheme() {
+    currentTheme = currentTheme === "dark" ? "light" : "dark";
+    try { document.documentElement.setAttribute("data-theme", currentTheme); } catch (e) {}
+    try { localStorage.setItem("weekmenu_theme", currentTheme); } catch (e) {}
+    render();
+  }
+
   var state = { view: "weeks", weekId: null, dayId: null, stepIndex: 0, generating: false, genError: null, genSuccess: null, variating: false, variateError: null, planWeekId: null, planSlotKey: null, planDayName: null, dayServings: null, dayBackView: null, dayBackWeekId: null, dayBackDayName: null, wizardStep: 0 };
   var busyCount = 0;
   var busyMessages = [];
@@ -646,6 +638,14 @@
     var h = document.createElement("h1");
     h.textContent = title;
     el.appendChild(h);
+    var themeBtn = document.createElement("button");
+    themeBtn.className = "backbtn";
+    themeBtn.setAttribute("aria-label", currentTheme === "dark" ? "Zet lichte modus aan" : "Zet donkere modus aan");
+    themeBtn.innerHTML = currentTheme === "dark"
+      ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>'
+      : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+    themeBtn.onclick = function () { toggleTheme(); };
+    el.appendChild(themeBtn);
     if (showBack) {
       var homeBtn = document.createElement("button");
       homeBtn.className = "backbtn";
@@ -2783,14 +2783,22 @@
     function ensureRoom(h) {
       if (y + h > maxY) { doc.addPage(); y = margin; }
     }
+    function measureWrappedLines(text, size) {
+      var s = size || 11.5;
+      var boxSize = s * 0.65;
+      var textIndent = boxSize + 8;
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(s);
+      return doc.splitTextToSize(text, pageW - margin * 2 - textIndent).length;
+    }
     function heading(text, size) {
       ensureRoom(size + 10);
-      doc.setTextColor(22, 48, 92);
-      doc.setFont("helvetica", "bold");
+      doc.setTextColor(14, 26, 48);
+      doc.setFont("times", "bold");
       doc.setFontSize(size);
       doc.text(text, margin, y);
       y += size + 8;
-      doc.setTextColor(20, 24, 34);
+      doc.setTextColor(16, 24, 43);
     }
     function bodyLines(text, opts) {
       doc.setFont("helvetica", opts && opts.bold ? "bold" : "normal");
@@ -2812,7 +2820,7 @@
       wrapped.forEach(function (line, idx) {
         ensureRoom(lineH);
         if (idx === 0) {
-          doc.setDrawColor(140, 140, 140);
+          doc.setDrawColor(150, 142, 125);
           doc.rect(margin, y - boxSize + 2, boxSize, boxSize);
         }
         doc.text(line, margin + textIndent, y);
@@ -2821,17 +2829,27 @@
     }
 
     heading("Boodschappenlijst — " + title, 20);
-    y += 4;
+    doc.setDrawColor(184, 134, 59);
+    doc.setLineWidth(2);
+    doc.line(margin, y - 2, margin + 50, y - 2);
+    doc.setLineWidth(1);
+    y += 10;
 
     if (mode === "day") {
       entries.forEach(function (entry) {
         var day = entry.day;
+        var visibleIngs = day.ingredienten.filter(function (ing) { return !isTapWater(parseIngredientLine(ing).name); });
+        var estHeight = 16 + 13 + 8;
+        visibleIngs.forEach(function (ing) { estHeight += measureWrappedLines(scaleIngredientText(ing, entry.servings || 1), 11.5) * lineH; });
+        estHeight += 6;
+        var availableOnFreshPage = maxY - margin;
+        if (y > margin && y + estHeight > maxY && estHeight <= availableOnFreshPage) { doc.addPage(); y = margin; }
         ensureRoom(24);
-        doc.setDrawColor(200, 208, 222);
+        doc.setDrawColor(231, 223, 204);
         doc.line(margin, y, pageW - margin, y);
         y += 16;
         heading(entry.label + " — " + day.name, 13);
-        day.ingredienten.forEach(function (ing) { if (isTapWater(parseIngredientLine(ing).name)) return; checkboxLine(scaleIngredientText(ing, entry.servings || 1), { size: 11.5 }); });
+        visibleIngs.forEach(function (ing) { checkboxLine(scaleIngredientText(ing, entry.servings || 1), { size: 11.5 }); });
         y += 6;
       });
     } else {
@@ -2839,8 +2857,13 @@
       CATEGORY_ORDER.forEach(function (cat) {
         var items = byCategory[cat];
         if (!items.length) return;
+        var estHeight = 16 + 13 + 8;
+        items.forEach(function (item) { estHeight += measureWrappedLines(item.text, 11.5) * lineH; });
+        estHeight += 6;
+        var availableOnFreshPage = maxY - margin;
+        if (y > margin && y + estHeight > maxY && estHeight <= availableOnFreshPage) { doc.addPage(); y = margin; }
         ensureRoom(24);
-        doc.setDrawColor(200, 208, 222);
+        doc.setDrawColor(231, 223, 204);
         doc.line(margin, y, pageW - margin, y);
         y += 16;
         heading(cat, 13);
@@ -2882,16 +2905,16 @@
     var lineH = 15;
     var maxY = pageH - margin;
 
-    var NAVY = [22, 48, 92];
-    var INK = [20, 24, 34];
-    var MUTED = [107, 100, 90];
-    var ORANGE = [245, 130, 31];
-    var ORANGE_INK = [58, 30, 0];
-    var KH_BG = [232, 238, 247], KH_INK = [30, 58, 102];
-    var EIWIT_BG = [238, 240, 244], EIWIT_INK = [58, 66, 87];
-    var VET_BG = [253, 236, 218], VET_INK = [180, 89, 10];
-    var NEUTRAL_BG = [244, 246, 250];
-    var LINE = [225, 229, 238];
+    var NAVY = [14, 26, 48];
+    var INK = [16, 24, 43];
+    var MUTED = [107, 97, 82];
+    var ORANGE = [184, 134, 59];
+    var ORANGE_INK = [42, 28, 0];
+    var KH_BG = [233, 231, 222], KH_INK = [16, 24, 43];
+    var EIWIT_BG = [237, 234, 225], EIWIT_INK = [74, 68, 56];
+    var VET_BG = [243, 230, 208], VET_INK = [138, 98, 32];
+    var NEUTRAL_BG = [247, 242, 231];
+    var LINE = [231, 223, 204];
 
     function ensureRoom(h) {
       if (y + h > maxY) { doc.addPage(); y = margin; }
@@ -2945,7 +2968,7 @@
     if (subtitle) {
       doc.setFont("helvetica", "normal");
       doc.setFontSize(12);
-      doc.setTextColor(220, 228, 240);
+      doc.setTextColor(224, 216, 196);
       doc.text(subtitle, margin, 168);
     }
     doc.setDrawColor(ORANGE[0], ORANGE[1], ORANGE[2]);
