@@ -9,12 +9,25 @@ Losstaande versie van de weekmenu-app. Geen build-stap, geen npm-dependencies
   compatibiliteitslaag bovenin die `window.claude.use(...)`-aanroepen
   vervangt door gewone `fetch()`-calls naar deze server).
 - `server.js` — serveert de app en biedt drie endpoints:
-  - `POST /api/generate` — stuurt een prompt door naar de Anthropic API met
-    **jouw** API-key, met rate limiting en een dagelijks plafond.
+  - `POST /api/generate` — bouwt de AI-prompt zelf op (op basis van ruwe
+    voorkeuren die de browser meestuurt, nooit de kant-en-klare prompttekst)
+    en stuurt die door naar de Anthropic API met **jouw** API-key, met rate
+    limiting en een dagelijks plafond.
   - `GET/POST /api/db` — simpele opslag voor voorkeuren, gerechten en
     planning (per browser, via een anoniem ID in localStorage — geen login).
 - `data/store.json` — wordt automatisch aangemaakt; hierin staan alle
   opgeslagen voorkeuren/gerechten/planning én de teller voor het dagplafond.
+
+## Prompt-privacy
+
+De browser stuurt bij het genereren van gerechten alleen ruwe voorkeuren op
+(bijv. `{"action":"generate","params":{"goal":"Onderhoud","cuisines":[...]}}`)
+naar `server.js` — nooit de volledig samengestelde AI-instructietekst zelf.
+Die opbouwlogica (de exacte bewoording, structuur en het JSON-schema dat aan
+het model wordt gegeven) staat uitsluitend in `server.js`, dat nooit naar de
+browser wordt verstuurd. Wie de Netwerk-tab of de paginabron van de browser
+bekijkt, ziet dus alleen losse instellingen — niet de prompt-engineering
+zelf.
 
 ## Lokaal draaien
 

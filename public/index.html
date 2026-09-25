@@ -382,11 +382,11 @@
     use: function (name) {
       if (name === "sample") {
         return Promise.resolve({
-          json: function (prompt) {
+          json: function (payload) {
             return fetch("/api/generate", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ prompt: prompt })
+              body: JSON.stringify(payload)
             }).then(function (res) {
               if (!res.ok) return parseErrorFromResponse(res).then(function (e) { throw e; });
               return res.json();
@@ -535,6 +535,9 @@
   var libraryFilter = "Alle";
   var libraryGoalFilter = "Alle";
   var shoppingViewMode = "week";
+  var priceCache = {};
+  var shoppingPriceLoading = false;
+  var shoppingPriceError = null;
   var timerInterval = null;
   var timerRemaining = 0;
   var timerRunning = false;
@@ -576,17 +579,6 @@
     activityLevel: "Gemiddeld actief",
     goal: "Onderhoud"
   };
-
-  function dietStyleInstructionText() {
-    if (!prefs.dietStyle) return "";
-    var notes = {
-      "Omnivoor": "geen beperkingen, alle voedingsmiddelen zijn toegestaan.",
-      "Flexitarisch": "overwegend plantaardig; vlees of vis mag af en toe voorkomen, maar niet in elk gerecht.",
-      "Vegetarisch": "geen vlees en geen vis; zuivel en eieren zijn wel toegestaan.",
-      "Veganistisch": "volledig plantaardig; geen vlees, vis, zuivel, eieren, honing of andere dierlijke producten."
-    };
-    return "- Voedingsstijl: " + prefs.dietStyle + " (" + notes[prefs.dietStyle] + ")\n";
-  }
 
   function findWeek(id) { return WEEKS.filter(function (w) { return w.id === id; })[0]; }
   function findDay(week, id) { return week.days.filter(function (d) { return d.id === id; })[0]; }
@@ -1310,82 +1302,6 @@
     return Math.max(0, Math.min(100, score));
   }
 
-  var MEALTYPE_GUIDE = {
-    "Ontbijt": { min: 350, max: 450, desc: "een ontbijt (bijv. eieren, havermout, kwark, yoghurt, brood) — geen zware avondmaaltijd-gerechten" },
-    "Lunch": { min: 450, max: 550, desc: "een lunch (bijv. salade, bowl, belegd brood, soep met brood) — praktisch te bereiden of mee te nemen" },
-    "Diner": { min: 550, max: 650, desc: "een volwaardige warme avondmaaltijd" },
-    "Snack": { min: 150, max: 250, desc: "een tussendoortje, klein en snel" }
-  };
-
-  var GOAL_KCAL_MULTIPLIER = {
-    "Onderhoud": 1,
-    "Vetverlies (spierbehoud)": 0.85,
-    "Cutting": 0.65,
-    "Spieropbouw (lean bulk)": 1.15,
-    "Atleet (prestatiegericht)": 1.1
-  };
-
-  function mealtypeGuideText(mealType) {
-    var g = MEALTYPE_GUIDE[mealType];
-    var mult = GOAL_KCAL_MULTIPLIER[prefs.goal] || 1;
-    var min = Math.max(80, Math.round(g.min * mult / 10) * 10);
-    var max = Math.max(min + 40, Math.round(g.max * mult / 10) * 10);
-    return min + "-" + max + " kcal per portie; " + g.desc;
-  }
-
-  function goalInstructionText() {
-    return "Streef naar een macroverdeling passend bij het doel \"" + prefs.goal + "\": " +
-      GOAL_DESCRIPTIONS[prefs.goal] + " (elke macro binnen 2-3 procentpunt van het streefpercentage). ";
-  }
-
-  function buildBodyProfileLine() {
-    if (!prefs.gender && !prefs.heightCm && !prefs.weightKg && !prefs.age) return "";
-    var bits = [];
-    if (prefs.gender) bits.push(prefs.gender);
-    if (prefs.age) bits.push(prefs.age + " jaar");
-    if (prefs.heightCm) bits.push(prefs.heightCm + " cm");
-    if (prefs.weightKg) bits.push(prefs.weightKg + " kg");
-    bits.push("activiteitsniveau: " + prefs.activityLevel.toLowerCase());
-    return "- Lichaamsprofiel: " + bits.join(", ") + " — stem portiegrootte en calorieën hierop af (naast de " +
-      "maaltijdmoment-richtlijn hierboven)\n";
-  }
-
-  function buildPrompt() {
-    var cuisineTxt = prefs.cuisines.length ? prefs.cuisines.join(", ") : "geen specifieke voorkeur";
-    var flavorTxt = prefs.flavors.length ? prefs.flavors.join(", ") : "geen specifieke voorkeur";
-    var equipTxt = prefs.equipment.length ? prefs.equipment.join(", ") : "standaard fornuis en oven";
-    var excludeTxt = prefs.exclude.trim() ? prefs.exclude.trim() : "geen";
-    var mealTypes = prefs.mealTypes.length ? prefs.mealTypes : ["Diner"];
-    var mealGuideTxt = mealTypes.map(function (mt) { return mt + " (" + mealtypeGuideText(mt) + ")"; }).join("; ");
-    var totalCount = prefs.count * mealTypes.length;
-    var mealInstruction = mealTypes.length === 1
-      ? "Alle " + prefs.count + " gerechten zijn bedoeld als " + mealTypes[0].toLowerCase() + "."
-      : "Genereer PRECIES " + prefs.count + " gerechten per maaltijdmoment (dus " + prefs.count + "x elk van: " +
-        mealTypes.join(", ") + " — in totaal " + totalCount + " gerechten). Niet verdelen of afronden, exact " +
-        prefs.count + " per moment.";
-    return "Je bent een voedingskundige chef-kok. Genereer in totaal " + totalCount + " macro-gebalanceerde " +
-      "gerechten (per 1 persoon) die voldoen aan:\n" +
-      "- Maaltijdmomenten: " + mealGuideTxt + "\n" +
-      mealInstruction + "\n" +
-      "- Keukenstijl: " + cuisineTxt + "\n" +
-      "- Smaakprofiel: " + flavorTxt + "\n" +
-      "- Culinair niveau: " + prefs.level + "\n" +
-      dietStyleInstructionText() +
-      "- Beschikbare apparatuur: " + equipTxt + "\n" +
-      "- Uitgesloten ingrediënten: " + excludeTxt + "\n" +
-      buildBodyProfileLine() +
-      goalInstructionText() +
-      "Gebruik reële, haalbare porties en ingrediënten die passen " +
-      "bij het gekozen maaltijdmoment van elk gerecht.\n" +
-      "Geef ALLEEN geldig JSON terug: een array van EXACT " + totalCount + " objecten (" + prefs.count +
-      " per maaltijdmoment), exact dit schema, geen markdown-opmaak, geen uitleg erbuiten:\n" +
-      '[{"name": "gerechtnaam", "mealType": "' + mealTypes[0] + '", "kcal": 600, "kh_g": 50, "eiwit_g": 48, "vet_g": 22, ' +
-      '"benodigdheden": "korte tekst met keukenapparatuur", "ingredienten": ["ingredient 1", "ingredient 2"], ' +
-      '"steps": [{"title": "korte staptitel", "content": "volledige instructie", "timer_seconds": 300}]}]\n' +
-      '"mealType" moet exact één van deze waarden zijn: ' + mealTypes.join(", ") + ". " +
-      "timer_seconds alleen toevoegen bij stappen met wachttijd (koken, bakken, grillen, oven, sudderen); anders weglaten.";
-  }
-
   function plannedGenerationCount() {
     var n = prefs.mealTypes.length || 1;
     return prefs.count * n;
@@ -1432,9 +1348,14 @@
         render();
         return;
       }
-      var prompt = buildPrompt();
+      var genParams = {
+        mealTypes: prefs.mealTypes, count: prefs.count, cuisines: prefs.cuisines, flavors: prefs.flavors,
+        level: prefs.level, dietStyle: prefs.dietStyle, equipment: prefs.equipment, exclude: prefs.exclude,
+        goal: prefs.goal, gender: prefs.gender, heightCm: prefs.heightCm, weightKg: prefs.weightKg,
+        age: prefs.age, activityLevel: prefs.activityLevel
+      };
       var mealTypesSel = prefs.mealTypes.length ? prefs.mealTypes : ["Diner"];
-      sample.json(prompt, { modelTier: "default" }).then(function (result) {
+      sample.json({ action: "generate", params: genParams }, { modelTier: "default" }).then(function (result) {
         var list = extractDishArray(result);
         if (!list || !list.length) throw new Error("Onverwacht antwoordformaat.");
 
@@ -2549,15 +2470,27 @@
     return formatAmount(Math.round((ml / 5) * 2) / 2) + " tl";
   }
 
-  var CATEGORY_ORDER = ["Groente & Fruit", "Brood & Granen", "Vlees, Vis & Kip", "Zuivel & Eieren", "Overige"];
+  var CATEGORY_ORDER = ["Groente & Fruit", "Brood & Granen", "Vlees, Vis & Kip", "Zuivel & Eieren", "Kruiden & Sausen", "Noten & Zaden", "Overige"];
   var CATEGORY_KEYWORDS = [
-    { label: "Groente & Fruit", keywords: ["aardappel", "ui", "knoflook", "paprika", "tomaat", "tomaatjes", "komkommer", "spinazie", "prei", "wortel", "broccoli", "sla", "citroen", "limoen", "appel", "banaan", "avocado", "doperwten", "groene bonen", "bloemkool", "courgette", "champignon", "peterselie", "koriander", "basilicum", "gember", "rucola", "venkel", "asperge", "framboos", "aardbei", "druif", "mango", "ananas", "selderij", "radijs", "biet", "spruitjes", "pompoen", "aubergine", "peer", "kiwi", "sinaasappel"] },
+    { label: "Noten & Zaden", keywords: ["amandel", "walnoot", "walnoten", "hazelnoot", "hazelnoten", "cashewnoot", "cashewnoten", "cashew", "pistache", "pinda", "macadamia", "paranoot", "pecannoot", "pecan", "pompoenpitten", "zonnebloempitten", "sesamzaad", "chiazaad", "lijnzaad", "maanzaad", "hennepzaad", "pindakaas", "notenmix", "amandelpasta", "tahin"] },
+    { label: "Groente & Fruit", keywords: ["aardappel", "ui", "knoflook", "paprika", "tomaat", "tomaatjes", "komkommer", "spinazie", "prei", "wortel", "broccoli", "sla", "citroen", "limoen", "appel", "banaan", "avocado", "doperwten", "groene bonen", "bloemkool", "courgette", "champignon", "peterselie", "koriander", "basilicum", "gember", "rucola", "venkel", "asperge", "framboos", "aardbei", "druif", "mango", "ananas", "selderij", "radijs", "biet", "spruitjes", "pompoen", "aubergine", "peer", "kiwi", "sinaasappel", "edamame", "boerenkool", "andijvie", "witlof", "raapstelen", "snijbonen", "sperziebonen", "zoete aardappel", "veldsla", "paksoi", "chinese kool", "rode kool", "witte kool", "savooiekool", "meloen", "granaatappel", "bosui", "sjalot"] },
     { label: "Brood & Granen", keywords: ["brood", "wrap", "pasta", "rijst", "zilvervlies", "volkoren", "havermout", "quinoa", "bulgur", "couscous", "cracker", "beschuit", "tortilla", "noedels", "spaghetti", "penne", "cracotte", "toast"] },
-    { label: "Vlees, Vis & Kip", keywords: ["kip", "kalkoen", "gehakt", "vis", "zalm", "tonijn", "garnalen", "spek", "ham", "worst", "biefstuk", "eend", "varkenshaas", "runderlappen", "kabeljauw", "kroket"] },
-    { label: "Zuivel & Eieren", keywords: ["kwark", "yoghurt", "melk", "kaas", "boter", "eieren", "ei ", " ei", "room", "mozzarella", "feta", "crème fraîche", "parmezaan", "ricotta"] }
+    { label: "Vlees, Vis & Kip", keywords: ["kip", "kalkoen", "gehakt", "vis", "zalm", "tonijn", "garnalen", "spek", "ham", "worst", "biefstuk", "eend", "varkenshaas", "runderlappen", "kabeljauw", "kroket", "rundvlees", "rund", "lamsvlees", "varkensvlees", "kalfsvlees", "gehaktbal", "shoarma", "gyros", "bacon", "chorizo", "salami", "pancetta", "forel", "makreel", "mosselen", "inktvis", "octopus", "krab", "kreeft", "kipfilet", "kipdij", "speklapjes", "entrecote", "ribeye"] },
+    { label: "Zuivel & Eieren", keywords: ["kwark", "yoghurt", "skyr", "hüttenkäse", "hutten kaas", "cottage cheese", "melk", "kaas", "boter", "eieren", "ei ", " ei", "room", "mozzarella", "feta", "crème fraîche", "parmezaan", "ricotta", "mascarpone", "burrata", "halloumi", "geitenkaas", "roomkaas", "karnemelk", "slagroom"] },
+    { label: "Kruiden & Sausen", keywords: ["zout", "peper", "paprikapoeder", "kerriepoeder", "kerrie", "komijn", "kaneel", "nootmuskaat", "oregano", "tijm", "rozemarijn", "laurier", "kruidnagel", "knoflookpoeder", "uipoeder", "chilipoeder", "chilivlokken", "specerij", "kruidenmix", "provençaalse kruiden", "sojasaus", "ketjap", "sriracha", "mosterd", "mayonaise", "ketchup", "pesto", "tomatensaus", "currypaste", "vissaus", "worcestersaus", "barbecuesaus", "bbq-saus", "hoisin", "sambal", "tabasco", "dressing", "azijn", "sesamolie", "visolie", "bouillon", "maggi", "teriyaki", "pindasaus", "satesaus", "chilisaus", "cocktailsaus", "knoflooksaus", "yoghurtsaus", "tzatziki", "chimichurri", "harissa", "piri piri", "oestersaus", "hoisinsaus", "honingmosterd", "honing", "balsamico", "appelazijn", "wijnazijn", "ahornsiroop", "esdoornsiroop", "agavesiroop", "vanille-extract", "vanillesuiker", "olijfolie", "zonnebloemolie", "kokosolie", "arachideolie", "raapolie", "walnootolie", "truffelolie", "frituurolie", "bakolie"] }
   ];
+  var CATEGORY_OVERRIDES = {
+    "pindasaus": "Kruiden & Sausen",
+    "satesaus": "Kruiden & Sausen",
+    "pindakaas": "Noten & Zaden",
+    "appelazijn": "Kruiden & Sausen",
+    "walnootolie": "Kruiden & Sausen"
+  };
   function categorizeIngredient(name) {
     var lower = " " + name.toLowerCase() + " ";
+    for (var key in CATEGORY_OVERRIDES) {
+      if (lower.indexOf(key) > -1) return CATEGORY_OVERRIDES[key];
+    }
     for (var i = 0; i < CATEGORY_KEYWORDS.length; i++) {
       var cat = CATEGORY_KEYWORDS[i];
       for (var j = 0; j < cat.keywords.length; j++) {
@@ -2576,6 +2509,11 @@
     return amtText + " " + parsed.name;
   }
 
+  var TAP_WATER_NAMES = ["water", "kraanwater", "koud water", "warm water", "heet water", "lauw water"];
+  function isTapWater(name) {
+    return TAP_WATER_NAMES.indexOf(name.trim().toLowerCase()) > -1;
+  }
+
   function buildAggregatedShoppingList(entries) {
     var groups = {};
     var order = [];
@@ -2583,6 +2521,7 @@
       var multiplier = entry.servings || 1;
       entry.day.ingredienten.forEach(function (raw) {
         var parsed = parseIngredientLine(raw);
+        if (isTapWater(parsed.name)) return;
         var matchKey = matchKeyForName(parsed.name);
         var conv = UNIT_CONVERSION[parsed.unit];
         var groupUnit = conv ? conv.family : parsed.unit;
@@ -2623,6 +2562,52 @@
     return byCategory;
   }
 
+  function estimateShoppingPrices(itemTexts) {
+    var uncached = [];
+    itemTexts.forEach(function (t) { if (!priceCache[t] && uncached.indexOf(t) === -1) uncached.push(t); });
+    if (!uncached.length) return;
+    shoppingPriceLoading = true;
+    shoppingPriceError = null;
+    render();
+    claude.use("sample").then(function (sample) {
+      if (!sample) {
+        shoppingPriceLoading = false;
+        shoppingPriceError = "Prijsschatting is in deze weergave niet beschikbaar.";
+        render();
+        return;
+      }
+      var prompt = "Je bent een prijsexpert voor Nederlandse supermarkten (zoals Albert Heijn en Jumbo). " +
+        "Geef voor elk van de onderstaande boodschappenlijst-items een realistische geschatte prijsrange in euro\'s, " +
+        "gebaseerd op de vermelde hoeveelheid en een gemiddeld huismerk/A-merk. " +
+        "Geef ALLEEN geldig JSON terug: een array van exact " + uncached.length + " objecten, in dezelfde volgorde " +
+        "als de items hieronder, elk exact dit schema: {\"laag\": number, \"hoog\": number} (bedragen in euro\'s, " +
+        "afgerond op 2 decimalen, laag <= hoog). Geen markdown, geen uitleg erbuiten.\n\nItems:\n" +
+        uncached.map(function (t, i) { return (i + 1) + ". " + t; }).join("\n");
+      sample.json(prompt, { modelTier: "default" }).then(function (result) {
+        var arr = extractDishArray(result);
+        if (arr) {
+          uncached.forEach(function (t, i) {
+            var p = arr[i];
+            if (p && typeof p.laag === "number" && typeof p.hoog === "number") {
+              priceCache[t] = { laag: p.laag, hoog: p.hoog };
+            }
+          });
+        }
+        shoppingPriceLoading = false;
+        if (!arr) shoppingPriceError = "Kon geen prijzen ophalen — probeer opnieuw.";
+        render();
+      }).catch(function () {
+        shoppingPriceLoading = false;
+        shoppingPriceError = "Prijsschatting mislukt — probeer opnieuw.";
+        render();
+      });
+    });
+  }
+
+  function formatEuro(n) {
+    return "€" + n.toFixed(2).replace(".", ",");
+  }
+
   function renderShoppingList(title, entries, backFn) {
     var app = document.getElementById("app");
     app.innerHTML = "";
@@ -2649,6 +2634,53 @@
     headerRow.appendChild(exportBtn);
 
     main.appendChild(headerRow);
+
+    var byCategory = shoppingViewMode === "day" ? null : buildAggregatedShoppingList(entries);
+    var pricingCategories = byCategory || buildAggregatedShoppingList(entries);
+    var currentItemTexts = [];
+    CATEGORY_ORDER.forEach(function (cat) { pricingCategories[cat].forEach(function (item) { currentItemTexts.push(item.text); }); });
+
+    var priceRow = document.createElement("div");
+    priceRow.style.display = "flex";
+    priceRow.style.alignItems = "center";
+    priceRow.style.gap = "12px";
+    priceRow.style.flexWrap = "wrap";
+
+    var knownPrices = currentItemTexts.map(function (t) { return priceCache[t]; }).filter(Boolean);
+    var allPriced = currentItemTexts.length > 0 && knownPrices.length === currentItemTexts.length;
+
+    if (allPriced) {
+      var totalLow = knownPrices.reduce(function (s, p) { return s + p.laag; }, 0);
+      var totalHigh = knownPrices.reduce(function (s, p) { return s + p.hoog; }, 0);
+      var totalBadge = document.createElement("div");
+      totalBadge.className = "tag balans";
+      totalBadge.textContent = "Geschat totaal: " + formatEuro(totalLow) + " – " + formatEuro(totalHigh);
+      priceRow.appendChild(totalBadge);
+    } else {
+      var priceBtn = document.createElement("button");
+      priceBtn.className = "ghost-btn";
+      priceBtn.disabled = shoppingPriceLoading || !currentItemTexts.length;
+      priceBtn.textContent = shoppingPriceLoading ? "Prijzen worden geschat…" : "Schat de kosten";
+      priceBtn.onclick = function () { estimateShoppingPrices(currentItemTexts); };
+      priceRow.appendChild(priceBtn);
+    }
+    main.appendChild(priceRow);
+
+    if (shoppingPriceError) {
+      var priceErr = document.createElement("div");
+      priceErr.className = "errorbox";
+      priceErr.textContent = shoppingPriceError;
+      main.appendChild(priceErr);
+    }
+    if (currentItemTexts.length > 0) {
+      var priceNote = document.createElement("div");
+      priceNote.style.fontSize = "12px";
+      priceNote.style.color = "var(--muted)";
+      priceNote.textContent = shoppingViewMode === "day"
+        ? "Het geschatte totaal is gebaseerd op de samengevoegde hoeveelheden per ingrediënt (zie \u201cPer week\u201d voor de prijs per ingrediënt) — een online-inschatting, geen actuele of gegarandeerde prijzen."
+        : "Prijzen zijn een online-inschatting op basis van gemiddelde Nederlandse supermarktprijzen, geen actuele of gegarandeerde prijzen.";
+      main.appendChild(priceNote);
+    }
 
     var modeRow = document.createElement("div");
     modeRow.className = "segrow";
@@ -2679,6 +2711,7 @@
         var group = document.createElement("div");
         group.className = "shop-group";
         day.ingredienten.forEach(function (ing, idx) {
+          if (isTapWater(parseIngredientLine(ing).name)) return;
           var key = entry.key + "|" + idx;
           var isChecked = !!shoppingChecked[key];
           var row = document.createElement("div");
@@ -2701,7 +2734,6 @@
         main.appendChild(group);
       });
     } else {
-      var byCategory = buildAggregatedShoppingList(entries);
       CATEGORY_ORDER.forEach(function (cat) {
         var items = byCategory[cat];
         if (!items.length) return;
@@ -2723,7 +2755,8 @@
             ? '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>'
             : '';
           var txt = document.createElement("span");
-          txt.textContent = item.text;
+          var itemPriceInfo = priceCache[item.text];
+          txt.textContent = item.text + (itemPriceInfo ? " (" + formatEuro(itemPriceInfo.laag) + " – " + formatEuro(itemPriceInfo.hoog) + ")" : "");
           row.appendChild(box);
           row.appendChild(txt);
           row.onclick = function () {
@@ -2769,6 +2802,23 @@
         y += lineH;
       });
     }
+    function checkboxLine(text, opts) {
+      var size = opts && opts.size ? opts.size : 11.5;
+      doc.setFont("helvetica", opts && opts.bold ? "bold" : "normal");
+      doc.setFontSize(size);
+      var boxSize = size * 0.65;
+      var textIndent = boxSize + 8;
+      var wrapped = doc.splitTextToSize(text, pageW - margin * 2 - textIndent);
+      wrapped.forEach(function (line, idx) {
+        ensureRoom(lineH);
+        if (idx === 0) {
+          doc.setDrawColor(140, 140, 140);
+          doc.rect(margin, y - boxSize + 2, boxSize, boxSize);
+        }
+        doc.text(line, margin + textIndent, y);
+        y += lineH;
+      });
+    }
 
     heading("Boodschappenlijst — " + title, 20);
     y += 4;
@@ -2781,7 +2831,7 @@
         doc.line(margin, y, pageW - margin, y);
         y += 16;
         heading(entry.label + " — " + day.name, 13);
-        day.ingredienten.forEach(function (ing) { bodyLines("\u2610  " + scaleIngredientText(ing, entry.servings || 1), { size: 11.5 }); });
+        day.ingredienten.forEach(function (ing) { if (isTapWater(parseIngredientLine(ing).name)) return; checkboxLine(scaleIngredientText(ing, entry.servings || 1), { size: 11.5 }); });
         y += 6;
       });
     } else {
@@ -2794,7 +2844,7 @@
         doc.line(margin, y, pageW - margin, y);
         y += 16;
         heading(cat, 13);
-        items.forEach(function (item) { bodyLines("\u2610  " + item.text, { size: 11.5 }); });
+        items.forEach(function (item) { checkboxLine(item.text, { size: 11.5 }); });
         y += 6;
       });
     }
@@ -3193,29 +3243,7 @@
     app.appendChild(main);
   }
 
-  function buildVariationPrompt(day, kind) {
-    var instructionMap = {
-      pittiger: "Maak dit gerecht duidelijk pittiger (meer chili/kruiden), zonder de kern van het gerecht te veranderen.",
-      simpeler: "Maak dit gerecht simpeler en basic: minder stappen, alledaagse ingrediënten, makkelijker om te bereiden.",
-      finedining: "Maak dit gerecht fine dining: verfijndere presentatie, technieken en smaakcombinaties, iets hoger culinair niveau.",
-      wisselkh: "Vervang de koolhydraatbron door een andere (bijv. rijst i.p.v. aardappel of andersom), maar behoud dezelfde macroverdeling."
-    };
-    var current = {
-      name: day.name, kcal: day.kcal,
-      ingredienten: day.ingredienten,
-      benodigdheden: day.benodigdheden,
-      steps: day.steps.map(function (s) { return s.title + ": " + s.content; })
-    };
-    return "Hier is een bestaand gerecht in JSON: " + JSON.stringify(current) + "\n\n" +
-      "Opdracht: " + instructionMap[kind] + "\n" +
-      "Streef naar een macroverdeling passend bij het doel \"" + prefs.goal + "\": " + GOAL_DESCRIPTIONS[prefs.goal] + "\n" +
-      (prefs.dietStyle ? dietStyleInstructionText() : "") +
-      "Geef ALLEEN geldig JSON terug, exact dit schema, geen markdown, geen uitleg erbuiten:\n" +
-      '{"name": "gerechtnaam", "kcal": 600, "kh_g": 50, "eiwit_g": 48, "vet_g": 22, ' +
-      '"benodigdheden": "korte tekst met keukenapparatuur", "ingredienten": ["ingredient 1", "ingredient 2"], ' +
-      '"steps": [{"title": "korte staptitel", "content": "volledige instructie", "timer_seconds": 300}]}\n' +
-      "timer_seconds alleen toevoegen bij stappen met wachttijd; anders weglaten.";
-  }
+
 
   function variateDish(week, day, kind, btnEl) {
     if (state.variating) return;
@@ -3232,8 +3260,13 @@
         render();
         return;
       }
-      var prompt = buildVariationPrompt(day, kind);
-      sample.json(prompt, { modelTier: "default" }).then(function (d) {
+      var variationCurrent = {
+        name: day.name, kcal: day.kcal,
+        ingredienten: day.ingredienten,
+        benodigdheden: day.benodigdheden,
+        steps: day.steps.map(function (s) { return s.title + ": " + s.content; })
+      };
+      sample.json({ action: "variation", current: variationCurrent, kind: kind, params: { goal: prefs.goal, dietStyle: prefs.dietStyle } }, { modelTier: "default" }).then(function (d) {
         var kcal = Number(d.kcal) || 0;
         var khG = Number(d.kh_g) || 0;
         var eiwitG = Number(d.eiwit_g) || 0;
@@ -3287,24 +3320,7 @@
     return out;
   }
 
-  function buildPrepPrompt(dishes) {
-    var lines = dishes.map(function (item) {
-      return "- " + item.day.name + " (" + item.count + "x deze week): benodigdheden: " + item.day.benodigdheden +
-        "; ingrediënten: " + item.day.ingredienten.join(", ");
-    }).join("\n");
-    return "Je bent een meal-prep expert. Hier is de lijst gerechten die deze week gepland staan, met hoe vaak elk " +
-      "voorkomt:\n" + lines + "\n\n" +
-      "Maak hier ÉÉN geconsolideerd prep-plan van voor aankomende zondag: welke onderdelen (eiwitbronnen, " +
-      "koolhydraatbronnen) kunnen in bulk worden voorbereid voor de hele week, gegroepeerd per keukenapparaat " +
-      "(gasfornuis, oven, airfryer, vleesgrill). Schaal hoeveelheden naar het aantal keren dat elk gerecht " +
-      "voorkomt. Houd het praktisch: alleen dingen die goed te bewaren/portioneren zijn (vlees, granen, " +
-      "geroosterde groenten) — geen verse garnering of dressing die je beter per maaltijd apart maakt.\n" +
-      "Geef ALLEEN geldig JSON terug, exact dit schema, geen markdown, geen uitleg erbuiten:\n" +
-      '{"name": "Prepdag", "benodigdheden": "korte tekst met keukenapparatuur", ' +
-      '"ingredienten": ["ingredient 1 met hoeveelheid", "ingredient 2 met hoeveelheid"], ' +
-      '"steps": [{"title": "korte staptitel", "content": "volledige instructie", "timer_seconds": 300}]}\n' +
-      "timer_seconds alleen toevoegen bij stappen met wachttijd; anders weglaten.";
-  }
+
 
   function generatePrepPlan(pw) {
     if (pw.prepGenerating) return;
@@ -3323,8 +3339,10 @@
         render();
         return;
       }
-      var prompt = buildPrepPrompt(dishes);
-      sample.json(prompt, { modelTier: "default" }).then(function (d) {
+      var prepDishes = dishes.map(function (item) {
+        return { name: item.day.name, count: item.count, benodigdheden: item.day.benodigdheden, ingredienten: item.day.ingredienten };
+      });
+      sample.json({ action: "prep", dishes: prepDishes }, { modelTier: "default" }).then(function (d) {
         var steps = Array.isArray(d.steps) ? d.steps.map(function (s) {
           var st = { title: String(s.title || "Stap"), content: String(s.content || "") };
           if (s.timer_seconds) st.timer = Number(s.timer_seconds);
@@ -3439,8 +3457,12 @@
           render();
           return;
         }
-        var prompt = buildBackgroundPrompt(needed);
-        sample.json(prompt, { modelTier: "default" }).then(function (result) {
+        var bgParams = {
+          cuisines: prefs.cuisines, flavors: prefs.flavors, level: prefs.level, dietStyle: prefs.dietStyle,
+          equipment: prefs.equipment, goal: prefs.goal, gender: prefs.gender, heightCm: prefs.heightCm,
+          weightKg: prefs.weightKg, age: prefs.age, activityLevel: prefs.activityLevel
+        };
+        sample.json({ action: "background", needed: needed, params: bgParams }, { modelTier: "default" }).then(function (result) {
           try {
             var list = extractDishArray(result);
             if (!list || !list.length) throw new Error("Onverwacht antwoordformaat.");
@@ -3688,29 +3710,6 @@
     cacheWeek.days = cacheWeek.days.concat(daysList);
   }
 
-  function buildBackgroundPrompt(needed) {
-    var cuisineTxt = prefs.cuisines.length ? prefs.cuisines.join(", ") : "geen specifieke voorkeur";
-    var flavorTxt = prefs.flavors.length ? prefs.flavors.join(", ") : "geen specifieke voorkeur";
-    var equipTxt = prefs.equipment.length ? prefs.equipment.join(", ") : "standaard fornuis en oven";
-    var types = Object.keys(needed);
-    var totalCount = types.reduce(function (sum, m) { return sum + needed[m]; }, 0);
-    var countTxt = types.map(function (m) { return needed[m] + "x " + m + " (" + mealtypeGuideText(m) + ")"; }).join(", ");
-    return "Je bent een voedingskundige chef-kok. Genereer in totaal " + totalCount + " macro-gebalanceerde " +
-      "gerechten (per 1 persoon), verdeeld als: " + countTxt + ". Precies deze aantallen per maaltijdmoment.\n" +
-      "- Keukenstijl: " + cuisineTxt + "\n- Smaakprofiel: " + flavorTxt + "\n- Culinair niveau: " + prefs.level + "\n" +
-      dietStyleInstructionText() +
-      "- Beschikbare apparatuur: " + equipTxt + "\n" +
-      buildBodyProfileLine() +
-      goalInstructionText() + "\n" +
-      "Geef ALLEEN geldig JSON terug: een array van EXACT " + totalCount + " objecten, exact dit schema, " +
-      "geen markdown-opmaak, geen uitleg erbuiten:\n" +
-      '[{"name": "gerechtnaam", "mealType": "' + types[0] + '", "kcal": 600, "kh_g": 50, "eiwit_g": 48, "vet_g": 22, ' +
-      '"benodigdheden": "korte tekst met keukenapparatuur", "ingredienten": ["ingredient 1", "ingredient 2"], ' +
-      '"steps": [{"title": "korte staptitel", "content": "volledige instructie", "timer_seconds": 300}]}]\n' +
-      '"mealType" moet exact één van deze waarden zijn: ' + types.join(", ") + ". " +
-      "timer_seconds alleen toevoegen bij stappen met wachttijd; anders weglaten.";
-  }
-
   function dishesFromAiList(list, prefix) {
     return list.map(function (d, idx) {
       var kcal = Number(d.kcal) || 0;
@@ -3745,8 +3744,12 @@
     claude.use("sample").then(function (sample) {
       if (!sample) return;
       busyStart("Gerechten worden aangevuld op de achtergrond…");
-      var prompt = buildBackgroundPrompt(needed);
-      sample.json(prompt, { modelTier: "default" }).then(function (result) {
+      var bgParams2 = {
+        cuisines: prefs.cuisines, flavors: prefs.flavors, level: prefs.level, dietStyle: prefs.dietStyle,
+        equipment: prefs.equipment, goal: prefs.goal, gender: prefs.gender, heightCm: prefs.heightCm,
+        weightKg: prefs.weightKg, age: prefs.age, activityLevel: prefs.activityLevel
+      };
+      sample.json({ action: "background", needed: needed, params: bgParams2 }, { modelTier: "default" }).then(function (result) {
         busyEnd();
         var list = extractDishArray(result);
         if (!list || !list.length) return;

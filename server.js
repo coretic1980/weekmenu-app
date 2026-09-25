@@ -203,6 +203,186 @@ function extractJson(text) {
 
 // ---------- Routes ----------
 
+// ---------- Prompt construction (server-side only) ----------
+// The exact prompt wording/structure lives here, not in the client JS —
+// the browser only ever sends raw preference values (goal, cuisines, etc.),
+// never the assembled instruction text. This keeps the prompt engineering
+// out of anyone's browser dev tools / view-source.
+
+var GOAL_DESCRIPTIONS = {
+  "Onderhoud": "gelijke verdeling (±33% koolhydraten/eiwit/vet) om gewicht te behouden",
+  "Vetverlies (spierbehoud)": "hoger eiwit, lager koolhydraten en vet, voor vetverlies met behoud van spiermassa (streef naar 30% koolhydraten / 40% eiwit / 30% vet)",
+  "Cutting": "zeer hoog eiwit, laag koolhydraten, voor een agressiever calorietekort met maximaal spierbehoud (streef naar 25% koolhydraten / 45% eiwit / 30% vet)",
+  "Spieropbouw (lean bulk)": "hoger koolhydraten en eiwit voor spieropbouw met een lichte overschot (streef naar 40% koolhydraten / 30% eiwit / 30% vet)",
+  "Atleet (prestatiegericht)": "hoger koolhydraten voor trainings- en wedstrijdbrandstof, met voldoende eiwit voor herstel (streef naar 45% koolhydraten / 25% eiwit / 30% vet)"
+};
+
+var MEALTYPE_GUIDE = {
+  "Ontbijt": { min: 350, max: 450, desc: "een ontbijt (bijv. eieren, havermout, kwark, yoghurt, brood) — geen zware avondmaaltijd-gerechten" },
+  "Lunch": { min: 450, max: 550, desc: "een lunch (bijv. salade, bowl, belegd brood, soep met brood) — praktisch te bereiden of mee te nemen" },
+  "Diner": { min: 550, max: 650, desc: "een volwaardige warme avondmaaltijd" },
+  "Snack": { min: 150, max: 250, desc: "een tussendoortje, klein en snel" }
+};
+
+var GOAL_KCAL_MULTIPLIER = {
+  "Onderhoud": 1,
+  "Vetverlies (spierbehoud)": 0.85,
+  "Cutting": 0.65,
+  "Spieropbouw (lean bulk)": 1.15,
+  "Atleet (prestatiegericht)": 1.1
+};
+
+var VARIATION_INSTRUCTIONS = {
+  pittiger: "Maak dit gerecht duidelijk pittiger (meer chili/kruiden), zonder de kern van het gerecht te veranderen.",
+  simpeler: "Maak dit gerecht simpeler en basic: minder stappen, alledaagse ingrediënten, makkelijker om te bereiden.",
+  finedining: "Maak dit gerecht fine dining: verfijndere presentatie, technieken en smaakcombinaties, iets hoger culinair niveau.",
+  wisselkh: "Vervang de koolhydraatbron door een andere (bijv. rijst i.p.v. aardappel of andersom), maar behoud dezelfde macroverdeling."
+};
+
+var INGREDIENT_SPECIFICITY_LINE = "Elk ingrediënt moet specifiek en concreet benoemd zijn (bijv. \"1 tl oregano\" of \"2 tenen knoflook\"), " +
+  "nooit een vaag verzamelwoord zoals \"kruiden\" of \"specerijen\" zonder te specificeren welke.\n";
+
+function mealtypeGuideText(mealType, goal) {
+  var g = MEALTYPE_GUIDE[mealType] || MEALTYPE_GUIDE["Diner"];
+  var mult = GOAL_KCAL_MULTIPLIER[goal] || 1;
+  var min = Math.max(80, Math.round(g.min * mult / 10) * 10);
+  var max = Math.max(min + 40, Math.round(g.max * mult / 10) * 10);
+  return min + "-" + max + " kcal per portie; " + g.desc;
+}
+
+function goalInstructionText(goal) {
+  var desc = GOAL_DESCRIPTIONS[goal] || GOAL_DESCRIPTIONS["Onderhoud"];
+  return "Streef naar een macroverdeling passend bij het doel \"" + goal + "\": " + desc +
+    " (elke macro binnen 2-3 procentpunt van het streefpercentage). ";
+}
+
+function dietStyleInstructionText(dietStyle) {
+  if (!dietStyle) return "";
+  var notes = {
+    "Omnivoor": "geen beperkingen, alle voedingsmiddelen zijn toegestaan.",
+    "Flexitarisch": "overwegend plantaardig; vlees of vis mag af en toe voorkomen, maar niet in elk gerecht.",
+    "Vegetarisch": "geen vlees en geen vis; zuivel en eieren zijn wel toegestaan.",
+    "Veganistisch": "volledig plantaardig; geen vlees, vis, zuivel, eieren, honing of andere dierlijke producten."
+  };
+  return "- Voedingsstijl: " + dietStyle + " (" + (notes[dietStyle] || "") + ")\n";
+}
+
+function buildBodyProfileLine(p) {
+  if (!p.gender && !p.heightCm && !p.weightKg && !p.age) return "";
+  var bits = [];
+  if (p.gender) bits.push(p.gender);
+  if (p.age) bits.push(p.age + " jaar");
+  if (p.heightCm) bits.push(p.heightCm + " cm");
+  if (p.weightKg) bits.push(p.weightKg + " kg");
+  bits.push("activiteitsniveau: " + String(p.activityLevel || "Gemiddeld actief").toLowerCase());
+  return "- Lichaamsprofiel: " + bits.join(", ") + " — stem portiegrootte en calorieën hierop af (naast de " +
+    "maaltijdmoment-richtlijn hierboven)\n";
+}
+
+function buildGeneratePrompt(p) {
+  var cuisineTxt = (p.cuisines && p.cuisines.length) ? p.cuisines.join(", ") : "geen specifieke voorkeur";
+  var flavorTxt = (p.flavors && p.flavors.length) ? p.flavors.join(", ") : "geen specifieke voorkeur";
+  var equipTxt = (p.equipment && p.equipment.length) ? p.equipment.join(", ") : "standaard fornuis en oven";
+  var excludeTxt = (p.exclude && String(p.exclude).trim()) ? String(p.exclude).trim() : "geen";
+  var mealTypes = (p.mealTypes && p.mealTypes.length) ? p.mealTypes : ["Diner"];
+  var count = p.count || 1;
+  var mealGuideTxt = mealTypes.map(function (mt) { return mt + " (" + mealtypeGuideText(mt, p.goal) + ")"; }).join("; ");
+  var totalCount = count * mealTypes.length;
+  var mealInstruction = mealTypes.length === 1
+    ? "Alle " + count + " gerechten zijn bedoeld als " + mealTypes[0].toLowerCase() + "."
+    : "Genereer PRECIES " + count + " gerechten per maaltijdmoment (dus " + count + "x elk van: " +
+      mealTypes.join(", ") + " — in totaal " + totalCount + " gerechten). Niet verdelen of afronden, exact " +
+      count + " per moment.";
+  return "Je bent een voedingskundige chef-kok. Genereer in totaal " + totalCount + " macro-gebalanceerde " +
+    "gerechten (per 1 persoon) die voldoen aan:\n" +
+    "- Maaltijdmomenten: " + mealGuideTxt + "\n" +
+    mealInstruction + "\n" +
+    "- Keukenstijl: " + cuisineTxt + "\n" +
+    "- Smaakprofiel: " + flavorTxt + "\n" +
+    "- Culinair niveau: " + (p.level || "Home-style") + "\n" +
+    dietStyleInstructionText(p.dietStyle) +
+    "- Beschikbare apparatuur: " + equipTxt + "\n" +
+    "- Uitgesloten ingrediënten: " + excludeTxt + "\n" +
+    buildBodyProfileLine(p) +
+    goalInstructionText(p.goal) +
+    "Gebruik reële, haalbare porties en ingrediënten die passen " +
+    "bij het gekozen maaltijdmoment van elk gerecht.\n" +
+    INGREDIENT_SPECIFICITY_LINE +
+    "Geef ALLEEN geldig JSON terug: een array van EXACT " + totalCount + " objecten (" + count +
+    " per maaltijdmoment), exact dit schema, geen markdown-opmaak, geen uitleg erbuiten:\n" +
+    '[{"name": "gerechtnaam", "mealType": "' + mealTypes[0] + '", "kcal": 600, "kh_g": 50, "eiwit_g": 48, "vet_g": 22, ' +
+    '"benodigdheden": "korte tekst met keukenapparatuur", "ingredienten": ["ingredient 1", "ingredient 2"], ' +
+    '"steps": [{"title": "korte staptitel", "content": "volledige instructie", "timer_seconds": 300}]}]\n' +
+    '"mealType" moet exact één van deze waarden zijn: ' + mealTypes.join(", ") + ". " +
+    "timer_seconds alleen toevoegen bij stappen met wachttijd (koken, bakken, grillen, oven, sudderen); anders weglaten.";
+}
+
+function buildBackgroundGeneratePrompt(needed, p) {
+  var cuisineTxt = (p.cuisines && p.cuisines.length) ? p.cuisines.join(", ") : "geen specifieke voorkeur";
+  var flavorTxt = (p.flavors && p.flavors.length) ? p.flavors.join(", ") : "geen specifieke voorkeur";
+  var equipTxt = (p.equipment && p.equipment.length) ? p.equipment.join(", ") : "standaard fornuis en oven";
+  var types = Object.keys(needed || {});
+  var totalCount = types.reduce(function (sum, m) { return sum + needed[m]; }, 0);
+  var countTxt = types.map(function (m) { return needed[m] + "x " + m + " (" + mealtypeGuideText(m, p.goal) + ")"; }).join(", ");
+  return "Je bent een voedingskundige chef-kok. Genereer in totaal " + totalCount + " macro-gebalanceerde " +
+    "gerechten (per 1 persoon), verdeeld als: " + countTxt + ". Precies deze aantallen per maaltijdmoment.\n" +
+    "- Keukenstijl: " + cuisineTxt + "\n- Smaakprofiel: " + flavorTxt + "\n- Culinair niveau: " + (p.level || "Home-style") + "\n" +
+    dietStyleInstructionText(p.dietStyle) +
+    "- Beschikbare apparatuur: " + equipTxt + "\n" +
+    buildBodyProfileLine(p) +
+    goalInstructionText(p.goal) + "\n" +
+    INGREDIENT_SPECIFICITY_LINE +
+    "Geef ALLEEN geldig JSON terug: een array van EXACT " + totalCount + " objecten, exact dit schema, " +
+    "geen markdown-opmaak, geen uitleg erbuiten:\n" +
+    '[{"name": "gerechtnaam", "mealType": "' + types[0] + '", "kcal": 600, "kh_g": 50, "eiwit_g": 48, "vet_g": 22, ' +
+    '"benodigdheden": "korte tekst met keukenapparatuur", "ingredienten": ["ingredient 1", "ingredient 2"], ' +
+    '"steps": [{"title": "korte staptitel", "content": "volledige instructie", "timer_seconds": 300}]}]\n' +
+    '"mealType" moet exact één van deze waarden zijn: ' + types.join(", ") + ". " +
+    "timer_seconds alleen toevoegen bij stappen met wachttijd; anders weglaten.";
+}
+
+function buildVariationPromptServer(current, kind, p) {
+  return "Hier is een bestaand gerecht in JSON: " + JSON.stringify(current) + "\n\n" +
+    "Opdracht: " + (VARIATION_INSTRUCTIONS[kind] || "") + "\n" +
+    "Streef naar een macroverdeling passend bij het doel \"" + p.goal + "\": " + (GOAL_DESCRIPTIONS[p.goal] || "") + "\n" +
+    (p.dietStyle ? dietStyleInstructionText(p.dietStyle) : "") +
+    INGREDIENT_SPECIFICITY_LINE +
+    "Geef ALLEEN geldig JSON terug, exact dit schema, geen markdown, geen uitleg erbuiten:\n" +
+    '{"name": "gerechtnaam", "kcal": 600, "kh_g": 50, "eiwit_g": 48, "vet_g": 22, ' +
+    '"benodigdheden": "korte tekst met keukenapparatuur", "ingredienten": ["ingredient 1", "ingredient 2"], ' +
+    '"steps": [{"title": "korte staptitel", "content": "volledige instructie", "timer_seconds": 300}]}\n' +
+    "timer_seconds alleen toevoegen bij stappen met wachttijd; anders weglaten.";
+}
+
+function buildPrepPromptServer(dishes) {
+  var lines = (dishes || []).map(function (item) {
+    return "- " + item.name + " (" + item.count + "x deze week): benodigdheden: " + item.benodigdheden +
+      "; ingrediënten: " + (item.ingredienten || []).join(", ");
+  }).join("\n");
+  return "Je bent een meal-prep expert. Hier is de lijst gerechten die deze week gepland staan, met hoe vaak elk " +
+    "voorkomt:\n" + lines + "\n\n" +
+    "Maak hier ÉÉN geconsolideerd prep-plan van voor aankomende zondag: welke onderdelen (eiwitbronnen, " +
+    "koolhydraatbronnen) kunnen in bulk worden voorbereid voor de hele week, gegroepeerd per keukenapparaat " +
+    "(gasfornuis, oven, airfryer, vleesgrill). Schaal hoeveelheden naar het aantal keren dat elk gerecht " +
+    "voorkomt. Houd het praktisch: alleen dingen die goed te bewaren/portioneren zijn (vlees, granen, " +
+    "geroosterde groenten) — geen verse garnering of dressing die je beter per maaltijd apart maakt.\n" +
+    INGREDIENT_SPECIFICITY_LINE +
+    "Geef ALLEEN geldig JSON terug, exact dit schema, geen markdown, geen uitleg erbuiten:\n" +
+    '{"name": "Prepdag", "benodigdheden": "korte tekst met keukenapparatuur", ' +
+    '"ingredienten": ["ingredient 1 met hoeveelheid", "ingredient 2 met hoeveelheid"], ' +
+    '"steps": [{"title": "korte staptitel", "content": "volledige instructie", "timer_seconds": 300}]}\n' +
+    "timer_seconds alleen toevoegen bij stappen met wachttijd; anders weglaten.";
+}
+
+function buildPromptFromRequest(body) {
+  var action = body && body.action;
+  if (action === "generate") return buildGeneratePrompt(body.params || {});
+  if (action === "background") return buildBackgroundGeneratePrompt(body.needed || {}, body.params || {});
+  if (action === "variation") return buildVariationPromptServer(body.current || {}, body.kind, body.params || {});
+  if (action === "prep") return buildPrepPromptServer(body.dishes || []);
+  return null;
+}
+
 function handleGenerate(req, res) {
   var ip = clientIp(req);
   if (!checkIpRateLimit(ip)) {
@@ -219,9 +399,9 @@ function handleGenerate(req, res) {
     }
 
     readBody(req).then(function (body) {
-      var prompt = body && body.prompt;
-      if (!prompt || typeof prompt !== "string") {
-        return sendJSON(res, 400, { code: "bad_request", message: "Geen prompt meegegeven." });
+      var prompt = buildPromptFromRequest(body);
+      if (!prompt) {
+        return sendJSON(res, 400, { code: "bad_request", message: "Ongeldig verzoek." });
       }
 
       return fetch("https://api.anthropic.com/v1/messages", {
