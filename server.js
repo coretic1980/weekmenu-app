@@ -537,7 +537,9 @@ function serveFile(req, res, relativePath) {
   fs.readFile(filePath, function (err, content) {
     if (err) { res.writeHead(404); res.end("Not found"); return; }
     var ext = path.extname(filePath);
-    res.writeHead(200, { "Content-Type": MIME_TYPES[ext] || "application/octet-stream" });
+    var headers = { "Content-Type": MIME_TYPES[ext] || "application/octet-stream" };
+    if (relativePath === "sw.js") headers["Cache-Control"] = "no-cache, no-store, must-revalidate";
+    res.writeHead(200, headers);
     res.end(content);
   });
 }
@@ -546,7 +548,7 @@ function serveStatic(req, res) {
   var filePath = path.join(PUBLIC_DIR, "index.html");
   fs.readFile(filePath, function (err, content) {
     if (err) { res.writeHead(500); res.end("Kan index.html niet laden"); return; }
-    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache, no-store, must-revalidate" });
     res.end(content);
   });
 }
