@@ -669,11 +669,14 @@
     }
     var items = [
       ["neutral", day.kcal + " kcal"],
+    ];
+    if (day.bereidingstijd) items.push(["neutral", "⏱ " + day.bereidingstijd + " min"]);
+    items = items.concat([
       ["kh", "KH " + day.kh + "%" + (day.khG !== undefined ? " (" + day.khG + "g)" : "")],
       ["eiwit", "Eiwit " + day.eiwit + "%" + (day.eiwitG !== undefined ? " (" + day.eiwitG + "g)" : "")],
       ["vet", "Vet " + day.vet + "%" + (day.vetG !== undefined ? " (" + day.vetG + "g)" : "")],
       ["balans", "Balans " + day.balans + "%"]
-    ];
+    ]);
     if (day.mealType && !(opts && opts.hideMealType)) items.unshift(["neutral", day.mealType]);
     items.forEach(function (it) {
       var t = document.createElement("span");
@@ -1380,6 +1383,7 @@
             name: String(d.name || "Naamloos gerecht"),
             kcal: kcal, kh: khPct, eiwit: eiwitPct, vet: vetPct, balans: balans,
             khG: khG, eiwitG: eiwitG, vetG: vetG,
+            bereidingstijd: Number(d.bereidingstijd_minuten) || 0,
             mealType: dishMealType,
             benodigdheden: String(d.benodigdheden || ""),
             ingredienten: Array.isArray(d.ingredienten) ? d.ingredienten.map(String) : [],
@@ -2130,7 +2134,8 @@
 
     var eyebrow = document.createElement("div");
     eyebrow.className = "eyebrow";
-    eyebrow.textContent = "Gebaseerd op " + prep.basedOnCount + " gerechten deze week";
+    eyebrow.textContent = "Gebaseerd op " + prep.basedOnCount + " gerechten deze week" +
+      (prep.bereidingstijd ? " · ⏱ " + prep.bereidingstijd + " min" : "");
     main.appendChild(eyebrow);
 
     var l1 = document.createElement("div");
@@ -3294,6 +3299,7 @@
         day.kcal = kcal;
         day.kh = khPct; day.eiwit = eiwitPct; day.vet = vetPct;
         day.khG = khG; day.eiwitG = eiwitG; day.vetG = vetG;
+        day.bereidingstijd = Number(d.bereidingstijd_minuten) || day.bereidingstijd;
         day.balans = computeBalance(khPct, eiwitPct, vetPct);
         day.benodigdheden = String(d.benodigdheden || day.benodigdheden);
         day.ingredienten = Array.isArray(d.ingredienten) ? d.ingredienten.map(String) : day.ingredienten;
@@ -3369,6 +3375,7 @@
           benodigdheden: String(d.benodigdheden || ""),
           ingredienten: Array.isArray(d.ingredienten) ? d.ingredienten.map(String) : [],
           steps: steps,
+          bereidingstijd: Number(d.bereidingstijd_minuten) || 0,
           basedOnCount: dishes.length
         };
         pw.prepGenerating = false;
@@ -3587,6 +3594,7 @@
       id: day.id, label: day.label, name: day.name,
       kcal: day.kcal, kh: day.kh, eiwit: day.eiwit, vet: day.vet, balans: day.balans,
       khG: day.khG, eiwitG: day.eiwitG, vetG: day.vetG,
+      bereidingstijd: day.bereidingstijd,
       mealType: day.mealType, benodigdheden: day.benodigdheden,
       ingredienten: day.ingredienten, steps: day.steps,
       profile: day.profile || null,
@@ -3747,6 +3755,7 @@
         name: String(d.name || "Naamloos gerecht"),
         kcal: kcal, kh: khPct, eiwit: eiwitPct, vet: vetPct, balans: computeBalance(khPct, eiwitPct, vetPct),
         khG: khG, eiwitG: eiwitG, vetG: vetG,
+        bereidingstijd: Number(d.bereidingstijd_minuten) || 0,
         mealType: dishMealType,
         benodigdheden: String(d.benodigdheden || ""),
         ingredienten: Array.isArray(d.ingredienten) ? d.ingredienten.map(String) : [],
