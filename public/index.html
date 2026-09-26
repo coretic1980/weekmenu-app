@@ -1269,7 +1269,7 @@
     goBtn.textContent = state.generating
       ? "Bezig met genereren… (" + formatEstimateRange(estSecs) + ")"
       : "Genereer gerechten (" + formatEstimateRange(estSecs) + ")";
-    goBtn.onclick = function () { generateMeals(false); };
+    goBtn.onclick = function () { goto("weeks"); generateMeals(false); };
     main.appendChild(goBtn);
 
     app.appendChild(main);
