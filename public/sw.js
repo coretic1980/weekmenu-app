@@ -39,6 +39,7 @@ self.addEventListener("fetch", function (event) {
   if (event.request.url.indexOf("http") !== 0) return;
   // Never intercept API calls — those must always hit the live server.
   if (event.request.url.indexOf("/api/") !== -1) return;
+  if (event.request.url.indexOf("/admin") !== -1) return;
   if (event.request.method !== "GET") return;
 
   event.respondWith(

@@ -38,6 +38,7 @@ const PER_IP_HOURLY_CAP = parseInt(process.env.PER_IP_HOURLY_CAP || "20", 10);
 const UNSPLASH_ACCESS_KEY = process.env.UNSPLASH_ACCESS_KEY || "";
 const MONGODB_URI = process.env.MONGODB_URI || "";
 const MONGODB_DB_NAME = process.env.MONGODB_DB || "weekmenu";
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "";
 
 const DATA_DIR = path.join(__dirname, "data");
 const DATA_FILE = path.join(DATA_DIR, "store.json");
@@ -127,6 +128,51 @@ function incrementUsageToday() {
     }
     return db.collection("usage").updateOne({ _id: today }, { $inc: { count: 1 } }, { upsert: true });
   });
+}
+
+function dbListUserIds() {
+  return mongoReady.then(function (db) {
+    if (!db) {
+      var store = loadStore();
+      var uids = [];
+      Object.keys(store.docs).forEach(function (key) {
+        var m = key.match(/^data\/users\/([^\/]+)\/prefs$/);
+        if (m) uids.push(m[1]);
+      });
+      return uids;
+    }
+    return db.collection("docs").find({ _id: { $regex: "^data/users/[^/]+/prefs$" } }).toArray().then(function (docs) {
+      return docs.map(function (d) { return d._id.split("/")[2]; });
+    });
+  });
+}
+
+// ---------- Simple admin auth: one shared password, random session tokens kept in memory ----------
+// Tokens are lost on server restart (fine for a small personal monitoring tool) and expire after 24h.
+
+var adminTokens = new Map(); // token -> expiry timestamp
+var ADMIN_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
+
+function issueAdminToken() {
+  var token = require("crypto").randomBytes(24).toString("hex");
+  adminTokens.set(token, Date.now() + ADMIN_TOKEN_TTL_MS);
+  return token;
+}
+function isValidAdminToken(token) {
+  if (!token) return false;
+  var expiry = adminTokens.get(token);
+  if (!expiry) return false;
+  if (Date.now() > expiry) { adminTokens.delete(token); return false; }
+  return true;
+}
+function requireAdmin(req, res) {
+  var auth = req.headers["authorization"] || "";
+  var token = auth.indexOf("Bearer ") === 0 ? auth.slice(7) : "";
+  if (!isValidAdminToken(token)) {
+    sendJSON(res, 401, { code: "unauthorized", message: "Niet ingelogd of sessie verlopen." });
+    return false;
+  }
+  return true;
 }
 
 // ---------- Simple in-memory per-IP rate limiter (resets on restart) ----------
@@ -602,6 +648,7 @@ function handleImage(req, res, query) {
 var MIME_TYPES = {
   ".json": "application/json; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
+  ".html": "text/html; charset=utf-8",
   ".png": "image/png",
   ".svg": "image/svg+xml",
   ".ico": "image/x-icon"
@@ -615,7 +662,7 @@ function serveFile(req, res, relativePath) {
     if (err) { res.writeHead(404); res.end("Not found"); return; }
     var ext = path.extname(filePath);
     var headers = { "Content-Type": MIME_TYPES[ext] || "application/octet-stream" };
-    if (relativePath === "sw.js") headers["Cache-Control"] = "no-cache, no-store, must-revalidate";
+    if (relativePath === "sw.js" || relativePath === "admin.html") headers["Cache-Control"] = "no-cache, no-store, must-revalidate";
     res.writeHead(200, headers);
     res.end(content);
   });
@@ -630,6 +677,84 @@ function serveStatic(req, res) {
   });
 }
 
+function handleAdminLogin(req, res) {
+  if (!ADMIN_PASSWORD) {
+    return sendJSON(res, 500, { code: "not_configured", message: "Server heeft nog geen ADMIN_PASSWORD ingesteld." });
+  }
+  readBody(req).then(function (body) {
+    var password = body && body.password;
+    if (password !== ADMIN_PASSWORD) {
+      return sendJSON(res, 401, { code: "unauthorized", message: "Onjuist wachtwoord." });
+    }
+    sendJSON(res, 200, { token: issueAdminToken() });
+  }).catch(function () {
+    sendJSON(res, 400, { code: "bad_request", message: "Ongeldige aanvraag." });
+  });
+}
+
+function handleAdminUsers(req, res) {
+  if (!requireAdmin(req, res)) return;
+  dbListUserIds().then(function (uids) {
+    return Promise.all(uids.map(function (uid) {
+      return Promise.all([
+        dbGetDoc("data/users/" + uid + "/prefs"),
+        dbGetDoc("data/users/" + uid + "/dishes"),
+        dbGetDoc("data/users/" + uid + "/plannedWeeks")
+      ]).then(function (results) {
+        var prefs = results[0].exists ? results[0].value : null;
+        var dishes = results[1].exists ? results[1].value : null;
+        var plannedWeeks = results[2].exists ? results[2].value : null;
+        var dishCount = 0;
+        if (dishes && typeof dishes === "object") {
+          Object.keys(dishes).forEach(function (mt) { dishCount += Array.isArray(dishes[mt]) ? dishes[mt].length : 0; });
+        }
+        return {
+          uid: uid,
+          goal: prefs ? prefs.goal : null,
+          dietStyle: prefs ? prefs.dietStyle : null,
+          level: prefs ? prefs.level : null,
+          dishCount: dishCount,
+          plannedWeekCount: Array.isArray(plannedWeeks) ? plannedWeeks.length : 0
+        };
+      });
+    }));
+  }).then(function (users) {
+    sendJSON(res, 200, { users: users });
+  }).catch(function (err) {
+    sendJSON(res, 500, { code: "error", message: "Kon gebruikers niet ophalen: " + err.message });
+  });
+}
+
+function handleAdminUserDetail(req, res, uid) {
+  if (!requireAdmin(req, res)) return;
+  Promise.all([
+    dbGetDoc("data/users/" + uid + "/prefs"),
+    dbGetDoc("data/users/" + uid + "/dishes"),
+    dbGetDoc("data/users/" + uid + "/plannedWeeks")
+  ]).then(function (results) {
+    sendJSON(res, 200, {
+      prefs: results[0].exists ? results[0].value : null,
+      dishes: results[1].exists ? results[1].value : null,
+      plannedWeeks: results[2].exists ? results[2].value : null
+    });
+  }).catch(function (err) {
+    sendJSON(res, 500, { code: "error", message: "Kon gebruikersdetail niet ophalen: " + err.message });
+  });
+}
+
+function handleAdminStats(req, res) {
+  if (!requireAdmin(req, res)) return;
+  Promise.all([dbListUserIds(), getUsageToday()]).then(function (results) {
+    sendJSON(res, 200, {
+      totalUsers: results[0].length,
+      usageToday: results[1],
+      dailyCap: DAILY_GENERATE_CAP
+    });
+  }).catch(function (err) {
+    sendJSON(res, 500, { code: "error", message: "Kon statistieken niet ophalen: " + err.message });
+  });
+}
+
 var server = http.createServer(function (req, res) {
   var url = new URL(req.url, "http://localhost");
 
@@ -641,6 +766,13 @@ var server = http.createServer(function (req, res) {
   if (req.method === "GET" && url.pathname === "/sw.js") return serveFile(req, res, "sw.js");
   if (req.method === "GET" && url.pathname === "/favicon.png") return serveFile(req, res, "favicon.png");
   if (req.method === "GET" && url.pathname.indexOf("/icons/") === 0) return serveFile(req, res, url.pathname);
+  if (req.method === "POST" && url.pathname === "/api/admin/login") return handleAdminLogin(req, res);
+  if (req.method === "GET" && url.pathname === "/api/admin/stats") return handleAdminStats(req, res);
+  if (req.method === "GET" && url.pathname === "/api/admin/users") return handleAdminUsers(req, res);
+  if (req.method === "GET" && url.pathname.indexOf("/api/admin/users/") === 0) {
+    return handleAdminUserDetail(req, res, decodeURIComponent(url.pathname.slice("/api/admin/users/".length)));
+  }
+  if (req.method === "GET" && url.pathname === "/admin") return serveFile(req, res, "admin.html");
   if (req.method === "GET" && (url.pathname === "/" || url.pathname === "/index.html")) return serveStatic(req, res);
 
   res.writeHead(404, { "Content-Type": "text/plain" });
