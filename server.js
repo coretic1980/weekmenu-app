@@ -374,12 +374,24 @@ function buildPrepPromptServer(dishes) {
     "timer_seconds alleen toevoegen bij stappen met wachttijd; anders weglaten.";
 }
 
+function buildPriceEstimatePrompt(items) {
+  var list = items || [];
+  return "Je bent een prijsexpert voor Nederlandse supermarkten (zoals Albert Heijn en Jumbo). " +
+    "Geef voor elk van de onderstaande boodschappenlijst-items een realistische geschatte prijsrange in euro's, " +
+    "gebaseerd op de vermelde hoeveelheid en een gemiddeld huismerk/A-merk. " +
+    "Geef ALLEEN geldig JSON terug: een array van exact " + list.length + " objecten, in dezelfde volgorde " +
+    "als de items hieronder, elk exact dit schema: {\"laag\": number, \"hoog\": number} (bedragen in euro's, " +
+    "afgerond op 2 decimalen, laag <= hoog). Geen markdown, geen uitleg erbuiten.\n\nItems:\n" +
+    list.map(function (t, i) { return (i + 1) + ". " + t; }).join("\n");
+}
+
 function buildPromptFromRequest(body) {
   var action = body && body.action;
   if (action === "generate") return buildGeneratePrompt(body.params || {});
   if (action === "background") return buildBackgroundGeneratePrompt(body.needed || {}, body.params || {});
   if (action === "variation") return buildVariationPromptServer(body.current || {}, body.kind, body.params || {});
   if (action === "prep") return buildPrepPromptServer(body.dishes || []);
+  if (action === "price") return buildPriceEstimatePrompt(body.items || []);
   return null;
 }
 
