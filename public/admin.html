@@ -173,9 +173,10 @@
       data.users.forEach(function (u) {
         var row = document.createElement("div");
         row.className = "user-row";
+        var loc = u.location ? (u.location.city ? u.location.city + ", " : "") + (u.location.country || "") : "onbekende locatie";
         row.innerHTML =
           '<div><div class="uid">' + u.uid + '</div>' +
-          '<div class="badge">' + (u.goal || "geen doel") + (u.dietStyle ? " · " + u.dietStyle : "") + '</div></div>' +
+          '<div class="badge">' + (u.goal || "geen doel") + (u.dietStyle ? " · " + u.dietStyle : "") + ' · ' + loc + '</div></div>' +
           '<div class="badge">' + u.dishCount + ' gerechten · ' + u.plannedWeekCount + ' weken</div>';
         row.onclick = function () { openUserDetail(u.uid); };
         listEl.appendChild(row);
@@ -193,8 +194,11 @@
     var body = document.getElementById("userDetailBody");
     body.innerHTML = '<div class="muted">Laden…</div>';
     api("/api/admin/users/" + encodeURIComponent(uid)).then(function (data) {
+      var loc = data.location ? (data.location.city ? data.location.city + ", " : "") + (data.location.country || "") : "onbekende locatie";
+      var lastSeen = data.lastSeenAt ? new Date(data.lastSeenAt).toLocaleString("nl-NL") : "onbekend";
       body.innerHTML =
         '<h2 style="font-family:Fraunces,serif; margin-top:0;">' + uid + '</h2>' +
+        '<div class="badge" style="margin-bottom:14px;">' + loc + ' · voor het laatst actief: ' + lastSeen + '</div>' +
         '<div class="section-label">Voorkeuren</div><pre>' + escapeHtml(JSON.stringify(data.prefs, null, 2)) + '</pre>' +
         '<div class="section-label">Opgeslagen gerechten</div><pre>' + escapeHtml(JSON.stringify(data.dishes, null, 2)) + '</pre>' +
         '<div class="section-label">Geplande weken</div><pre>' + escapeHtml(JSON.stringify(data.plannedWeeks, null, 2)) + '</pre>';

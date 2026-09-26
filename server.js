@@ -130,6 +130,33 @@ function incrementUsageToday() {
   });
 }
 
+// ---------- IP geolocation (best-effort, for the admin page only) ----------
+// Uses a free public API (no key required); results are cached in memory for
+// a day per IP so opening the admin page repeatedly doesn't re-query it.
+// Private/local IPs (dev, or behind certain proxies) simply resolve to null.
+
+var geoCache = new Map(); // ip -> { value: {city,country} | null, expiry }
+var GEO_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+
+function isPrivateIp(ip) {
+  return !ip || ip === "unknown" || ip === "::1" || ip === "127.0.0.1" ||
+    /^10\./.test(ip) || /^192\.168\./.test(ip) || /^172\.(1[6-9]|2\d|3[01])\./.test(ip);
+}
+
+function resolveIpLocation(ip) {
+  if (isPrivateIp(ip)) return Promise.resolve(null);
+  var cached = geoCache.get(ip);
+  if (cached && Date.now() < cached.expiry) return Promise.resolve(cached.value);
+  return fetch("https://ipapi.co/" + encodeURIComponent(ip) + "/json/")
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (data) {
+      var value = (data && !data.error) ? { city: data.city || null, country: data.country_name || null } : null;
+      geoCache.set(ip, { value: value, expiry: Date.now() + GEO_CACHE_TTL_MS });
+      return value;
+    })
+    .catch(function () { return null; });
+}
+
 function dbListUserIds() {
   return mongoReady.then(function (db) {
     if (!db) {
@@ -598,7 +625,12 @@ function handleDbGet(req, res, query) {
 function handleDbSet(req, res) {
   readBody(req).then(function (body) {
     if (!body || !body.path) return sendJSON(res, 400, { message: "path ontbreekt" });
-    return dbSetDoc(body.path, body.value).then(function () {
+    var ip = clientIp(req);
+    var userMatch = body.path.match(/^data\/users\/([^\/]+)\//);
+    var trackIp = userMatch
+      ? dbSetDoc("data/users/" + userMatch[1] + "/meta", { lastIp: ip, lastSeenAt: new Date().toISOString() }).catch(function () {})
+      : Promise.resolve();
+    return Promise.all([dbSetDoc(body.path, body.value), trackIp]).then(function () {
       sendJSON(res, 200, { ok: true });
     });
   }).catch(function (err) {
@@ -699,23 +731,30 @@ function handleAdminUsers(req, res) {
       return Promise.all([
         dbGetDoc("data/users/" + uid + "/prefs"),
         dbGetDoc("data/users/" + uid + "/dishes"),
-        dbGetDoc("data/users/" + uid + "/plannedWeeks")
+        dbGetDoc("data/users/" + uid + "/plannedWeeks"),
+        dbGetDoc("data/users/" + uid + "/meta")
       ]).then(function (results) {
         var prefs = results[0].exists ? results[0].value : null;
         var dishes = results[1].exists ? results[1].value : null;
         var plannedWeeks = results[2].exists ? results[2].value : null;
+        var meta = results[3].exists ? results[3].value : null;
         var dishCount = 0;
         if (dishes && typeof dishes === "object") {
           Object.keys(dishes).forEach(function (mt) { dishCount += Array.isArray(dishes[mt]) ? dishes[mt].length : 0; });
         }
-        return {
-          uid: uid,
-          goal: prefs ? prefs.goal : null,
-          dietStyle: prefs ? prefs.dietStyle : null,
-          level: prefs ? prefs.level : null,
-          dishCount: dishCount,
-          plannedWeekCount: Array.isArray(plannedWeeks) ? plannedWeeks.length : 0
-        };
+        var locationPromise = (meta && meta.lastIp) ? resolveIpLocation(meta.lastIp) : Promise.resolve(null);
+        return locationPromise.then(function (location) {
+          return {
+            uid: uid,
+            goal: prefs ? prefs.goal : null,
+            dietStyle: prefs ? prefs.dietStyle : null,
+            level: prefs ? prefs.level : null,
+            dishCount: dishCount,
+            plannedWeekCount: Array.isArray(plannedWeeks) ? plannedWeeks.length : 0,
+            lastSeenAt: meta ? meta.lastSeenAt : null,
+            location: location
+          };
+        });
       });
     }));
   }).then(function (users) {
@@ -730,12 +769,19 @@ function handleAdminUserDetail(req, res, uid) {
   Promise.all([
     dbGetDoc("data/users/" + uid + "/prefs"),
     dbGetDoc("data/users/" + uid + "/dishes"),
-    dbGetDoc("data/users/" + uid + "/plannedWeeks")
+    dbGetDoc("data/users/" + uid + "/plannedWeeks"),
+    dbGetDoc("data/users/" + uid + "/meta")
   ]).then(function (results) {
-    sendJSON(res, 200, {
-      prefs: results[0].exists ? results[0].value : null,
-      dishes: results[1].exists ? results[1].value : null,
-      plannedWeeks: results[2].exists ? results[2].value : null
+    var meta = results[3].exists ? results[3].value : null;
+    var locationPromise = (meta && meta.lastIp) ? resolveIpLocation(meta.lastIp) : Promise.resolve(null);
+    return locationPromise.then(function (location) {
+      sendJSON(res, 200, {
+        prefs: results[0].exists ? results[0].value : null,
+        dishes: results[1].exists ? results[1].value : null,
+        plannedWeeks: results[2].exists ? results[2].value : null,
+        lastSeenAt: meta ? meta.lastSeenAt : null,
+        location: location
+      });
     });
   }).catch(function (err) {
     sendJSON(res, 500, { code: "error", message: "Kon gebruikersdetail niet ophalen: " + err.message });
