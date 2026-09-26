@@ -182,11 +182,21 @@ function clientIp(req) {
 
 // ---------- Extract the first JSON value (array or object) from a model's text reply ----------
 
+function fixDutchDecimals(text) {
+  // The model occasionally writes a Dutch-style decimal comma (e.g. 1,50)
+  // instead of the JSON-required decimal point (1.50), which breaks JSON.parse.
+  // Only touches number-like values right after a colon, followed by a
+  // comma/brace/bracket — deliberately narrow so it never touches real
+  // array/object separators.
+  return text.replace(/(:\s*-?\d+),(\d{1,2})(?=\s*[,}\]])/g, "$1.$2");
+}
+
 function extractJson(text) {
   var cleaned = text.replace(/```json/gi, "```").trim();
   var fenceMatch = cleaned.match(/```([\s\S]*?)```/);
   if (fenceMatch) cleaned = fenceMatch[1].trim();
   try { return JSON.parse(cleaned); } catch (e) {}
+  try { return JSON.parse(fixDutchDecimals(cleaned)); } catch (e) {}
   var firstArray = cleaned.indexOf("[");
   var firstObj = cleaned.indexOf("{");
   var start = -1;
@@ -198,7 +208,8 @@ function extractJson(text) {
   var lastObj = cleaned.lastIndexOf("}");
   var end = Math.max(lastArray, lastObj);
   var candidate = cleaned.slice(start, end + 1);
-  return JSON.parse(candidate);
+  try { return JSON.parse(candidate); } catch (e) {}
+  return JSON.parse(fixDutchDecimals(candidate));
 }
 
 // ---------- Routes ----------
@@ -381,7 +392,8 @@ function buildPriceEstimatePrompt(items) {
     "gebaseerd op de vermelde hoeveelheid en een gemiddeld huismerk/A-merk. " +
     "Geef ALLEEN geldig JSON terug: een array van exact " + list.length + " objecten, in dezelfde volgorde " +
     "als de items hieronder, elk exact dit schema: {\"laag\": number, \"hoog\": number} (bedragen in euro's, " +
-    "afgerond op 2 decimalen, laag <= hoog). Geen markdown, geen uitleg erbuiten.\n\nItems:\n" +
+    "afgerond op 2 decimalen, laag <= hoog, gebruik ALTIJD een punt als decimaalteken zoals 1.50 — nooit een komma). " +
+    "Geen markdown, geen uitleg erbuiten.\n\nItems:\n" +
     list.map(function (t, i) { return (i + 1) + ". " + t; }).join("\n");
 }
 
