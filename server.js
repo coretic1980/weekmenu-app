@@ -64,6 +64,61 @@ function todayKey() {
   return new Date().toISOString().slice(0, 10);
 }
 
+// ---------- Request logging (for the admin page) ----------
+// Every /api/generate call logs its action, duration, and outcome. Capped at
+// the most recent 1000 entries so it never grows unbounded.
+
+var LOG_CAP = 1000;
+
+function logRequest(entry) {
+  mongoReady.then(function (db) {
+    if (!db) {
+      var store = loadStore();
+      store.logs = store.logs || [];
+      store.logs.push(entry);
+      if (store.logs.length > LOG_CAP) store.logs = store.logs.slice(-LOG_CAP);
+      saveStore(store);
+      return;
+    }
+    return db.collection("logs").insertOne(entry).then(function () {
+      return db.collection("logs").countDocuments().then(function (count) {
+        if (count <= LOG_CAP) return;
+        return db.collection("logs").find().sort({ ts: 1 }).limit(count - LOG_CAP).toArray().then(function (oldest) {
+          return db.collection("logs").deleteMany({ _id: { $in: oldest.map(function (d) { return d._id; }) } });
+        });
+      });
+    });
+  }).catch(function () {});
+}
+
+function getRecentLogs(limit) {
+  return mongoReady.then(function (db) {
+    if (!db) {
+      var store = loadStore();
+      return (store.logs || []).slice(-limit).reverse();
+    }
+    return db.collection("logs").find().sort({ ts: -1 }).limit(limit).toArray();
+  });
+}
+
+function computeLogStats(logs) {
+  var today = todayKey();
+  var todays = logs.filter(function (l) { return l.ts && l.ts.slice(0, 10) === today; });
+  var errors = todays.filter(function (l) { return !l.ok; });
+  var totalDuration = todays.reduce(function (s, l) { return s + (l.durationMs || 0); }, 0);
+  var byAction = {};
+  todays.forEach(function (l) {
+    var a = l.action || "onbekend";
+    byAction[a] = (byAction[a] || 0) + 1;
+  });
+  return {
+    requestsToday: todays.length,
+    errorsToday: errors.length,
+    avgDurationMs: todays.length ? Math.round(totalDuration / todays.length) : 0,
+    byAction: byAction
+  };
+}
+
 // ---------- Persistent storage: MongoDB Atlas if configured, else the local file above ----------
 // The local file works for quick local testing, but on most hosting platforms (including
 // Render's free tier) the filesystem is wiped on every restart/redeploy — so for anything
@@ -576,22 +631,28 @@ function generateWithBalansRetry(prompt, goal) {
 
 function handleGenerate(req, res) {
   var ip = clientIp(req);
+  var startTime = Date.now();
   if (!checkIpRateLimit(ip)) {
+    logRequest({ ts: new Date().toISOString(), action: "onbekend", durationMs: Date.now() - startTime, ok: false, status: 429, error: "Rate limit (IP)", ip: ip });
     return sendJSON(res, 429, { code: "rate_limited", message: "Te veel verzoeken vanaf dit adres. Probeer later opnieuw." });
   }
 
   if (!ANTHROPIC_API_KEY) {
+    logRequest({ ts: new Date().toISOString(), action: "onbekend", durationMs: Date.now() - startTime, ok: false, status: 500, error: "ANTHROPIC_API_KEY niet ingesteld", ip: ip });
     return sendJSON(res, 500, { code: "not_configured", message: "Server heeft nog geen ANTHROPIC_API_KEY ingesteld." });
   }
 
   getUsageToday().then(function (usedToday) {
     if (usedToday >= DAILY_GENERATE_CAP) {
+      logRequest({ ts: new Date().toISOString(), action: "onbekend", durationMs: Date.now() - startTime, ok: false, status: 429, error: "Dagelijkse limiet bereikt", ip: ip });
       return sendJSON(res, 429, { code: "rate_limited", message: "De dagelijkse limiet voor het genereren van gerechten is bereikt. Probeer het morgen opnieuw." });
     }
 
     readBody(req).then(function (body) {
+      var action = (body && body.action) || "onbekend";
       var prompt = buildPromptFromRequest(body);
       if (!prompt) {
+        logRequest({ ts: new Date().toISOString(), action: action, durationMs: Date.now() - startTime, ok: false, status: 400, error: "Ongeldig verzoek", ip: ip });
         return sendJSON(res, 400, { code: "bad_request", message: "Ongeldig verzoek." });
       }
       var goalForValidation = (body.action === "generate" || body.action === "background" || body.action === "variation")
@@ -600,14 +661,18 @@ function handleGenerate(req, res) {
 
       return generateWithBalansRetry(prompt, goalForValidation).then(function (parsed) {
         incrementUsageToday();
+        logRequest({ ts: new Date().toISOString(), action: action, durationMs: Date.now() - startTime, ok: true, status: 200, ip: ip });
         sendJSON(res, 200, { result: parsed });
       }).catch(function (err) {
+        logRequest({ ts: new Date().toISOString(), action: action, durationMs: Date.now() - startTime, ok: false, status: 502, error: err.message, ip: ip });
         sendJSON(res, 502, { code: "error", message: "Genereren mislukt: " + err.message });
       });
     }).catch(function () {
+      logRequest({ ts: new Date().toISOString(), action: "onbekend", durationMs: Date.now() - startTime, ok: false, status: 400, error: "Ongeldige aanvraag", ip: ip });
       sendJSON(res, 400, { code: "bad_request", message: "Ongeldige aanvraag." });
     });
   }).catch(function (err) {
+    logRequest({ ts: new Date().toISOString(), action: "onbekend", durationMs: Date.now() - startTime, ok: false, status: 502, error: "Opslag niet bereikbaar: " + (err && err.message ? err.message : "onbekende fout"), ip: ip });
     sendJSON(res, 502, { code: "error", message: "Opslag niet bereikbaar: " + (err && err.message ? err.message : "onbekende fout") });
   });
 }
@@ -790,14 +855,28 @@ function handleAdminUserDetail(req, res, uid) {
 
 function handleAdminStats(req, res) {
   if (!requireAdmin(req, res)) return;
-  Promise.all([dbListUserIds(), getUsageToday()]).then(function (results) {
+  Promise.all([dbListUserIds(), getUsageToday(), getRecentLogs(LOG_CAP)]).then(function (results) {
+    var logStats = computeLogStats(results[2]);
     sendJSON(res, 200, {
       totalUsers: results[0].length,
       usageToday: results[1],
-      dailyCap: DAILY_GENERATE_CAP
+      dailyCap: DAILY_GENERATE_CAP,
+      requestsToday: logStats.requestsToday,
+      errorsToday: logStats.errorsToday,
+      avgDurationMs: logStats.avgDurationMs,
+      byAction: logStats.byAction
     });
   }).catch(function (err) {
     sendJSON(res, 500, { code: "error", message: "Kon statistieken niet ophalen: " + err.message });
+  });
+}
+
+function handleAdminLogs(req, res) {
+  if (!requireAdmin(req, res)) return;
+  getRecentLogs(100).then(function (logs) {
+    sendJSON(res, 200, { logs: logs });
+  }).catch(function (err) {
+    sendJSON(res, 500, { code: "error", message: "Kon logs niet ophalen: " + err.message });
   });
 }
 
@@ -814,6 +893,7 @@ var server = http.createServer(function (req, res) {
   if (req.method === "GET" && url.pathname.indexOf("/icons/") === 0) return serveFile(req, res, url.pathname);
   if (req.method === "POST" && url.pathname === "/api/admin/login") return handleAdminLogin(req, res);
   if (req.method === "GET" && url.pathname === "/api/admin/stats") return handleAdminStats(req, res);
+  if (req.method === "GET" && url.pathname === "/api/admin/logs") return handleAdminLogs(req, res);
   if (req.method === "GET" && url.pathname === "/api/admin/users") return handleAdminUsers(req, res);
   if (req.method === "GET" && url.pathname.indexOf("/api/admin/users/") === 0) {
     return handleAdminUserDetail(req, res, decodeURIComponent(url.pathname.slice("/api/admin/users/".length)));

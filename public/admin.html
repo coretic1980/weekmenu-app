@@ -52,6 +52,15 @@
     padding: 12px; overflow-x: auto; font-size: 12px; line-height: 1.5; white-space: pre-wrap; word-break: break-word;
   }
   .section-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 16px 0 6px; }
+  .log-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 9px 4px; border-bottom: 1px solid var(--line); font-size: 13px;
+  }
+  .log-row:last-child { border-bottom: none; }
+  .log-row.fail { color: #E08787; }
+  .log-time { color: var(--muted); font-size: 12px; min-width: 62px; }
+  .log-action { flex: 1; }
+  .log-duration { color: var(--muted); font-size: 12px; min-width: 50px; text-align: right; }
   #loginView, #dashView { display: none; }
 </style>
 </head>
@@ -75,6 +84,11 @@
   </header>
   <main>
     <div class="stats" id="statsRow"></div>
+
+    <div id="logCard" class="card">
+      <div class="section-label">Recente activiteit</div>
+      <div id="logList"><div class="muted">Laden…</div></div>
+    </div>
 
     <div id="userListCard" class="card">
       <div class="section-label">Gebruikers</div>
@@ -114,6 +128,7 @@
     document.getElementById("loginView").style.display = "none";
     document.getElementById("dashView").style.display = "block";
     loadStats();
+    loadLogs();
     loadUsers();
   }
 
@@ -149,7 +164,10 @@
       row.innerHTML = "";
       [
         ["Gebruikers", data.totalUsers],
-        ["Generaties vandaag", data.usageToday + " / " + data.dailyCap]
+        ["Generaties vandaag", data.usageToday + " / " + data.dailyCap],
+        ["Verzoeken vandaag", data.requestsToday],
+        ["Fouten vandaag", data.errorsToday],
+        ["Gem. duur", data.avgDurationMs + " ms"]
       ].forEach(function (pair) {
         var el = document.createElement("div");
         el.className = "stat";
@@ -158,6 +176,32 @@
       });
     }).catch(function (e) {
       if (e.message.indexOf("unauthorized") > -1 || e.message.indexOf("Niet ingelogd") > -1) showLogin();
+    });
+  }
+
+  function loadLogs() {
+    var listEl = document.getElementById("logList");
+    listEl.innerHTML = '<div class="muted">Laden…</div>';
+    api("/api/admin/logs").then(function (data) {
+      if (!data.logs.length) {
+        listEl.innerHTML = '<div class="muted">Nog geen activiteit.</div>';
+        return;
+      }
+      listEl.innerHTML = "";
+      data.logs.slice(0, 30).forEach(function (l) {
+        var row = document.createElement("div");
+        row.className = "log-row" + (l.ok ? "" : " fail");
+        var time = l.ts ? new Date(l.ts).toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" }) : "?";
+        var label = l.action + (l.ok ? "" : " — " + (l.error || "fout"));
+        row.innerHTML =
+          '<span class="log-time">' + time + '</span>' +
+          '<span class="log-action">' + label + '</span>' +
+          '<span class="log-duration">' + l.durationMs + ' ms</span>';
+        listEl.appendChild(row);
+      });
+    }).catch(function (e) {
+      if (e.message.indexOf("unauthorized") > -1 || e.message.indexOf("Niet ingelogd") > -1) showLogin();
+      else listEl.innerHTML = '<div class="error">' + e.message + '</div>';
     });
   }
 
