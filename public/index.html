@@ -2576,14 +2576,7 @@
         render();
         return;
       }
-      var prompt = "Je bent een prijsexpert voor Nederlandse supermarkten (zoals Albert Heijn en Jumbo). " +
-        "Geef voor elk van de onderstaande boodschappenlijst-items een realistische geschatte prijsrange in euro\'s, " +
-        "gebaseerd op de vermelde hoeveelheid en een gemiddeld huismerk/A-merk. " +
-        "Geef ALLEEN geldig JSON terug: een array van exact " + uncached.length + " objecten, in dezelfde volgorde " +
-        "als de items hieronder, elk exact dit schema: {\"laag\": number, \"hoog\": number} (bedragen in euro\'s, " +
-        "afgerond op 2 decimalen, laag <= hoog). Geen markdown, geen uitleg erbuiten.\n\nItems:\n" +
-        uncached.map(function (t, i) { return (i + 1) + ". " + t; }).join("\n");
-      sample.json(prompt, { modelTier: "default" }).then(function (result) {
+      sample.json({ action: "price", items: uncached }, { modelTier: "default" }).then(function (result) {
         var arr = extractDishArray(result);
         if (arr) {
           uncached.forEach(function (t, i) {
@@ -2596,9 +2589,9 @@
         shoppingPriceLoading = false;
         if (!arr) shoppingPriceError = "Kon geen prijzen ophalen — probeer opnieuw.";
         render();
-      }).catch(function () {
+      }).catch(function (e) {
         shoppingPriceLoading = false;
-        shoppingPriceError = "Prijsschatting mislukt — probeer opnieuw.";
+        shoppingPriceError = "Prijsschatting mislukt: " + (e && e.message ? e.message : "onbekende fout") + " — probeer opnieuw.";
         render();
       });
     });

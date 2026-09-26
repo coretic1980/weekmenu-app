@@ -4,7 +4,7 @@
 // request fails (e.g. briefly offline). Bump CACHE_NAME whenever you want to
 // force-invalidate old cached assets after a deploy.
 
-var CACHE_NAME = "weekmenu-shell-v2";
+var CACHE_NAME = "weekmenu-shell-v3";
 var SHELL_FILES = [
   "/",
   "/manifest.json",
@@ -42,7 +42,7 @@ self.addEventListener("fetch", function (event) {
   if (event.request.method !== "GET") return;
 
   event.respondWith(
-    fetch(event.request)
+    fetch(event.request, event.request.mode === "navigate" ? { cache: "no-store" } : {})
       .then(function (response) {
         var copy = response.clone();
         caches.open(CACHE_NAME).then(function (cache) { cache.put(event.request, copy); }).catch(function () {});
