@@ -322,9 +322,10 @@ function buildGeneratePrompt(p) {
     "Geef ALLEEN geldig JSON terug: een array van EXACT " + totalCount + " objecten (" + count +
     " per maaltijdmoment), exact dit schema, geen markdown-opmaak, geen uitleg erbuiten:\n" +
     '[{"name": "gerechtnaam", "mealType": "' + mealTypes[0] + '", "kcal": 600, "kh_g": 50, "eiwit_g": 48, "vet_g": 22, ' +
-    '"benodigdheden": "korte tekst met keukenapparatuur", "ingredienten": ["ingredient 1", "ingredient 2"], ' +
+    '"bereidingstijd_minuten": 30, "benodigdheden": "korte tekst met keukenapparatuur", "ingredienten": ["ingredient 1", "ingredient 2"], ' +
     '"steps": [{"title": "korte staptitel", "content": "volledige instructie", "timer_seconds": 300}]}]\n' +
     '"mealType" moet exact één van deze waarden zijn: ' + mealTypes.join(", ") + ". " +
+    "\"bereidingstijd_minuten\" is de totale realistische bereidingstijd (voorbereiding + kooktijd samen) in hele minuten. " +
     "timer_seconds alleen toevoegen bij stappen met wachttijd (koken, bakken, grillen, oven, sudderen); anders weglaten.";
 }
 
@@ -346,9 +347,10 @@ function buildBackgroundGeneratePrompt(needed, p) {
     "Geef ALLEEN geldig JSON terug: een array van EXACT " + totalCount + " objecten, exact dit schema, " +
     "geen markdown-opmaak, geen uitleg erbuiten:\n" +
     '[{"name": "gerechtnaam", "mealType": "' + types[0] + '", "kcal": 600, "kh_g": 50, "eiwit_g": 48, "vet_g": 22, ' +
-    '"benodigdheden": "korte tekst met keukenapparatuur", "ingredienten": ["ingredient 1", "ingredient 2"], ' +
+    '"bereidingstijd_minuten": 30, "benodigdheden": "korte tekst met keukenapparatuur", "ingredienten": ["ingredient 1", "ingredient 2"], ' +
     '"steps": [{"title": "korte staptitel", "content": "volledige instructie", "timer_seconds": 300}]}]\n' +
     '"mealType" moet exact één van deze waarden zijn: ' + types.join(", ") + ". " +
+    "\"bereidingstijd_minuten\" is de totale realistische bereidingstijd (voorbereiding + kooktijd samen) in hele minuten. " +
     "timer_seconds alleen toevoegen bij stappen met wachttijd; anders weglaten.";
 }
 
@@ -360,8 +362,9 @@ function buildVariationPromptServer(current, kind, p) {
     INGREDIENT_SPECIFICITY_LINE +
     "Geef ALLEEN geldig JSON terug, exact dit schema, geen markdown, geen uitleg erbuiten:\n" +
     '{"name": "gerechtnaam", "kcal": 600, "kh_g": 50, "eiwit_g": 48, "vet_g": 22, ' +
-    '"benodigdheden": "korte tekst met keukenapparatuur", "ingredienten": ["ingredient 1", "ingredient 2"], ' +
+    '"bereidingstijd_minuten": 30, "benodigdheden": "korte tekst met keukenapparatuur", "ingredienten": ["ingredient 1", "ingredient 2"], ' +
     '"steps": [{"title": "korte staptitel", "content": "volledige instructie", "timer_seconds": 300}]}\n' +
+    "\"bereidingstijd_minuten\" is de bijgewerkte, realistische totale bereidingstijd in hele minuten, passend bij de opdracht. " +
     "timer_seconds alleen toevoegen bij stappen met wachttijd; anders weglaten.";
 }
 
@@ -381,7 +384,9 @@ function buildPrepPromptServer(dishes) {
     "Geef ALLEEN geldig JSON terug, exact dit schema, geen markdown, geen uitleg erbuiten:\n" +
     '{"name": "Prepdag", "benodigdheden": "korte tekst met keukenapparatuur", ' +
     '"ingredienten": ["ingredient 1 met hoeveelheid", "ingredient 2 met hoeveelheid"], ' +
+    '"bereidingstijd_minuten": 60, ' +
     '"steps": [{"title": "korte staptitel", "content": "volledige instructie", "timer_seconds": 300}]}\n' +
+    "\"bereidingstijd_minuten\" is de totale realistische bereidingstijd (voorbereiding + kooktijd samen) in hele minuten. " +
     "timer_seconds alleen toevoegen bij stappen met wachttijd; anders weglaten.";
 }
 
@@ -407,6 +412,95 @@ function buildPromptFromRequest(body) {
   return null;
 }
 
+var GOAL_TARGETS = {
+  "Onderhoud": { kh: 33, eiwit: 33, vet: 34 },
+  "Vetverlies (spierbehoud)": { kh: 30, eiwit: 40, vet: 30 },
+  "Cutting": { kh: 25, eiwit: 45, vet: 30 },
+  "Spieropbouw (lean bulk)": { kh: 40, eiwit: 30, vet: 30 },
+  "Atleet (prestatiegericht)": { kh: 45, eiwit: 25, vet: 30 }
+};
+function computeBalanceServer(khPct, eiwitPct, vetPct, goal) {
+  var t = GOAL_TARGETS[goal] || GOAL_TARGETS["Onderhoud"];
+  var maxDev = Math.max(Math.abs(khPct - t.kh), Math.abs(eiwitPct - t.eiwit), Math.abs(vetPct - t.vet));
+  return Math.max(0, Math.min(100, Math.round(100 - 3 * maxDev)));
+}
+function dishBalans(d, goal) {
+  var kcal = Number(d && d.kcal) || 0;
+  if (!kcal) return 0;
+  var khPct = Math.round((Number(d.kh_g || 0) * 4 / kcal) * 100);
+  var eiwitPct = Math.round((Number(d.eiwit_g || 0) * 4 / kcal) * 100);
+  var vetPct = Math.round((Number(d.vet_g || 0) * 9 / kcal) * 100);
+  return computeBalanceServer(khPct, eiwitPct, vetPct, goal);
+}
+function minBalans(parsed, goal) {
+  var dishes = Array.isArray(parsed) ? parsed : [parsed];
+  if (!dishes.length) return 0;
+  return dishes.reduce(function (min, d) { return Math.min(min, dishBalans(d, goal)); }, 100);
+}
+
+var BALANS_MIN_THRESHOLD = 75;
+var BALANS_MAX_ATTEMPTS = 3;
+
+function callAnthropicOnce(prompt) {
+  return fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "x-api-key": ANTHROPIC_API_KEY,
+      "anthropic-version": "2023-06-01",
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({
+      model: ANTHROPIC_MODEL,
+      max_tokens: 64000,
+      messages: [{ role: "user", content: prompt }]
+    })
+  }).then(function (apiRes) {
+    if (!apiRes.ok) {
+      return apiRes.text().then(function (t) {
+        throw new Error("Anthropic API error " + apiRes.status + ": " + t.slice(0, 300));
+      });
+    }
+    return apiRes.json();
+  }).then(function (data) {
+    var textBlock = (data.content || []).filter(function (b) { return b.type === "text"; })[0];
+    if (!textBlock) throw new Error("Geen tekst in antwoord van model");
+    try {
+      return extractJson(textBlock.text);
+    } catch (parseErr) {
+      if (data.stop_reason === "max_tokens") {
+        throw new Error("Antwoord werd afgekapt (te lang voor de ingestelde limiet). Probeer minder gerechten tegelijk te genereren, of verhoog max_tokens in server.js.");
+      }
+      throw parseErr;
+    }
+  });
+}
+
+// Retries generation (up to BALANS_MAX_ATTEMPTS times total) until every dish's
+// Balans-score reaches BALANS_MIN_THRESHOLD, keeping the best-scoring attempt
+// seen so far. Only applies when a goal is known (dish-generating actions);
+// prep/price requests have no macros to score and skip this entirely.
+function generateWithBalansRetry(prompt, goal) {
+  if (!goal) return callAnthropicOnce(prompt);
+
+  var bestParsed = null;
+  var bestScore = -1;
+  var attempt = 0;
+
+  function tryOnce() {
+    attempt++;
+    return callAnthropicOnce(prompt).then(function (parsed) {
+      var score = minBalans(parsed, goal);
+      if (score > bestScore) { bestScore = score; bestParsed = parsed; }
+      if (score >= BALANS_MIN_THRESHOLD || attempt >= BALANS_MAX_ATTEMPTS) {
+        return bestParsed;
+      }
+      return tryOnce();
+    });
+  }
+
+  return tryOnce();
+}
+
 function handleGenerate(req, res) {
   var ip = clientIp(req);
   if (!checkIpRateLimit(ip)) {
@@ -427,41 +521,12 @@ function handleGenerate(req, res) {
       if (!prompt) {
         return sendJSON(res, 400, { code: "bad_request", message: "Ongeldig verzoek." });
       }
+      var goalForValidation = (body.action === "generate" || body.action === "background" || body.action === "variation")
+        ? ((body.params && body.params.goal) || null)
+        : null;
 
-      return fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "x-api-key": ANTHROPIC_API_KEY,
-          "anthropic-version": "2023-06-01",
-          "content-type": "application/json"
-        },
-        body: JSON.stringify({
-          model: ANTHROPIC_MODEL,
-          max_tokens: 64000,
-          messages: [{ role: "user", content: prompt }]
-        })
-      }).then(function (apiRes) {
-        if (!apiRes.ok) {
-          return apiRes.text().then(function (t) {
-            throw new Error("Anthropic API error " + apiRes.status + ": " + t.slice(0, 300));
-          });
-        }
-        return apiRes.json();
-      }).then(function (data) {
-        var textBlock = (data.content || []).filter(function (b) { return b.type === "text"; })[0];
-        if (!textBlock) throw new Error("Geen tekst in antwoord van model");
-        var parsed;
-        try {
-          parsed = extractJson(textBlock.text);
-        } catch (parseErr) {
-          if (data.stop_reason === "max_tokens") {
-            throw new Error("Antwoord werd afgekapt (te lang voor de ingestelde limiet). Probeer minder gerechten tegelijk te genereren, of verhoog max_tokens in server.js.");
-          }
-          throw parseErr;
-        }
-
+      return generateWithBalansRetry(prompt, goalForValidation).then(function (parsed) {
         incrementUsageToday();
-
         sendJSON(res, 200, { result: parsed });
       }).catch(function (err) {
         sendJSON(res, 502, { code: "error", message: "Genereren mislukt: " + err.message });
