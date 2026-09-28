@@ -1217,6 +1217,154 @@ function handleAuthUpgrade(req, res) {
   });
 }
 
+// ---------- Het eigen account beheren (voor de ingelogde gebruiker zelf) ----------
+// Profielgegevens, gegevens downloaden, wachtwoord en e-mailadres wijzigen, op andere apparaten uitloggen en het
+// account verwijderen. Alles wat een wachtwoord controleert heeft een strenge grens per IP-adres (tegen raden).
+var accountSensitiveAllowed = makeHourlyLimiter(20);
+var accountLightAllowed = makeHourlyLimiter(120);
+
+function withAccountUser(req, res, opts, fn) {
+  var limiter = opts.sensitive ? accountSensitiveAllowed : accountLightAllowed;
+  if (!limiter(clientIp(req))) return sendJSON(res, 429, { code: "rate_limited", message: "Te veel pogingen. Probeer het over een uur opnieuw." });
+  return resolveUser(req).then(function (user) {
+    if (!user) return sendUnauthorized(res);
+    if (opts.needAccount && !user.email) return sendJSON(res, 403, { code: "forbidden", message: "Dit kan alleen met een account. Maak eerst een account aan." });
+    return fn(user);
+  }).catch(function (err) {
+    sendJSON(res, 500, { code: "error", message: "Er ging iets mis: " + (err && err.message ? err.message : "onbekende fout") });
+  });
+}
+function forbiddenPassword(res) { return sendJSON(res, 403, { code: "forbidden", message: "Je huidige wachtwoord klopt niet." }); }
+// Het accountdocument van de ingelogde gebruiker, en alleen als het echt bij deze sessie hoort.
+function loadOwnAccount(user) {
+  return dbGetDoc("auth/users/" + user.email).then(function (r) {
+    return r.exists && r.value && r.value.uid === user.uid ? r.value : null;
+  });
+}
+function cleanBodyPassword(v) { return typeof v === "string" ? v : ""; }
+
+function handleAccountInfo(req, res) {
+  return withAccountUser(req, res, {}, function (user) {
+    return Promise.all([readAnonData(user.uid), user.email ? loadOwnAccount(user) : Promise.resolve(null)]).then(function (r) {
+      var s = anonSummary(r[0]), acc = r[1];
+      sendJSON(res, 200, { type: user.email ? "account" : "anon", uid: user.uid, email: user.email || null,
+        createdAt: acc ? acc.createdAt || null : null, lastLoginAt: acc ? acc.lastLoginAt || null : null, upgraded: !!(acc && acc.upgradedFrom),
+        counts: { dishes: s.dishes, plannedWeeks: s.plannedWeeks, lists: s.lists } });
+    });
+  });
+}
+
+function handleAccountExport(req, res) {
+  return withAccountUser(req, res, {}, function (user) {
+    return Promise.all([readAnonData(user.uid), user.email ? loadOwnAccount(user) : Promise.resolve(null)]).then(function (r) {
+      var d = r[0], acc = r[1];
+      return Promise.all(d.tokens.map(function (t) {
+        return dbGetDoc("lists/" + t).then(function (l) {
+          if (!l.exists || !l.value || l.value.ownerUid !== user.uid) return null;
+          return { link: "/l/" + t, title: l.value.title, items: l.value.items, state: l.value.state, createdAt: l.value.createdAt, expiresAt: l.value.expiresAt };
+        });
+      })).then(function (lists) {
+        var data = JSON.stringify({
+          exportedAt: new Date().toISOString(),
+          account: { type: user.email ? "account" : "anon", email: user.email || null, createdAt: acc ? acc.createdAt || null : null },
+          prefs: d.prefs.exists ? d.prefs.value : null, dishes: d.dishes.exists ? d.dishes.value : null, plannedWeeks: d.plannedWeeks.exists ? d.plannedWeeks.value : null,
+          sharedLists: lists.filter(Boolean)
+        }, null, 2);
+        logEvent("auth", "export", true, 200, { uid: user.uid, email: user.email || undefined, ip: clientIp(req) });
+        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Content-Disposition": "attachment; filename=\"balanza-gegevens-" + new Date().toISOString().slice(0, 10) + ".json\"", "Cache-Control": "no-store", "Content-Length": Buffer.byteLength(data) });
+        res.end(data);
+      });
+    });
+  });
+}
+
+function handleAccountChangePassword(req, res) {
+  return withAccountUser(req, res, { sensitive: true, needAccount: true }, function (user) {
+    return readBody(req).then(function (body) {
+      var cur = cleanBodyPassword(body && body.currentPassword), nw = cleanBodyPassword(body && body.newPassword);
+      if (!cur) return sendJSON(res, 400, { code: "bad_request", message: "Vul je huidige wachtwoord in." });
+      if (nw.length < 8) return sendJSON(res, 400, { code: "bad_request", message: "Het nieuwe wachtwoord moet minstens 8 tekens zijn." });
+      if (nw.length > 200) return sendJSON(res, 400, { code: "bad_request", message: "Een wachtwoord mag hoogstens 200 tekens hebben." });
+      return loadOwnAccount(user).then(function (acc) {
+        if (!acc) return sendUnauthorized(res);
+        if (!verifyPassword(cur, acc)) { logEvent("auth", "password-change", false, 403, { error: "Huidig wachtwoord onjuist", email: user.email, uid: user.uid, ip: clientIp(req) }); return forbiddenPassword(res); }
+        if (nw === cur) return sendJSON(res, 400, { code: "bad_request", message: "Kies een ander wachtwoord dan je huidige." });
+        var rec = makePasswordRecord(nw), stamp = Date.now();
+        return dbSetDoc("auth/users/" + user.email, Object.assign({}, acc, { salt: rec.salt, hash: rec.hash })).then(function () {
+          return updateBlocked(function (b) { b.invalidBefore[user.uid] = stamp; });
+        }).then(function () {
+          logEvent("auth", "password-change", true, 200, { email: user.email, uid: user.uid, ip: clientIp(req) });
+          sendJSON(res, 200, { ok: true, token: issueUserSession(user.uid, user.email), uid: user.uid });   // alle andere sessies zijn nu ingetrokken; deze niet
+        });
+      });
+    });
+  });
+}
+
+function handleAccountChangeEmail(req, res) {
+  return withAccountUser(req, res, { sensitive: true, needAccount: true }, function (user) {
+    return readBody(req).then(function (body) {
+      var password = cleanBodyPassword(body && body.password), next = normalizeEmail(body && body.newEmail);
+      if (!EMAIL_RE.test(next) || next.length > 200) return sendJSON(res, 400, { code: "bad_request", message: "Vul een geldig e-mailadres in." });
+      if (!password) return sendJSON(res, 400, { code: "bad_request", message: "Vul je wachtwoord in om je e-mailadres te wijzigen." });
+      if (next === user.email) return sendJSON(res, 400, { code: "bad_request", message: "Dit is al je e-mailadres." });
+      var lockKey = "email:" + next;
+      if (upgradeLocks.has(lockKey)) return sendJSON(res, 409, { code: "busy", message: "Je aanvraag wordt al verwerkt. Even geduld." });
+      upgradeLocks.add(lockKey);
+      var release = function () { upgradeLocks.delete(lockKey); };
+      return loadOwnAccount(user).then(function (acc) {
+        if (!acc) return sendUnauthorized(res);
+        if (!verifyPassword(password, acc)) { logEvent("auth", "email-change", false, 403, { error: "Wachtwoord onjuist", email: user.email, uid: user.uid, ip: clientIp(req) }); return forbiddenPassword(res); }
+        return dbGetDoc("auth/users/" + next).then(function (taken) {
+          if (taken.exists) { logEvent("auth", "email-change", false, 409, { error: "Bestaat al", email: user.email, uid: user.uid, ip: clientIp(req) }); return sendJSON(res, 409, { code: "conflict", message: "Er bestaat al een account met dit e-mailadres." }); }
+          var stamp = Date.now();
+          return dbSetDoc("auth/users/" + next, acc).then(function () {
+            return dbDeleteDoc("auth/users/" + user.email).catch(function (e) { return dbDeleteDoc("auth/users/" + next).then(function () { throw e; }); });
+          }).then(function () {
+            return dbGetDoc("data/users/" + user.uid + "/meta").then(function (m) {
+              return m.exists && m.value ? dbSetDoc("data/users/" + user.uid + "/meta", Object.assign({}, m.value, { email: next })) : null;
+            });
+          }).then(function () {
+            return updateBlocked(function (b) { b.invalidBefore[user.uid] = stamp; });
+          }).then(function () {
+            invalidateSummaries();
+            logEvent("auth", "email-change", true, 200, { email: next, fromEmail: user.email, uid: user.uid, ip: clientIp(req) });
+            sendJSON(res, 200, { ok: true, token: issueUserSession(user.uid, next), uid: user.uid, email: next });
+          });
+        });
+      }).then(release, function (e) { release(); throw e; });
+    });
+  });
+}
+
+function handleAccountLogoutOthers(req, res) {
+  return withAccountUser(req, res, { needAccount: true }, function (user) {
+    var stamp = Date.now();
+    return updateBlocked(function (b) { b.invalidBefore[user.uid] = stamp; }).then(function () {
+      logEvent("auth", "logout-others", true, 200, { email: user.email, uid: user.uid, ip: clientIp(req) });
+      sendJSON(res, 200, { ok: true, token: issueUserSession(user.uid, user.email), uid: user.uid });
+    });
+  });
+}
+
+function handleAccountDelete(req, res) {
+  return withAccountUser(req, res, { sensitive: true, needAccount: true }, function (user) {
+    return readBody(req).then(function (body) {
+      var password = cleanBodyPassword(body && body.password);
+      if (!body || body.confirm !== "VERWIJDEREN") return sendJSON(res, 400, { code: "bad_request", message: "Typ VERWIJDEREN om te bevestigen." });
+      if (!password) return sendJSON(res, 400, { code: "bad_request", message: "Vul je wachtwoord in om je account te verwijderen." });
+      return loadOwnAccount(user).then(function (acc) {
+        if (!acc) return sendUnauthorized(res);
+        if (!verifyPassword(password, acc)) { logEvent("auth", "self-delete", false, 403, { error: "Wachtwoord onjuist", email: user.email, uid: user.uid, ip: clientIp(req) }); return forbiddenPassword(res); }
+        return deleteUserEverywhere({ uid: user.uid, email: user.email }).then(function () {
+          logEvent("auth", "self-delete", true, 200, { email: user.email, uid: user.uid, ip: clientIp(req) });
+          sendJSON(res, 200, { ok: true });
+        });
+      });
+    });
+  });
+}
+
 function handleAuthLogin(req, res) {
   var ip = clientIp(req);
   readBody(req).then(function (body) {
@@ -1281,7 +1429,7 @@ function handleForgotPassword(req, res) {
       if (!result.exists) return genericResponse();
       var token = crypto.randomBytes(24).toString("hex");
       logEvent("auth", "reset-request", true, 200, { email: email, uid: result.value.uid, ip: clientIp(req) });
-      return dbSetDoc("auth/resets/" + token, { email: email, expiresAt: Date.now() + RESET_TOKEN_TTL_MS, used: false }).then(function () {
+      return dbSetDoc("auth/resets/" + token, { email: email, uid: result.value.uid, expiresAt: Date.now() + RESET_TOKEN_TTL_MS, used: false }).then(function () {
         var host = req.headers.host;
         var resetLink = "https://" + host + "/?reset=" + token;
         return sendResetEmail(email, resetLink);
@@ -1308,6 +1456,8 @@ function handleResetPassword(req, res) {
       var email = result.value.email;
       return dbGetDoc("auth/users/" + email).then(function (userResult) {
         if (!userResult.exists) return sendJSON(res, 400, { code: "bad_request", message: "Account niet gevonden." });
+        // Een link hoort bij één account: is het e-mailadres inmiddels gewijzigd en later aan iemand anders gegeven, dan werkt de oude link niet.
+        if (result.value.uid && result.value.uid !== userResult.value.uid) return sendJSON(res, 400, { code: "bad_request", message: "Deze link is ongeldig of verlopen. Vraag een nieuwe aan." });
         var uid = userResult.value.uid;
         var record = makePasswordRecord(newPassword);
         return Promise.all([
@@ -2608,7 +2758,9 @@ function sanitizePrefsPatch(patch) {
 function randomPassword() { return crypto.randomBytes(9).toString("base64url"); }
 function createResetLink(req, email) {
   var token = crypto.randomBytes(24).toString("hex");
-  return dbSetDoc("auth/resets/" + token, { email: email, expiresAt: Date.now() + RESET_TOKEN_TTL_MS, used: false }).then(function () {
+  return dbGetDoc("auth/users/" + email).then(function (acc) {
+    return dbSetDoc("auth/resets/" + token, { email: email, uid: acc.exists && acc.value ? acc.value.uid : undefined, expiresAt: Date.now() + RESET_TOKEN_TTL_MS, used: false });
+  }).then(function () {
     return { token: token, link: "https://" + req.headers.host + "/?reset=" + token };
   });
 }
@@ -3194,6 +3346,12 @@ var server = http.createServer(function (req, res) {
   if (req.method === "POST" && url.pathname === "/api/auth/register") return guardedRegister(req, res);
   if (req.method === "POST" && url.pathname === "/api/auth/upgrade") return guardedUpgrade(req, res);
   if (req.method === "GET" && url.pathname === "/api/auth/anon-status") return handleAnonStatus(req, res);
+  if (req.method === "GET" && url.pathname === "/api/account") return handleAccountInfo(req, res);
+  if (req.method === "GET" && url.pathname === "/api/account/export") return handleAccountExport(req, res);
+  if (req.method === "POST" && url.pathname === "/api/account/change-password") return handleAccountChangePassword(req, res);
+  if (req.method === "POST" && url.pathname === "/api/account/change-email") return handleAccountChangeEmail(req, res);
+  if (req.method === "POST" && url.pathname === "/api/account/logout-others") return handleAccountLogoutOthers(req, res);
+  if (req.method === "POST" && url.pathname === "/api/account/delete") return handleAccountDelete(req, res);
   if (req.method === "POST" && url.pathname === "/api/auth/login") return handleAuthLogin(req, res);
   if (req.method === "POST" && url.pathname === "/api/auth/forgot-password") return guardedForgot(req, res);
   if (req.method === "POST" && url.pathname === "/api/auth/reset-password") return guardedReset(req, res);

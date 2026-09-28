@@ -288,6 +288,45 @@
   .sheet-label { display: block; font-weight: 600; font-size: 15px; }
   .sheet-sub { display: block; font-size: 12.5px; color: var(--muted); margin-top: 2px; line-height: 1.4; }
   .sheet-close { width: 100%; margin-top: 14px; }
+  /* ----- accountmenu (avatar rechtsboven) ----- */
+  .acct-btn { appearance: none; border: 0; background: transparent; color: var(--ink); display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 2px 2px 2px 4px; border-radius: 999px; font: inherit; flex: none; max-width: 46vw; }
+  .acct-btn:hover .avatar, .acct-btn:focus-visible .avatar { border-color: var(--accent2); }
+  .acct-name { font-weight: 600; font-size: 14px; max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  @media (max-width: 460px) { .acct-name { display: none; } }
+  .avatar { flex: none; width: 34px; height: 34px; border-radius: 50%; background: var(--dark-panel); color: var(--accent2); border: 1.5px solid var(--line); display: flex; align-items: center; justify-content: center; font-family: "Fraunces", serif; font-weight: 700; font-size: 15px; text-transform: uppercase; overflow: hidden; }
+  .avatar.med { width: 56px; height: 56px; font-size: 23px; }
+  .avatar.big { width: 72px; height: 72px; font-size: 30px; }
+  .menu-overlay { position: fixed; inset: 0; z-index: 115; display: none; background: rgba(10, 8, 5, 0.28); }
+  .menu-overlay.active { display: block; }
+  .account-menu { position: absolute; top: calc(64px + env(safe-area-inset-top, 0px)); right: 12px; width: min(340px, calc(100vw - 24px)); max-height: calc(100vh - 84px - env(safe-area-inset-top, 0px)); overflow-y: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 14px 40px rgba(0, 0, 0, 0.4); }
+  @media (min-width: 780px) { .account-menu { right: calc(50vw - 380px + 12px); } }
+  .am-head { display: flex; gap: 14px; align-items: center; padding: 18px; }
+  .am-name { font-family: "Fraunces", serif; font-weight: 600; font-size: 18px; overflow-wrap: anywhere; }
+  .am-mail { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; margin-top: 1px; }
+  .am-link { background: none; border: 0; padding: 0; margin-top: 6px; color: var(--accent2); font: inherit; font-weight: 600; font-size: 14px; cursor: pointer; text-align: left; }
+  .am-list { border-top: 1px solid var(--line); padding: 6px 0; }
+  .am-item { display: flex; align-items: center; gap: 14px; width: 100%; text-align: left; background: transparent; border: 0; padding: 13px 18px; color: var(--ink); font: inherit; font-size: 15px; cursor: pointer; }
+  .am-item:hover, .am-item:focus-visible { background: rgba(184, 134, 59, 0.14); outline: none; }
+  .am-item svg { flex: none; color: var(--muted); }
+  .am-item.accent, .am-item.accent svg { color: var(--accent2); font-weight: 600; }
+  .am-item.danger, .am-item.danger svg { color: #D9776F; }
+  :root[data-theme="light"] .am-item.danger, :root[data-theme="light"] .am-item.danger svg { color: #B4463D; }
+  .am-sep { height: 1px; background: var(--line); margin: 6px 0; }
+  /* ----- profiel- en instellingenschermen ----- */
+  .acc-card { background: var(--surface); border: 1px solid var(--line); border-radius: 13px; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+  .acc-card h2 { font-family: "Fraunces", serif; font-weight: 600; font-size: 18px; margin: 0; }
+  .acc-row { display: flex; gap: 14px; align-items: center; }
+  .acc-sub { color: var(--muted); font-size: 14px; overflow-wrap: anywhere; }
+  .acc-stats { color: var(--muted); font-size: 13.5px; }
+  .acc-btn { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; }
+  .acc-btn svg { flex: none; }
+  .acc-btn.danger { color: #D9776F; border-color: #D9776F; }
+  :root[data-theme="light"] .acc-btn.danger { color: #B4463D; border-color: #B4463D; }
+  .acc-form { display: flex; flex-direction: column; gap: 10px; padding: 4px 0 6px; }
+  .acc-form .errorbox { padding: 10px 12px; font-size: 13px; }
+  .seg { display: flex; gap: 8px; }
+  .seg button { flex: 1; }
+  .seg button[aria-pressed="true"] { border-color: var(--accent2); color: var(--accent2); }
   .confirm-box .confirm-title { font-family: "Fraunces", serif; font-weight: 600; font-size: 19px; margin-bottom: 8px; }
   .confirm-box .textinput { margin: 0 0 10px; }
   .confirm-box .errorbox { margin-bottom: 12px; padding: 10px 12px; font-size: 13px; }
@@ -408,6 +447,11 @@
     <div id="shareMenuTitle" class="sheet-title">Delen en exporteren</div>
     <div id="shareMenuBody"></div>
     <button id="shareMenuClose" class="ghost-btn sheet-close">Sluiten</button>
+  </div>
+</div>
+<div id="accountMenuOverlay" class="menu-overlay">
+  <div id="accountMenu" class="account-menu" role="dialog" aria-modal="true" aria-label="Accountmenu">
+    <div id="accountMenuBody"></div>
   </div>
 </div>
 <div id="bringOverlay" class="confirm-overlay">
@@ -791,14 +835,18 @@
     var h = document.createElement("h1");
     h.textContent = title;
     el.appendChild(h);
-    var themeBtn = document.createElement("button");
-    themeBtn.className = "backbtn";
-    themeBtn.setAttribute("aria-label", currentTheme === "dark" ? "Zet lichte modus aan" : "Zet donkere modus aan");
-    themeBtn.innerHTML = currentTheme === "dark"
-      ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>'
-      : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
-    themeBtn.onclick = function () { toggleTheme(); };
-    el.appendChild(themeBtn);
+    var acctBtn = document.createElement("button");
+    acctBtn.className = "acct-btn";
+    acctBtn.id = "accountBtn";
+    acctBtn.setAttribute("aria-label", "Account en instellingen");
+    acctBtn.setAttribute("aria-haspopup", "dialog");
+    acctBtn.appendChild(avatarNode(""));
+    var acctName = document.createElement("span");
+    acctName.className = "acct-name";
+    acctName.textContent = firstNameOf(accountName());
+    acctBtn.appendChild(acctName);
+    acctBtn.onclick = function () { openAccountMenu(); };
+    el.appendChild(acctBtn);
     if (showBack) {
       var homeBtn = document.createElement("button");
       homeBtn.className = "backbtn";
@@ -1121,6 +1169,397 @@
       authState.error = e.message;
       render();
     });
+  }
+
+  // =====================================================================================
+  // Accountmenu (avatar rechtsboven), "Mijn profiel" en "Instellingen"
+  // =====================================================================================
+  var ICONS = {
+    sliders: '<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/>',
+    gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
+    sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>',
+    moon: '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>',
+    download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/>',
+    help: '<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/>',
+    userplus: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/>',
+    refresh: '<path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/>',
+    logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/>',
+    user: '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+    key: '<path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.78 7.78 5.5 5.5 0 0 1 7.78-7.78zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>',
+    mail: '<path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/><path d="M22 6l-10 7L2 6"/>',
+    trash: '<path d="M3 6h18"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
+    devices: '<rect x="2" y="4" width="14" height="10" rx="2"/><path d="M8 18h2"/><rect x="18" y="8" width="4" height="10" rx="1"/>'
+  };
+  function iconSvg(key, size) {
+    return '<svg width="' + (size || 20) + '" height="' + (size || 20) + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (ICONS[key] || "") + '</svg>';
+  }
+
+  // Het e-mailadres staat in de sessie zelf (de app hoeft er niets voor op te halen).
+  function accountEmail() {
+    if (!window.authToken) return null;
+    try {
+      var part = String(window.authToken).split(".")[0].replace(/-/g, "+").replace(/_/g, "/");
+      while (part.length % 4) part += "=";
+      var bin = atob(part), bytes = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      var payload = JSON.parse(new TextDecoder().decode(bytes));
+      return payload && typeof payload.email === "string" && payload.email ? payload.email : null;
+    } catch (e) { return null; }
+  }
+  function accountName() {
+    var n = String(prefs.name || "").trim();
+    if (n) return n;
+    var e = accountEmail();
+    if (e) return e.split("@")[0];
+    return window.authToken ? "Mijn account" : "Gast";
+  }
+  function firstNameOf(n) { return String(n || "").trim().split(/\s+/)[0]; }
+  function avatarNode(size) {
+    var el = document.createElement("span");
+    el.className = "avatar" + (size ? " " + size : "");
+    var src = String(prefs.name || "").trim() || accountEmail() || "";
+    var ch = src ? Array.from(src)[0] : "";
+    if (ch) el.textContent = ch; else el.innerHTML = iconSvg("user", size === "big" ? 34 : size === "med" ? 26 : 18);
+    return el;
+  }
+
+  function accountMenuOverlay() { return document.getElementById("accountMenuOverlay"); }
+  function closeAccountMenu() { var o = accountMenuOverlay(); if (o) o.classList.remove("active"); }
+  function amItem(parent, id, icon, label, action, cls) {
+    var b = document.createElement("button");
+    b.className = "am-item" + (cls ? " " + cls : "");
+    b.id = id;
+    var ic = document.createElement("span");
+    ic.innerHTML = iconSvg(icon, 20);
+    var t = document.createElement("span");
+    t.textContent = label;
+    b.appendChild(ic); b.appendChild(t);
+    b.onclick = function () { closeAccountMenu(); action(); };
+    parent.appendChild(b);
+    return b;
+  }
+  function openAccountMenu() {
+    var body = document.getElementById("accountMenuBody");
+    if (!body) return;
+    body.innerHTML = "";
+    var email = accountEmail();
+    var head = document.createElement("div");
+    head.className = "am-head";
+    head.appendChild(avatarNode("med"));
+    var info = document.createElement("div");
+    var nm = document.createElement("div"); nm.className = "am-name"; nm.id = "amName"; nm.textContent = accountName();
+    var ml = document.createElement("div"); ml.className = "am-mail"; ml.id = "amMail";
+    ml.textContent = window.authToken ? (email || "Ingelogd") : "Anoniem profiel · alleen op dit apparaat";
+    var prof = document.createElement("button"); prof.className = "am-link"; prof.id = "amProfile"; prof.textContent = "Mijn profiel";
+    prof.onclick = function () { closeAccountMenu(); goto("account"); };
+    info.appendChild(nm); info.appendChild(ml); info.appendChild(prof);
+    head.appendChild(info);
+    body.appendChild(head);
+
+    var list = document.createElement("div");
+    list.className = "am-list";
+    if (!window.authToken && moduleOn("registration")) amItem(list, "amCreate", "userplus", "Account aanmaken", function () { upgradeState.error = null; goto("upgrade"); }, "accent");
+    amItem(list, "amPrefs", "sliders", "Mijn voorkeuren", function () { goto("prefs"); });
+    amItem(list, "amSettings", "gear", "Instellingen", function () { goto("settings"); });
+    amItem(list, "amTheme", currentTheme === "dark" ? "sun" : "moon", currentTheme === "dark" ? "Lichte weergave" : "Donkere weergave", function () { toggleTheme(); });
+    amItem(list, "amExport", "download", "Mijn gegevens downloaden", function () { exportMyData(); });
+    amItem(list, "amGuide", "help", "Hoe werkt Balanza", function () { goto("guide"); });
+    var sep = document.createElement("div"); sep.className = "am-sep"; list.appendChild(sep);
+    amItem(list, "amReset", "refresh", "Reset app \u2014 begin opnieuw", function () { resetEverything(); }, "danger");
+    if (window.authToken) amItem(list, "amLogout", "logout", "Uitloggen", function () { logout(); });
+    body.appendChild(list);
+    // Het menu hangt recht onder de avatar (ook met een notch of op een breed scherm); zonder meting geldt de standaardplek uit de opmaak.
+    try {
+      var btn = document.getElementById("accountBtn"), menu = document.getElementById("accountMenu");
+      var r = btn && btn.getBoundingClientRect ? btn.getBoundingClientRect() : null;
+      if (r && menu && r.bottom) {
+        menu.style.top = Math.round(r.bottom + 8) + "px";
+        menu.style.right = Math.max(8, Math.round((window.innerWidth || 0) - r.right)) + "px";
+      }
+    } catch (e) {}
+    var o = accountMenuOverlay();
+    if (o) o.classList.add("active");
+  }
+  (function wireAccountMenu() {
+    var overlay = accountMenuOverlay();
+    if (overlay) overlay.onclick = function (e) { if (e && e.target === overlay) closeAccountMenu(); };
+    if (typeof document.addEventListener === "function") {
+      document.addEventListener("keydown", function (e) { if (e && e.key === "Escape") closeAccountMenu(); });
+    }
+  })();
+
+  // ---- gemeenschappelijke hulpjes voor verzoeken en formulieren ----
+  function sessionExpiredReload() {
+    window.authToken = null; window.setAuthToken(null);
+    try { window.location.reload(); } catch (e) { bootstrapApp(); }
+  }
+  function accountRequest(method, path, body) {
+    var headers = Object.assign({ "Content-Type": "application/json" }, window.authHeaders ? window.authHeaders() : {});
+    return fetch(path, { method: method, headers: headers, body: body === undefined ? undefined : JSON.stringify(body) }).then(function (res) {
+      return res.json().catch(function () { return {}; }).then(function (data) {
+        if (res.status === 401) { sessionExpiredReload(); throw new Error("Je sessie is verlopen. Log opnieuw in."); }
+        if (!res.ok) throw new Error(data.message || "Er ging iets mis.");
+        return data;
+      });
+    });
+  }
+  function clearDeviceData() {
+    [SHARES_KEY, SHARE_PENDING_KEY, SHARE_META_KEY, SKIPPED_KEY].forEach(function (k) { try { localStorage.removeItem(k); } catch (e) {} });
+  }
+
+  function exportMyData() {
+    fetch("/api/account/export", { headers: window.authHeaders ? window.authHeaders() : {} }).then(function (res) {
+      if (res.status === 401) { sessionExpiredReload(); throw new Error("Je sessie is verlopen. Log opnieuw in."); }
+      if (!res.ok) return res.json().catch(function () { return {}; }).then(function (d) { throw new Error(d.message || "Downloaden lukte niet."); });
+      var cd = res.headers && res.headers.get ? (res.headers.get("content-disposition") || "") : "";
+      var m = cd.match(/filename="([^"]+)"/);
+      return res.blob().then(function (blob) { return { blob: blob, name: m ? m[1] : "balanza-gegevens.json" }; });
+    }).then(function (f) {
+      return claude.use("downloads").then(function (dl) { return dl.save({ data: f.blob, filename: f.name }); });
+    }).then(function () {
+      showToast("Je gegevens zijn gedownload.");
+    }).catch(function (e) {
+      showToast(e && e.name === "TypeError" ? "Downloaden lukte niet: geen verbinding." : ((e && e.message) || "Downloaden lukte niet."));
+    });
+  }
+
+  function accCard(main, title) {
+    var card = document.createElement("div");
+    card.className = "acc-card";
+    if (title) { var h = document.createElement("h2"); h.textContent = title; card.appendChild(h); }
+    main.appendChild(card);
+    return card;
+  }
+  function accButton(parent, id, icon, label, onclick, cls) {
+    var b = document.createElement("button");
+    b.className = "ghost-btn acc-btn" + (cls ? " " + cls : "");
+    b.id = id;
+    var ic = document.createElement("span"); ic.innerHTML = iconSvg(icon, 20);
+    var t = document.createElement("span"); t.textContent = label;
+    b.appendChild(ic); b.appendChild(t);
+    b.onclick = onclick;
+    parent.appendChild(b);
+    return b;
+  }
+  function accInput(parent, id, type, placeholder, autocomplete) {
+    var el = document.createElement("input");
+    el.type = type; el.id = id; el.placeholder = placeholder; el.className = "textinput";
+    if (autocomplete) el.autocomplete = autocomplete;
+    parent.appendChild(el);
+    return el;
+  }
+  // Een formulier dat opengaat als je op de knop tikt; fouten staan in het formulier zelf (geen herteken, dus je invoer blijft).
+  function foldForm(parent, idPrefix, icon, label, build, cls) {
+    var box = document.createElement("div");
+    box.className = "acc-form"; box.id = idPrefix + "Form"; box.style.display = "none";
+    var err = document.createElement("div");
+    err.className = "errorbox"; err.id = idPrefix + "Error"; err.style.display = "none"; err.setAttribute("role", "alert");
+    box.appendChild(err);
+    var api = {
+      box: box,
+      fail: function (msg) { err.textContent = msg; err.style.display = "block"; },
+      clearError: function () { err.textContent = ""; err.style.display = "none"; },
+      close: function () { api.clearError(); box.style.display = "none"; }
+    };
+    var toggle = accButton(parent, idPrefix + "Toggle", icon, label, function () {
+      var open = box.style.display === "none";
+      box.style.display = open ? "flex" : "none";
+      if (!open) api.clearError();
+    }, cls);
+    build(box, api);
+    parent.appendChild(box);
+    return api;
+  }
+  function runForm(btn, form, request, done) {
+    var label = btn.textContent;
+    form.clearError();
+    btn.disabled = true; btn.textContent = "Even geduld\u2026";
+    request().then(function (data) {
+      btn.disabled = false; btn.textContent = label;
+      done(data);
+    }).catch(function (e) {
+      btn.disabled = false; btn.textContent = label;
+      form.fail(friendlyNetError(e));
+    });
+  }
+
+  // ---- Mijn profiel ----
+  function renderAccount() {
+    var app = document.getElementById("app");
+    app.innerHTML = "";
+    app.appendChild(renderTopbar("Mijn profiel", true, function () { goto("weeks"); }));
+    var main = document.createElement("main");
+
+    var card = accCard(main, null);
+    var row = document.createElement("div");
+    row.className = "acc-row";
+    row.appendChild(avatarNode("big"));
+    var who = document.createElement("div");
+    var nm = document.createElement("div"); nm.className = "am-name"; nm.id = "profileName"; nm.textContent = accountName();
+    var em = document.createElement("div"); em.className = "acc-sub"; em.id = "profileEmail";
+    em.textContent = window.authToken ? (accountEmail() || "Ingelogd") : "Anoniem profiel \u00b7 je gegevens staan alleen op dit apparaat";
+    who.appendChild(nm); who.appendChild(em);
+    row.appendChild(who);
+    card.appendChild(row);
+    var stats = document.createElement("div");
+    stats.className = "acc-stats"; stats.id = "profileStats"; stats.textContent = "";
+    card.appendChild(stats);
+
+    var nameCard = accCard(main, "Hoe mogen we je noemen?");
+    var nameInput = accInput(nameCard, "profileNameInput", "text", "Je naam", "given-name");
+    nameInput.maxLength = 40; nameInput.value = String(prefs.name || "");
+    var save = document.createElement("button");
+    save.className = "primary-btn"; save.id = "profileNameSave"; save.textContent = "Naam opslaan";
+    save.onclick = function () {
+      var v = nameInput.value.trim().slice(0, 40);
+      prefs.name = v; savePrefs();
+      showToast(v ? "Naam opgeslagen." : "Naam verwijderd.");
+      render();
+    };
+    nameCard.appendChild(save);
+
+    if (!window.authToken && moduleOn("registration")) {
+      var cta = accCard(main, "Bewaar je gegevens veilig");
+      var txt = document.createElement("div"); txt.className = "acc-sub";
+      txt.textContent = "Met een account staan je gerechten, voorkeuren en planning ook op je andere apparaten, en raak je ze niet kwijt als je je browser wist.";
+      cta.appendChild(txt);
+      accButton(cta, "profileCreate", "userplus", "Account aanmaken", function () { upgradeState.error = null; goto("upgrade"); });
+    }
+    var more = accCard(main, null);
+    accButton(more, "profileSettings", "gear", "Instellingen", function () { goto("settings"); });
+    app.appendChild(main);
+
+    accountRequest("GET", "/api/account").then(function (info) {
+      if (state.view !== "account") return;
+      var el = document.getElementById("profileStats");
+      if (!el) return;
+      var parts = [];
+      var c2 = info.counts || {};
+      parts.push(c2.dishes + (c2.dishes === 1 ? " gerecht" : " gerechten"));
+      parts.push(c2.plannedWeeks + (c2.plannedWeeks === 1 ? " week planning" : " weken planning"));
+      parts.push(c2.lists + (c2.lists === 1 ? " gedeelde lijst" : " gedeelde lijsten"));
+      var since = "";
+      if (info.createdAt) { try { since = " \u00b7 lid sinds " + new Date(info.createdAt).toLocaleDateString("nl-NL", { day: "numeric", month: "long", year: "numeric" }); } catch (e) {} }
+      el.textContent = parts.join(" \u00b7 ") + since;
+    }).catch(function () {});
+  }
+
+  // ---- Instellingen ----
+  function renderSettings() {
+    var app = document.getElementById("app");
+    app.innerHTML = "";
+    app.appendChild(renderTopbar("Instellingen", true, function () { goto("weeks"); }));
+    var main = document.createElement("main");
+    var loggedIn = !!window.authToken;
+
+    var look = accCard(main, "Weergave");
+    var seg = document.createElement("div"); seg.className = "seg";
+    [["dark", "Donker", "moon"], ["light", "Licht", "sun"]].forEach(function (t) {
+      var b = document.createElement("button");
+      b.className = "ghost-btn"; b.id = "theme-" + t[0]; b.textContent = t[1];
+      b.setAttribute("aria-pressed", currentTheme === t[0] ? "true" : "false");
+      b.onclick = function () { if (currentTheme !== t[0]) toggleTheme(); };
+      seg.appendChild(b);
+    });
+    look.appendChild(seg);
+
+    var mine = accCard(main, "Mijn Balanza");
+    accButton(mine, "settingsProfile", "user", "Mijn profiel", function () { goto("account"); });
+    accButton(mine, "settingsPrefs", "sliders", "Mijn voorkeuren", function () { goto("prefs"); });
+    accButton(mine, "settingsGuide", "help", "Hoe werkt Balanza", function () { goto("guide"); });
+
+    if (loggedIn) {
+      var acc = accCard(main, "Account en beveiliging");
+      var mailLine = document.createElement("div"); mailLine.className = "acc-sub"; mailLine.id = "settingsEmailLine";
+      mailLine.textContent = "Ingelogd als " + (accountEmail() || "je account");
+      acc.appendChild(mailLine);
+
+      foldForm(acc, "settingsPw", "key", "Wachtwoord wijzigen", function (box, form) {
+        var cur = accInput(box, "settingsCurrentPw", "password", "Huidig wachtwoord", "current-password");
+        var nw = accInput(box, "settingsNewPw", "password", "Nieuw wachtwoord (minstens 8 tekens)", "new-password");
+        var nw2 = accInput(box, "settingsNewPw2", "password", "Herhaal nieuw wachtwoord", "new-password");
+        var go = document.createElement("button"); go.className = "primary-btn"; go.id = "settingsPwSubmit"; go.textContent = "Wachtwoord opslaan";
+        go.onclick = function () {
+          if (!cur.value) return form.fail("Vul je huidige wachtwoord in.");
+          if (nw.value.length < 8) return form.fail("Het nieuwe wachtwoord moet minstens 8 tekens zijn.");
+          if (nw.value !== nw2.value) return form.fail("De nieuwe wachtwoorden komen niet overeen.");
+          if (nw.value === cur.value) return form.fail("Kies een ander wachtwoord dan je huidige.");
+          runForm(go, form, function () { return accountRequest("POST", "/api/account/change-password", { currentPassword: cur.value, newPassword: nw.value }); }, function (data) {
+            storeSession(data);
+            cur.value = ""; nw.value = ""; nw2.value = "";
+            form.close();
+            showToast("Wachtwoord gewijzigd. Op je andere apparaten ben je uitgelogd.");
+          });
+        };
+        box.appendChild(go);
+      });
+
+      foldForm(acc, "settingsEmail", "mail", "E-mailadres wijzigen", function (box, form) {
+        var ne = accInput(box, "settingsNewEmail", "email", "Nieuw e-mailadres", "email");
+        var pw = accInput(box, "settingsEmailPw", "password", "Je wachtwoord ter bevestiging", "current-password");
+        var go = document.createElement("button"); go.className = "primary-btn"; go.id = "settingsEmailSubmit"; go.textContent = "E-mailadres opslaan";
+        go.onclick = function () {
+          var v = ne.value.trim();
+          if (!v || v.indexOf("@") === -1) return form.fail("Vul een geldig e-mailadres in.");
+          if (!pw.value) return form.fail("Vul je wachtwoord in om je e-mailadres te wijzigen.");
+          runForm(go, form, function () { return accountRequest("POST", "/api/account/change-email", { password: pw.value, newEmail: v }); }, function (data) {
+            storeSession(data);
+            ne.value = ""; pw.value = "";
+            form.close();
+            var line = document.getElementById("settingsEmailLine");
+            if (line) line.textContent = "Ingelogd als " + (data.email || v);
+            showToast("E-mailadres gewijzigd naar " + (data.email || v) + ". Op je andere apparaten ben je uitgelogd.");
+          });
+        };
+        box.appendChild(go);
+      });
+
+      accButton(acc, "settingsLogoutOthers", "devices", "Uitloggen op andere apparaten", function () {
+        askConfirm("Je wordt op al je andere apparaten uitgelogd. Op dit apparaat blijf je ingelogd.", function () {
+          accountRequest("POST", "/api/account/logout-others", {}).then(function (data) {
+            storeSession(data);
+            showToast("Je bent op alle andere apparaten uitgelogd.");
+          }).catch(function (e) { showToast(friendlyNetError(e)); });
+        }, "Uitloggen op andere apparaten");
+      });
+      accButton(acc, "settingsLogout", "logout", "Uitloggen", function () { logout(); });
+    } else {
+      var anon = accCard(main, "Account");
+      var at = document.createElement("div"); at.className = "acc-sub";
+      at.textContent = "Je gebruikt Balanza nu anoniem: je gegevens staan alleen op dit apparaat.";
+      anon.appendChild(at);
+      if (moduleOn("registration")) accButton(anon, "settingsCreate", "userplus", "Account aanmaken en gegevens bewaren", function () { upgradeState.error = null; goto("upgrade"); });
+    }
+
+    var data = accCard(main, "Mijn gegevens");
+    accButton(data, "settingsExport", "download", "Mijn gegevens downloaden", function () { exportMyData(); });
+    var dt = document.createElement("div"); dt.className = "acc-sub";
+    dt.textContent = "Een bestand met je voorkeuren, gerechten, planning en gedeelde lijsten.";
+    data.appendChild(dt);
+    accButton(data, "settingsReset", "refresh", "Reset app \u2014 begin opnieuw", function () { resetEverything(); }, "danger");
+
+    if (loggedIn) {
+      var danger = accCard(main, "Account verwijderen");
+      var dd = document.createElement("div"); dd.className = "acc-sub";
+      dd.textContent = "Wist je account en al je gegevens definitief: gerechten, voorkeuren, planning en gedeelde lijsten. Dit kan niet ongedaan worden gemaakt.";
+      danger.appendChild(dd);
+      foldForm(danger, "settingsDelete", "trash", "Account verwijderen\u2026", function (box, form) {
+        var pw = accInput(box, "settingsDeletePw", "password", "Je wachtwoord", "current-password");
+        var word = accInput(box, "settingsDeleteWord", "text", "Typ VERWIJDEREN ter bevestiging", "off");
+        var go = document.createElement("button"); go.className = "primary-btn"; go.id = "settingsDeleteSubmit"; go.textContent = "Definitief verwijderen";
+        go.onclick = function () {
+          if (word.value !== "VERWIJDEREN") return form.fail("Typ VERWIJDEREN om te bevestigen.");
+          if (!pw.value) return form.fail("Vul je wachtwoord in om je account te verwijderen.");
+          runForm(go, form, function () { return accountRequest("POST", "/api/account/delete", { password: pw.value, confirm: word.value }); }, function () {
+            try { sessionStorage.setItem("weekmenu_notice", "Je account en al je gegevens zijn verwijderd."); } catch (e) {}
+            clearDeviceData();
+            logout();
+          });
+        };
+        box.appendChild(go);
+      }, "danger");
+    }
+    app.appendChild(main);
   }
 
   // ---------- Anoniem profiel omzetten naar een account (gegevens gaan mee) ----------
@@ -1640,28 +2079,6 @@
       accTile.onclick = function () { upgradeState.error = null; goto("upgrade"); };
       accRow.appendChild(accTile);
       main.appendChild(accRow);
-    }
-
-    var resetSpacer = document.createElement("div");
-    resetSpacer.style.height = "8px";
-    main.appendChild(resetSpacer);
-
-    var resetBtn = document.createElement("button");
-    resetBtn.className = "ghost-btn";
-    resetBtn.textContent = "Reset app — begin opnieuw";
-    resetBtn.onclick = function () { resetEverything(); };
-    main.appendChild(resetBtn);
-
-    if (window.authToken) {
-      var logoutSpacer = document.createElement("div");
-      logoutSpacer.style.height = "8px";
-      main.appendChild(logoutSpacer);
-
-      var logoutBtn = document.createElement("button");
-      logoutBtn.className = "ghost-btn";
-      logoutBtn.textContent = "Uitloggen";
-      logoutBtn.onclick = function () { logout(); };
-      main.appendChild(logoutBtn);
     }
 
     app.appendChild(main);
@@ -2465,7 +2882,7 @@
     { title: "Varieer een gerecht", body: "Op het receptdetailscherm kun je een gerecht laten aanpassen: Pittiger, Simpeler, Fine dining, of de koolhydraatbron laten wisselen \u2014 de macro's en balansscore worden automatisch herberekend." },
     { title: "Start het kookproces", body: "Vanuit een receptdetail start je de stap-voor-stap kookmodus, met een voortgangsbalk en een timer bij stappen die wachttijd hebben (koken, bakken, grillen, oven, sudderen)." },
     { title: "Exporteer als PDF", body: "Zowel een boodschappenlijst als een compleet weekmenu kun je exporteren als PDF, opgemaakt als een echt kookboek \u2014 met omslagpagina, inhoudsopgave en een gerecht dat nooit halverwege afbreekt over een pagina." },
-    { title: "Begin opnieuw", body: "Onderaan het startscherm staat \u201cReset app \u2014 begin opnieuw\u201d: dit wist al je opgeslagen gerechten, voorkeuren en planning in \u00e9\u00e9n keer, mocht je helemaal fris willen beginnen." }
+    { title: "Begin opnieuw", body: "Via je avatar rechtsboven (het accountmenu) kies je \u201cReset app \u2014 begin opnieuw\u201d: dit wist al je opgeslagen gerechten, voorkeuren en planning in \u00e9\u00e9n keer, mocht je helemaal fris willen beginnen." }
   ];
 
   function renderGuide() {
@@ -6174,6 +6591,8 @@
       else if (state.view === "planprep") renderPlanPrep();
       else if (state.view === "planpick") renderPlanPick();
       else if (state.view === "week") renderWeek();
+      else if (state.view === "account") renderAccount();
+      else if (state.view === "settings") renderSettings();
       else if (state.view === "upgrade") renderUpgrade();
       else if (state.view === "shopping") renderShopping();
       else if (state.view === "planshopping") renderPlanShopping();
@@ -6260,6 +6679,7 @@
       window.authRequired = cfg.authRequired !== false;
       window.bringImportEndpoint = typeof cfg.bringImportEndpoint === "string" ? cfg.bringImportEndpoint : "";
       applyRuntimeConfig(cfg);
+      try { var pendingNotice = sessionStorage.getItem("weekmenu_notice"); if (pendingNotice) { sessionStorage.removeItem("weekmenu_notice"); setTimeout(function () { showToast(pendingNotice); }, 400); } } catch (e) {}
       lastConfigRefresh = Date.now();
       configLoaded = true;
       if (window.authToken || !window.authRequired) initPersistence();

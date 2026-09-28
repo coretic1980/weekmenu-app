@@ -29,6 +29,44 @@ browser wordt verstuurd. Wie de Netwerk-tab of de paginabron van de browser
 bekijkt, ziet dus alleen losse instellingen — niet de prompt-engineering
 zelf.
 
+## Accountmenu (voor gebruikers)
+
+Rechtsboven in de app staat de avatar met de voornaam van de gebruiker (bij geen naam: het begin
+van het e-mailadres, of "Gast" bij een anoniem profiel). Tikken opent het accountmenu:
+
+- **Kop:** naam, e-mailadres (of "Anoniem profiel · alleen op dit apparaat") en de link **Mijn profiel**.
+- **Account aanmaken** (alleen voor anonieme gebruikers, en alleen als "Nieuwe accounts" aan staat).
+- **Mijn voorkeuren**, **Instellingen**, **Lichte/Donkere weergave**, **Mijn gegevens downloaden**,
+  **Hoe werkt Balanza**.
+- **Reset app — begin opnieuw** (met bevestiging) en **Uitloggen** (alleen als je bent ingelogd).
+
+Het menu sluit met Escape of door ernaast te tikken. De knoppen "Reset app" en "Uitloggen" staan
+daarom niet meer onderaan het startscherm.
+
+**Mijn profiel:** grote avatar, naam, e-mailadres, aantallen (gerechten, weken planning, gedeelde
+lijsten), sinds wanneer je lid bent, en de naam wijzigen. Anonieme gebruikers krijgen een uitnodiging
+om een account aan te maken.
+
+**Instellingen:**
+
+| Onderdeel | Wat het doet |
+| --- | --- |
+| Weergave | Donker of licht thema (wordt onthouden). |
+| Wachtwoord wijzigen | Vraagt het huidige wachtwoord. Daarna ben je op alle andere apparaten uitgelogd; dit apparaat blijft ingelogd. |
+| E-mailadres wijzigen | Vraagt het wachtwoord. Alle gegevens blijven van hetzelfde account; andere apparaten worden uitgelogd. |
+| Uitloggen op andere apparaten | Beëindigt alle andere sessies; dit apparaat blijft ingelogd. |
+| Mijn gegevens downloaden | Een JSON-bestand met voorkeuren, gerechten, planning en gedeelde lijsten (nooit met wachtwoordgegevens). Werkt ook anoniem. |
+| Reset app | Wist gerechten, voorkeuren en planning; het account blijft. |
+| Account verwijderen | Vraagt het wachtwoord en het woord `VERWIJDEREN`. Wist het account, alle gegevens en de gedeelde lijsten definitief. |
+
+Alles wat een wachtwoord controleert (wijzigen, e-mailadres, verwijderen) is begrensd tot 20
+pogingen per uur per IP-adres. Een verkeerd wachtwoord geeft een melding in het formulier en logt
+je niet uit. Een resetlink hoort bij één account: is een e-mailadres gewijzigd en later aan iemand
+anders gegeven, dan werkt een oude resetlink daar niet op.
+
+Voor beheerders staan deze acties in het logboek (Activiteit) met duidelijke namen: wachtwoord
+gewijzigd, e-mailadres gewijzigd, op andere apparaten uitgelogd, account zelf verwijderd en gegevens gedownload.
+
 ## Beheer (admin)
 
 Op `/admin` staat de beheerconsole. Je logt in met `ADMIN_PASSWORD`. Kies er een van
