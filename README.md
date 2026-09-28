@@ -55,10 +55,33 @@ Alle wijzigingen gelden direct, zonder herstart.
 - **Uit (standaard):** de app werkt zonder account; elke browser krijgt een anoniem profiel
   (ID met prefix `anon_`). Accounts blijven afgeschermd: alleen `anon_`-ID's worden zonder
   inlog geaccepteerd. Wie al is ingelogd, blijft gewoon zijn eigen account gebruiken.
-- **Aan:** bezoekers moeten een account aanmaken of inloggen. Anonieme gegevens blijven
-  bewaard, maar worden niet automatisch aan een nieuw account gekoppeld. De console vraagt
-  hier eerst om bevestiging.
+- **Aan:** bezoekers moeten een account aanmaken of inloggen. Anonieme gebruikers zien het
+  inlogscherm; bij het aanmaken van een account kunnen ze hun bestaande gegevens meenemen
+  (zie "Anoniem omzetten naar een account"). De console vraagt hier eerst om bevestiging.
 - Kan de instelling door een opslagfout niet worden gelezen, dan geldt veilig: inloggen verplicht.
+
+### Anoniem omzetten naar een account
+
+Wie de app anoniem gebruikt, kan zichzelf omzetten naar een account en houdt al zijn gegevens:
+voorkeuren, opgeslagen gerechten, weekplanning en gedeelde lijsten.
+
+- **In de app:** op het startscherm staat voor anonieme gebruikers de tegel "Account aanmaken"
+  (e-mailadres, wachtwoord en herhaling). Na afloop is de gebruiker ingelogd op dat apparaat
+  en ziet hij precies wat er is meegenomen. Op een ander apparaat logt hij in met dezelfde gegevens.
+- **Als inloggen verplicht is geworden:** kiest iemand op het inlogscherm voor "Account
+  aanmaken" en staan er nog gegevens van dit apparaat, dan verschijnt een keuzevakje (standaard
+  aan) om die mee te nemen. Inloggen op een bestaand account voegt nooit stilletjes gegevens samen.
+- **Hoe het werkt:** een anoniem profiel bewijst zich met zijn ID. Bij het omzetten
+  worden de gegevens naar een nieuw account-ID verhuisd (een account-ID werkt nooit als anoniem ID)
+  en van het anonieme ID gewist. Gedeelde lijsten blijven bereikbaar via dezelfde link en
+  horen daarna bij het account. De notitie van de beheerder gaat mee.
+- **Herstelbaar:** onderbreekt de verbinding halverwege, dan kan de gebruiker het gewoon nog
+  eens met dezelfde gegevens proberen; dat maakt het af zonder iets dubbel te doen of te overschrijven.
+- **Beperkingen:** een geblokkeerd anoniem profiel kan zich niet omzetten. Staat "Nieuwe accounts"
+  uit, of de onderhoudsmodus aan, dan is omzetten ook uit. Er geldt een grens van 30 pogingen per uur per IP-adres.
+- **In het beheer:** omgezette accounts hebben de aanduiding "eerst anoniem" (met het oude ID op
+  de gebruikerspagina), de actie staat in het logboek als "Anoniem omgezet naar account" en telt
+  mee als nieuwe registratie.
 
 ### Onderdelen aan of uit
 
@@ -74,7 +97,7 @@ Negen onderdelen zijn los te schakelen. Een uitgezet onderdeel verdwijnt uit de 
 | Lijsten delen | server | De opties voor delen verdwijnen; tekst versturen of kopiëren blijft kunnen. |
 | Importeren in Bring! | server | De Bring!-optie verdwijnt (Bring! werkt via een gedeelde lijst). |
 | PDF-export | alleen in de app | De PDF-knoppen verdwijnen. |
-| Nieuwe accounts | server | Registreren kan niet; het inlogscherm legt dat uit. |
+| Nieuwe accounts | server | Registreren en het omzetten van een anoniem profiel kunnen niet; het inlogscherm legt dat uit. |
 | Wachtwoord vergeten | server | De link verdwijnt; de server antwoordt neutraal, zonder e-mail te sturen. |
 
 ### Onderhoudsmodus en mededeling

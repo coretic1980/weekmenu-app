@@ -1030,9 +1030,10 @@
     var email = emailEl ? emailEl.value.trim() : "";
     var password = pwEl ? pwEl.value : "";
     authState.error = null;
+    var takeAnon = action === "register" && !!authState.anonStatus && authState.anonStatus.hasData === true && authState.takeAnon !== false;
     authState.busy = true;
     render();
-    fetch("/api/auth/" + action, {
+    (takeAnon ? upgradeRequest(email, password) : fetch("/api/auth/" + action, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email: email, password: password })
@@ -1041,14 +1042,13 @@
         if (!res.ok) throw new Error(data.message || "Er ging iets mis.");
         return data;
       });
-    }).then(function (data) {
-      window.authToken = data.token;
-      window.setAuthToken(window.authToken);
-      window.USER_ID = data.uid;
-      window.setStoredUid(window.USER_ID);
+    })).then(function (data) {
+      storeSession(data);
       authState.busy = false;
+      authState.anonStatus = undefined;   // het anonieme profiel bestaat niet meer
       goto("weeks");
       initPersistence();
+      if (takeAnon) showToast(upgradeDoneMessage(data.migrated));
     }).catch(function (e) {
       authState.busy = false;
       authState.error = e.message;
@@ -1121,6 +1121,153 @@
       authState.error = e.message;
       render();
     });
+  }
+
+  // ---------- Anoniem profiel omzetten naar een account (gegevens gaan mee) ----------
+  var upgradeState = { error: null, busy: false, email: "" };
+
+  // "3 gerechten, 2 weken planning, …" voor wat er onder het anonieme profiel staat of is meegenomen.
+  function describeMigrated(m) {
+    var parts = [];
+    if (m && m.dishes) parts.push(m.dishes + (m.dishes === 1 ? " gerecht" : " gerechten"));
+    if (m && m.plannedWeeks) parts.push(m.plannedWeeks + (m.plannedWeeks === 1 ? " week planning" : " weken planning"));
+    if (m && m.lists) parts.push(m.lists + (m.lists === 1 ? " gedeelde lijst" : " gedeelde lijsten"));
+    if (m && m.prefs) parts.push("je voorkeuren");
+    return parts.join(", ");
+  }
+  function friendlyNetError(e) {
+    return e && e.name === "TypeError" ? "Geen verbinding. Controleer je internet en probeer het opnieuw." : ((e && e.message) || "Er ging iets mis.");
+  }
+  function upgradeRequest(email, password) {
+    return fetch("/api/auth/upgrade", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Anon-Id": window.anonId },
+      body: JSON.stringify({ email: email, password: password })
+    }).then(function (res) {
+      return res.json().catch(function () { return {}; }).then(function (data) {
+        if (!res.ok) throw new Error(data.message || "Er ging iets mis.");
+        return data;
+      });
+    });
+  }
+  function storeSession(data) {
+    window.authToken = data.token;
+    window.setAuthToken(window.authToken);
+    window.USER_ID = data.uid;
+    window.setStoredUid(window.USER_ID);
+  }
+  function upgradeDoneMessage(m) {
+    var what = describeMigrated(m);
+    return "Account aangemaakt" + (what ? " — meegenomen: " + what + "." : ".");
+  }
+
+  function submitUpgrade() {
+    var emailEl = document.getElementById("upgradeEmail"), pwEl = document.getElementById("upgradePassword"), pw2El = document.getElementById("upgradePassword2");
+    var email = emailEl ? emailEl.value.trim() : "", password = pwEl ? pwEl.value : "", password2 = pw2El ? pw2El.value : "";
+    upgradeState.email = email;
+    upgradeState.error = null;
+    if (!email || email.indexOf("@") === -1) upgradeState.error = "Vul een geldig e-mailadres in.";
+    else if (password.length < 8) upgradeState.error = "Wachtwoord moet minstens 8 tekens zijn.";
+    else if (password !== password2) upgradeState.error = "Wachtwoorden komen niet overeen.";
+    if (upgradeState.error) { render(); return; }
+    upgradeState.busy = true;
+    render();
+    upgradeRequest(email, password).then(function (data) {
+      // Wat de app nu in het geheugen heeft is precies wat er is meegenomen; dus niets opnieuw laden.
+      // Vanaf nu bewaart de app alles onder het account.
+      storeSession(data);
+      upgradeState.busy = false; upgradeState.error = null; upgradeState.email = "";
+      goto("weeks");
+      showToast(upgradeDoneMessage(data.migrated));
+    }).catch(function (e) {
+      upgradeState.busy = false;
+      upgradeState.error = friendlyNetError(e);
+      render();
+    });
+  }
+
+  function renderUpgrade() {
+    var app = document.getElementById("app");
+    app.innerHTML = "";
+    app.appendChild(renderTopbar("Account aanmaken", true, function () { upgradeState.error = null; goto("weeks"); }));
+    var main = document.createElement("main");
+
+    var intro = document.createElement("div");
+    intro.className = "muted";
+    intro.id = "upgradeIntro";
+    intro.style.marginBottom = "18px";
+    intro.textContent = "Bewaar je gegevens veilig en gebruik ze op elk apparaat. Alles wat je nu hebt gaat mee: je gerechten, voorkeuren, weekplanning en gedeelde lijsten.";
+    main.appendChild(intro);
+
+    if (upgradeState.error) {
+      var err = document.createElement("div");
+      err.className = "errorbox";
+      err.id = "upgradeError";
+      err.style.marginBottom = "14px";
+      err.textContent = upgradeState.error;
+      main.appendChild(err);
+    }
+
+    var emailInput = document.createElement("input");
+    emailInput.type = "email"; emailInput.id = "upgradeEmail"; emailInput.placeholder = "E-mailadres"; emailInput.className = "textinput";
+    emailInput.autocomplete = "email"; emailInput.style.marginBottom = "10px"; emailInput.value = upgradeState.email || "";
+    main.appendChild(emailInput);
+
+    var pwInput = document.createElement("input");
+    pwInput.type = "password"; pwInput.id = "upgradePassword"; pwInput.placeholder = "Wachtwoord (minstens 8 tekens)"; pwInput.className = "textinput";
+    pwInput.autocomplete = "new-password"; pwInput.style.marginBottom = "10px";
+    main.appendChild(pwInput);
+
+    var pw2Input = document.createElement("input");
+    pw2Input.type = "password"; pw2Input.id = "upgradePassword2"; pw2Input.placeholder = "Herhaal wachtwoord"; pw2Input.className = "textinput";
+    pw2Input.autocomplete = "new-password"; pw2Input.style.marginBottom = "18px";
+    main.appendChild(pw2Input);
+
+    var submit = document.createElement("button");
+    submit.className = "primary-btn"; submit.id = "upgradeSubmit";
+    submit.disabled = upgradeState.busy;
+    submit.textContent = upgradeState.busy ? "Even geduld…" : "Account aanmaken en gegevens bewaren";
+    submit.onclick = submitUpgrade;
+    main.appendChild(submit);
+
+    var note = document.createElement("div");
+    note.className = "muted";
+    note.style.cssText = "font-size:12px;margin-top:14px;";
+    note.textContent = "Je bent daarna ingelogd op dit apparaat. Op een ander apparaat log je in met je e-mailadres en wachtwoord.";
+    main.appendChild(note);
+
+    app.appendChild(main);
+    if (typeof pw2Input.addEventListener === "function") {
+      pw2Input.addEventListener("keydown", function (e) { if (e && e.key === "Enter") submitUpgrade(); });
+    }
+  }
+
+  // Op het inlogscherm (als inloggen verplicht is geworden) kun je de gegevens van dit apparaat meenemen.
+  function loadAnonStatus() {
+    authState.anonStatus = null;   // bezig; geen tweede verzoek
+    fetch("/api/auth/anon-status", { headers: { "X-Anon-Id": window.anonId } })
+      .then(function (res) { return res.ok ? res.json() : null; })
+      .then(function (s) {
+        authState.anonStatus = s && typeof s === "object" ? s : { hasData: false };
+        var wrap = document.getElementById("authTakeAnon");
+        if (wrap) drawTakeAnon(wrap);
+      }).catch(function () { authState.anonStatus = { hasData: false }; });
+  }
+  function drawTakeAnon(wrap) {
+    wrap.innerHTML = "";
+    var s = authState.anonStatus;
+    if (!s || !s.hasData) return;
+    var row = document.createElement("label");
+    row.style.cssText = "display:flex;gap:10px;align-items:flex-start;margin:4px 0 12px;font-size:14px;cursor:pointer;";
+    var box = document.createElement("input");
+    box.type = "checkbox"; box.id = "authTakeAnonBox"; box.checked = authState.takeAnon !== false;
+    box.style.marginTop = "3px";
+    box.onchange = function () { authState.takeAnon = !!box.checked; };
+    var what = describeMigrated(s);
+    var txt = document.createElement("span");
+    txt.textContent = "Neem mijn bestaande gegevens van dit apparaat mee" + (what ? " (" + what + ")" : "") + ".";
+    row.appendChild(box); row.appendChild(txt);
+    wrap.appendChild(row);
   }
 
   function renderAuth() {
@@ -1205,6 +1352,13 @@
       pwInput.className = "textinput";
       pwInput.style.marginBottom = "10px";
       main.appendChild(pwInput);
+
+      if (authState.mode === "register" && window.anonId) {
+        var takeWrap = document.createElement("div");
+        takeWrap.id = "authTakeAnon";
+        main.appendChild(takeWrap);
+        if (authState.anonStatus === undefined) loadAnonStatus(); else drawTakeAnon(takeWrap);
+      }
 
       if (authState.mode === "login" && moduleOn("passwordReset")) {
         var forgotLink = document.createElement("button");
@@ -1472,6 +1626,21 @@
     guideTile.onclick = function () { goto("guide"); };
     guideRow.appendChild(guideTile);
     main.appendChild(guideRow);
+
+    if (!window.authToken && moduleOn("registration")) {
+      var accRow = document.createElement("div");
+      accRow.className = "tilerow";
+      var accTile = document.createElement("button");
+      accTile.className = "tile";
+      accTile.id = "accountTile";
+      accTile.innerHTML =
+        '<span class="ticon"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>' +
+        '<h2>Account aanmaken</h2>' +
+        '<div class="sub">Bewaar je gegevens veilig en gebruik ze op elk apparaat</div>';
+      accTile.onclick = function () { upgradeState.error = null; goto("upgrade"); };
+      accRow.appendChild(accTile);
+      main.appendChild(accRow);
+    }
 
     var resetSpacer = document.createElement("div");
     resetSpacer.style.height = "8px";
@@ -6005,6 +6174,7 @@
       else if (state.view === "planprep") renderPlanPrep();
       else if (state.view === "planpick") renderPlanPick();
       else if (state.view === "week") renderWeek();
+      else if (state.view === "upgrade") renderUpgrade();
       else if (state.view === "shopping") renderShopping();
       else if (state.view === "planshopping") renderPlanShopping();
       else if (state.view === "day") renderDay();

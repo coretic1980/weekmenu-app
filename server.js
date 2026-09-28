@@ -1084,6 +1084,139 @@ function handleAuthRegister(req, res) {
   });
 }
 
+// ---------- Een anoniem profiel omzetten naar een account (met behoud van gegevens) ----------
+// Een anoniem profiel is alleen te bewijzen met zijn ID (de header X-Anon-Id). Wie dat ID kent, mag de gegevens
+// dus meenemen naar een nieuw account. De gegevens worden VERHUISD naar het nieuwe account-ID (nooit delen we
+// een ID: account-ID's mogen nooit als anoniem ID werken), en daarna van het anonieme ID gewist.
+// Volgorde: eerst kopiëren, dan het account aanmaken, dan opruimen. Gaat er iets mis vóór het account bestaat,
+// dan draaien we de kopieën terug; daarna is opnieuw proberen met dezelfde gegevens veilig (herstelbaar).
+var upgradeLocks = new Set();
+var upgradeAllowed = makeHourlyLimiter(30);
+var anonStatusAllowed = makeHourlyLimiter(120);
+var UPGRADE_SUBPATHS = ["prefs", "dishes", "plannedWeeks"];
+
+function anonIdOf(req) {
+  var anon = String(req.headers["x-anon-id"] || "");
+  return ANON_ID_PATTERN.test(anon) ? anon : null;
+}
+function countDishes(v) {
+  var n = 0;
+  if (v && typeof v === "object") Object.keys(v).forEach(function (k) { n += Array.isArray(v[k]) ? v[k].length : 0; });
+  return n;
+}
+function countWeeks(v) { return v && Array.isArray(v.list) ? v.list.length : (Array.isArray(v) ? v.length : 0); }
+
+// Wat er onder een anoniem ID staat (zonder iets te wijzigen).
+function readAnonData(anon) {
+  return Promise.all(UPGRADE_SUBPATHS.map(function (s) { return dbGetDoc("data/users/" + anon + "/" + s); }).concat([
+    dbGetDoc("data/users/" + anon + "/meta"), dbGetDoc("adminMeta/" + anon), dbGetDoc("listsIndex/" + anon)
+  ])).then(function (r) {
+    var tokens = r[5].exists && r[5].value && Array.isArray(r[5].value.tokens) ? r[5].value.tokens : [];
+    return { prefs: r[0], dishes: r[1], plannedWeeks: r[2], meta: r[3], adminMeta: r[4], tokens: tokens };
+  });
+}
+function anonSummary(d) {
+  return { prefs: d.prefs.exists, dishes: countDishes(d.dishes.value), plannedWeeks: countWeeks(d.plannedWeeks.value), lists: d.tokens.length };
+}
+
+// Kopieert alles naar het nieuwe ID. Schrijft nooit iets wat aan de bron ontbreekt, en verandert de bron niet.
+function copyAnonData(anon, uid, d, email, resume) {
+  var writes = [];
+  UPGRADE_SUBPATHS.forEach(function (s) { if (d[s].exists) writes.push(dbSetDoc("data/users/" + uid + "/" + s, d[s].value)); });
+  if (d.adminMeta.exists) writes.push(dbSetDoc("adminMeta/" + uid, d.adminMeta.value));
+  var m = d.meta.exists && d.meta.value ? d.meta.value : {};
+  // Bij een herhaalde aanvraag (bron al opgeruimd) laten we het bestaande "laatst gezien" met rust.
+  if (d.meta.exists || !resume) writes.push(dbSetDoc("data/users/" + uid + "/meta", { lastIp: m.lastIp || null, lastSeenAt: m.lastSeenAt || new Date().toISOString(), email: email }));
+  // Lijsten: alleen wat écht van dit anonieme ID is; de eigenaar wordt het nieuwe ID.
+  var listWork = Promise.all(d.tokens.map(function (t) {
+    return dbGetDoc("lists/" + t).then(function (r) {
+      if (!r.exists || !r.value || r.value.ownerUid !== anon) return null;
+      return dbSetDoc("lists/" + t, Object.assign({}, r.value, { ownerUid: uid })).then(function () { return t; });
+    });
+  })).then(function (moved) {
+    var tokens = moved.filter(Boolean);
+    return dbGetDoc("listsIndex/" + uid).then(function (ex) {
+      var have = ex.exists && ex.value && Array.isArray(ex.value.tokens) ? ex.value.tokens : [];
+      tokens.forEach(function (t) { if (have.indexOf(t) === -1) have.push(t); });
+      return tokens.length || ex.exists ? dbSetDoc("listsIndex/" + uid, { tokens: have }) : null;
+    }).then(function () { return tokens; });
+  });
+  return Promise.all(writes).then(function () { return listWork; });
+}
+function removeCopies(uid, tokens, anon) {
+  var paths = UPGRADE_SUBPATHS.map(function (s) { return "data/users/" + uid + "/" + s; }).concat(["data/users/" + uid + "/meta", "adminMeta/" + uid, "listsIndex/" + uid]);
+  return Promise.all(paths.map(dbDeleteDoc).concat((tokens || []).map(function (t) {
+    return dbGetDoc("lists/" + t).then(function (r) { return r.exists && r.value ? dbSetDoc("lists/" + t, Object.assign({}, r.value, { ownerUid: anon })) : null; });
+  }))).catch(function () {});
+}
+function cleanupAnon(anon) {
+  var paths = UPGRADE_SUBPATHS.map(function (s) { return "data/users/" + anon + "/" + s; }).concat(["data/users/" + anon + "/meta", "adminMeta/" + anon, "listsIndex/" + anon]);
+  return Promise.all(paths.map(dbDeleteDoc)).then(function () {
+    return updateBlocked(function (b) { delete b.uids[anon]; delete b.invalidBefore[anon]; });
+  }).then(function () { invalidateSummaries(); });
+}
+
+function handleAnonStatus(req, res) {
+  if (!anonStatusAllowed(clientIp(req))) return sendJSON(res, 429, { code: "rate_limited", message: "Te veel verzoeken. Probeer het later opnieuw." });
+  var anon = anonIdOf(req);
+  if (!anon) return sendJSON(res, 200, { hasData: false });
+  return Promise.all([getBlocked(), readAnonData(anon)]).then(function (r) {
+    if (r[0].uids[anon]) return sendJSON(res, 200, { hasData: false });
+    var s = anonSummary(r[1]);
+    sendJSON(res, 200, { hasData: s.prefs || s.dishes > 0 || s.plannedWeeks > 0 || s.lists > 0, prefs: s.prefs, dishes: s.dishes, plannedWeeks: s.plannedWeeks, lists: s.lists });
+  }).catch(function () { sendJSON(res, 500, { code: "error", message: "Opslag niet bereikbaar." }); });
+}
+
+function handleAuthUpgrade(req, res) {
+  var ip = clientIp(req);
+  if (!upgradeAllowed(ip)) return sendJSON(res, 429, { code: "rate_limited", message: "Te veel pogingen. Probeer het later opnieuw." });
+  var anon = anonIdOf(req);
+  if (!anon) return sendJSON(res, 400, { code: "bad_request", message: "Er is geen anoniem profiel om om te zetten." });
+  return readBody(req).then(function (body) {
+    var email = normalizeEmail(body && body.email);
+    var password = (body && typeof body.password === "string") ? body.password : "";
+    if (!EMAIL_RE.test(email) || email.length > 200) return sendJSON(res, 400, { code: "bad_request", message: "Vul een geldig e-mailadres in." });
+    if (password.length < 8) return sendJSON(res, 400, { code: "bad_request", message: "Wachtwoord moet minstens 8 tekens zijn." });
+    if (password.length > 200) return sendJSON(res, 400, { code: "bad_request", message: "Een wachtwoord mag hoogstens 200 tekens hebben." });
+    var lockKeys = ["email:" + email, "anon:" + anon];
+    if (lockKeys.some(function (k) { return upgradeLocks.has(k); })) return sendJSON(res, 409, { code: "busy", message: "Je aanvraag wordt al verwerkt. Even geduld." });
+    lockKeys.forEach(function (k) { upgradeLocks.add(k); });
+    var release = function () { lockKeys.forEach(function (k) { upgradeLocks.delete(k); }); };
+    var fail = function (status, code, message, why) {
+      logEvent("auth", "upgrade", false, status, { error: why || message, email: email, fromUid: anon, ip: ip });
+      sendJSON(res, status, { code: code, message: message });
+    };
+    return getBlocked().then(function (b) {
+      if (b.uids[anon]) return fail(403, "blocked", "Dit profiel is geblokkeerd. Neem contact op met de beheerder.", "Anoniem profiel geblokkeerd");
+      return Promise.all([dbGetDoc("auth/users/" + email), readAnonData(anon)]).then(function (r) {
+        var existing = r[0], data = r[1], resumeUid = null;
+        if (existing.exists) {
+          // Een eerdere poging met dit profiel kan halverwege zijn gestopt (of het antwoord kwam niet aan): dan gaan we verder.
+          if (existing.value && existing.value.upgradedFrom === anon && verifyPassword(password, existing.value)) resumeUid = existing.value.uid;
+          else return fail(409, "conflict", "Er bestaat al een account met dit e-mailadres.", "Bestaat al");
+        }
+        var uid = resumeUid || "u_" + crypto.randomBytes(12).toString("hex");
+        var now = new Date().toISOString();
+        return copyAnonData(anon, uid, data, email, !!resumeUid).then(function (movedTokens) {
+          var made = resumeUid ? Promise.resolve() : (function () {
+            var record = makePasswordRecord(password);
+            return dbSetDoc("auth/users/" + email, { uid: uid, salt: record.salt, hash: record.hash, createdAt: now, createdBy: "self", upgradedFrom: anon, lastLoginAt: now, loginCount: 1 });
+          })();
+          return made.catch(function (e) { return removeCopies(uid, movedTokens, anon).then(function () { throw e; }); }).then(function () {
+            return cleanupAnon(anon);
+          }).then(function () {
+            var s = anonSummary(data); s.lists = movedTokens.length;
+            logEvent("auth", "upgrade", true, 200, { email: email, uid: uid, fromUid: anon, ip: ip });
+            sendJSON(res, 200, { token: issueUserSession(uid, email), uid: uid, migrated: s });
+          });
+        });
+      });
+    }).then(release, function (e) { release(); throw e; });
+  }).catch(function (err) {
+    sendJSON(res, 500, { code: "error", message: "Omzetten mislukt: " + (err && err.message ? err.message : "onbekende fout") });
+  });
+}
+
 function handleAuthLogin(req, res) {
   var ip = clientIp(req);
   readBody(req).then(function (body) {
@@ -2318,6 +2451,7 @@ function buildSummary(account, blocked, noteDoc) {
       lastIp: meta ? meta.lastIp || null : null,
       createdAt: acc ? acc.createdAt || null : null,
       createdBy: acc ? acc.createdBy || null : null,
+      upgradedFrom: acc ? acc.upgradedFrom || null : null,
       lastLoginAt: acc ? acc.lastLoginAt || null : null,
       loginCount: acc ? acc.loginCount || 0 : 0,
       disabled: !!blocked.uids[uid],
@@ -2863,7 +2997,7 @@ function handleAdminStats(req, res) {
       auth: {
         loginsToday: authToday.filter(function (l) { return l.action === "login" && l.ok; }).length,
         failedLoginsToday: authToday.filter(function (l) { return l.action === "login" && !l.ok; }).length,
-        registrationsToday: authToday.filter(function (l) { return l.action === "register" && l.ok; }).length
+        registrationsToday: authToday.filter(function (l) { return (l.action === "register" || l.action === "upgrade") && l.ok; }).length
       },
       lists: { total: lists.length, active: lists.filter(function (d) { return !(d.value && d.value.expiresAt && d.value.expiresAt < now); }).length },
       logCapped: logs.length >= LOG_CAP,
@@ -3039,6 +3173,7 @@ function handleConfig(req, res) {
 
 // Eindpunten achter een schakelaar (zie MODULE_DEFS). Uit = een duidelijke melding, geen storing.
 var guardedRegister = moduleGuard("registration", handleAuthRegister);
+var guardedUpgrade = moduleGuard("registration", handleAuthUpgrade);
 var guardedForgot = moduleGuard("passwordReset", handleForgotPassword, function (req, res) {
   sendJSON(res, 200, { message: "Als dit e-mailadres bekend is, ontvang je een link om je wachtwoord te resetten." });   // lekt niets en verstuurt niets
 });
@@ -3057,6 +3192,8 @@ var server = http.createServer(function (req, res) {
   if (req.method === "POST" && url.pathname === "/api/generate") return handleGenerate(req, res);
   if (req.method === "POST" && url.pathname === "/api/tips") return handleTips(req, res);
   if (req.method === "POST" && url.pathname === "/api/auth/register") return guardedRegister(req, res);
+  if (req.method === "POST" && url.pathname === "/api/auth/upgrade") return guardedUpgrade(req, res);
+  if (req.method === "GET" && url.pathname === "/api/auth/anon-status") return handleAnonStatus(req, res);
   if (req.method === "POST" && url.pathname === "/api/auth/login") return handleAuthLogin(req, res);
   if (req.method === "POST" && url.pathname === "/api/auth/forgot-password") return guardedForgot(req, res);
   if (req.method === "POST" && url.pathname === "/api/auth/reset-password") return guardedReset(req, res);

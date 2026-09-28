@@ -627,7 +627,7 @@
         var tr = h("tr", { class: "clickable userRow" + (u.disabled ? " off" : "") },
           h("td", {}, cb),
           h("td", {}, h("strong", { text: u.name || (u.email ? u.email.split("@")[0] : "Anoniem") }), h("span", { class: "sub", text: u.email || shortUid(u.uid) })),
-          h("td", {}, badge(u.type === "account" ? "Account" : "Anoniem", u.type === "account" ? "accent" : ""), u.createdBy === "admin" ? " " : null, u.createdBy === "admin" ? badge("door beheerder") : null),
+          h("td", {}, badge(u.type === "account" ? "Account" : "Anoniem", u.type === "account" ? "accent" : ""), u.createdBy === "admin" ? " " : null, u.createdBy === "admin" ? badge("door beheerder") : null, u.upgradedFrom ? " " : null, u.upgradedFrom ? badge("eerst anoniem") : null),
           h("td", { text: u.goal || "—" }),
           h("td", { class: "nowrap", text: u.dishCount + " gerechten" }, h("span", { class: "sub", text: plural(u.plannedWeekCount, "week", "weken") })),
           h("td", { class: "nowrap", text: relTime(u.lastSeenAt) }, u.location ? h("span", { class: "sub", text: [u.location.city, u.location.country].filter(Boolean).join(", ") }) : null),
@@ -717,7 +717,7 @@
 
     view.appendChild(h("div", { class: "page-head" },
       h("div", { class: "row" }, back, h("h2", { id: "userTitle", text: u.name || u.email || "Anoniem" })),
-      h("div", { class: "row" }, badge(isAcc ? "Account" : "Anoniem", "accent"), u.createdBy === "admin" ? badge("door beheerder aangemaakt") : null, u.disabled ? badge("Geblokkeerd", "bad") : badge("Actief", "good"))));
+      h("div", { class: "row" }, badge(isAcc ? "Account" : "Anoniem", "accent"), u.createdBy === "admin" ? badge("door beheerder aangemaakt") : null, u.upgradedFrom ? badge("eerst anoniem") : null, u.disabled ? badge("Geblokkeerd", "bad") : badge("Actief", "good"))));
     if (u.disabled) view.appendChild(h("div", { class: "notebox warn", id: "blockedNote" }, "Geblokkeerd sinds " + fmtDate(u.disabledAt) + (u.disabledReason ? " — reden: " + u.disabledReason : "") + ". Deze gebruiker kan niet inloggen of de app gebruiken."));
 
     // ---- account ----
@@ -729,7 +729,8 @@
     var kv = h("dl", { class: "kv" },
       h("dt", { text: "Gebruikers-ID" }), h("dd", { class: "mono" }, idBtn),
       h("dt", { text: "Soort" }), h("dd", { text: isAcc ? "Account (e-mail en wachtwoord)" : "Anoniem (alleen dit apparaat)" }),
-      isAcc ? [h("dt", { text: "Aangemaakt" }), h("dd", { text: fmtDate(u.createdAt) + (u.createdBy === "admin" ? " — door beheerder" : u.createdBy === "self" ? " — zelf geregistreerd" : "") }),
+      isAcc ? [h("dt", { text: "Aangemaakt" }), h("dd", { text: fmtDate(u.createdAt) + (u.createdBy === "admin" ? " — door beheerder" : u.upgradedFrom ? " — zelf omgezet van een anoniem profiel" : u.createdBy === "self" ? " — zelf geregistreerd" : "") }),
+        u.upgradedFrom ? [h("dt", { text: "Eerder anoniem als" }), h("dd", { class: "mono", text: u.upgradedFrom })] : null,
         h("dt", { text: "Laatste login" }), h("dd", { text: u.lastLoginAt ? fmtDate(u.lastLoginAt) + " (" + relTime(u.lastLoginAt) + ")" : "nooit" }),
         h("dt", { text: "Aantal logins" }), h("dd", { text: String(u.loginCount) })] : null,
       h("dt", { text: "Laatst actief" }), h("dd", { text: u.lastSeenAt ? fmtDate(u.lastSeenAt) + " (" + relTime(u.lastSeenAt) + ")" : "nooit" }),
@@ -881,7 +882,7 @@
   // Activiteit (logboek)
   // =====================================================================================
   var TYPE_LABELS = { generate: "AI", tips: "Tips", auth: "Account" };
-  var LOG_ACTION_LABELS = { login: "Inloggen", register: "Registreren", "reset-request": "Reset aangevraagd", "reset-done": "Wachtwoord gereset" };
+  var LOG_ACTION_LABELS = { login: "Inloggen", register: "Registreren", upgrade: "Anoniem omgezet naar account", "reset-request": "Reset aangevraagd", "reset-done": "Wachtwoord gereset" };
   function logRow(l, compact) {
     var who = null;
     if (!compact) {
