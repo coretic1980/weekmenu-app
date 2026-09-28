@@ -4,7 +4,7 @@
 // request fails (e.g. briefly offline). Bump CACHE_NAME whenever you want to
 // force-invalidate old cached assets after a deploy.
 
-var CACHE_NAME = "weekmenu-shell-v3";
+var CACHE_NAME = "weekmenu-shell-v4";
 var SHELL_FILES = [
   "/",
   "/manifest.json",

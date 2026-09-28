@@ -119,7 +119,7 @@ function verifySessionToken(token) {
 }
 var SESSION_TTL_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
 function issueUserSession(uid, email) {
-  return signSessionToken({ uid: uid, email: email, exp: Date.now() + SESSION_TTL_MS });
+  return signSessionToken({ uid: uid, email: email, iat: Date.now(), exp: Date.now() + SESSION_TTL_MS });
 }
 // ---------- Login on/off (admin setting) ----------
 // When login is required, only valid account sessions are accepted. When the
@@ -130,23 +130,199 @@ function issueUserSession(uid, email) {
 // Default is "no login". Login is only required once the admin has explicitly
 // switched it on. (If the setting can't be read because of a storage error,
 // we fail closed and require login, since we can't tell what the admin chose.)
-var authRequiredCache = { value: null, expiry: 0 };
+// ---------- Instellingen die de beheerder live kan aanpassen ----------
+// Alles staat in één document (settings/app): inloggen verplicht of niet, welke onderdelen ("modules") aan of uit
+// staan, de gebruikslimieten, een onderhoudsmodus en een mededeling voor alle gebruikers. Wat er niet in staat,
+// valt terug op de standaard (modules aan, limieten uit de omgevingsvariabelen). Kan de opslag niet gelezen
+// worden, dan gebruiken we de laatst bekende instellingen; bestaan die nog niet, dan geldt "inloggen verplicht",
+// omdat we dan niet weten wat de beheerder koos.
+var MODULE_DEFS = [
+  { key: "generate", label: "Gerechten genereren", desc: "Het maken van gerechten en weekmenu's met AI. Uit: niemand kan nieuwe gerechten laten maken.", enforced: "server" },
+  { key: "prices", label: "Kostenschatting", desc: "De prijsschatting op het boodschappenscherm (gebruikt ook de AI).", enforced: "server" },
+  { key: "tips", label: "Tips tijdens het wachten", desc: "De weetjes en tips die getoond worden tijdens het genereren.", enforced: "server" },
+  { key: "images", label: "Gerechtfoto's", desc: "Foto's bij gerechten (Unsplash) en de foto's in de PDF.", enforced: "server" },
+  { key: "sharing", label: "Boodschappenlijst delen", desc: "Nieuwe lijsten delen en bijwerken (WhatsApp/link). Bestaande gedeelde lijsten blijven te lezen en af te vinken.", enforced: "server" },
+  { key: "bring", label: "Importeren in Bring!", desc: "De Bring!-import en de pagina's die Bring! ophaalt.", enforced: "server" },
+  { key: "pdf", label: "PDF-export", desc: "Het exporteren als PDF. Dit gebeurt in de app zelf: uitzetten verbergt de knoppen.", enforced: "app" },
+  { key: "registration", label: "Nieuwe accounts (registreren)", desc: "Zelf een account aanmaken. Uit: alleen jij maakt accounts aan; inloggen blijft werken.", enforced: "server" },
+  { key: "passwordReset", label: "Wachtwoord vergeten", desc: "De wachtwoord-vergeten-mail en de resetlink.", enforced: "server" }
+];
+var MAINTENANCE_OFF_MODULES = ["generate", "prices", "tips", "sharing", "bring", "registration"];
+var LIMIT_DEFS = [
+  { key: "dailyGenerateCap", label: "Generaties per dag (totaal)", def: DAILY_GENERATE_CAP, min: 0, max: 100000 },
+  { key: "perIpHourlyCap", label: "Generaties per uur per IP-adres", def: PER_IP_HOURLY_CAP, min: 0, max: 10000 },
+  { key: "dailyTipsCap", label: "Tip-verzoeken per dag (totaal)", def: DAILY_TIPS_CAP, min: 0, max: 100000 },
+  { key: "tipsPerIpHourly", label: "Tip-verzoeken per uur per IP-adres", def: TIPS_PER_IP_HOURLY, min: 0, max: 10000 }
+];
+var liveLimits = {};
+LIMIT_DEFS.forEach(function (d) { liveLimits[d.key] = d.def; });
 
-function getAuthRequired() {
-  if (authRequiredCache.value !== null && Date.now() < authRequiredCache.expiry) {
-    return Promise.resolve(authRequiredCache.value);
-  }
-  return dbGetDoc("settings/app").then(function (r) {
-    var value = !!(r.exists && r.value && r.value.authRequired === true);
-    authRequiredCache = { value: value, expiry: Date.now() + 5000 };
-    return value;
-  }).catch(function () { return true; });
+function cleanText(v, max) { return String(v == null ? "" : v).replace(/[\u0000-\u001f\u007f\s]+/g, " ").trim().slice(0, max); }
+// Notities mogen regeleinden houden (maximaal één lege regel achter elkaar).
+function cleanNote(v, max) {
+  return String(v == null ? "" : v).replace(/\r\n?/g, "\n").split("\n").map(function (l) { return l.replace(/[\u0000-\u001f\u007f\s]+/g, " ").trim(); }).join("\n").replace(/\n{3,}/g, "\n\n").trim().slice(0, max);
 }
 
-function setAuthRequired(value) {
-  return dbSetDoc("settings/app", { authRequired: !!value }).then(function () {
-    authRequiredCache = { value: !!value, expiry: Date.now() + 5000 };
+function normalizeSettings(raw) {
+  raw = raw && typeof raw === "object" ? raw : {};
+  var modules = {};
+  MODULE_DEFS.forEach(function (d) { modules[d.key] = !(raw.modules && raw.modules[d.key] === false); });
+  var limits = {};
+  LIMIT_DEFS.forEach(function (d) {
+    var v = raw.limits ? raw.limits[d.key] : undefined;
+    limits[d.key] = (typeof v === "number" && isFinite(v) && v >= d.min && v <= d.max && Math.floor(v) === v) ? v : d.def;
   });
+  var m = raw.maintenance && typeof raw.maintenance === "object" ? raw.maintenance : {};
+  var a = raw.announcement && typeof raw.announcement === "object" ? raw.announcement : {};
+  return {
+    authRequired: raw.authRequired === true,
+    modules: modules,
+    limits: limits,
+    maintenance: { enabled: m.enabled === true, message: cleanText(m.message, 300) },
+    announcement: { enabled: a.enabled === true, message: cleanText(a.message, 300), level: a.level === "warning" ? "warning" : "info" }
+  };
+}
+function effectiveModules(s) {
+  var mods = Object.assign({}, s.modules);
+  if (s.maintenance.enabled) MAINTENANCE_OFF_MODULES.forEach(function (k) { mods[k] = false; });
+  return mods;
+}
+function applyLimits(s) { LIMIT_DEFS.forEach(function (d) { liveLimits[d.key] = s.limits[d.key]; }); }
+
+var settingsCache = { value: null, expiry: 0 };
+function getSettings() {
+  if (settingsCache.value && Date.now() < settingsCache.expiry) return Promise.resolve(settingsCache.value);
+  return dbGetDoc("settings/app").then(function (r) {
+    var s = normalizeSettings(r.exists ? r.value : null);
+    settingsCache = { value: s, expiry: Date.now() + 5000 };
+    applyLimits(s);
+    return s;
+  }).catch(function () {
+    if (settingsCache.value) return settingsCache.value;
+    var s = normalizeSettings(null);
+    s.authRequired = true;
+    return s;
+  });
+}
+function mergeSettings(cur, patch) {
+  var next = JSON.parse(JSON.stringify(cur));
+  if (typeof patch.authRequired === "boolean") next.authRequired = patch.authRequired;
+  ["modules", "limits", "maintenance", "announcement"].forEach(function (k) {
+    if (patch[k]) Object.keys(patch[k]).forEach(function (kk) { next[k][kk] = patch[k][kk]; });
+  });
+  return next;
+}
+function updateSettings(patch) {
+  return dbGetDoc("settings/app").then(function (r) {
+    var next = mergeSettings(normalizeSettings(r.exists ? r.value : null), patch);
+    return dbSetDoc("settings/app", next).then(function () {
+      settingsCache = { value: next, expiry: Date.now() + 5000 };
+      applyLimits(next);
+      return next;
+    });
+  });
+}
+// Controleert wat de beheerder instuurt. Geeft { patch } of { error }.
+function validateSettingsPatch(body) {
+  if (!body || typeof body !== "object") return { error: "Ongeldige aanvraag." };
+  var patch = {}, n = 0;
+  if (body.authRequired !== undefined) {
+    if (typeof body.authRequired !== "boolean") return { error: "authRequired moet true of false zijn." };
+    patch.authRequired = body.authRequired; n++;
+  }
+  if (body.modules !== undefined) {
+    if (!body.modules || typeof body.modules !== "object" || Array.isArray(body.modules)) return { error: "modules moet een object zijn." };
+    patch.modules = {};
+    for (var k of Object.keys(body.modules)) {
+      if (!MODULE_DEFS.some(function (d) { return d.key === k; })) return { error: "Onbekende module: " + k + "." };
+      if (typeof body.modules[k] !== "boolean") return { error: "Module " + k + " moet aan (true) of uit (false) staan." };
+      patch.modules[k] = body.modules[k]; n++;
+    }
+  }
+  if (body.limits !== undefined) {
+    if (!body.limits || typeof body.limits !== "object" || Array.isArray(body.limits)) return { error: "limits moet een object zijn." };
+    patch.limits = {};
+    for (var lk of Object.keys(body.limits)) {
+      var def = LIMIT_DEFS.filter(function (d) { return d.key === lk; })[0];
+      if (!def) return { error: "Onbekende limiet: " + lk + "." };
+      var v = body.limits[lk];
+      if (typeof v !== "number" || !isFinite(v) || Math.floor(v) !== v || v < def.min || v > def.max) {
+        return { error: def.label + " moet een geheel getal zijn tussen " + def.min + " en " + def.max + "." };
+      }
+      patch.limits[lk] = v; n++;
+    }
+  }
+  if (body.maintenance !== undefined) {
+    var m = body.maintenance;
+    if (!m || typeof m !== "object") return { error: "maintenance moet een object zijn." };
+    patch.maintenance = {};
+    if (m.enabled !== undefined) { if (typeof m.enabled !== "boolean") return { error: "maintenance.enabled moet true of false zijn." }; patch.maintenance.enabled = m.enabled; n++; }
+    if (m.message !== undefined) { if (typeof m.message !== "string") return { error: "De onderhoudsmelding moet tekst zijn." }; patch.maintenance.message = cleanText(m.message, 300); n++; }
+  }
+  if (body.announcement !== undefined) {
+    var a = body.announcement;
+    if (!a || typeof a !== "object") return { error: "announcement moet een object zijn." };
+    patch.announcement = {};
+    if (a.enabled !== undefined) { if (typeof a.enabled !== "boolean") return { error: "announcement.enabled moet true of false zijn." }; patch.announcement.enabled = a.enabled; n++; }
+    if (a.message !== undefined) { if (typeof a.message !== "string") return { error: "De mededeling moet tekst zijn." }; patch.announcement.message = cleanText(a.message, 300); n++; }
+    if (a.level !== undefined) { if (a.level !== "info" && a.level !== "warning") return { error: "Het type mededeling moet 'info' of 'warning' zijn." }; patch.announcement.level = a.level; n++; }
+  }
+  if (!n) return { error: "Geen geldige wijzigingen ontvangen." };
+  return { patch: patch };
+}
+function moduleOffBody(key, s) {
+  var def = MODULE_DEFS.filter(function (d) { return d.key === key; })[0];
+  var msg = s.maintenance.enabled && MAINTENANCE_OFF_MODULES.indexOf(key) > -1
+    ? (s.maintenance.message || "De app is tijdelijk in onderhoud.")
+    : (def ? def.label : key) + " staat tijdelijk uit.";
+  return { code: "module_disabled", module: key, message: msg };
+}
+// Zet een schakelaar voor een heel eindpunt: uit = 503 (of het antwoord dat onOff geeft).
+function moduleGuard(key, handler, onOff) {
+  return function () {
+    var args = arguments, req = args[0], res = args[1];
+    getSettings().then(function (s) {
+      if (effectiveModules(s)[key]) return handler.apply(null, args);
+      return onOff ? onOff(req, res, s) : sendJSON(res, 503, moduleOffBody(key, s));
+    }).catch(function () {
+      try { sendJSON(res, 500, { code: "error", message: "Interne fout." }); } catch (e) {}
+    });
+  };
+}
+
+function getAuthRequired() { return getSettings().then(function (s) { return s.authRequired; }); }
+function setAuthRequired(value) { return updateSettings({ authRequired: !!value }); }
+
+// ---------- Geblokkeerde accounts en ingetrokken sessies ----------
+// Eén document (settings/blocked): uids die geblokkeerd zijn (ook anonieme) en per uid een tijdstip waarvoor
+// uitgegeven sessies niet meer gelden ("overal uitloggen", na wachtwoord- of e-mailwijziging).
+var blockedCache = { value: null, expiry: 0 };
+function normalizeBlocked(raw) {
+  raw = raw && typeof raw === "object" ? raw : {};
+  return { uids: raw.uids && typeof raw.uids === "object" ? raw.uids : {}, invalidBefore: raw.invalidBefore && typeof raw.invalidBefore === "object" ? raw.invalidBefore : {} };
+}
+function getBlocked() {
+  if (blockedCache.value && Date.now() < blockedCache.expiry) return Promise.resolve(blockedCache.value);
+  return dbGetDoc("settings/blocked").then(function (r) {
+    var b = normalizeBlocked(r.exists ? r.value : null);
+    blockedCache = { value: b, expiry: Date.now() + 5000 };
+    return b;
+  }).catch(function () { return blockedCache.value || normalizeBlocked(null); });
+}
+function updateBlocked(mutator) {
+  return dbGetDoc("settings/blocked").then(function (r) {
+    var b = normalizeBlocked(r.exists ? r.value : null);
+    mutator(b);
+    return dbSetDoc("settings/blocked", b).then(function () {
+      blockedCache = { value: b, expiry: Date.now() + 5000 };
+      return b;
+    });
+  });
+}
+function sessionAllowed(b, uid, iat) {
+  if (b.uids[uid]) return false;
+  var inv = b.invalidBefore[uid];
+  return !(inv && (iat || 0) < inv);
 }
 
 var ANON_ID_PATTERN = /^anon_[a-z0-9]{10,40}$/;
@@ -157,11 +333,16 @@ function resolveUser(req) {
   var auth = req.headers["authorization"] || "";
   var token = auth.indexOf("Bearer ") === 0 ? auth.slice(7) : "";
   var payload = verifySessionToken(token);
-  if (payload && payload.uid) return Promise.resolve({ uid: payload.uid, email: payload.email });
+  if (payload && payload.uid) {
+    return getBlocked().then(function (b) {
+      return sessionAllowed(b, payload.uid, payload.iat) ? { uid: payload.uid, email: payload.email } : null;
+    });
+  }
   var anon = String(req.headers["x-anon-id"] || "");
   if (!ANON_ID_PATTERN.test(anon)) return Promise.resolve(null);
-  return getAuthRequired().then(function (required) {
-    return required ? null : { uid: anon, email: null };
+  return Promise.all([getAuthRequired(), getBlocked()]).then(function (r) {
+    if (r[0]) return null;
+    return r[1].uids[anon] ? null : { uid: anon, email: null };
   });
 }
 function sendUnauthorized(res) {
@@ -172,7 +353,7 @@ function sendUnauthorized(res) {
 // Every /api/generate call logs its action, duration, and outcome. Capped at
 // the most recent 1000 entries so it never grows unbounded.
 
-var LOG_CAP = 1000;
+var LOG_CAP = 5000;
 
 function logRequest(entry) {
   mongoReady.then(function (db) {
@@ -228,8 +409,10 @@ function computeLogStats(logs) {
 // Render's free tier) the filesystem is wiped on every restart/redeploy — so for anything
 // long-lived, set MONGODB_URI (see .env.example / README) to use a real persistent database.
 
+var mongoConnected = false;
 var mongoReady = MONGODB_URI
   ? new MongoClient(MONGODB_URI).connect().then(function (client) {
+      mongoConnected = true;
       console.log("Verbonden met MongoDB — data blijft nu bewaard tussen herstarts.");
       return client.db(MONGODB_DB_NAME);
     }).catch(function (err) {
@@ -323,7 +506,7 @@ function dbListUserIds() {
       var users = [];
       Object.keys(store.docs).forEach(function (key) {
         var m = key.match(/^auth\/users\/(.+)$/);
-        if (m) { users.push({ uid: store.docs[key].uid, email: m[1] }); return; }
+        if (m) { users.push({ uid: store.docs[key].uid, email: m[1], account: store.docs[key] }); return; }
         var a = key.match(/^data\/users\/(anon_[^\/]+)\/meta$/);
         if (a) users.push({ uid: a[1], email: null });
       });
@@ -333,7 +516,7 @@ function dbListUserIds() {
       db.collection("docs").find({ _id: { $regex: "^auth/users/" } }).toArray(),
       db.collection("docs").find({ _id: { $regex: "^data/users/anon_[^/]+/meta$" } }).toArray()
     ]).then(function (results) {
-      var accounts = results[0].map(function (d) { return { uid: d.value.uid, email: d._id.slice("auth/users/".length) }; });
+      var accounts = results[0].map(function (d) { return { uid: d.value.uid, email: d._id.slice("auth/users/".length), account: d.value }; });
       var anons = results[1].map(function (d) { return { uid: d._id.split("/")[2], email: null }; });
       return accounts.concat(anons);
     });
@@ -380,7 +563,7 @@ function checkIpRateLimit(ip) {
   }
   entry.count++;
   ipHits.set(ip, entry);
-  return entry.count <= PER_IP_HOURLY_CAP;
+  return entry.count <= liveLimits.perIpHourlyCap;
 }
 
 // ---------- HTTP helpers ----------
@@ -795,53 +978,74 @@ function generateWithBalansRetry(prompt, goal) {
   return tryOnce();
 }
 
+function logEvent(type, action, ok, status, extra) {
+  logRequest(Object.assign({ ts: new Date().toISOString(), type: type, action: action, ok: ok, status: status }, extra || {}));
+}
+
 function handleGenerate(req, res) {
   var ip = clientIp(req);
   var startTime = Date.now();
+  var uidForLog = null;
+  function log(action, ok, status, error) {
+    logRequest({ ts: new Date().toISOString(), type: "generate", action: action, durationMs: Date.now() - startTime, ok: ok, status: status, error: error || undefined, ip: ip, uid: uidForLog || undefined });
+  }
   if (!checkIpRateLimit(ip)) {
-    logRequest({ ts: new Date().toISOString(), action: "onbekend", durationMs: Date.now() - startTime, ok: false, status: 429, error: "Rate limit (IP)", ip: ip });
+    log("onbekend", false, 429, "Rate limit (IP)");
     return sendJSON(res, 429, { code: "rate_limited", message: "Te veel verzoeken vanaf dit adres. Probeer later opnieuw." });
   }
 
-  resolveUser(req).then(function (user) {
-    if (!user) {
-      logRequest({ ts: new Date().toISOString(), action: "onbekend", durationMs: Date.now() - startTime, ok: false, status: 401, error: "Niet ingelogd", ip: ip });
-      sendUnauthorized(res);
-      return null;
+  getSettings().then(function (settings) {
+    var mods = effectiveModules(settings);
+    if (!mods.generate) {
+      log("onbekend", false, 503, "Module uitgeschakeld: generate");
+      sendJSON(res, 503, moduleOffBody("generate", settings));
+      return undefined;
     }
-    if (!ANTHROPIC_API_KEY) {
-      logRequest({ ts: new Date().toISOString(), action: "onbekend", durationMs: Date.now() - startTime, ok: false, status: 500, error: "ANTHROPIC_API_KEY niet ingesteld", ip: ip });
-      sendJSON(res, 500, { code: "not_configured", message: "Server heeft nog geen ANTHROPIC_API_KEY ingesteld." });
-      return null;
-    }
-    return getUsageToday();
-  }).then(function (usedToday) {
-    if (usedToday === null) return; // already answered with 401
-    if (usedToday >= DAILY_GENERATE_CAP) {
-      logRequest({ ts: new Date().toISOString(), action: "onbekend", durationMs: Date.now() - startTime, ok: false, status: 429, error: "Dagelijkse limiet bereikt", ip: ip });
-      return sendJSON(res, 429, { code: "rate_limited", message: "De dagelijkse limiet voor het genereren van gerechten is bereikt. Probeer het morgen opnieuw." });
-    }
+    return resolveUser(req).then(function (user) {
+      if (!user) {
+        log("onbekend", false, 401, "Niet ingelogd");
+        sendUnauthorized(res);
+        return null;
+      }
+      uidForLog = user.uid;
+      if (!ANTHROPIC_API_KEY) {
+        log("onbekend", false, 500, "ANTHROPIC_API_KEY niet ingesteld");
+        sendJSON(res, 500, { code: "not_configured", message: "Server heeft nog geen ANTHROPIC_API_KEY ingesteld." });
+        return null;
+      }
+      return getUsageToday();
+    }).then(function (usedToday) {
+      if (usedToday === null) return; // already answered with 401
+      if (usedToday >= liveLimits.dailyGenerateCap) {
+        log("onbekend", false, 429, "Dagelijkse limiet bereikt");
+        return sendJSON(res, 429, { code: "rate_limited", message: "De dagelijkse limiet voor het genereren van gerechten is bereikt. Probeer het morgen opnieuw." });
+      }
 
-    readBody(req).then(function (body) {
-      var action = (body && body.action) || "onbekend";
+      readBody(req).then(function (body) {
+        var action = (body && body.action) || "onbekend";
+        if (action === "price" && !mods.prices) {
+          log(action, false, 503, "Module uitgeschakeld: prices");
+          return sendJSON(res, 503, moduleOffBody("prices", settings));
+        }
 
-      return runGenerateAction(body).then(function (parsed) {
-        incrementUsageToday();
-        logRequest({ ts: new Date().toISOString(), action: action, durationMs: Date.now() - startTime, ok: true, status: 200, ip: ip });
-        sendJSON(res, 200, { result: parsed });
-      }).catch(function (err) {
-        var status = err && err.isBadRequest ? 400 : 502;
-        var code = err && err.isBadRequest ? "bad_request" : "error";
-        var message = err && err.isBadRequest ? "Ongeldig verzoek." : "Genereren mislukt: " + err.message;
-        logRequest({ ts: new Date().toISOString(), action: action, durationMs: Date.now() - startTime, ok: false, status: status, error: err.message, ip: ip });
-        sendJSON(res, status, { code: code, message: message });
+        return runGenerateAction(body).then(function (parsed) {
+          incrementUsageToday();
+          log(action, true, 200);
+          sendJSON(res, 200, { result: parsed });
+        }).catch(function (err) {
+          var status = err && err.isBadRequest ? 400 : 502;
+          var code = err && err.isBadRequest ? "bad_request" : "error";
+          var message = err && err.isBadRequest ? "Ongeldig verzoek." : "Genereren mislukt: " + err.message;
+          log(action, false, status, err.message);
+          sendJSON(res, status, { code: code, message: message });
+        });
+      }).catch(function () {
+        log("onbekend", false, 400, "Ongeldige aanvraag");
+        sendJSON(res, 400, { code: "bad_request", message: "Ongeldige aanvraag." });
       });
-    }).catch(function () {
-      logRequest({ ts: new Date().toISOString(), action: "onbekend", durationMs: Date.now() - startTime, ok: false, status: 400, error: "Ongeldige aanvraag", ip: ip });
-      sendJSON(res, 400, { code: "bad_request", message: "Ongeldige aanvraag." });
     });
   }).catch(function (err) {
-    logRequest({ ts: new Date().toISOString(), action: "onbekend", durationMs: Date.now() - startTime, ok: false, status: 502, error: "Opslag niet bereikbaar: " + (err && err.message ? err.message : "onbekende fout"), ip: ip });
+    log("onbekend", false, 502, "Opslag niet bereikbaar: " + (err && err.message ? err.message : "onbekende fout"));
     sendJSON(res, 502, { code: "error", message: "Opslag niet bereikbaar: " + (err && err.message ? err.message : "onbekende fout") });
   });
 }
@@ -849,8 +1053,10 @@ function handleGenerate(req, res) {
 function normalizeEmail(email) {
   return String(email || "").trim().toLowerCase();
 }
+var EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function handleAuthRegister(req, res) {
+  var ip = clientIp(req);
   readBody(req).then(function (body) {
     var email = normalizeEmail(body && body.email);
     var password = (body && body.password) || "";
@@ -862,11 +1068,14 @@ function handleAuthRegister(req, res) {
     }
     return dbGetDoc("auth/users/" + email).then(function (existing) {
       if (existing.exists) {
+        logEvent("auth", "register", false, 409, { error: "Bestaat al", email: email, ip: ip });
         return sendJSON(res, 409, { code: "conflict", message: "Er bestaat al een account met dit e-mailadres." });
       }
       var uid = "u_" + crypto.randomBytes(12).toString("hex");
       var record = makePasswordRecord(password);
-      return dbSetDoc("auth/users/" + email, { uid: uid, salt: record.salt, hash: record.hash, createdAt: new Date().toISOString() }).then(function () {
+      var now = new Date().toISOString();
+      return dbSetDoc("auth/users/" + email, { uid: uid, salt: record.salt, hash: record.hash, createdAt: now, createdBy: "self", lastLoginAt: now, loginCount: 1 }).then(function () {
+        logEvent("auth", "register", true, 200, { email: email, uid: uid, ip: ip });
         sendJSON(res, 200, { token: issueUserSession(uid, email), uid: uid });
       });
     });
@@ -876,14 +1085,26 @@ function handleAuthRegister(req, res) {
 }
 
 function handleAuthLogin(req, res) {
+  var ip = clientIp(req);
   readBody(req).then(function (body) {
     var email = normalizeEmail(body && body.email);
     var password = (body && body.password) || "";
     return dbGetDoc("auth/users/" + email).then(function (result) {
       if (!result.exists || !verifyPassword(password, result.value)) {
+        logEvent("auth", "login", false, 401, { error: "Onjuiste inloggegevens", email: email.slice(0, 200), ip: ip });
         return sendJSON(res, 401, { code: "unauthorized", message: "E-mailadres of wachtwoord onjuist." });
       }
-      sendJSON(res, 200, { token: issueUserSession(result.value.uid, email), uid: result.value.uid });
+      return getBlocked().then(function (b) {
+        if (b.uids[result.value.uid]) {
+          logEvent("auth", "login", false, 403, { error: "Account geblokkeerd", email: email, uid: result.value.uid, ip: ip });
+          return sendJSON(res, 403, { code: "blocked", message: "Dit account is geblokkeerd. Neem contact op met de beheerder." });
+        }
+        var updated = Object.assign({}, result.value, { lastLoginAt: new Date().toISOString(), loginCount: (result.value.loginCount || 0) + 1 });
+        return dbSetDoc("auth/users/" + email, updated).catch(function () {}).then(function () {
+          logEvent("auth", "login", true, 200, { email: email, uid: result.value.uid, ip: ip });
+          sendJSON(res, 200, { token: issueUserSession(result.value.uid, email), uid: result.value.uid });
+        });
+      });
     });
   }).catch(function (err) {
     sendJSON(res, 500, { code: "error", message: "Inloggen mislukt: " + (err && err.message ? err.message : "onbekende fout") });
@@ -926,6 +1147,7 @@ function handleForgotPassword(req, res) {
     dbGetDoc("auth/users/" + email).then(function (result) {
       if (!result.exists) return genericResponse();
       var token = crypto.randomBytes(24).toString("hex");
+      logEvent("auth", "reset-request", true, 200, { email: email, uid: result.value.uid, ip: clientIp(req) });
       return dbSetDoc("auth/resets/" + token, { email: email, expiresAt: Date.now() + RESET_TOKEN_TTL_MS, used: false }).then(function () {
         var host = req.headers.host;
         var resetLink = "https://" + host + "/?reset=" + token;
@@ -956,9 +1178,11 @@ function handleResetPassword(req, res) {
         var uid = userResult.value.uid;
         var record = makePasswordRecord(newPassword);
         return Promise.all([
-          dbSetDoc("auth/users/" + email, { uid: uid, salt: record.salt, hash: record.hash, createdAt: userResult.value.createdAt }),
-          dbSetDoc("auth/resets/" + token, { email: email, expiresAt: 0, used: true })
+          dbSetDoc("auth/users/" + email, Object.assign({}, userResult.value, { salt: record.salt, hash: record.hash })),
+          dbSetDoc("auth/resets/" + token, { email: email, expiresAt: 0, used: true }),
+          updateBlocked(function (b) { b.invalidBefore[uid] = Date.now(); })
         ]).then(function () {
+          logEvent("auth", "reset-done", true, 200, { email: email, uid: uid, ip: clientIp(req) });
           sendJSON(res, 200, { token: issueUserSession(uid, email), uid: uid });
         });
       });
@@ -1078,11 +1302,11 @@ function checkTipsLimits(ip) {
   if (!entry || now - entry.windowStart > 60 * 60 * 1000) entry = { count: 0, windowStart: now };
   entry.count++;
   tipsIpHits.set(ip, entry);
-  if (entry.count > TIPS_PER_IP_HOURLY) return "Te veel tip-verzoeken vanaf dit adres.";
+  if (entry.count > liveLimits.tipsPerIpHourly) return "Te veel tip-verzoeken vanaf dit adres.";
   var today = todayKey();
   if (tipsDay.day !== today) tipsDay = { day: today, count: 0 };
   tipsDay.count++;
-  if (tipsDay.count > DAILY_TIPS_CAP) return "De dagelijkse tip-limiet is bereikt.";
+  if (tipsDay.count > liveLimits.dailyTipsCap) return "De dagelijkse tip-limiet is bereikt.";
   return null;
 }
 
@@ -1092,7 +1316,11 @@ function handleTips(req, res) {
   var limitMessage = checkTipsLimits(ip);
   if (limitMessage) return sendJSON(res, 429, { code: "rate_limited", message: limitMessage });
 
-  resolveUser(req).then(function (user) {
+  getSettings().then(function (settings) {
+    if (!effectiveModules(settings).tips) { sendJSON(res, 503, moduleOffBody("tips", settings)); return undefined; }
+    return resolveUser(req);
+  }).then(function (user) {
+    if (user === undefined) return;   // uitgeschakeld: al beantwoord
     if (!user) return sendUnauthorized(res);
     if (!ANTHROPIC_API_KEY) return sendJSON(res, 500, { code: "not_configured", message: "Server heeft nog geen ANTHROPIC_API_KEY ingesteld." });
     return readBody(req).then(function (body) {
@@ -1104,7 +1332,7 @@ function handleTips(req, res) {
       });
     });
   }).catch(function (err) {
-    logRequest({ ts: new Date().toISOString(), action: "tips", durationMs: Date.now() - startTime, ok: false, status: 502, error: err.message, ip: ip });
+    logRequest({ ts: new Date().toISOString(), type: "tips", action: "tips", durationMs: Date.now() - startTime, ok: false, status: 502, error: err.message, ip: ip });
     sendJSON(res, 502, { code: "error", message: "Tips ophalen mislukt: " + err.message });
   });
 }
@@ -1889,156 +2117,954 @@ function serveStatic(req, res) {
   });
 }
 
+// ======================================================================================
+// ADMIN-API
+// Alles onder /api/admin/ (behalve inloggen) vraagt een geldige beheerderssessie. Elke wijziging komt in het
+// auditlog te staan (wie/wat/wanneer, nooit wachtwoorden). Zoeken, filteren, sorteren en pagineren gebeurt op
+// de server, zodat de pagina snel blijft bij veel gebruikers.
+// ======================================================================================
+
+function HttpError(status, code, message) {
+  var e = new Error(message);
+  e.status = status;
+  e.code = code;
+  return e;
+}
+var DAY_MS = 24 * 60 * 60 * 1000;
+
+// ---- beheerder inloggen (met begrenzing op mislukte pogingen) ----
+var adminFails = new Map();          // ip -> { count, start }
+var ADMIN_FAIL_WINDOW_MS = 15 * 60 * 1000;
+var ADMIN_FAIL_MAX = 10;
+function adminLockedFor(ip) {
+  var e = adminFails.get(ip);
+  if (!e) return 0;
+  if (Date.now() - e.start > ADMIN_FAIL_WINDOW_MS) { adminFails.delete(ip); return 0; }
+  return e.count >= ADMIN_FAIL_MAX ? Math.ceil((e.start + ADMIN_FAIL_WINDOW_MS - Date.now()) / 1000) : 0;
+}
+function adminRegisterFail(ip) {
+  var e = adminFails.get(ip);
+  if (!e || Date.now() - e.start > ADMIN_FAIL_WINDOW_MS) e = { count: 0, start: Date.now() };
+  e.count++;
+  adminFails.set(ip, e);
+}
+function safeEqual(a, b) {
+  var ha = crypto.createHash("sha256").update(String(a)).digest();
+  var hb = crypto.createHash("sha256").update(String(b)).digest();
+  return crypto.timingSafeEqual(ha, hb);
+}
+
 function handleAdminLogin(req, res) {
   if (!ADMIN_PASSWORD) {
     return sendJSON(res, 500, { code: "not_configured", message: "Server heeft nog geen ADMIN_PASSWORD ingesteld." });
   }
+  var ip = clientIp(req);
+  var wait = adminLockedFor(ip);
+  if (wait) {
+    return sendJSON(res, 429, { code: "rate_limited", retryAfterSec: wait, message: "Te veel mislukte pogingen. Probeer het over " + Math.ceil(wait / 60) + " min opnieuw." });
+  }
   readBody(req).then(function (body) {
     var password = body && body.password;
-    if (password !== ADMIN_PASSWORD) {
+    if (typeof password !== "string" || !safeEqual(password, ADMIN_PASSWORD)) {
+      adminRegisterFail(ip);
+      auditLog(req, "admin.login-mislukt", null, null);
       return sendJSON(res, 401, { code: "unauthorized", message: "Onjuist wachtwoord." });
     }
+    adminFails.delete(ip);
+    auditLog(req, "admin.login", null, null);
     sendJSON(res, 200, { token: issueAdminToken() });
   }).catch(function () {
     sendJSON(res, 400, { code: "bad_request", message: "Ongeldige aanvraag." });
   });
 }
 
-function handleAdminUsers(req, res) {
-  if (!requireAdmin(req, res)) return;
-  dbListUserIds().then(function (accounts) {
-    return Promise.all(accounts.map(function (account) {
-      var uid = account.uid;
-      return Promise.all([
-        dbGetDoc("data/users/" + uid + "/prefs"),
-        dbGetDoc("data/users/" + uid + "/dishes"),
-        dbGetDoc("data/users/" + uid + "/plannedWeeks"),
-        dbGetDoc("data/users/" + uid + "/meta")
-      ]).then(function (results) {
-        var prefs = results[0].exists ? results[0].value : null;
-        var dishes = results[1].exists ? results[1].value : null;
-        var plannedWeeks = results[2].exists ? results[2].value : null;
-        var meta = results[3].exists ? results[3].value : null;
-        var dishCount = 0;
-        if (dishes && typeof dishes === "object") {
-          Object.keys(dishes).forEach(function (mt) { dishCount += Array.isArray(dishes[mt]) ? dishes[mt].length : 0; });
-        }
-        var locationPromise = (meta && meta.lastIp) ? resolveIpLocation(meta.lastIp) : Promise.resolve(null);
-        return locationPromise.then(function (location) {
-          return {
-            uid: uid,
-            email: account.email,
-            name: prefs && typeof prefs.name === "string" ? prefs.name.slice(0, 40) : null,
-            goal: prefs ? prefs.goal : null,
-            dietStyle: prefs ? prefs.dietStyle : null,
-            level: prefs ? prefs.level : null,
-            dishCount: dishCount,
-            plannedWeekCount: Array.isArray(plannedWeeks) ? plannedWeeks.length : 0,
-            lastSeenAt: meta ? meta.lastSeenAt : null,
-            location: location
-          };
+// ---- opslag-hulpjes voor logboeken en lijsten ----
+var AUDIT_CAP = 3000;
+function cappedInsert(collection, storeKey, entry, cap) {
+  return mongoReady.then(function (db) {
+    if (!db) {
+      var store = loadStore();
+      store[storeKey] = store[storeKey] || [];
+      store[storeKey].push(entry);
+      if (store[storeKey].length > cap) store[storeKey] = store[storeKey].slice(-cap);
+      saveStore(store);
+      return;
+    }
+    return db.collection(collection).insertOne(Object.assign({}, entry)).then(function () {
+      return db.collection(collection).countDocuments().then(function (count) {
+        if (count <= cap) return;
+        return db.collection(collection).find().sort({ ts: 1 }).limit(count - cap).toArray().then(function (oldest) {
+          return db.collection(collection).deleteMany({ _id: { $in: oldest.map(function (d) { return d._id; }) } });
         });
       });
-    }));
-  }).then(function (users) {
-    sendJSON(res, 200, { users: users });
-  }).catch(function (err) {
-    sendJSON(res, 500, { code: "error", message: "Kon gebruikers niet ophalen: " + err.message });
+    });
+  });
+}
+function cappedReadAll(collection, storeKey, limit) {
+  return mongoReady.then(function (db) {
+    if (!db) return (loadStore()[storeKey] || []).slice(-limit).reverse();
+    return db.collection(collection).find().sort({ ts: -1 }).limit(limit).toArray();
+  });
+}
+function auditLog(req, action, target, detail) {
+  var entry = { ts: new Date().toISOString(), action: action, target: target || null, detail: detail || null, ip: req ? clientIp(req) : null };
+  return cappedInsert("audit", "audit", entry, AUDIT_CAP).catch(function () {});
+}
+function dbListDocs(prefix) {
+  return mongoReady.then(function (db) {
+    if (!db) {
+      var store = loadStore();
+      return Object.keys(store.docs).filter(function (k) { return k.indexOf(prefix) === 0; }).map(function (k) { return { path: k, value: store.docs[k] }; });
+    }
+    var rx = "^" + prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return db.collection("docs").find({ _id: { $regex: rx } }).toArray().then(function (docs) {
+      return docs.map(function (d) { return { path: d._id, value: d.value }; });
+    });
+  });
+}
+function dayKeyOf(ms) { return new Date(ms).toISOString().slice(0, 10); }
+function lastDayKeys(n) {
+  var keys = [];
+  for (var i = n - 1; i >= 0; i--) keys.push(dayKeyOf(Date.now() - i * DAY_MS));
+  return keys;
+}
+function getUsageHistory(n) {
+  var keys = lastDayKeys(n);
+  return mongoReady.then(function (db) {
+    if (!db) {
+      var store = loadStore();
+      return keys.map(function (k) { return { day: k, count: (store.usage && store.usage[k]) || 0 }; });
+    }
+    return db.collection("usage").find({ _id: { $in: keys } }).toArray().then(function (docs) {
+      var m = {};
+      docs.forEach(function (d) { m[d._id] = d.count; });
+      return keys.map(function (k) { return { day: k, count: m[k] || 0 }; });
+    });
+  });
+}
+function mapLimit(items, limit, fn) {
+  var results = new Array(items.length), next = 0;
+  function worker() {
+    if (next >= items.length) return Promise.resolve();
+    var i = next++;
+    return fn(items[i], i).then(function (r) { results[i] = r; return worker(); });
+  }
+  var workers = [];
+  for (var w = 0; w < Math.min(limit, items.length); w++) workers.push(worker());
+  return Promise.all(workers).then(function () { return results; });
+}
+function intParam(q, name, def, min, max) {
+  var v = parseInt(q.get(name) || "", 10);
+  if (!isFinite(v)) v = def;
+  return Math.max(min, Math.min(max, v));
+}
+function paginate(rows, q, defSize) {
+  var pageSize = intParam(q, "pageSize", defSize || 25, 1, 200);
+  var pages = Math.max(1, Math.ceil(rows.length / pageSize));
+  var page = Math.min(intParam(q, "page", 1, 1, 100000), pages);
+  return { rows: rows.slice((page - 1) * pageSize, page * pageSize), page: page, pageSize: pageSize, pages: pages, total: rows.length };
+}
+function csvCell(v) {
+  var s = v == null ? "" : String(v);
+  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;                 // voorkomt dat een spreadsheet tekst als formule uitvoert
+  return /[",\n\r;]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+function toCsv(rows, columns) {
+  return [columns.join(",")].concat(rows.map(function (r) { return columns.map(function (c) { return csvCell(r[c]); }).join(","); })).join("\r\n") + "\r\n";
+}
+function parseDateBound(v, endOfDay) {
+  if (!v) return null;
+  var s = String(v).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) s += endOfDay ? "T23:59:59.999Z" : "T00:00:00.000Z";
+  var t = Date.parse(s);
+  return isFinite(t) ? t : null;
+}
+
+// ---- gebruikers: overzicht ----
+var summariesCache = { value: null, expiry: 0 };
+function invalidateSummaries() { summariesCache = { value: null, expiry: 0 }; }
+
+function latestTimestamp(a, b) {
+  var ta = a ? Date.parse(a) : NaN, tb = b ? Date.parse(b) : NaN;
+  if (!isFinite(ta) && !isFinite(tb)) return null;
+  return (isFinite(ta) && (!isFinite(tb) || ta >= tb)) ? a : b;
+}
+// Bouwt het overzicht van één gebruiker (leest de vier documenten van die gebruiker).
+function buildSummary(account, blocked, noteDoc) {
+  var uid = account.uid;
+  return Promise.all([
+    dbGetDoc("data/users/" + uid + "/prefs"), dbGetDoc("data/users/" + uid + "/dishes"),
+    dbGetDoc("data/users/" + uid + "/plannedWeeks"), dbGetDoc("data/users/" + uid + "/meta")
+  ]).then(function (res) {
+    var prefs = res[0].exists && res[0].value && typeof res[0].value === "object" ? res[0].value : null;
+    var dishes = res[1].exists ? res[1].value : null;
+    var weeks = res[2].exists ? res[2].value : null;
+    var meta = res[3].exists && res[3].value ? res[3].value : null;
+    var dishCount = 0;
+    if (dishes && typeof dishes === "object") Object.keys(dishes).forEach(function (mt) { dishCount += Array.isArray(dishes[mt]) ? dishes[mt].length : 0; });
+    var acc = account.account || null;
+    var weekList = weeks && Array.isArray(weeks.list) ? weeks.list : (Array.isArray(weeks) ? weeks : []);
+    return {
+      uid: uid,
+      email: account.email || null,
+      type: account.email ? "account" : "anon",
+      name: prefs && typeof prefs.name === "string" ? prefs.name.slice(0, 40) : null,
+      goal: prefs ? prefs.goal || null : null,
+      dietStyle: prefs ? prefs.dietStyle || null : null,
+      level: prefs ? prefs.level || null : null,
+      dishCount: dishCount,
+      plannedWeekCount: weekList.length,
+      lastSeenAt: latestTimestamp(meta ? meta.lastSeenAt : null, acc ? acc.lastLoginAt : null),   // laatst actief: gegevens bewaard of ingelogd
+      lastIp: meta ? meta.lastIp || null : null,
+      createdAt: acc ? acc.createdAt || null : null,
+      createdBy: acc ? acc.createdBy || null : null,
+      lastLoginAt: acc ? acc.lastLoginAt || null : null,
+      loginCount: acc ? acc.loginCount || 0 : 0,
+      disabled: !!blocked.uids[uid],
+      disabledAt: blocked.uids[uid] ? blocked.uids[uid].at || null : null,
+      disabledReason: blocked.uids[uid] ? blocked.uids[uid].reason || "" : "",
+      note: noteDoc && noteDoc.note ? noteDoc.note : ""
+    };
+  });
+}
+// Het overzicht van iedereen; wordt 15 seconden onthouden zodat zoeken en bladeren de opslag niet belast.
+function loadUserSummaries() {
+  if (summariesCache.value && Date.now() < summariesCache.expiry) return Promise.resolve(summariesCache.value);
+  return Promise.all([dbListUserIds(), getBlocked(), dbListDocs("adminMeta/")]).then(function (r) {
+    var blocked = r[1], notes = {};
+    r[2].forEach(function (d) { notes[d.path.slice("adminMeta/".length)] = d.value; });
+    var accounts = r[0].filter(function (a) { return a && a.uid; });
+    return mapLimit(accounts, 20, function (account) { return buildSummary(account, blocked, notes[account.uid]); });
+  }).then(function (list) {
+    summariesCache = { value: list, expiry: Date.now() + 15000 };
+    return list;
+  });
+}
+// Eén gebruiker, altijd vers (voor detail, wijzigen en acties).
+function loadSummaryFresh(uid) {
+  return Promise.all([dbListUserIds(), getBlocked(), dbGetDoc("adminMeta/" + uid)]).then(function (r) {
+    var account = r[0].filter(function (a) { return a && a.uid === uid; })[0];
+    return account ? buildSummary(account, r[1], r[2].exists ? r[2].value : null) : null;
+  });
+}
+function findSummary(uid) {
+  return loadUserSummaries().then(function (list) { return list.filter(function (u) { return u.uid === uid; })[0] || null; });
+}
+function needSummary(uid) {
+  return loadSummaryFresh(uid).then(function (u) {
+    if (!u) throw HttpError(404, "not_found", "Gebruiker niet gevonden.");
+    return u;
+  });
+}
+function withLocation(u) {
+  if (!u.lastIp) return Promise.resolve(Object.assign({}, u, { location: null }));
+  var timeout = new Promise(function (resolve) { setTimeout(function () { resolve(null); }, 2500); });
+  return Promise.race([resolveIpLocation(u.lastIp), timeout]).then(function (loc) { return Object.assign({}, u, { location: loc }); });
+}
+function filterUsers(list, q) {
+  var text = (q.get("q") || "").trim().toLowerCase();
+  var type = q.get("type") || "all", status = q.get("status") || "all";
+  var goal = q.get("goal") || "", diet = q.get("diet") || "", active = q.get("active") || "", created = q.get("created") || "";
+  var now = Date.now();
+  function within(ts, days) { var t = ts ? Date.parse(ts) : NaN; return isFinite(t) && now - t <= days * DAY_MS; }
+  return list.filter(function (u) {
+    if (type === "account" && u.type !== "account") return false;
+    if (type === "anon" && u.type !== "anon") return false;
+    if (status === "active" && u.disabled) return false;
+    if (status === "disabled" && !u.disabled) return false;
+    if (goal && u.goal !== goal) return false;
+    if (diet && u.dietStyle !== diet) return false;
+    if (active === "24h" && !within(u.lastSeenAt, 1)) return false;
+    if (active === "7d" && !within(u.lastSeenAt, 7)) return false;
+    if (active === "30d" && !within(u.lastSeenAt, 30)) return false;
+    if (active === "inactive30" && within(u.lastSeenAt, 30)) return false;
+    if (created === "7d" && !within(u.createdAt, 7)) return false;
+    if (created === "30d" && !within(u.createdAt, 30)) return false;
+    if (text) {
+      var hay = [u.email, u.name, u.uid, u.note, u.lastIp, u.goal, u.dietStyle].join(" ").toLowerCase();
+      if (hay.indexOf(text) === -1) return false;
+    }
+    return true;
+  });
+}
+function sortUsers(rows, q) {
+  var sort = q.get("sort") || "lastSeen";
+  var textCols = { name: "name", email: "email" };
+  var numCols = { dishes: "dishCount", weeks: "plannedWeekCount", logins: "loginCount" };
+  var dateCols = { lastSeen: "lastSeenAt", created: "createdAt", lastLogin: "lastLoginAt" };
+  var dir = q.get("dir") || (textCols[sort] ? "asc" : "desc");
+  var mul = dir === "asc" ? 1 : -1;
+  rows.sort(function (a, b) {
+    var x, y;
+    if (textCols[sort]) { x = String(a[textCols[sort]] || "").toLowerCase(); y = String(b[textCols[sort]] || "").toLowerCase(); if (!x && y) return 1; if (x && !y) return -1; return x < y ? -mul : x > y ? mul : 0; }
+    if (numCols[sort]) { x = a[numCols[sort]] || 0; y = b[numCols[sort]] || 0; return (x - y) * mul; }
+    var col = dateCols[sort] || "lastSeenAt";
+    x = a[col] ? Date.parse(a[col]) : 0; y = b[col] ? Date.parse(b[col]) : 0;
+    return (x - y) * mul;
+  });
+  return rows;
+}
+
+function handleAdminUserList(req, res, url) {
+  var q = url.searchParams;
+  return loadUserSummaries().then(function (list) {
+    var rows = sortUsers(filterUsers(list, q), q);
+    var pg = paginate(rows, q, 25);
+    var goals = {}, diets = {};
+    list.forEach(function (u) { if (u.goal) goals[u.goal] = true; if (u.dietStyle) diets[u.dietStyle] = true; });
+    return mapLimit(pg.rows, 5, withLocation).then(function (users) {
+      sendJSON(res, 200, {
+        users: users, total: pg.total, page: pg.page, pageSize: pg.pageSize, pages: pg.pages,
+        counts: {
+          all: list.length,
+          accounts: list.filter(function (u) { return u.type === "account"; }).length,
+          anon: list.filter(function (u) { return u.type === "anon"; }).length,
+          disabled: list.filter(function (u) { return u.disabled; }).length
+        },
+        facets: { goals: Object.keys(goals).sort(), diets: Object.keys(diets).sort() }
+      });
+    });
   });
 }
 
-function handleAdminUserDetail(req, res, uid) {
-  if (!requireAdmin(req, res)) return;
-  Promise.all([
-    dbGetDoc("data/users/" + uid + "/prefs"),
-    dbGetDoc("data/users/" + uid + "/dishes"),
-    dbGetDoc("data/users/" + uid + "/plannedWeeks"),
-    dbGetDoc("data/users/" + uid + "/meta")
-  ]).then(function (results) {
-    var meta = results[3].exists ? results[3].value : null;
-    var locationPromise = (meta && meta.lastIp) ? resolveIpLocation(meta.lastIp) : Promise.resolve(null);
-    return locationPromise.then(function (location) {
-      sendJSON(res, 200, {
-        prefs: results[0].exists ? results[0].value : null,
-        dishes: results[1].exists ? results[1].value : null,
-        plannedWeeks: results[2].exists ? results[2].value : null,
-        lastSeenAt: meta ? meta.lastSeenAt : null,
-        location: location
+// ---- gebruikers: gegevens controleren en aanpassen ----
+var PREF_MEALTYPES = ["Ontbijt", "Lunch", "Diner", "Snack"];
+function numericPref(v, label, min, max, errors) {
+  if (v === "" || v === null) return "";
+  var n = Number(v);
+  if (!isFinite(n) || n < min || n > max) { errors.push(label + " moet tussen " + min + " en " + max + " liggen (of leeg zijn)."); return undefined; }
+  return String(n);
+}
+function stringList(v, label, max, errors) {
+  if (!Array.isArray(v) || v.length > 40) { errors.push(label + " moet een lijst van maximaal 40 items zijn."); return undefined; }
+  return v.map(function (x) { return cleanText(x, max); }).filter(Boolean);
+}
+function sanitizePrefsPatch(patch) {
+  var clean = {}, errors = [], ignored = [];
+  Object.keys(patch && typeof patch === "object" ? patch : {}).forEach(function (k) {
+    var v = patch[k], r;
+    switch (k) {
+      case "name": clean.name = cleanText(v, 40); break;
+      case "level": case "activityLevel": case "dietStyle": clean[k] = cleanText(v, 40); break;
+      case "gender": clean.gender = cleanText(v, 20); break;
+      case "exclude": clean.exclude = cleanText(v, 300); break;
+      case "goal":
+        if (typeof v !== "string" || !GOAL_TARGETS[v]) errors.push("Onbekend doel: " + cleanText(v, 60) + "."); else clean.goal = v;
+        break;
+      case "count":
+        if (!Number.isInteger(Number(v)) || Number(v) < 1 || Number(v) > 14) errors.push("Aantal gerechten moet een geheel getal van 1 tot en met 14 zijn."); else clean.count = Number(v);
+        break;
+      case "heightCm": r = numericPref(v, "Lengte", 100, 250, errors); if (r !== undefined) clean.heightCm = r; break;
+      case "weightKg": r = numericPref(v, "Gewicht", 30, 300, errors); if (r !== undefined) clean.weightKg = r; break;
+      case "age": r = numericPref(v, "Leeftijd", 10, 100, errors); if (r !== undefined) clean.age = r; break;
+      case "cuisines": case "flavors": case "equipment":
+        r = stringList(v, k, 40, errors); if (r !== undefined) clean[k] = r; break;
+      case "mealTypes":
+        r = stringList(v, "Maaltijdsoorten", 20, errors);
+        if (r !== undefined) {
+          if (r.some(function (x) { return PREF_MEALTYPES.indexOf(x) === -1; })) errors.push("Maaltijdsoorten mogen alleen " + PREF_MEALTYPES.join(", ") + " zijn.");
+          else clean.mealTypes = r;
+        }
+        break;
+      default: ignored.push(k);
+    }
+  });
+  return { clean: clean, errors: errors, ignored: ignored };
+}
+function randomPassword() { return crypto.randomBytes(9).toString("base64url"); }
+function createResetLink(req, email) {
+  var token = crypto.randomBytes(24).toString("hex");
+  return dbSetDoc("auth/resets/" + token, { email: email, expiresAt: Date.now() + RESET_TOKEN_TTL_MS, used: false }).then(function () {
+    return { token: token, link: "https://" + req.headers.host + "/?reset=" + token };
+  });
+}
+function writeAdminNote(uid, note) {
+  var text = cleanNote(note, 500);
+  return text ? dbSetDoc("adminMeta/" + uid, { note: text }) : dbDeleteDoc("adminMeta/" + uid);
+}
+function mergePrefs(uid, clean) {
+  return dbGetDoc("data/users/" + uid + "/prefs").then(function (r) {
+    var cur = r.exists && r.value && typeof r.value === "object" ? r.value : {};
+    return dbSetDoc("data/users/" + uid + "/prefs", Object.assign({}, cur, clean));
+  });
+}
+function requireBody(req) {
+  return readBody(req).catch(function () { throw HttpError(400, "bad_request", "Ongeldige aanvraag."); });
+}
+
+function handleAdminUserCreate(req, res) {
+  return requireBody(req).then(function (body) {
+    var email = normalizeEmail(body.email);
+    if (!EMAIL_RE.test(email) || email.length > 200) throw HttpError(400, "bad_request", "Vul een geldig e-mailadres in.");
+    var generated = body.password === undefined || body.password === null || body.password === "";
+    var password = generated ? randomPassword() : String(body.password);
+    if (password.length < 8 || password.length > 200) throw HttpError(400, "bad_request", "Wachtwoord moet tussen 8 en 200 tekens zijn.");
+    var patch = Object.assign({}, body.prefs && typeof body.prefs === "object" ? body.prefs : {});
+    if (body.name !== undefined) patch.name = body.name;
+    var pr = sanitizePrefsPatch(patch);
+    if (pr.errors.length) throw HttpError(400, "bad_request", pr.errors.join(" "));
+    return dbGetDoc("auth/users/" + email).then(function (existing) {
+      if (existing.exists) throw HttpError(409, "conflict", "Er bestaat al een account met dit e-mailadres.");
+      var uid = "u_" + crypto.randomBytes(12).toString("hex");
+      var record = makePasswordRecord(password);
+      return dbSetDoc("auth/users/" + email, { uid: uid, salt: record.salt, hash: record.hash, createdAt: new Date().toISOString(), createdBy: "admin", loginCount: 0 }).then(function () {
+        var jobs = [];
+        if (Object.keys(pr.clean).length) jobs.push(mergePrefs(uid, pr.clean));
+        if (body.note) jobs.push(writeAdminNote(uid, body.note));
+        return Promise.all(jobs);
+      }).then(function () {
+        invalidateSummaries();
+        auditLog(req, "gebruiker.aanmaken", uid, { email: email, wachtwoord: generated ? "gegenereerd" : "opgegeven" });
+        var out = { generated: generated };
+        var mail = Promise.resolve();
+        if (body.sendResetLink === true) {
+          mail = createResetLink(req, email).then(function (r) {
+            out.resetLink = r.link;
+            return sendResetEmail(email, r.link).then(function () { out.emailSent = true; }, function (e) { out.emailSent = false; out.emailError = e.message; });
+          });
+        }
+        return mail.then(function () { return needSummary(uid); }).then(function (user) {
+          out.user = user;
+          if (generated) out.password = password;   // wordt maar één keer getoond
+          sendJSON(res, 200, out);
+        });
       });
     });
-  }).catch(function (err) {
-    sendJSON(res, 500, { code: "error", message: "Kon gebruikersdetail niet ophalen: " + err.message });
+  });
+}
+
+function handleAdminUserUpdate(req, res, uid) {
+  return Promise.all([needSummary(uid), requireBody(req)]).then(function (r) {
+    var user = r[0], body = r[1];
+    var changes = [], sessionsOut = false;
+    var patch = Object.assign({}, body.prefs && typeof body.prefs === "object" ? body.prefs : {});
+    if (body.name !== undefined) patch.name = body.name;
+    var pr = sanitizePrefsPatch(patch);
+    if (pr.errors.length) throw HttpError(400, "bad_request", pr.errors.join(" "));
+
+    var newEmail = null;
+    if (body.email !== undefined && normalizeEmail(body.email) !== user.email) {
+      if (user.type !== "account") throw HttpError(400, "bad_request", "Anonieme gebruikers hebben geen e-mailadres.");
+      newEmail = normalizeEmail(body.email);
+      if (!EMAIL_RE.test(newEmail) || newEmail.length > 200) throw HttpError(400, "bad_request", "Vul een geldig e-mailadres in.");
+    }
+    var newPassword = null;
+    if (body.newPassword !== undefined && body.newPassword !== "") {
+      if (user.type !== "account") throw HttpError(400, "bad_request", "Anonieme gebruikers hebben geen wachtwoord.");
+      newPassword = String(body.newPassword);
+      if (newPassword.length < 8 || newPassword.length > 200) throw HttpError(400, "bad_request", "Wachtwoord moet tussen 8 en 200 tekens zijn.");
+    }
+    if (body.note !== undefined && typeof body.note !== "string") throw HttpError(400, "bad_request", "De notitie moet tekst zijn.");
+
+    var step = Promise.resolve();
+    if (newEmail || newPassword) {
+      step = dbGetDoc("auth/users/" + user.email).then(function (acc) {
+        if (!acc.exists) throw HttpError(404, "not_found", "Account niet gevonden.");
+        var doc = Object.assign({}, acc.value);
+        if (newPassword) { var rec = makePasswordRecord(newPassword); doc.salt = rec.salt; doc.hash = rec.hash; changes.push("wachtwoord"); }
+        if (!newEmail) return dbSetDoc("auth/users/" + user.email, doc);
+        return dbGetDoc("auth/users/" + newEmail).then(function (clash) {
+          if (clash.exists) throw HttpError(409, "conflict", "Er bestaat al een account met dit e-mailadres.");
+          return dbSetDoc("auth/users/" + newEmail, doc).then(function () {
+            return dbDeleteDoc("auth/users/" + user.email);
+          }).then(function () {
+            return dbGetDoc("data/users/" + uid + "/meta");
+          }).then(function (m) {
+            if (m.exists && m.value) return dbSetDoc("data/users/" + uid + "/meta", Object.assign({}, m.value, { email: newEmail }));
+          }).then(function () { changes.push("e-mailadres"); });
+        });
+      }).then(function () {
+        sessionsOut = true;
+        return updateBlocked(function (b) { b.invalidBefore[uid] = Date.now(); });
+      });
+    }
+    return step.then(function () {
+      var jobs = [];
+      if (Object.keys(pr.clean).length) { jobs.push(mergePrefs(uid, pr.clean)); Object.keys(pr.clean).forEach(function (k) { changes.push("voorkeur: " + k); }); }
+      if (body.note !== undefined && cleanNote(body.note, 500) !== user.note) { jobs.push(writeAdminNote(uid, body.note)); changes.push("notitie"); }
+      return Promise.all(jobs);
+    }).then(function () {
+      invalidateSummaries();
+      if (changes.length) auditLog(req, "gebruiker.wijzigen", uid, { velden: changes, emailVan: newEmail ? user.email : undefined, emailNaar: newEmail || undefined, sessiesUitgelogd: sessionsOut });
+      return needSummary(uid);
+    }).then(function (updated) {
+      sendJSON(res, 200, { user: updated, changes: changes, ignored: pr.ignored, sessionsSignedOut: sessionsOut });
+    });
+  });
+}
+
+function listsOfUser(uid) {
+  return dbGetDoc("listsIndex/" + uid).then(function (r) {
+    var tokens = r.exists && r.value && Array.isArray(r.value.tokens) ? r.value.tokens : [];
+    return mapLimit(tokens, 5, function (t) {
+      return dbGetDoc("lists/" + t).then(function (d) { return d.exists && d.value ? listSummary(t, d.value) : null; });
+    }).then(function (arr) { return arr.filter(Boolean); });
+  });
+}
+function listSummary(token, doc) {
+  var c = listCounts(doc);
+  return { token: token, title: doc.title, ownerUid: doc.ownerUid, itemCount: (doc.items || []).length, basket: c.basket, skip: c.skip,
+    createdAt: doc.createdAt ? new Date(doc.createdAt).toISOString() : null, updatedAt: doc.updatedAt ? new Date(doc.updatedAt).toISOString() : null,
+    expiresAt: doc.expiresAt ? new Date(doc.expiresAt).toISOString() : null, expired: !!(doc.expiresAt && doc.expiresAt < Date.now()), rev: doc.rev || 1 };
+}
+
+function handleAdminUserDetail(req, res, uid) {
+  return needSummary(uid).then(function (user) {
+    return Promise.all([
+      dbGetDoc("data/users/" + uid + "/prefs"), dbGetDoc("data/users/" + uid + "/dishes"), dbGetDoc("data/users/" + uid + "/plannedWeeks"),
+      listsOfUser(uid), getRecentLogs(LOG_CAP), withLocation(user)
+    ]).then(function (r) {
+      var logs = r[4].filter(function (l) { return l.uid === uid; }).slice(0, 50).map(cleanLogRow);
+      sendJSON(res, 200, {
+        user: r[5],
+        prefs: r[0].exists ? r[0].value : null,
+        dishes: r[1].exists ? r[1].value : null,
+        plannedWeeks: r[2].exists ? r[2].value : null,
+        lists: r[3],
+        logs: logs
+      });
+    });
+  });
+}
+
+function deleteUserEverywhere(user) {
+  var uid = user.uid;
+  return dbGetDoc("listsIndex/" + uid).then(function (r) {
+    var tokens = r.exists && r.value && Array.isArray(r.value.tokens) ? r.value.tokens : [];
+    return Promise.all(tokens.map(function (t) { return dbDeleteDoc("lists/" + t); }));
+  }).then(function () {
+    var paths = ["data/users/" + uid + "/prefs", "data/users/" + uid + "/dishes", "data/users/" + uid + "/plannedWeeks", "data/users/" + uid + "/meta", "listsIndex/" + uid, "adminMeta/" + uid];
+    if (user.email) paths.push("auth/users/" + user.email);
+    return Promise.all(paths.map(dbDeleteDoc));
+  }).then(function () {
+    // Een verwijderd account houdt zijn 'ingetrokken'-stempel: zijn uid komt nooit terug, dus oude sessies blijven ongeldig.
+    // Bij een anonieme gebruiker ruimen we alles op: dat ID is niet te controleren en kan gewoon opnieuw beginnen.
+    return updateBlocked(function (b) {
+      delete b.uids[uid];
+      if (user.email) b.invalidBefore[uid] = Date.now(); else delete b.invalidBefore[uid];
+    });
+  }).then(function () { invalidateSummaries(); });
+}
+
+function handleAdminUserAction(req, res, uid, action) {
+  return needSummary(uid).then(function (user) {
+    return requireBody(req).then(function (body) {
+      switch (action) {
+        case "disable":
+          return updateBlocked(function (b) { b.uids[uid] = { at: new Date().toISOString(), reason: cleanText(body.reason, 200) }; }).then(function () {
+            invalidateSummaries(); auditLog(req, "gebruiker.blokkeren", uid, { email: user.email, reden: cleanText(body.reason, 200) || undefined });
+            sendJSON(res, 200, { ok: true });
+          });
+        case "enable":
+          return updateBlocked(function (b) { delete b.uids[uid]; }).then(function () {
+            invalidateSummaries(); auditLog(req, "gebruiker.deblokkeren", uid, { email: user.email });
+            sendJSON(res, 200, { ok: true });
+          });
+        case "logout":
+          return updateBlocked(function (b) { b.invalidBefore[uid] = Date.now(); }).then(function () {
+            auditLog(req, "gebruiker.uitloggen", uid, { email: user.email });
+            sendJSON(res, 200, { ok: true });
+          });
+        case "reset-password": {
+          if (user.type !== "account") throw HttpError(400, "bad_request", "Anonieme gebruikers hebben geen wachtwoord.");
+          var generated = body.password === undefined || body.password === null || body.password === "";
+          var password = generated ? randomPassword() : String(body.password);
+          if (password.length < 8 || password.length > 200) throw HttpError(400, "bad_request", "Wachtwoord moet tussen 8 en 200 tekens zijn.");
+          return dbGetDoc("auth/users/" + user.email).then(function (acc) {
+            var rec = makePasswordRecord(password);
+            return dbSetDoc("auth/users/" + user.email, Object.assign({}, acc.value, { salt: rec.salt, hash: rec.hash }));
+          }).then(function () {
+            return updateBlocked(function (b) { b.invalidBefore[uid] = Date.now(); });
+          }).then(function () {
+            auditLog(req, "gebruiker.wachtwoord-resetten", uid, { email: user.email, wachtwoord: generated ? "gegenereerd" : "opgegeven" });
+            sendJSON(res, 200, generated ? { ok: true, password: password } : { ok: true });
+          });
+        }
+        case "reset-link": {
+          if (user.type !== "account") throw HttpError(400, "bad_request", "Anonieme gebruikers hebben geen wachtwoord.");
+          return createResetLink(req, user.email).then(function (r) {
+            var out = { link: r.link, expiresInMinutes: Math.round(RESET_TOKEN_TTL_MS / 60000) };
+            var mail = Promise.resolve();
+            if (body.send === true) {
+              mail = sendResetEmail(user.email, r.link).then(function () { out.emailSent = true; }, function (e) { out.emailSent = false; out.emailError = e.message; });
+            }
+            return mail.then(function () {
+              auditLog(req, "gebruiker.resetlink", uid, { email: user.email, verstuurd: body.send === true ? out.emailSent === true : false });
+              sendJSON(res, 200, out);
+            });
+          });
+        }
+        case "clear-data": {
+          var what = body.what;
+          var map = { dishes: ["dishes"], plannedWeeks: ["plannedWeeks"], prefs: ["prefs"], all: ["dishes", "plannedWeeks", "prefs"] };
+          if (!map[what]) throw HttpError(400, "bad_request", "Kies wat er gewist moet worden: dishes, plannedWeeks, prefs of all.");
+          return Promise.all(map[what].map(function (sp) { return dbDeleteDoc("data/users/" + uid + "/" + sp); })).then(function () {
+            invalidateSummaries(); auditLog(req, "gebruiker.gegevens-wissen", uid, { wat: what });
+            sendJSON(res, 200, { ok: true });
+          });
+        }
+        case "delete": {
+          var expected = user.email || user.uid;
+          if (body.confirm !== expected) throw HttpError(400, "confirm_required", "Bevestig het verwijderen door het e-mailadres (of de uid) exact in te vullen.");
+          return deleteUserEverywhere(user).then(function () {
+            auditLog(req, "gebruiker.verwijderen", uid, { email: user.email, type: user.type });
+            sendJSON(res, 200, { ok: true });
+          });
+        }
+        default:
+          throw HttpError(404, "not_found", "Onbekende actie.");
+      }
+    });
+  });
+}
+
+function handleAdminUserExport(req, res, uid) {
+  return needSummary(uid).then(function (user) {
+    return Promise.all([
+      dbGetDoc("data/users/" + uid + "/prefs"), dbGetDoc("data/users/" + uid + "/dishes"), dbGetDoc("data/users/" + uid + "/plannedWeeks"),
+      dbListDocs("lists/")
+    ]).then(function (r) {
+      var lists = r[3].filter(function (d) { return d.value && d.value.ownerUid === uid; }).map(function (d) { return { token: d.path.slice(6), title: d.value.title, items: d.value.items, state: d.value.state, createdAt: d.value.createdAt, updatedAt: d.value.updatedAt }; });
+      var data = JSON.stringify({ exportedAt: new Date().toISOString(), user: user, prefs: r[0].exists ? r[0].value : null, dishes: r[1].exists ? r[1].value : null, plannedWeeks: r[2].exists ? r[2].value : null, sharedLists: lists }, null, 2);
+      auditLog(req, "gebruiker.exporteren", uid, { email: user.email });
+      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Content-Disposition": "attachment; filename=\"balanza-" + uid + ".json\"", "Cache-Control": "no-store", "Content-Length": Buffer.byteLength(data) });
+      res.end(data);
+    });
+  });
+}
+
+function handleAdminUserBulk(req, res) {
+  return requireBody(req).then(function (body) {
+    var uids = Array.isArray(body.uids) ? body.uids.filter(function (u) { return typeof u === "string"; }) : [];
+    var action = body.action;
+    if (!uids.length || uids.length > 200) throw HttpError(400, "bad_request", "Kies tussen 1 en 200 gebruikers.");
+    if (["disable", "enable", "logout", "delete"].indexOf(action) === -1) throw HttpError(400, "bad_request", "Onbekende actie.");
+    if (action === "delete" && body.confirm !== "VERWIJDEREN") throw HttpError(400, "confirm_required", "Bevestig het verwijderen door VERWIJDEREN in te vullen.");
+    return loadUserSummaries().then(function (list) {
+      var byUid = {};
+      list.forEach(function (u) { byUid[u.uid] = u; });
+      var found = uids.filter(function (u) { return byUid[u]; });
+      var missing = uids.filter(function (u) { return !byUid[u]; });
+      var step = Promise.resolve();
+      if (action === "disable") step = updateBlocked(function (b) { found.forEach(function (u) { b.uids[u] = { at: new Date().toISOString(), reason: cleanText(body.reason, 200) }; }); });
+      else if (action === "enable") step = updateBlocked(function (b) { found.forEach(function (u) { delete b.uids[u]; }); });
+      else if (action === "logout") step = updateBlocked(function (b) { found.forEach(function (u) { b.invalidBefore[u] = Date.now(); }); });
+      else step = mapLimit(found, 3, function (u) { return deleteUserEverywhere(byUid[u]); });
+      return step.then(function () {
+        invalidateSummaries();
+        auditLog(req, "gebruikers.bulk-" + action, null, { aantal: found.length, uids: found.slice(0, 50) });
+        sendJSON(res, 200, { ok: true, done: found.length, missing: missing });
+      });
+    });
+  });
+}
+
+// ---- logboek ----
+function logType(l) { return l.type || (l.action === "tips" ? "tips" : "generate"); }
+function cleanLogRow(l) {
+  var o = Object.assign({}, l);
+  delete o._id;
+  o.type = logType(l);
+  return o;
+}
+function handleAdminLogs(req, res, url) {
+  var q = url.searchParams;
+  return getRecentLogs(LOG_CAP).then(function (raw) {
+    var all = raw.map(cleanLogRow);
+    var text = (q.get("q") || "").trim().toLowerCase();
+    var type = q.get("type") || "", status = q.get("status") || "", action = q.get("action") || "";
+    var uid = (q.get("uid") || "").trim(), ip = (q.get("ip") || "").trim();
+    var from = parseDateBound(q.get("from"), false), to = parseDateBound(q.get("to"), true);
+    var minMs = parseInt(q.get("minMs") || "", 10);
+    var rows = all.filter(function (l) {
+      if (type && l.type !== type) return false;
+      if (status === "ok" && !l.ok) return false;
+      if (status === "error" && l.ok) return false;
+      if (action && l.action !== action) return false;
+      if (uid && l.uid !== uid) return false;
+      if (ip && l.ip !== ip) return false;
+      var t = Date.parse(l.ts);
+      if (from !== null && !(t >= from)) return false;
+      if (to !== null && !(t <= to)) return false;
+      if (isFinite(minMs) && !((l.durationMs || 0) >= minMs)) return false;
+      if (text && [l.type, l.action, l.error, l.ip, l.uid, l.email, l.status].join(" ").toLowerCase().indexOf(text) === -1) return false;
+      return true;
+    });
+    rows.sort(function (a, b) { return Date.parse(b.ts) - Date.parse(a.ts); });
+    if (q.get("format") === "csv") {
+      var csv = toCsv(rows, ["ts", "type", "action", "ok", "status", "durationMs", "error", "uid", "email", "ip"]);
+      auditLog(req, "logboek.exporteren", null, { rijen: rows.length });
+      res.writeHead(200, { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": "attachment; filename=\"balanza-logboek.csv\"", "Cache-Control": "no-store" });
+      return res.end("\uFEFF" + csv);
+    }
+    var types = {}, actions = {};
+    all.forEach(function (l) { types[l.type] = (types[l.type] || 0) + 1; actions[l.action || "onbekend"] = (actions[l.action || "onbekend"] || 0) + 1; });
+    var pg = paginate(rows, q, 50);
+    sendJSON(res, 200, { logs: pg.rows, total: pg.total, page: pg.page, pageSize: pg.pageSize, pages: pg.pages, capped: all.length >= LOG_CAP, facets: { types: types, actions: actions } });
+  });
+}
+
+function handleAdminAudit(req, res, url) {
+  var q = url.searchParams;
+  return cappedReadAll("audit", "audit", AUDIT_CAP).then(function (raw) {
+    var all = raw.map(function (e) { var o = Object.assign({}, e); delete o._id; return o; });
+    var text = (q.get("q") || "").trim().toLowerCase(), action = q.get("action") || "";
+    var from = parseDateBound(q.get("from"), false), to = parseDateBound(q.get("to"), true);
+    var rows = all.filter(function (e) {
+      if (action && e.action !== action) return false;
+      var t = Date.parse(e.ts);
+      if (from !== null && !(t >= from)) return false;
+      if (to !== null && !(t <= to)) return false;
+      if (text && [e.action, e.target, e.ip, JSON.stringify(e.detail || {})].join(" ").toLowerCase().indexOf(text) === -1) return false;
+      return true;
+    });
+    rows.sort(function (a, b) { return Date.parse(b.ts) - Date.parse(a.ts); });
+    var actions = {};
+    all.forEach(function (e) { actions[e.action] = (actions[e.action] || 0) + 1; });
+    var pg = paginate(rows, q, 50);
+    sendJSON(res, 200, { entries: pg.rows, total: pg.total, page: pg.page, pageSize: pg.pageSize, pages: pg.pages, facets: { actions: actions } });
+  });
+}
+
+// ---- statistieken en systeemstatus ----
+function handleAdminStats(req, res) {
+  return Promise.all([loadUserSummaries(), getUsageToday(), getUsageHistory(14), getRecentLogs(LOG_CAP), dbListDocs("lists/"), getSettings()]).then(function (r) {
+    var users = r[0], logs = r[3].map(cleanLogRow), now = Date.now();
+    function within(ts, days) { var t = ts ? Date.parse(ts) : NaN; return isFinite(t) && now - t <= days * DAY_MS; }
+    var accounts = users.filter(function (u) { return u.type === "account"; });
+    var today = todayKey(), days = lastDayKeys(14);
+    var ai = logs.filter(function (l) { return l.type === "generate" || l.type === "tips"; });
+    var todays = ai.filter(function (l) { return l.ts && l.ts.slice(0, 10) === today; });
+    var durations = todays.map(function (l) { return l.durationMs || 0; }).sort(function (a, b) { return a - b; });
+    var byAction = {};
+    todays.forEach(function (l) { var a = l.action || "onbekend"; byAction[a] = (byAction[a] || 0) + 1; });
+    var perDay = days.map(function (d) {
+      var rows = ai.filter(function (l) { return l.ts && l.ts.slice(0, 10) === d; });
+      return { day: d, total: rows.length, errors: rows.filter(function (l) { return !l.ok; }).length };
+    });
+    var authToday = logs.filter(function (l) { return l.type === "auth" && l.ts && l.ts.slice(0, 10) === today; });
+    var lists = r[4];
+    sendJSON(res, 200, {
+      generatedAt: new Date().toISOString(),
+      users: {
+        total: users.length, accounts: accounts.length, anon: users.length - accounts.length, disabled: users.filter(function (u) { return u.disabled; }).length,
+        new7d: accounts.filter(function (u) { return within(u.createdAt, 7); }).length, new30d: accounts.filter(function (u) { return within(u.createdAt, 30); }).length,
+        active24h: users.filter(function (u) { return within(u.lastSeenAt, 1); }).length, active7d: users.filter(function (u) { return within(u.lastSeenAt, 7); }).length, active30d: users.filter(function (u) { return within(u.lastSeenAt, 30); }).length
+      },
+      usage: { today: r[1], cap: liveLimits.dailyGenerateCap, history: r[2] },
+      requests: {
+        today: todays.length, errorsToday: todays.filter(function (l) { return !l.ok; }).length,
+        errorRate: todays.length ? Math.round(todays.filter(function (l) { return !l.ok; }).length / todays.length * 1000) / 10 : 0,
+        avgDurationMs: durations.length ? Math.round(durations.reduce(function (s, d) { return s + d; }, 0) / durations.length) : 0,
+        p95DurationMs: durations.length ? durations[Math.min(durations.length - 1, Math.floor(durations.length * 0.95))] : 0,
+        byAction: byAction, perDay: perDay,
+        recentErrors: ai.filter(function (l) { return !l.ok; }).sort(function (a, b) { return Date.parse(b.ts) - Date.parse(a.ts); }).slice(0, 8)
+      },
+      auth: {
+        loginsToday: authToday.filter(function (l) { return l.action === "login" && l.ok; }).length,
+        failedLoginsToday: authToday.filter(function (l) { return l.action === "login" && !l.ok; }).length,
+        registrationsToday: authToday.filter(function (l) { return l.action === "register" && l.ok; }).length
+      },
+      lists: { total: lists.length, active: lists.filter(function (d) { return !(d.value && d.value.expiresAt && d.value.expiresAt < now); }).length },
+      logCapped: logs.length >= LOG_CAP,
+      maintenance: r[5].maintenance.enabled
+    });
+  });
+}
+
+var SERVER_STARTED_AT = new Date().toISOString();
+function handleAdminSystem(req, res) {
+  var t0 = Date.now();
+  return dbGetDoc("settings/app").then(function () { return { ok: true, ms: Date.now() - t0 }; }, function (e) { return { ok: false, ms: Date.now() - t0, error: e.message }; }).then(function (storage) {
+    var mem = process.memoryUsage();
+    var checks = [
+      { key: "storage", label: "Opslag", ok: storage.ok && mongoConnected, detail: (mongoConnected ? "MongoDB (blijvend)" : "Lokaal bestand: data gaat verloren bij een herstart of nieuwe deploy") + (storage.ok ? ", antwoordtijd " + storage.ms + " ms" : ", FOUT: " + storage.error) },
+      { key: "anthropic", label: "AI-sleutel (ANTHROPIC_API_KEY)", ok: !!ANTHROPIC_API_KEY, detail: ANTHROPIC_API_KEY ? "ingesteld" : "niet ingesteld: genereren werkt niet" },
+      { key: "adminPassword", label: "Beheerderswachtwoord", ok: ADMIN_PASSWORD.length >= 12, detail: ADMIN_PASSWORD.length >= 12 ? "sterk genoeg" : "korter dan 12 tekens: kies een langer wachtwoord (ADMIN_PASSWORD)" },
+      { key: "sessionSecret", label: "Sessiegeheim (SESSION_SECRET)", ok: !!process.env.SESSION_SECRET, detail: process.env.SESSION_SECRET ? "vast ingesteld" : "niet ingesteld: iedereen wordt uitgelogd bij een herstart" },
+      { key: "unsplash", label: "Foto's (UNSPLASH_ACCESS_KEY)", ok: !!UNSPLASH_ACCESS_KEY, optional: true, detail: UNSPLASH_ACCESS_KEY ? "ingesteld" : "niet ingesteld: gerechten krijgen geen foto" },
+      { key: "resend", label: "E-mail (RESEND_API_KEY)", ok: !!RESEND_API_KEY, optional: true, detail: RESEND_API_KEY ? "ingesteld" : "niet ingesteld: geen wachtwoord-vergeten-mails of uitnodigingen per e-mail" }
+    ];
+    sendJSON(res, 200, {
+      checks: checks,
+      info: {
+        node: process.version, startedAt: SERVER_STARTED_AT, uptimeSec: Math.round(process.uptime()), serverTime: new Date().toISOString(),
+        memoryMb: Math.round(mem.rss / 1048576), storage: mongoConnected ? "mongodb" : "file", model: ANTHROPIC_MODEL, tipsModel: TIPS_MODEL,
+        bringEndpoint: BRING_IMPORT_ENDPOINT, logCap: LOG_CAP, auditCap: AUDIT_CAP
+      },
+      limits: liveLimits
+    });
+  });
+}
+
+// ---- instellingen ----
+function settingsPayload(s) {
+  return { settings: s, effectiveModules: effectiveModules(s), moduleDefs: MODULE_DEFS, limitDefs: LIMIT_DEFS, maintenanceOffModules: MAINTENANCE_OFF_MODULES,
+    prefOptions: { goals: Object.keys(GOAL_TARGETS), diets: TIP_DIETS, mealTypes: PREF_MEALTYPES } };
+}
+function diffSettings(cur, next) {
+  var out = [];
+  if (cur.authRequired !== next.authRequired) out.push({ sleutel: "authRequired", van: cur.authRequired, naar: next.authRequired });
+  ["modules", "limits", "maintenance", "announcement"].forEach(function (k) {
+    Object.keys(next[k]).forEach(function (kk) { if (cur[k][kk] !== next[k][kk]) out.push({ sleutel: k + "." + kk, van: cur[k][kk], naar: next[k][kk] }); });
+  });
+  return out;
+}
+function handleAdminSettingsSet(req, res) {
+  return requireBody(req).then(function (body) {
+    var v = validateSettingsPatch(body);
+    if (v.error) throw HttpError(400, "bad_request", v.error);
+    return getSettings().then(function (cur) {
+      var merged = mergeSettings(cur, v.patch);
+      if (merged.announcement.enabled && !merged.announcement.message) throw HttpError(400, "bad_request", "Vul een tekst in voor de mededeling voordat je hem aanzet.");
+      return updateSettings(v.patch).then(function (next) {
+        var diff = diffSettings(cur, next);
+        if (diff.length) auditLog(req, "instellingen.wijzigen", null, { wijzigingen: diff });
+        sendJSON(res, 200, settingsPayload(next));
+      });
+    });
+  });
+}
+
+// ---- gedeelde lijsten ----
+function handleAdminLists(req, res, url) {
+  var q = url.searchParams;
+  return Promise.all([dbListDocs("lists/"), loadUserSummaries()]).then(function (r) {
+    var owners = {};
+    r[1].forEach(function (u) { owners[u.uid] = u; });
+    var text = (q.get("q") || "").trim().toLowerCase(), status = q.get("status") || "all";
+    var rows = r[0].filter(function (d) { return d.value && Array.isArray(d.value.items); }).map(function (d) {
+      var s = listSummary(d.path.slice("lists/".length), d.value);
+      s.ownerEmail = owners[s.ownerUid] ? owners[s.ownerUid].email : null;
+      s.ownerName = owners[s.ownerUid] ? owners[s.ownerUid].name : null;
+      return s;
+    }).filter(function (s) {
+      if (status === "active" && s.expired) return false;
+      if (status === "expired" && !s.expired) return false;
+      if (text && [s.title, s.token, s.ownerUid, s.ownerEmail, s.ownerName].join(" ").toLowerCase().indexOf(text) === -1) return false;
+      return true;
+    });
+    rows.sort(function (a, b) { return Date.parse(b.updatedAt || 0) - Date.parse(a.updatedAt || 0); });
+    var pg = paginate(rows, q, 25);
+    sendJSON(res, 200, { lists: pg.rows, total: pg.total, page: pg.page, pageSize: pg.pageSize, pages: pg.pages, expiredCount: r[0].filter(function (d) { return d.value && d.value.expiresAt && d.value.expiresAt < Date.now(); }).length });
+  });
+}
+function handleAdminListDetail(req, res, token) {
+  return dbGetDoc("lists/" + token).then(function (r) {
+    if (!r.exists || !r.value) throw HttpError(404, "not_found", "Lijst niet gevonden.");
+    var doc = r.value;
+    sendJSON(res, 200, { list: listSummary(token, doc), items: (doc.items || []).map(function (it) { return { id: it.id, cat: it.cat, text: it.text, state: (doc.state || {})[it.id] || null }; }) });
+  });
+}
+function handleAdminListDelete(req, res, token) {
+  return dbGetDoc("lists/" + token).then(function (r) {
+    if (!r.exists || !r.value) throw HttpError(404, "not_found", "Lijst niet gevonden.");
+    var owner = r.value.ownerUid;
+    return dbDeleteDoc("lists/" + token).then(function () { return owner ? removeFromOwnerIndex(owner, token) : null; }).then(function () {
+      auditLog(req, "lijst.verwijderen", token, { titel: r.value.title, eigenaar: owner });
+      sendJSON(res, 200, { ok: true });
+    });
+  });
+}
+function handleAdminListCleanup(req, res) {
+  return dbListDocs("lists/").then(function (docs) {
+    var expired = docs.filter(function (d) { return d.value && d.value.expiresAt && d.value.expiresAt < Date.now(); });
+    return mapLimit(expired, 5, function (d) {
+      var token = d.path.slice("lists/".length);
+      return dbDeleteDoc(d.path).then(function () { return d.value.ownerUid ? removeFromOwnerIndex(d.value.ownerUid, token) : null; });
+    }).then(function () {
+      auditLog(req, "lijsten.opruimen", null, { verwijderd: expired.length });
+      sendJSON(res, 200, { ok: true, removed: expired.length });
+    });
+  });
+}
+
+// ---- verdeler ----
+function handleAdminApi(req, res, url) {
+  var p = url.pathname, m, method = req.method;
+  if (method === "POST" && p === "/api/admin/login") return handleAdminLogin(req, res);
+  if (!requireAdmin(req, res)) return;
+  var run = null;
+  if (method === "GET" && p === "/api/admin/me") run = function () { sendJSON(res, 200, { ok: true }); };
+  else if (method === "POST" && p === "/api/admin/logout") run = function () {
+    var auth = req.headers["authorization"] || "";
+    adminTokens.delete(auth.slice(7));
+    sendJSON(res, 200, { ok: true });
+  };
+  else if (p === "/api/admin/settings") {
+    if (method === "GET") run = function () { return getSettings().then(function (s) { sendJSON(res, 200, settingsPayload(s)); }); };
+    else if (method === "POST") run = function () { return handleAdminSettingsSet(req, res); };
+  }
+  else if (method === "GET" && p === "/api/admin/stats") run = function () { return handleAdminStats(req, res); };
+  else if (method === "GET" && p === "/api/admin/system") run = function () { return handleAdminSystem(req, res); };
+  else if (method === "GET" && p === "/api/admin/logs") run = function () { return handleAdminLogs(req, res, url); };
+  else if (method === "GET" && p === "/api/admin/audit") run = function () { return handleAdminAudit(req, res, url); };
+  else if (p === "/api/admin/users") {
+    if (method === "GET") run = function () { return handleAdminUserList(req, res, url); };
+    else if (method === "POST") run = function () { return handleAdminUserCreate(req, res); };
+  }
+  else if (method === "POST" && p === "/api/admin/users/bulk") run = function () { return handleAdminUserBulk(req, res); };
+  else if ((m = p.match(/^\/api\/admin\/users\/([A-Za-z0-9_-]{3,80})(?:\/([a-z-]+))?$/))) {
+    var uid = m[1], sub = m[2];
+    if (!sub && method === "GET") run = function () { return handleAdminUserDetail(req, res, uid); };
+    else if (!sub && method === "POST") run = function () { return handleAdminUserUpdate(req, res, uid); };
+    else if (sub === "export" && method === "GET") run = function () { return handleAdminUserExport(req, res, uid); };
+    else if (sub && method === "POST") run = function () { return handleAdminUserAction(req, res, uid, sub); };
+  }
+  else if (method === "GET" && p === "/api/admin/lists") run = function () { return handleAdminLists(req, res, url); };
+  else if (method === "POST" && p === "/api/admin/lists/cleanup") run = function () { return handleAdminListCleanup(req, res); };
+  else if ((m = p.match(/^\/api\/admin\/lists\/([A-Za-z0-9_-]{22})(?:\/(delete))?$/))) {
+    var token = m[1];
+    if (!m[2] && method === "GET") run = function () { return handleAdminListDetail(req, res, token); };
+    else if (m[2] === "delete" && method === "POST") run = function () { return handleAdminListDelete(req, res, token); };
+  }
+  if (!run) return sendJSON(res, 404, { code: "not_found", message: "Onbekend admin-eindpunt." });
+  Promise.resolve().then(run).catch(function (err) {
+    if (res.headersSent) { try { res.end(); } catch (e) {} return; }
+    sendJSON(res, err && err.status ? err.status : 500, { code: err && err.code ? err.code : "error", message: err && err.status ? err.message : "Er ging iets mis: " + (err && err.message ? err.message : "onbekende fout") });
   });
 }
 
 function handleConfig(req, res) {
-  getAuthRequired().then(function (required) {
-    sendJSON(res, 200, { authRequired: required, bringImportEndpoint: BRING_IMPORT_ENDPOINT });
-  });
-}
-
-function handleAdminSettingsGet(req, res) {
-  if (!requireAdmin(req, res)) return;
-  getAuthRequired().then(function (required) {
-    sendJSON(res, 200, { authRequired: required });
-  });
-}
-
-function handleAdminSettingsSet(req, res) {
-  if (!requireAdmin(req, res)) return;
-  readBody(req).then(function (body) {
-    if (!body || typeof body.authRequired !== "boolean") {
-      return sendJSON(res, 400, { code: "bad_request", message: "authRequired (true/false) ontbreekt." });
-    }
-    return setAuthRequired(body.authRequired).then(function () {
-      sendJSON(res, 200, { authRequired: body.authRequired });
-    });
-  }).catch(function (err) {
-    sendJSON(res, 500, { code: "error", message: "Opslaan mislukt: " + (err && err.message ? err.message : "onbekende fout") });
-  });
-}
-
-function handleAdminStats(req, res) {
-  if (!requireAdmin(req, res)) return;
-  Promise.all([dbListUserIds(), getUsageToday(), getRecentLogs(LOG_CAP)]).then(function (results) {
-    var logStats = computeLogStats(results[2]);
+  getSettings().then(function (s) {
     sendJSON(res, 200, {
-      totalUsers: results[0].length,
-      usageToday: results[1],
-      dailyCap: DAILY_GENERATE_CAP,
-      requestsToday: logStats.requestsToday,
-      errorsToday: logStats.errorsToday,
-      avgDurationMs: logStats.avgDurationMs,
-      byAction: logStats.byAction
+      authRequired: s.authRequired,
+      bringImportEndpoint: BRING_IMPORT_ENDPOINT,
+      modules: effectiveModules(s),
+      maintenance: s.maintenance.enabled ? { enabled: true, message: s.maintenance.message || "De app is tijdelijk in onderhoud." } : { enabled: false },
+      announcement: s.announcement.enabled && s.announcement.message ? { enabled: true, message: s.announcement.message, level: s.announcement.level } : { enabled: false }
     });
-  }).catch(function (err) {
-    sendJSON(res, 500, { code: "error", message: "Kon statistieken niet ophalen: " + err.message });
   });
 }
 
-function handleAdminLogs(req, res) {
-  if (!requireAdmin(req, res)) return;
-  getRecentLogs(100).then(function (logs) {
-    sendJSON(res, 200, { logs: logs });
-  }).catch(function (err) {
-    sendJSON(res, 500, { code: "error", message: "Kon logs niet ophalen: " + err.message });
-  });
-}
+// Eindpunten achter een schakelaar (zie MODULE_DEFS). Uit = een duidelijke melding, geen storing.
+var guardedRegister = moduleGuard("registration", handleAuthRegister);
+var guardedForgot = moduleGuard("passwordReset", handleForgotPassword, function (req, res) {
+  sendJSON(res, 200, { message: "Als dit e-mailadres bekend is, ontvang je een link om je wachtwoord te resetten." });   // lekt niets en verstuurt niets
+});
+var guardedReset = moduleGuard("passwordReset", handleResetPassword);
+var guardedImage = moduleGuard("images", handleImage, function (req, res) { sendJSON(res, 200, { url: null, credit: null, final: true }); });
+var guardedPhoto = moduleGuard("images", handlePhoto);
+var guardedListCreate = moduleGuard("sharing", handleListCreate);
+var guardedBring = moduleGuard("bring", handleListBring, function (req, res, s) {
+  res.writeHead(503, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" });
+  res.end(moduleOffBody("bring", s).message);
+});
 
 var server = http.createServer(function (req, res) {
   var url = new URL(req.url, "http://localhost");
 
   if (req.method === "POST" && url.pathname === "/api/generate") return handleGenerate(req, res);
   if (req.method === "POST" && url.pathname === "/api/tips") return handleTips(req, res);
-  if (req.method === "POST" && url.pathname === "/api/auth/register") return handleAuthRegister(req, res);
+  if (req.method === "POST" && url.pathname === "/api/auth/register") return guardedRegister(req, res);
   if (req.method === "POST" && url.pathname === "/api/auth/login") return handleAuthLogin(req, res);
-  if (req.method === "POST" && url.pathname === "/api/auth/forgot-password") return handleForgotPassword(req, res);
-  if (req.method === "POST" && url.pathname === "/api/auth/reset-password") return handleResetPassword(req, res);
+  if (req.method === "POST" && url.pathname === "/api/auth/forgot-password") return guardedForgot(req, res);
+  if (req.method === "POST" && url.pathname === "/api/auth/reset-password") return guardedReset(req, res);
   if (req.method === "GET" && url.pathname === "/api/db") return handleDbGet(req, res, url.searchParams);
   if (req.method === "POST" && url.pathname === "/api/db") return handleDbSet(req, res);
-  if (req.method === "GET" && url.pathname === "/api/image") return handleImage(req, res, url.searchParams);
-  if (req.method === "GET" && url.pathname === "/api/photo") return handlePhoto(req, res, url.searchParams);
-  if (req.method === "POST" && url.pathname === "/api/lists") return handleListCreate(req, res);
+  if (req.method === "GET" && url.pathname === "/api/image") return guardedImage(req, res, url.searchParams);
+  if (req.method === "GET" && url.pathname === "/api/photo") return guardedPhoto(req, res, url.searchParams);
+  if (req.method === "POST" && url.pathname === "/api/lists") return guardedListCreate(req, res);
   var listApi = url.pathname.match(/^\/api\/lists\/([A-Za-z0-9_-]{22})(?:\/(item|reset|delete))?$/);
   if (listApi) {
     if (req.method === "GET" && !listApi[2]) return handleListGet(req, res, listApi[1], url.searchParams);
@@ -2047,23 +3073,15 @@ var server = http.createServer(function (req, res) {
     if (req.method === "POST" && listApi[2] === "delete") return handleListDelete(req, res, listApi[1]);
   }
   var listBring = url.pathname.match(/^\/l\/([A-Za-z0-9_-]{22})\/(bring|bring\.json)$/);
-  if ((req.method === "GET" || req.method === "HEAD") && listBring) return handleListBring(req, res, listBring[1], listBring[2] === "bring.json", url.searchParams);
+  if ((req.method === "GET" || req.method === "HEAD") && listBring) return guardedBring(req, res, listBring[1], listBring[2] === "bring.json", url.searchParams);
   var listPage = url.pathname.match(/^\/l\/([A-Za-z0-9_-]{22})$/);
   if (req.method === "GET" && listPage) return handleListPage(req, res, listPage[1]);
   if (req.method === "GET" && url.pathname === "/manifest.json") return serveFile(req, res, "manifest.json");
   if (req.method === "GET" && url.pathname === "/sw.js") return serveFile(req, res, "sw.js");
   if (req.method === "GET" && url.pathname === "/favicon.png") return serveFile(req, res, "favicon.png");
   if (req.method === "GET" && url.pathname.indexOf("/icons/") === 0) return serveFile(req, res, url.pathname);
-  if (req.method === "POST" && url.pathname === "/api/admin/login") return handleAdminLogin(req, res);
   if (req.method === "GET" && url.pathname === "/api/config") return handleConfig(req, res);
-  if (req.method === "GET" && url.pathname === "/api/admin/settings") return handleAdminSettingsGet(req, res);
-  if (req.method === "POST" && url.pathname === "/api/admin/settings") return handleAdminSettingsSet(req, res);
-  if (req.method === "GET" && url.pathname === "/api/admin/stats") return handleAdminStats(req, res);
-  if (req.method === "GET" && url.pathname === "/api/admin/logs") return handleAdminLogs(req, res);
-  if (req.method === "GET" && url.pathname === "/api/admin/users") return handleAdminUsers(req, res);
-  if (req.method === "GET" && url.pathname.indexOf("/api/admin/users/") === 0) {
-    return handleAdminUserDetail(req, res, decodeURIComponent(url.pathname.slice("/api/admin/users/".length)));
-  }
+  if (url.pathname.indexOf("/api/admin/") === 0) return handleAdminApi(req, res, url);
   if (req.method === "GET" && url.pathname === "/admin") return serveFile(req, res, "admin.html");
   if (req.method === "GET" && (url.pathname === "/" || url.pathname === "/index.html")) return serveStatic(req, res);
 
@@ -2073,6 +3091,7 @@ var server = http.createServer(function (req, res) {
 
 server.listen(PORT, function () {
   console.log("Weekmenu app draait op http://localhost:" + PORT);
+  getSettings().catch(function () {});
   if (!ANTHROPIC_API_KEY) {
     console.warn("WAARSCHUWING: ANTHROPIC_API_KEY is niet ingesteld — genereren zal niet werken.");
   }

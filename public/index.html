@@ -63,6 +63,10 @@
     -webkit-font-smoothing: antialiased;
   }
   #app { max-width: 760px; margin: 0 auto; min-height: 100%; display: flex; flex-direction: column; }
+  .notice-bar { align-items: center; justify-content: center; gap: 12px; padding: calc(10px + env(safe-area-inset-top, 0px)) 16px 10px; font-size: 13px; line-height: 1.45; text-align: center; background: var(--surface); color: var(--ink); border-bottom: 1px solid var(--line); }
+  .notice-bar.warning { background: #3A2A10; color: #F1D9A8; border-bottom-color: #6B4E1E; }
+  :root[data-theme="light"] .notice-bar.warning { background: #FBEBC8; color: #5A3E0B; border-bottom-color: #E2C283; }
+  .notice-bar button { background: transparent; border: none; color: inherit; font-size: 17px; line-height: 1; cursor: pointer; padding: 2px 6px; opacity: 0.8; }
   header.topbar {
     position: sticky; top: 0;
     padding: calc(16px + env(safe-area-inset-top, 0px)) 20px 16px;
@@ -376,6 +380,7 @@
 </style>
 </head>
 <body>
+<div id="noticeBar" class="notice-bar" role="status" style="display:none;"></div>
 <div id="app"></div>
 <div id="busyBar" class="busybar" aria-hidden="true">
   <div class="busybar-card" role="status">
@@ -966,6 +971,7 @@
   }
 
   function fetchTipBatch() {
+    if (!moduleOn("tips")) return;
     if (tipLoading || tipFailures >= 2 || tipBatches >= TIP_MAX_BATCHES) return;
     tipLoading = true;
     tipBatches++;
@@ -1118,6 +1124,11 @@
   }
 
   function renderAuth() {
+    if (!moduleOn("registration") && authState.mode === "register") authState.mode = "login";
+    if (!moduleOn("passwordReset") && (authState.mode === "forgot" || authState.mode === "reset")) {
+      authState.mode = "login";
+      if (!authState.error) authState.error = "Een nieuw wachtwoord instellen kan op dit moment niet. Probeer het later opnieuw.";
+    }
     var app = document.getElementById("app");
     app.innerHTML = "";
     var main = document.createElement("main");
@@ -1195,7 +1206,7 @@
       pwInput.style.marginBottom = "10px";
       main.appendChild(pwInput);
 
-      if (authState.mode === "login") {
+      if (authState.mode === "login" && moduleOn("passwordReset")) {
         var forgotLink = document.createElement("button");
         forgotLink.className = "wizard-skip";
         forgotLink.style.marginBottom = "8px";
@@ -1214,16 +1225,26 @@
       submitBtn.onclick = function () { submitAuth(authState.mode === "login" ? "login" : "register"); };
       main.appendChild(submitBtn);
 
-      var toggle = document.createElement("button");
-      toggle.className = "wizard-skip";
-      toggle.style.marginTop = "14px";
-      toggle.textContent = authState.mode === "login" ? "Nog geen account? Account aanmaken" : "Al een account? Inloggen";
-      toggle.onclick = function () {
-        authState.mode = authState.mode === "login" ? "register" : "login";
-        authState.error = null; authState.info = null;
-        render();
-      };
-      main.appendChild(toggle);
+      if (moduleOn("registration")) {
+        var toggle = document.createElement("button");
+        toggle.className = "wizard-skip";
+        toggle.style.marginTop = "14px";
+        toggle.textContent = authState.mode === "login" ? "Nog geen account? Account aanmaken" : "Al een account? Inloggen";
+        toggle.onclick = function () {
+          authState.mode = authState.mode === "login" ? "register" : "login";
+          authState.error = null; authState.info = null;
+          render();
+        };
+        main.appendChild(toggle);
+      } else {
+        var noReg = document.createElement("div");
+        noReg.className = "muted";
+        noReg.id = "authNoRegistration";
+        noReg.style.marginTop = "14px";
+        noReg.style.textAlign = "center";
+        noReg.textContent = "Nieuwe accounts kunnen op dit moment niet worden aangemaakt.";
+        main.appendChild(noReg);
+      }
 
       app.appendChild(main);
       var pwField = document.getElementById("authPassword");
@@ -1925,7 +1946,9 @@
     goBtn.textContent = state.generating
       ? "Bezig met genereren… (" + formatEstimateRange(estSecs) + ")"
       : "Genereer gerechten (" + formatEstimateRange(estSecs) + ")";
+    if (!moduleOn("generate")) { goBtn.disabled = true; goBtn.textContent = "Genereren staat tijdelijk uit"; }
     goBtn.onclick = function () {
+      if (!moduleOn("images")) { goto("weeks"); generateMeals(false); return; }   // foto's staan uit: niet vragen
       var planned = plannedGenerationCount();
       var waitRange = formatEstimateRange(estimateGenerationSeconds(planned, false));
       askConfirm(
@@ -2709,7 +2732,7 @@
     pdfBtn.id = "planPdfExportBtn";
     pdfBtn.textContent = "Exporteer Week Menu";
     pdfBtn.onclick = function () { exportPlanPdf(pw); };
-    actions.appendChild(pdfBtn);
+    if (moduleOn("pdf")) actions.appendChild(pdfBtn);
     var autoBtn = document.createElement("button");
     autoBtn.className = "ghost-btn";
     autoBtn.disabled = pw.autoFilling;
@@ -3091,7 +3114,7 @@
     pdfBtn.id = "pdfExportBtn";
     pdfBtn.textContent = "Exporteer Week Menu";
     pdfBtn.onclick = function () { exportWeekPdf(week); };
-    actions.appendChild(pdfBtn);
+    if (moduleOn("pdf")) actions.appendChild(pdfBtn);
     main.appendChild(actions);
 
     week.days.forEach(function (day) {
@@ -4193,10 +4216,12 @@
       next(shoppingListText(title, needed.groups));
     }
 
-    sheetSection(body, "Samen afvinken");
-    sheetItem(body, "shareMenuWhatsApp", "chat", "Deel via WhatsApp",
-      "Stuurt een link waarmee jullie samen afvinken. Daar kun je de link ook kopi\u00ebren.",
-      function () { shareShoppingList(title, entries, trigger); });
+    if (moduleOn("sharing")) {
+      sheetSection(body, "Samen afvinken");
+      sheetItem(body, "shareMenuWhatsApp", "chat", "Deel via WhatsApp",
+        "Stuurt een link waarmee jullie samen afvinken. Daar kun je de link ook kopi\u00ebren.",
+        function () { shareShoppingList(title, entries, trigger); });
+    }
 
     sheetSection(body, "Als tekst");
     sheetItem(body, "shareMenuTextWhatsApp", "list", "Stuur als tekst via WhatsApp",
@@ -4222,11 +4247,12 @@
         });
     }
 
-    sheetSection(body, "Apps en bestanden");
-    sheetItem(body, "shareMenuBring", "basket", "Importeer in Bring!",
+    var showBring = moduleOn("sharing") && moduleOn("bring"), showPdf = moduleOn("pdf");
+    if (showBring || showPdf) sheetSection(body, "Apps en bestanden");
+    if (showBring) sheetItem(body, "shareMenuBring", "basket", "Importeer in Bring!",
       "Zet de producten in je Bring!-lijst.",
       function () { importToBring(title, entries, trigger); });
-    sheetItem(body, "shareMenuPdf", "file", "Exporteer als PDF",
+    if (showPdf) sheetItem(body, "shareMenuPdf", "file", "Exporteer als PDF",
       "Om te printen of te bewaren.",
       function () {
         if (!window.jspdf || !window.jspdf.jsPDF) { showToast("De PDF-bibliotheek is niet geladen. Controleer je verbinding en probeer het opnieuw."); return; }
@@ -4412,7 +4438,7 @@
       totalBadge.className = "tag balans";
       totalBadge.textContent = "Geschat totaal: " + formatEuro(totalLow) + " – " + formatEuro(totalHigh);
       priceRow.appendChild(totalBadge);
-    } else {
+    } else if (moduleOn("prices")) {
       var priceBtn = document.createElement("button");
       priceBtn.className = "ghost-btn";
       priceBtn.disabled = shoppingPriceLoading || !currentItemTexts.length;
@@ -6001,6 +6027,58 @@
     app.innerHTML = '<div class="empty-hint" style="padding-top:120px;">Laden…</div>';
   }
 
+  // ---------- Onderdelen die de beheerder aan of uit kan zetten, en mededelingen ----------
+  // De server dwingt de meeste onderdelen zelf af; hier verbergen we de bijbehorende knoppen, zodat niemand
+  // op iets klikt dat toch niet werkt. Onbekend (config niet geladen) telt als 'aan'.
+  function moduleOn(key) { return !window.appModules || window.appModules[key] !== false; }
+
+  function noticeDismissKey(text) {
+    var h = 0;
+    for (var i = 0; i < text.length; i++) h = ((h << 5) - h + text.charCodeAt(i)) | 0;
+    return "balanza_notice_" + h;
+  }
+  function updateNoticeBar() {
+    var bar = document.getElementById("noticeBar");
+    if (!bar) return;
+    var n = window.appNotice || {};
+    var text = "", level = "info", key = null;
+    if (n.maintenance && n.maintenance.enabled) {
+      text = String(n.maintenance.message || ""); level = "warning";                // onderhoud kun je niet wegklikken
+    } else if (n.announcement && n.announcement.enabled) {
+      text = String(n.announcement.message || ""); level = n.announcement.level === "warning" ? "warning" : "info";
+      key = noticeDismissKey(text);
+      try { if (sessionStorage.getItem(key) === "1") text = ""; } catch (e) {}
+    }
+    bar.innerHTML = "";
+    if (!text) { bar.style.display = "none"; return; }
+    var span = document.createElement("span");
+    span.textContent = text;
+    bar.appendChild(span);
+    if (key) {
+      var close = document.createElement("button");
+      close.setAttribute("aria-label", "Sluiten");
+      close.textContent = "\u00d7";
+      close.onclick = function () { try { sessionStorage.setItem(key, "1"); } catch (e) {} bar.style.display = "none"; };
+      bar.appendChild(close);
+    }
+    bar.className = "notice-bar " + level;
+    bar.style.display = "flex";
+  }
+  function applyRuntimeConfig(cfg) {
+    window.appModules = cfg && cfg.modules && typeof cfg.modules === "object" ? cfg.modules : null;
+    window.appNotice = { maintenance: cfg ? cfg.maintenance || null : null, announcement: cfg ? cfg.announcement || null : null };
+    updateNoticeBar();
+  }
+  // Komt iemand terug naar de app, dan halen we de mededeling en de schakelaars opnieuw op (hooguit elke minuut).
+  var lastConfigRefresh = Date.now();
+  if (typeof document.addEventListener === "function") {
+    document.addEventListener("visibilitychange", function () {
+      if (document.visibilityState !== "visible" || Date.now() - lastConfigRefresh < 60000) return;
+      lastConfigRefresh = Date.now();
+      fetch("/api/config").then(function (res) { return res.ok ? res.json() : null; }).then(function (cfg) { if (cfg) applyRuntimeConfig(cfg); }).catch(function () {});
+    });
+  }
+
   function bootstrapApp() {
     configLoaded = false;
     render();
@@ -6011,6 +6089,8 @@
     }).then(function (cfg) {
       window.authRequired = cfg.authRequired !== false;
       window.bringImportEndpoint = typeof cfg.bringImportEndpoint === "string" ? cfg.bringImportEndpoint : "";
+      applyRuntimeConfig(cfg);
+      lastConfigRefresh = Date.now();
       configLoaded = true;
       if (window.authToken || !window.authRequired) initPersistence();
       render();

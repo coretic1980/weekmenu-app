@@ -29,19 +29,99 @@ browser wordt verstuurd. Wie de Netwerk-tab of de paginabron van de browser
 bekijkt, ziet dus alleen losse instellingen — niet de prompt-engineering
 zelf.
 
-## Inloggen aan/uit (admin)
+## Beheer (admin)
 
-Op `/admin` staat onder "Instellingen" een schakelaar voor inloggen.
+Op `/admin` staat de beheerconsole. Je logt in met `ADMIN_PASSWORD`. Kies er een van
+minstens 12 tekens: een korter wachtwoord werkt wel, maar het overzicht en het tabblad
+Systeem tonen dan een aandachtspunt. Is er helemaal geen wachtwoord ingesteld, dan kun je
+niet inloggen. Na 10 mislukte pogingen vanaf één IP-adres in 15 minuten wordt dat
+adres tijdelijk geweigerd. De sessie blijft alleen in het browsertabblad bewaard.
+Het wachtwoord wijzig je in de omgevingsvariabelen van je host (bijvoorbeeld Render).
+
+Alle wijzigingen gelden direct, zonder herstart.
+
+| Tabblad | Wat je er doet |
+| --- | --- |
+| **Overzicht** | Kengetallen (gebruikers, actief, nieuw, generaties tegen de daglimiet, fouten, reactietijd, inloggen), grafieken van de laatste 14 dagen, laatste fouten, welke onderdelen aan staan, aandachtspunten. |
+| **Gebruikers** | Zoeken, filteren, sorteren en bladeren; gebruikers aanmaken, wijzigen, blokkeren, exporteren, wissen en verwijderen, ook meerdere tegelijk. |
+| **Activiteit** | Het verzoeklogboek met zoeken en filters (soort, uitkomst, actie, gebruiker, IP, datum, minimale duur) en CSV-export. |
+| **Gedeelde lijsten** | Alle gedeelde boodschappenlijsten bekijken, verwijderen, en verlopen lijsten opruimen. |
+| **Instellingen** | Inloggen verplicht, onderdelen aan/uit, limieten, onderhoudsmodus en een mededeling aan alle gebruikers. |
+| **Auditlog** | Wie deed wat, wanneer en vanaf welk IP-adres. Bij instellingen staat wat er veranderde (van, naar). Wachtwoorden komen hier nooit in. |
+| **Systeem** | Gezondheidscontroles (opslag, AI-sleutel, beheerderswachtwoord, sessiegeheim, optionele koppelingen), serverinfo en de geldende limieten. |
+
+### Inloggen verplicht
 
 - **Uit (standaard):** de app werkt zonder account; elke browser krijgt een anoniem profiel
-  (ID met prefix `anon_`). Accounts blijven afgeschermd — alleen `anon_`-ID's
-  worden zonder inlog geaccepteerd. Wie al is ingelogd, blijft gewoon zijn
-  eigen account gebruiken.
-- **Aan:** bezoekers moeten een account aanmaken of inloggen. Anonieme gegevens
-  blijven bewaard, maar worden niet automatisch aan een nieuw account gekoppeld.
-- De instelling staat in de database (`settings/app`). Inloggen is alleen
-  verplicht als jij dat expliciet hebt aangezet; kan de instelling door een
-  opslagfout niet worden gelezen, dan geldt veilig: inloggen verplicht.
+  (ID met prefix `anon_`). Accounts blijven afgeschermd: alleen `anon_`-ID's worden zonder
+  inlog geaccepteerd. Wie al is ingelogd, blijft gewoon zijn eigen account gebruiken.
+- **Aan:** bezoekers moeten een account aanmaken of inloggen. Anonieme gegevens blijven
+  bewaard, maar worden niet automatisch aan een nieuw account gekoppeld. De console vraagt
+  hier eerst om bevestiging.
+- Kan de instelling door een opslagfout niet worden gelezen, dan geldt veilig: inloggen verplicht.
+
+### Onderdelen aan of uit
+
+Negen onderdelen zijn los te schakelen. Een uitgezet onderdeel verdwijnt uit de app
+(de knoppen worden verborgen) en, waar aangegeven, weigert ook de server het.
+
+| Onderdeel | Afgedwongen door | Wat er gebeurt als het uit staat |
+| --- | --- | --- |
+| Gerechten genereren | server | De knop is uitgeschakeld met een uitleg; de server weigert nieuwe generaties. |
+| Kostenschatting | server | De knop 'Schat de kosten' verdwijnt. |
+| Tips tijdens het wachten | server | Er worden geen tips opgehaald. |
+| Gerechtfoto's | server | Geen foto's; de app vraagt er ook niet meer naar. |
+| Lijsten delen | server | De opties voor delen verdwijnen; tekst versturen of kopiëren blijft kunnen. |
+| Importeren in Bring! | server | De Bring!-optie verdwijnt (Bring! werkt via een gedeelde lijst). |
+| PDF-export | alleen in de app | De PDF-knoppen verdwijnen. |
+| Nieuwe accounts | server | Registreren kan niet; het inlogscherm legt dat uit. |
+| Wachtwoord vergeten | server | De link verdwijnt; de server antwoordt neutraal, zonder e-mail te sturen. |
+
+### Onderhoudsmodus en mededeling
+
+- **Onderhoudsmodus** zet tegelijk uit: genereren, kostenschatting, tips, delen, Bring! en
+  registreren. Foto's, PDF en wachtwoord-reset blijven werken. Gebruikers zien bovenin de app
+  jouw melding; die kunnen ze niet wegklikken. Het overzicht toont een snelle knop om de modus uit te zetten.
+- **Mededeling** is een balk bovenin de app (informatie of waarschuwing). Gebruikers kunnen hem
+  per bericht wegklikken, tot ze de app sluiten. Staat er ook onderhoud aan, dan gaat de
+  onderhoudsmelding voor. De app haalt de instellingen opnieuw op als iemand terugkomt
+  (hooguit één keer per minuut).
+
+### Limieten
+
+Vier limieten beschermen je AI-tegoed en zijn live aan te passen (0 blokkeert helemaal):
+generaties per dag en per uur per IP, tip-verzoeken per dag en per uur per IP. De
+omgevingsvariabelen `DAILY_GENERATE_CAP`, `PER_IP_HOURLY_CAP`, `DAILY_TIPS_CAP` en
+`TIPS_PER_IP_HOURLY` bepalen de beginwaarden.
+
+### Gebruikers beheren
+
+- **Aanmaken:** e-mailadres, optioneel een wachtwoord (laat je het leeg, dan maakt de console
+  een sterk wachtwoord dat je één keer te zien krijgt), naam, doel, dieet en een notitie die
+  alleen beheerders zien. Optioneel wordt een link gestuurd waarmee de gebruiker zelf een
+  wachtwoord kiest; dat mailen werkt alleen met `RESEND_API_KEY`. Zonder mailkoppeling krijg
+  je de link om zelf door te geven.
+- **Wijzigen:** e-mailadres, naam, notitie, wachtwoord en alle voorkeuren (alleen gewijzigde
+  velden worden opgeslagen). Een wachtwoord kun je nooit terugzien, alleen vervangen.
+- **Blokkeren:** de gebruiker kan niet meer inloggen en lopende sessies stoppen; de gegevens
+  blijven bewaard. Optioneel met een reden (alleen voor jou).
+- **Sessies:** een wachtwoord- of e-mailwijziging en 'overal uitloggen' beëindigen alle
+  lopende sessies van die gebruiker. Ook bij een verwijderd account blijven oude sessies
+  ongeldig.
+- **Exporteren, wissen, verwijderen:** een JSON-export van alle gegevens; wissen van gerechten,
+  weekplanning of voorkeuren (het account blijft); of definitief verwijderen. Verwijderen vraagt
+  dat je het e-mailadres (of het ID) exact intypt.
+- **Meerdere tegelijk:** blokkeren, deblokkeren, uitloggen of verwijderen voor maximaal 200
+  gebruikers; verwijderen vraagt om het woord `VERWIJDEREN`.
+
+### Logboeken
+
+- Het verzoeklogboek bewaart de laatste 5.000 regels, het auditlog de laatste 3.000; oudere
+  regels worden vanzelf opgeruimd. De CSV-export volgt de gekozen filters en is beveiligd
+  tegen formule-injectie in spreadsheets.
+- De instellingen en de lijst met geblokkeerde accounts staan in de database
+  (`settings/app`, `settings/blocked`). Zonder MongoDB gaan ze, net als alle andere
+  gegevens, verloren bij een herstart: zie "Blijvende opslag".
 
 ## Lokaal draaien
 
@@ -206,7 +286,8 @@ Unsplash "Production" aan (5.000 aanvragen per uur).
 
 ## Kostenbeheersing
 
-Twee env-variabelen begrenzen wat de app aan API-kosten kan maken:
+Twee env-variabelen begrenzen wat de app aan API-kosten kan maken (in de beheerconsole
+onder Instellingen zijn ze ook live aan te passen, samen met de limieten voor tips):
 
 - `PER_IP_HOURLY_CAP` (standaard 20) — max. generatie-verzoeken per uur, per IP-adres.
 - `DAILY_GENERATE_CAP` (standaard 300) — max. generatie-verzoeken per dag, voor alle gebruikers samen.
