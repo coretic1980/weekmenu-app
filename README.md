@@ -55,6 +55,23 @@ Open daarna `http://localhost:3000` in je browser.
 
 Geen `npm install` nodig — er zijn geen externe dependencies.
 
+## Wachtcarrousel met tips
+
+Tijdens het genereren toont het startscherm een carrousel met weetjes en tips
+(elke 8 seconden een nieuwe).
+
+- De tips worden in pakketjes van 8 door de AI geschreven (`POST /api/tips`),
+  afgestemd op het gekozen doel en de voedingsstijl, en steeds over andere
+  onderwerpen. Al getoonde tips worden onthouden en niet herhaald.
+- Er wordt alleen om nieuwe tips gevraagd terwijl de carrousel in beeld is:
+  ongeveer één klein verzoek per minuut, met een maximum van 10 pakketjes per keer.
+- Lukt het ophalen niet (of duurt het te lang), dan valt de carrousel terug op een
+  handgeschreven lijst van 36 tips; de app blijft gewoon werken.
+- Tips hebben een eigen, ruimere limiet (`TIPS_PER_IP_HOURLY`, `DAILY_TIPS_CAP`) en tellen
+  niet mee voor de generatielimiet. Met `ANTHROPIC_TIPS_MODEL` kun je een ander model kiezen.
+- Op de kaart staat "Algemene informatie, geen medisch advies". Let op: tips die het model schrijft kunnen
+  fouten bevatten; de kaart zegt niet dat ze door een model zijn geschreven.
+
 ## Gerechtfoto's (optioneel)
 
 De app kan een foto bij elk gerecht tonen (in de gerechtenlijst en op het
@@ -80,6 +97,15 @@ gerecht opgeslagen, dus niet steeds opnieuw aangevraagd.
   zoekterm; daarna geldt liever géén foto dan een verkeerde foto.
 - Een tijdelijke storing (bijv. de Unsplash-limiet) wordt niet als "geen foto"
   vastgelegd: er wordt later opnieuw gezocht (na 10 minuten).
+
+**Foto's in de PDF:** de weekmenu-PDF (weekplanning en menu uit ontworpen gerechten) toont bij
+elk gerecht met een foto een banner, met de fotograaf erbij (dat vraagt Unsplash). Gerechten waar
+nog geen foto aan hangt, worden tijdens het maken van de PDF alsnog opgezocht. De foto's komen
+via `GET /api/photo`: dat eindpunt haalt de afbeelding op en geeft die door aan de browser (een
+browser mag plaatjes van een andere site niet uitlezen om ze in een PDF te zetten). Het is
+streng begrensd: alleen `https://images.unsplash.com`, alleen voor ingelogde (of, als inloggen
+uit staat, anonieme) gebruikers, alleen afbeeldingen en maximaal 6 MB. Lukt het ophalen niet,
+dan krijg je gewoon de PDF zonder foto's. De PDF wordt hierdoor langer en groter.
 
 **Let op — Unsplash-limiet:** een Unsplash-app in demomodus mag 50 aanvragen
 per uur doen. Eén generatie van 28 gerechten met afbeeldingen kost er ongeveer

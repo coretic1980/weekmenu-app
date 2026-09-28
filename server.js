@@ -36,6 +36,10 @@ const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "";
 const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6";
 const DAILY_GENERATE_CAP = parseInt(process.env.DAILY_GENERATE_CAP || "300", 10);
 const PER_IP_HOURLY_CAP = parseInt(process.env.PER_IP_HOURLY_CAP || "20", 10);
+// Tips voor de wachtcarrousel: eigen limieten, zodat ze de generatielimieten niet opeten.
+const TIPS_PER_IP_HOURLY = parseInt(process.env.TIPS_PER_IP_HOURLY || "40", 10);
+const DAILY_TIPS_CAP = parseInt(process.env.DAILY_TIPS_CAP || "500", 10);
+const TIPS_MODEL = process.env.ANTHROPIC_TIPS_MODEL || ANTHROPIC_MODEL;
 const UNSPLASH_ACCESS_KEY = process.env.UNSPLASH_ACCESS_KEY || "";
 const MONGODB_URI = process.env.MONGODB_URI || "";
 const MONGODB_DB_NAME = process.env.MONGODB_DB || "weekmenu";
@@ -726,7 +730,7 @@ function minBalans(parsed, goal) {
 var BALANS_MIN_THRESHOLD = 75;
 var BALANS_MAX_ATTEMPTS = 3;
 
-function callAnthropicOnce(prompt) {
+function callAnthropicOnce(prompt, model, maxTokens) {
   return fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -735,8 +739,8 @@ function callAnthropicOnce(prompt) {
       "content-type": "application/json"
     },
     body: JSON.stringify({
-      model: ANTHROPIC_MODEL,
-      max_tokens: 64000,
+      model: model || ANTHROPIC_MODEL,
+      max_tokens: maxTokens || 64000,
       messages: [{ role: "user", content: prompt }]
     })
   }).then(function (apiRes) {
@@ -992,6 +996,114 @@ function handleDbSet(req, res) {
   });
 }
 
+// ---------- Tips voor de wachtcarrousel ----------
+// Tijdens het genereren toont de app een carrousel met weetjes en tips. Die worden in
+// kleine pakketjes (8 stuks) door de AI geschreven, zodat er steeds nieuwe bij komen.
+// Eigen eindpunt met eigen limieten: tips tellen niet mee voor de generatielimiet.
+
+// Controleert een door de AI geleverde lijst met tips en houdt alleen bruikbare items over.
+function cleanTipList(raw) {
+  var list = Array.isArray(raw) ? raw : (raw && Array.isArray(raw.tips) ? raw.tips : []);
+  var out = [], seen = {};
+  list.forEach(function (item) {
+    if (!item || typeof item !== "object") return;
+    var text = String(item.tekst || item.text || "").replace(/\s+/g, " ").trim();
+    if (text.length < 20 || text.length > 240) return;
+    var key = text.toLowerCase().slice(0, 50);
+    if (seen[key]) return;
+    seen[key] = true;
+    var type = item.type === "feit" || item.type === "balanza" ? item.type : "tip";
+    out.push({ type: type, tekst: text });
+  });
+  return out.slice(0, 12);
+}
+
+var TIP_GOALS = ["Onderhoud", "Vetverlies (spierbehoud)", "Cutting", "Spieropbouw (lean bulk)", "Atleet (prestatiegericht)"];
+var TIP_DIETS = ["Omnivoor", "Flexitarisch", "Vegetarisch", "Veganistisch"];
+var TIP_TOPICS = ["eiwit", "koolhydraten", "vetten", "vezels en groente", "verzadiging en porties", "meal prep en bewaren",
+  "slim boodschappen doen", "smaak en kruiden", "kooktechnieken", "ontbijt", "snacks", "sport en herstel", "drinken",
+  "seizoensgroenten", "Balanza-functies"];
+
+function pickRandomItems(list, n) {
+  var pool = list.slice(), out = [];
+  while (out.length < n && pool.length) out.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
+  return out;
+}
+
+// Bouwt de opdracht voor een nieuw pakket tips. Doel en voedingsstijl komen uit een vaste lijst
+// (nooit vrije tekst) en de "avoid"-lijst wordt ingekort en van regeleinden ontdaan.
+function buildTipsPrompt(p) {
+  p = p || {};
+  var goal = TIP_GOALS.indexOf(p.goal) > -1 ? p.goal : "Onderhoud";
+  var diet = TIP_DIETS.indexOf(p.dietStyle) > -1 ? p.dietStyle : "";
+  var avoid = (Array.isArray(p.avoid) ? p.avoid : []).slice(0, 30)
+    .map(function (s) { return String(s).replace(/[\r\n"]+/g, " ").trim().slice(0, 90); })
+    .filter(Boolean);
+  var topics = pickRandomItems(TIP_TOPICS, 3);
+  return "Je schrijft korte, prettig leesbare weetjes en tips voor de wachtcarrousel van Balanza, een app die gebalanceerde " +
+    "maaltijden ontwerpt op basis van macro's. De lezer wacht even op het genereren van gerechten en wil zich vermaken en iets leren.\n\n" +
+    "Schrijf 8 NIEUWE items in het Nederlands. Verdeel ze over deze onderwerpen: " + topics.join(", ") + ". " +
+    "Maak van hooguit 1 item een tip over Balanza zelf.\n" +
+    "Context van de lezer: doel \"" + goal + "\"" + (diet ? ", voedingsstijl \"" + diet + "\"" : "") + ". " +
+    "Laat minstens twee items aansluiten op dat doel" + (diet ? " of die voedingsstijl" : "") + ".\n\n" +
+    "Regels:\n" +
+    "- Maximaal 190 tekens per item, één of twee korte zinnen, geen opsomming, geen emoji's, spreek de lezer aan met \"je\".\n" +
+    "- Alleen algemeen erkende voedings- en kookkennis. Geen medische adviezen, geen beloftes over resultaten (zoals \"val zo af\"), " +
+    "geen exacte cijfers behalve algemeen bekende (bijv. 4 kcal per gram eiwit of koolhydraten, 9 kcal per gram vet). " +
+    "Twijfel je over de juistheid? Laat het item dan weg.\n" +
+    "- Types: \"feit\" (verrassend weetje; begin niet met \"Wist je dat\"), \"tip\" (praktische kook- of voedingstip), " +
+    "\"balanza\" (tip over een echte functie van Balanza).\n" +
+    "- Echte Balanza-functies (verzin er geen andere): Balans-score per gerecht (hoe dicht de macroverdeling bij het doel ligt); " +
+    "dag- en weektotalen van macro's; weekplanning per maaltijdmoment; boodschappenlijst (samengevoegd per week of per dag, " +
+    "gegroepeerd per categorie, met prijsindicatie); prepdag-plan; een variant van een gerecht laten maken (pittiger, simpeler, " +
+    "fine dining, andere koolhydraatbron); aantal personen per gerecht; kookmodus met timers; PDF-export; bereidingstijd per gerecht; " +
+    "doel en voedingsstijl instellen.\n" +
+    (avoid.length ? "- Herhaal deze eerder getoonde items niet en varieer sterk:\n" + avoid.map(function (a) { return "  * " + a; }).join("\n") + "\n" : "") +
+    "\nGeef ALLEEN geldig JSON terug: een array van 8 objecten, exact dit schema, geen markdown, geen uitleg erbuiten:\n" +
+    "[{\"type\": \"feit\", \"tekst\": \"...\"}]";
+}
+
+var tipsIpHits = new Map(); // ip -> { count, windowStart }
+var tipsDay = { day: "", count: 0 };
+
+// Geeft null als het verzoek mag, anders de melding waarom niet.
+function checkTipsLimits(ip) {
+  var now = Date.now();
+  var entry = tipsIpHits.get(ip);
+  if (!entry || now - entry.windowStart > 60 * 60 * 1000) entry = { count: 0, windowStart: now };
+  entry.count++;
+  tipsIpHits.set(ip, entry);
+  if (entry.count > TIPS_PER_IP_HOURLY) return "Te veel tip-verzoeken vanaf dit adres.";
+  var today = todayKey();
+  if (tipsDay.day !== today) tipsDay = { day: today, count: 0 };
+  tipsDay.count++;
+  if (tipsDay.count > DAILY_TIPS_CAP) return "De dagelijkse tip-limiet is bereikt.";
+  return null;
+}
+
+function handleTips(req, res) {
+  var ip = clientIp(req);
+  var startTime = Date.now();
+  var limitMessage = checkTipsLimits(ip);
+  if (limitMessage) return sendJSON(res, 429, { code: "rate_limited", message: limitMessage });
+
+  resolveUser(req).then(function (user) {
+    if (!user) return sendUnauthorized(res);
+    if (!ANTHROPIC_API_KEY) return sendJSON(res, 500, { code: "not_configured", message: "Server heeft nog geen ANTHROPIC_API_KEY ingesteld." });
+    return readBody(req).then(function (body) {
+      var prompt = buildTipsPrompt((body && body.params) || {});
+      return callAnthropicOnce(prompt, TIPS_MODEL, 2000).then(function (parsed) {
+        var tips = cleanTipList(parsed);
+        if (!tips.length) throw new Error("Geen bruikbare tips ontvangen");
+        sendJSON(res, 200, { result: tips });
+      });
+    });
+  }).catch(function (err) {
+    logRequest({ ts: new Date().toISOString(), action: "tips", durationMs: Date.now() - startTime, ok: false, status: 502, error: err.message, ip: ip });
+    sendJSON(res, 502, { code: "error", message: "Tips ophalen mislukt: " + err.message });
+  });
+}
+
 // ---------- Foto's (Unsplash; alleen actief als UNSPLASH_ACCESS_KEY is ingesteld) ----------
 //
 // Zo komt een foto tot stand:
@@ -1223,6 +1335,62 @@ function handleImage(req, res, query) {
   });
 }
 
+// ---------- Foto-proxy (voor de PDF-export) ----------
+// Een browser mag een plaatje van een andere site wel tonen, maar niet uitlezen om het in een
+// PDF te zetten (CORS). Daarom haalt de server de foto op en geeft die door. Streng begrensd:
+// alleen https://images.unsplash.com, alleen voor ingelogde (of, als inloggen uit staat,
+// anonieme) gebruikers, alleen afbeeldingen, en maximaal 6 MB.
+
+var PHOTO_MAX_BYTES = 6 * 1024 * 1024;
+var PHOTO_HOST = "images.unsplash.com";
+
+// Geeft een URL-object terug als het adres een toegestane Unsplash-afbeelding is, anders null.
+function parsePhotoUrl(raw) {
+  var u;
+  try { u = new URL(String(raw || "")); } catch (e) { return null; }
+  if (u.protocol !== "https:" || u.hostname !== PHOTO_HOST || u.port) return null;
+  if (u.username || u.password) return null;
+  return u;
+}
+
+function fetchPhotoBytes(urlString) {
+  return fetch(urlString, { redirect: "error" }).then(function (r) {
+    if (!r.ok) throw new Error("Foto-bron gaf status " + r.status);
+    var type = r.headers.get("content-type") || "";
+    if (!/^image\//i.test(type)) throw new Error("Geen afbeelding");
+    return r.arrayBuffer().then(function (buf) {
+      if (buf.byteLength > PHOTO_MAX_BYTES) throw new Error("Foto te groot");
+      return { type: type, buffer: Buffer.from(buf) };
+    });
+  });
+}
+
+function handlePhoto(req, res, query) {
+  var target = parsePhotoUrl(query.get("url"));
+  if (!target) return sendJSON(res, 400, { message: "Ongeldige foto-url." });
+  // Voor print willen we meer pixels dan de 400 px van het lijstje. Alleen de breedte aanpassen.
+  var width = Math.max(400, Math.min(1600, parseInt(query.get("w") || "1000", 10) || 1000));
+  var original = target.toString();
+  var larger = new URL(original);
+  larger.searchParams.set("w", String(width));
+
+  resolveUser(req).then(function (user) {
+    if (!user) return sendUnauthorized(res);
+    return fetchPhotoBytes(larger.toString()).catch(function () {
+      return fetchPhotoBytes(original); // grotere variant niet beschikbaar: val terug op het origineel
+    }).then(function (photo) {
+      res.writeHead(200, {
+        "Content-Type": photo.type,
+        "Content-Length": photo.buffer.length,
+        "Cache-Control": "private, max-age=86400"
+      });
+      res.end(photo.buffer);
+    });
+  }).catch(function () {
+    sendJSON(res, 502, { message: "Foto niet beschikbaar." });
+  });
+}
+
 var MIME_TYPES = {
   ".json": "application/json; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
@@ -1395,6 +1563,7 @@ var server = http.createServer(function (req, res) {
   var url = new URL(req.url, "http://localhost");
 
   if (req.method === "POST" && url.pathname === "/api/generate") return handleGenerate(req, res);
+  if (req.method === "POST" && url.pathname === "/api/tips") return handleTips(req, res);
   if (req.method === "POST" && url.pathname === "/api/auth/register") return handleAuthRegister(req, res);
   if (req.method === "POST" && url.pathname === "/api/auth/login") return handleAuthLogin(req, res);
   if (req.method === "POST" && url.pathname === "/api/auth/forgot-password") return handleForgotPassword(req, res);
@@ -1402,6 +1571,7 @@ var server = http.createServer(function (req, res) {
   if (req.method === "GET" && url.pathname === "/api/db") return handleDbGet(req, res, url.searchParams);
   if (req.method === "POST" && url.pathname === "/api/db") return handleDbSet(req, res);
   if (req.method === "GET" && url.pathname === "/api/image") return handleImage(req, res, url.searchParams);
+  if (req.method === "GET" && url.pathname === "/api/photo") return handlePhoto(req, res, url.searchParams);
   if (req.method === "GET" && url.pathname === "/manifest.json") return serveFile(req, res, "manifest.json");
   if (req.method === "GET" && url.pathname === "/sw.js") return serveFile(req, res, "sw.js");
   if (req.method === "GET" && url.pathname === "/favicon.png") return serveFile(req, res, "favicon.png");

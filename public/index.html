@@ -412,6 +412,7 @@
   }
   window.anonId = getAnonId();
   window.isStandalone = true; // deze versie genereert per maaltijdmoment parallel
+  window.authHeaders = authHeaders;
 
   function authHeaders() {
     var h = {};
@@ -1592,15 +1593,21 @@
 
       var plannedCount = plannedGenerationCount();
 
+      var timeHint = document.createElement("div");
+      timeHint.className = "field-hint";
+      timeHint.textContent = "Verwachte wachttijd: " + formatEstimateRange(estimateGenerationSeconds(plannedCount, false)) +
+        ". Afbeeldingen ophalen kost " + formatImageExtra() + ".";
+      main.appendChild(timeHint);
+
       var withImgBtn = document.createElement("button");
       withImgBtn.className = "primary-btn";
-      withImgBtn.textContent = "Ja, met afbeeldingen (" + formatEstimateRange(estimateGenerationSeconds(plannedCount, true)) + ")";
+      withImgBtn.textContent = "Ja, met afbeeldingen";
       withImgBtn.onclick = function () { savePrefs(); goto("weeks"); generateMeals(true); };
       main.appendChild(withImgBtn);
 
       var noImgBtn = document.createElement("button");
       noImgBtn.className = "ghost-btn";
-      noImgBtn.textContent = "Ja, zonder afbeeldingen (" + formatEstimateRange(estimateGenerationSeconds(plannedCount, false)) + ")";
+      noImgBtn.textContent = "Ja, zonder afbeeldingen";
       noImgBtn.onclick = function () { savePrefs(); goto("weeks"); generateMeals(false); };
       main.appendChild(noImgBtn);
 
@@ -1849,10 +1856,9 @@
       : "Genereer gerechten (" + formatEstimateRange(estSecs) + ")";
     goBtn.onclick = function () {
       var planned = plannedGenerationCount();
-      var withRange = formatEstimateRange(estimateGenerationSeconds(planned, true));
-      var withoutRange = formatEstimateRange(estimateGenerationSeconds(planned, false));
+      var waitRange = formatEstimateRange(estimateGenerationSeconds(planned, false));
       askConfirm(
-        "Wil je bij de gerechten ook afbeeldingen laten zoeken? Met afbeeldingen duurt het iets langer: " + withRange + " (zonder: " + withoutRange + ").",
+        "Wil je bij de gerechten ook afbeeldingen laten zoeken? Dat kost " + formatImageExtra() + ". Verwachte wachttijd: " + waitRange + ".",
         function () { goto("weeks"); generateMeals(true); },
         "Met afbeeldingen",
         "Zonder afbeeldingen",
@@ -1989,6 +1995,14 @@
   function formatEstimateRange(seconds) {
     var b = estimateBounds(seconds);
     return "~" + formatSecondsRange(b.low, b.high);
+  }
+  // Wat het ophalen van afbeeldingen er extra bij kost. Dat is een kwestie van seconden
+  // (de foto's worden gelijktijdig opgehaald), dus tonen we het los van de wachttijd:
+  // op halve minuten afgerond zou het verschil daar niet te zien zijn.
+  function formatImageExtra() {
+    var t = loadTiming();
+    var s = t.imgs.length ? quantile(t.imgs, 0.5) : TIMING_DEFAULT_IMG_SECS;
+    return "ongeveer " + formatSecondsRange(s * 0.6, s * 1.8) + " extra";
   }
   function genRemainingText(startMs, bounds) {
     var elapsed = (Date.now() - startMs) / 1000;
@@ -3619,7 +3633,127 @@
     renderShoppingList(formatWeekLabel(monday), buildPlanEntries(pw), function () { goto("planweek", { planWeekId: pw.id }); });
   }
 
-  function generatePdfBlob(title, subtitle, entries) {
+  // ---------- Foto's in de PDF ----------
+  // Elk gerecht met een foto krijgt in de PDF een banner, met de fotograaf erbij (dat vraagt
+  // Unsplash). De foto komt via onze eigen server (/api/photo), omdat een browser plaatjes van
+  // een andere site niet mag uitlezen om ze in een PDF te zetten. Gerechten waar nog geen foto
+  // aan hangt, worden hier alsnog opgezocht. Lukt iets niet, dan wordt de foto overgeslagen en
+  // krijg je gewoon de PDF zonder; de PDF blijft altijd kunnen worden gemaakt.
+  var PDF_BANNER_H = 170;                       // punten (pt)
+  var PDF_CONTENT_W = 595.28 - 96;              // A4-breedte min de marges van generatePdfBlob
+  var PDF_BANNER_PX_W = 1100;
+  var PDF_IMAGES_DEADLINE_MS = 60000;           // daarna gaan we verder met wat er dan is
+
+  function fetchWithTimeout(url, opts, ms) {
+    return new Promise(function (resolve, reject) {
+      var ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
+      var timer = setTimeout(function () { if (ctrl) ctrl.abort(); reject(new Error("timeout")); }, ms);
+      var o = {};
+      for (var k in (opts || {})) o[k] = opts[k];
+      if (ctrl) o.signal = ctrl.signal;
+      fetch(url, o).then(function (r) { clearTimeout(timer); resolve(r); }, function (e) { clearTimeout(timer); reject(e); });
+    });
+  }
+
+  // Snijdt de foto bij tot de vaste bannerverhouding (vanuit het midden, iets naar boven, waar het
+  // eten meestal staat) en geeft een JPEG als data-URL terug.
+  function imageBlobToBanner(blob, targetW, targetH) {
+    return new Promise(function (resolve, reject) {
+      var objUrl = URL.createObjectURL(blob);
+      var img = new Image();
+      img.onload = function () {
+        try {
+          var canvas = document.createElement("canvas");
+          canvas.width = targetW;
+          canvas.height = targetH;
+          var ctx = canvas.getContext("2d");
+          var scale = Math.max(targetW / img.naturalWidth, targetH / img.naturalHeight);
+          var sw = targetW / scale, sh = targetH / scale;
+          var sx = (img.naturalWidth - sw) / 2;
+          var sy = (img.naturalHeight - sh) * 0.4;
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(0, 0, targetW, targetH);
+          ctx.drawImage(img, sx, sy, sw, sh, 0, 0, targetW, targetH);
+          var dataUrl = canvas.toDataURL("image/jpeg", 0.82);
+          URL.revokeObjectURL(objUrl);
+          resolve(dataUrl);
+        } catch (e) { URL.revokeObjectURL(objUrl); reject(e); }
+      };
+      img.onerror = function () { URL.revokeObjectURL(objUrl); reject(new Error("foto niet leesbaar")); };
+      img.src = objUrl;
+    });
+  }
+
+  // Geeft { url, credit } voor een gerecht (zo nodig opzoeken), of null als er geen foto is.
+  function resolvePhotoForPdf(day) {
+    if (day.imageUrl) return Promise.resolve({ url: day.imageUrl, credit: day.imageCredit || null });
+    if (day.imageUrl === null && day.imageV === IMAGE_V) return Promise.resolve(null);
+    var key = day.id || day.name;
+    if (imageRetryAt[key] && Date.now() < imageRetryAt[key]) return Promise.resolve(null);
+    return fetchWithTimeout(imageRequestUrl(day), {}, 12000).then(function (res) {
+      return res.ok ? res.json() : { url: null, credit: null, final: false };
+    }).then(function (data) {
+      var definitive = applyImageResult(day, data);
+      if (definitive) persistDishImageUpdate(day);
+      return day.imageUrl ? { url: day.imageUrl, credit: day.imageCredit || null } : null;
+    }).catch(function () { return null; });
+  }
+
+  // Levert een lijst op die parallel loopt aan "entries": per gerecht { dataUrl, alias, credit } of null.
+  function loadPdfImages(entries) {
+    var empty = entries.map(function () { return null; });
+    if (!window.isStandalone) return Promise.resolve(empty);
+    var lookups = {}, banners = {};
+    var bannerPxH = Math.round(PDF_BANNER_PX_W * PDF_BANNER_H / PDF_CONTENT_W);
+    function photoFor(day) {
+      var k = day.id || day.name;
+      if (!lookups[k]) lookups[k] = resolvePhotoForPdf(day);
+      return lookups[k];
+    }
+    function bannerFor(url) {
+      if (!banners[url]) {
+        banners[url] = fetchWithTimeout("/api/photo?url=" + encodeURIComponent(url) + "&w=" + PDF_BANNER_PX_W,
+          { headers: window.authHeaders ? window.authHeaders() : {} }, 20000).then(function (res) {
+          if (!res.ok) throw new Error("foto niet beschikbaar");
+          return res.blob();
+        }).then(function (blob) {
+          return imageBlobToBanner(blob, PDF_BANNER_PX_W, bannerPxH);
+        }).catch(function () { return null; });
+      }
+      return banners[url];
+    }
+    var results = empty.slice();
+    var next = 0;
+    function worker() {
+      if (next >= entries.length) return Promise.resolve();
+      var i = next++;
+      var day = entries[i] && entries[i].day;
+      if (!day || day.prep) return worker();
+      return photoFor(day).then(function (photo) {
+        if (!photo) return null;
+        return bannerFor(photo.url).then(function (dataUrl) {
+          return dataUrl ? { dataUrl: dataUrl, alias: photo.url, credit: photo.credit } : null;
+        });
+      }).catch(function () { return null; }).then(function (r) { results[i] = r; }).then(worker);
+    }
+    return new Promise(function (resolve) {
+      var finished = false;
+      var timer = setTimeout(function () { if (!finished) { finished = true; resolve(results.slice()); } }, PDF_IMAGES_DEADLINE_MS);
+      Promise.all([worker(), worker(), worker(), worker()]).then(function () {
+        if (!finished) { finished = true; clearTimeout(timer); resolve(results); }
+      });
+    });
+  }
+
+  // Haalt eerst de foto's op en maakt daarna de PDF. Gaat het ophalen mis, dan zonder foto's.
+  function buildPdfWithImages(entries, makeBlob) {
+    busyStart("PDF wordt gemaakt…");
+    return loadPdfImages(entries).catch(function () { return []; }).then(function (images) {
+      try { return makeBlob(images); } finally { busyEnd(); }
+    }, function (e) { busyEnd(); throw e; });
+  }
+
+  function generatePdfBlob(title, subtitle, entries, images) {
     var doc = new window.jspdf.jsPDF({ unit: "pt", format: "a4" });
     var pageW = doc.internal.pageSize.getWidth();
     var pageH = doc.internal.pageSize.getHeight();
@@ -3726,8 +3860,9 @@
     doc.addPage();
     y = margin;
 
-    entries.forEach(function (entry) {
+    entries.forEach(function (entry, entryIdx) {
       var day = entry.day;
+      var pdfImg = images && images[entryIdx] && images[entryIdx].dataUrl ? images[entryIdx] : null;
       var meta = day.prep ? "" : (day.kcal + " kcal  ·  KH " + day.kh + "%" + (day.khG !== undefined ? " (" + day.khG + "g)" : "") +
         " / Eiwit " + day.eiwit + "%" + (day.eiwitG !== undefined ? " (" + day.eiwitG + "g)" : "") +
         " / Vet " + day.vet + "%" + (day.vetG !== undefined ? " (" + day.vetG + "g)" : "") +
@@ -3735,6 +3870,7 @@
       var benodigdhedenText = "Benodigdheden: " + day.benodigdheden;
 
       var estHeight = 26 + (20 + 8) + 26 + 4 + 4 + 10;
+      if (pdfImg) estHeight += PDF_BANNER_H + 22;
       estHeight += measureLines(benodigdhedenText, 11) * lineH;
       estHeight += measureLines("Ingrediënten:", 11, true) * lineH;
       day.ingredienten.forEach(function (ing) { estHeight += measureLines("• " + ing, 11) * lineH; });
@@ -3769,6 +3905,27 @@
         bx = drawBadge(bx, y, "Balans " + day.balans + "%", ORANGE, ORANGE_INK);
       }
       y += 16 + 12;
+
+      if (pdfImg) {
+        var imgW = pageW - margin * 2;
+        if (y + PDF_BANNER_H + 22 > maxY) { doc.addPage(); y = margin; }
+        try {
+          doc.addImage(pdfImg.dataUrl, "JPEG", margin, y, imgW, PDF_BANNER_H, pdfImg.alias, "FAST");
+          doc.setDrawColor(LINE[0], LINE[1], LINE[2]);
+          doc.rect(margin, y, imgW, PDF_BANNER_H);
+          y += PDF_BANNER_H;
+          if (pdfImg.credit && pdfImg.credit.name) {
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(7.5);
+            doc.setTextColor(MUTED[0], MUTED[1], MUTED[2]);
+            doc.text("Foto: " + pdfImg.credit.name + " (Unsplash)", pageW - margin, y + 10, { align: "right" });
+            doc.setTextColor(INK[0], INK[1], INK[2]);
+            y += 22;
+          } else {
+            y += 12;
+          }
+        } catch (imgErr) { /* foto overslaan als het toevoegen mislukt; de rest van het gerecht blijft */ }
+      }
 
       if (!day.prep) { bodyLines(benodigdhedenText, { size: 11 }); y += 4; }
       doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
@@ -3843,8 +4000,14 @@
       return;
     }
     if (btn) btn.textContent = "PDF wordt gemaakt…";
-    var blob = generatePdfBlob(week.title, week.subtitle, buildDayEntries(week));
-    downloadPdf(blob, week.title, btn, "Exporteer Week Menu");
+    var entries = buildDayEntries(week);
+    buildPdfWithImages(entries, function (images) {
+      return generatePdfBlob(week.title, week.subtitle, entries, images);
+    }).then(function (blob) {
+      downloadPdf(blob, week.title, btn, "Exporteer Week Menu");
+    }).catch(function () {
+      if (btn) btn.textContent = "PDF maken mislukt — probeer opnieuw";
+    });
   }
 
   function exportPlanPdf(pw) {
@@ -3856,8 +4019,15 @@
     var monday = new Date(pw.weekStart);
     var label = formatWeekLabel(monday);
     if (btn) btn.textContent = "PDF wordt gemaakt…";
-    var blob = generatePdfBlob(label, "Weekplanning", buildPlanEntries(pw));
-    downloadPdf(blob, "weekplanning-" + label, btn, btn && btn.dataset && btn.dataset.label ? btn.dataset.label : "Exporteer Week Menu");
+    var resetLabel = btn && btn.dataset && btn.dataset.label ? btn.dataset.label : "Exporteer Week Menu";
+    var entries = buildPlanEntries(pw);
+    buildPdfWithImages(entries, function (images) {
+      return generatePdfBlob(label, "Weekplanning", entries, images);
+    }).then(function (blob) {
+      downloadPdf(blob, "weekplanning-" + label, btn, resetLabel);
+    }).catch(function () {
+      if (btn) btn.textContent = "PDF maken mislukt — probeer opnieuw";
+    });
   }
 
   function renderDay() {
