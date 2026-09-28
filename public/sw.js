@@ -4,7 +4,7 @@
 // request fails (e.g. briefly offline). Bump CACHE_NAME whenever you want to
 // force-invalidate old cached assets after a deploy.
 
-var CACHE_NAME = "weekmenu-shell-v6";
+var CACHE_NAME = "weekmenu-shell-v7";
 var SHELL_FILES = [
   "/",
   "/manifest.json",
@@ -55,4 +55,32 @@ self.addEventListener("fetch", function (event) {
         });
       })
   );
+});
+
+// ---------- Meldingen (Web Push) ----------
+// De server stuurt een versleutelde melding als een opdracht klaar is terwijl de gebruiker weg is.
+self.addEventListener("push", function (event) {
+  var data = {};
+  try { data = event.data ? event.data.json() : {}; } catch (e) { try { data = { body: event.data.text() }; } catch (e2) { data = {}; } }
+  var title = data.title || "Balanza";
+  var options = {
+    body: data.body || "Er staat iets voor je klaar.",
+    icon: "/icons/icon-192.png",
+    badge: "/icons/icon-192.png",
+    tag: data.tag || "balanza",
+    renotify: true,
+    data: { url: data.url || "/" }
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener("notificationclick", function (event) {
+  event.notification.close();
+  var target = (event.notification.data && event.notification.data.url) || "/";
+  event.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(function (list) {
+    for (var i = 0; i < list.length; i++) {
+      if (list[i] && typeof list[i].focus === "function") return list[i].focus();   // de app is al open: daarheen (de app haalt het resultaat zelf op)
+    }
+    if (self.clients.openWindow) return self.clients.openWindow(target);
+  }));
 });

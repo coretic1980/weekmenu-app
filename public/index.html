@@ -547,12 +547,96 @@
     });
   }
 
+  // ---------- Opdrachten op de server: genereren gaat door, ook als je even naar een andere app gaat ----------
+  // De app start een opdracht en peilt daarna of het klaar is. Wordt de pagina gepauzeerd (andere app, scherm op slot),
+  // dan werkt de server gewoon door; komt de gebruiker terug, dan halen we het resultaat op. Werd de pagina zelfs
+  // afgesloten, dan onthoudt de app de opdracht (localStorage) en pakt hij hem bij het opstarten weer op.
+  var JOBS_KEY = "weekmenu_jobs";
+  var activeJobs = {};   // opdrachtnummer -> { kick } voor opdrachten waar deze pagina nu op wacht
+  function readJobs() {
+    try { var o = JSON.parse(localStorage.getItem(JOBS_KEY) || "{}"); return o && typeof o === "object" ? o : {}; } catch (e) { return {}; }
+  }
+  function writeJobs(map) {
+    try { if (Object.keys(map).length) localStorage.setItem(JOBS_KEY, JSON.stringify(map)); else localStorage.removeItem(JOBS_KEY); } catch (e) {}
+  }
+  function rememberJob(id, rec) { var m = readJobs(); m[id] = rec; writeJobs(m); }
+  function forgetJob(id) {   // geeft true als deze aanroep de opdracht als eerste opborg (dan mag het resultaat worden verwerkt)
+    var m = readJobs();
+    if (!Object.prototype.hasOwnProperty.call(m, id)) return false;
+    delete m[id]; writeJobs(m); return true;
+  }
+  function pollDelay(n) { return window.__jobPollMs || (n < 20 ? 1500 : 3000); }
+  function waitForJob(jobId, startedAt) {
+    return new Promise(function (resolve, reject) {
+      var timer = null, finished = false, inFlight = false, polls = 0, netFails = 0;
+      var MAX_MS = 12 * 60 * 1000;
+      function finish(fn, val) { if (finished) return; finished = true; clearTimeout(timer); delete activeJobs[jobId]; fn(val); }
+      function schedule(ms) { if (finished) return; clearTimeout(timer); timer = setTimeout(tick, ms); }
+      function tick() {
+        if (finished || inFlight) return;
+        if (Date.now() - startedAt > MAX_MS) { var te = new Error("Het duurde te lang."); te.code = "timeout"; return finish(reject, te); }
+        inFlight = true; polls++;
+        fetch("/api/generate/job/" + jobId, { headers: authHeaders() }).then(function (res) {
+          if (res.status === 401) { handleAuthExpired(); var ue = new Error("Sessie verlopen."); ue.code = "unauthorized"; ue.final = true; throw ue; }
+          if (res.status === 404) { var ne = new Error("Deze opdracht bestaat niet meer."); ne.code = "not_found"; ne.final = true; throw ne; }
+          if (!res.ok) throw new Error("HTTP " + res.status);
+          return res.json();
+        }).then(function (data) {
+          inFlight = false; netFails = 0;
+          if (data && data.status === "running") return schedule(pollDelay(polls));
+          if (data && data.status === "done") return finish(resolve, data.result);
+          var err = new Error((data && data.message) || "Genereren is niet gelukt."); err.code = (data && data.code) || "error"; finish(reject, err);
+        }).catch(function (e) {
+          inFlight = false;
+          if (e && e.final) return finish(reject, e);
+          netFails++;   // geen verbinding, of de pagina komt net terug uit pauze: opnieuw proberen
+          schedule(window.__jobPollMs || Math.min(5000, 800 * netFails));
+        });
+      }
+      activeJobs[jobId] = { kick: function () { if (!finished && !inFlight) { clearTimeout(timer); tick(); } } };
+      schedule(window.__jobPollMs || 700);
+    });
+  }
+  function kickJobs() { Object.keys(activeJobs).forEach(function (id) { try { activeJobs[id].kick(); } catch (e) {} }); }
+  // Zodra de pagina weer zichtbaar is of er weer verbinding is, meteen kijken in plaats van op de volgende timer te wachten.
+  if (typeof document.addEventListener === "function") document.addEventListener("visibilitychange", function () { if (document.visibilityState !== "hidden") kickJobs(); });
+  if (typeof window.addEventListener === "function") { window.addEventListener("pageshow", kickJobs); window.addEventListener("online", kickJobs); window.addEventListener("focus", kickJobs); }
+  function newRequestId() {
+    var hex = "";
+    try { var arr = new Uint8Array(12); window.crypto.getRandomValues(arr); for (var i = 0; i < arr.length; i++) hex += ("0" + arr[i].toString(16)).slice(-2); }
+    catch (e) { for (var j = 0; j < 24; j++) hex += Math.floor(Math.random() * 16).toString(16); }
+    return "r" + hex;
+  }
+  function startJob(payload, opts) {
+    var body = Object.assign({}, payload, { async: true, requestId: newRequestId() });   // hetzelfde aanvraagnummer: een herhaald verzoek maakt nooit een tweede opdracht
+    var attempt = 0;
+    function post() {
+      attempt++;
+      return fetch("/api/generate", { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, authHeaders()), body: JSON.stringify(body) }).then(function (res) {
+        if (res.status === 401) handleAuthExpired();
+        if (!res.ok) return parseErrorFromResponse(res).then(function (e) { e.final = true; throw e; });
+        return res.json();
+      }).catch(function (e) {
+        if ((e && e.final) || attempt >= 3) throw e;   // verbinding weg op het moment van versturen: nog een keer of twee
+        return new Promise(function (r) { setTimeout(r, (window.__jobPollMs || 1200) * attempt); }).then(post);
+      });
+    }
+    return post().then(function (data) {
+      if (!data || !data.jobId) return data && data.result;   // oudere server: het resultaat komt meteen mee
+      var startedAt = Date.now(), meta = opts && opts.jobMeta;
+      if (meta) rememberJob(data.jobId, Object.assign({ action: payload.action, startedAt: startedAt }, meta));
+      return waitForJob(data.jobId, startedAt).then(function (result) { forgetJob(data.jobId); return result; }, function (e) { forgetJob(data.jobId); throw e; });
+    });
+  }
+  window.balanzaJobs = { pending: readJobs, claim: forgetJob, isActive: function (id) { return !!activeJobs[id]; }, wait: waitForJob };
+
   window.claude = {
     use: function (name) {
       if (name === "sample") {
         return Promise.resolve({
-          json: function (payload) {
-            return fetch(payload && payload.action === "tips" ? "/api/tips" : "/api/generate", {
+          json: function (payload, opts) {
+            if (!payload || payload.action !== "tips") return startJob(payload, opts);   // tips zijn kort en blijven gewoon een direct verzoek
+            return fetch("/api/tips", {
               method: "POST",
               headers: Object.assign({ "Content-Type": "application/json" }, authHeaders()),
               body: JSON.stringify(payload)
@@ -680,7 +764,31 @@
   var state = { view: "weeks", weekId: null, dayId: null, stepIndex: 0, generating: false, genError: null, genSuccess: null, variating: false, variateError: null, planWeekId: null, planSlotKey: null, planDayName: null, dayServings: null, dayBackView: null, dayBackWeekId: null, dayBackDayName: null, wizardStep: 0 };
   var busyCount = 0;
   var busyMessages = [];
+  // Scherm aan houden zolang de app aan het werk is (voorkomt dat de telefoon op slot gaat tijdens het genereren).
+  // Dit helpt niet als je naar een andere app gaat: daarvoor werkt de server door en halen we het resultaat later op.
+  var wakeLock = null;
+  function wakeWanted() { return busyCount > 0; }
+  function wakeUpdate() {
+    try {
+      if (wakeWanted()) {
+        if (wakeLock || !navigator.wakeLock || typeof navigator.wakeLock.request !== "function") return;
+        if (typeof document.visibilityState !== "undefined" && document.visibilityState === "hidden") return;
+        var wanted = navigator.wakeLock.request("screen");
+        wakeLock = "pending";
+        wanted.then(function (lock) {
+          if (!wakeWanted()) { try { lock.release(); } catch (e) {} wakeLock = null; return; }
+          wakeLock = lock;
+          if (typeof lock.addEventListener === "function") lock.addEventListener("release", function () { if (wakeLock === lock) wakeLock = null; });
+        }, function () { wakeLock = null; });
+      } else if (wakeLock && wakeLock !== "pending") {
+        var l = wakeLock; wakeLock = null;
+        try { l.release(); } catch (e) {}
+      }
+    } catch (e) { wakeLock = null; }
+  }
+  if (typeof document.addEventListener === "function") document.addEventListener("visibilitychange", function () { if (document.visibilityState !== "hidden") wakeUpdate(); });
   function updateBusyUI() {
+    wakeUpdate();
     var el = document.getElementById("busyBar");
     var textEl = document.getElementById("busyText");
     if (!el) return;
@@ -1188,7 +1296,8 @@
     key: '<path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.78 7.78 5.5 5.5 0 0 1 7.78-7.78zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>',
     mail: '<path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/><path d="M22 6l-10 7L2 6"/>',
     trash: '<path d="M3 6h18"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
-    devices: '<rect x="2" y="4" width="14" height="10" rx="2"/><path d="M8 18h2"/><rect x="18" y="8" width="4" height="10" rx="1"/>'
+    devices: '<rect x="2" y="4" width="14" height="10" rx="2"/><path d="M8 18h2"/><rect x="18" y="8" width="4" height="10" rx="1"/>',
+    bell: '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>'
   };
   function iconSvg(key, size) {
     return '<svg width="' + (size || 20) + '" height="' + (size || 20) + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (ICONS[key] || "") + '</svg>';
@@ -1337,6 +1446,7 @@
     var ic = document.createElement("span"); ic.innerHTML = iconSvg(icon, 20);
     var t = document.createElement("span"); t.textContent = label;
     b.appendChild(ic); b.appendChild(t);
+    b.labelEl = t;
     b.onclick = onclick;
     parent.appendChild(b);
     return b;
@@ -1381,6 +1491,99 @@
       btn.disabled = false; btn.textContent = label;
       form.fail(friendlyNetError(e));
     });
+  }
+
+  // ---- Meldingen: een seintje als je gerechten klaar zijn terwijl je in een andere app zit ----
+  var PUSH_FLAG_KEY = "weekmenu_push";
+  var pushState = null;   // "on" | "off" | "denied" | "ios-install" | "unsupported" | null (nog onbekend)
+  function pushFlagOn() { try { return localStorage.getItem(PUSH_FLAG_KEY) === "1"; } catch (e) { return false; } }
+  function setPushFlag(on) { try { if (on) localStorage.setItem(PUSH_FLAG_KEY, "1"); else localStorage.removeItem(PUSH_FLAG_KEY); } catch (e) {} }
+  function isIosLike() {
+    var ua = (typeof navigator !== "undefined" && navigator.userAgent) || "";
+    return /iPad|iPhone|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  }
+  function isStandaloneDisplay() {
+    try { return navigator.standalone === true || (typeof window.matchMedia === "function" && window.matchMedia("(display-mode: standalone)").matches); } catch (e) { return false; }
+  }
+  function pushSupport() {
+    if (typeof navigator !== "undefined" && "serviceWorker" in navigator && "PushManager" in window && "Notification" in window) return { ok: true };
+    return { ok: false, reason: isIosLike() && !isStandaloneDisplay() ? "ios-install" : "unsupported" };
+  }
+  function urlBase64ToUint8Array(b64) {
+    var raw = atob((b64 + "=".repeat((4 - b64.length % 4) % 4)).replace(/-/g, "+").replace(/_/g, "/"));
+    var out = new Uint8Array(raw.length);
+    for (var i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+    return out;
+  }
+  function subKeyB64(sub) {
+    try {
+      var k = sub && sub.options && sub.options.applicationServerKey;
+      if (!k) return null;
+      var bytes = new Uint8Array(k), s = "";
+      for (var i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+      return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    } catch (e) { return null; }
+  }
+  function pushPost(path, body, tokenOverride) {   // stil verzoek: geen herlaad bij een verlopen sessie
+    var headers = Object.assign({ "Content-Type": "application/json" }, window.authHeaders ? window.authHeaders() : {});
+    if (tokenOverride) headers["Authorization"] = "Bearer " + tokenOverride;
+    return fetch(path, { method: "POST", headers: headers, body: JSON.stringify(body), keepalive: true }).then(function (res) {
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      return res;
+    });
+  }
+  // Zorgt dat dit toestel bij de server is aangemeld voor de huidige gebruiker (en maakt zo nodig een nieuw abonnement).
+  function registerPushDevice() {
+    return Promise.all([navigator.serviceWorker.ready, fetch("/api/push/key").then(function (r) {
+      if (!r.ok) throw new Error("Meldingen zijn op deze server niet beschikbaar.");
+      return r.json();
+    })]).then(function (r) {
+      var reg = r[0], key = r[1].publicKey;
+      return reg.pushManager.getSubscription().then(function (existing) {
+        var have = subKeyB64(existing);
+        if (existing && (!have || have === key)) return existing;   // bij andere sleutels van de server: opnieuw abonneren
+        return (existing ? existing.unsubscribe().catch(function () {}) : Promise.resolve()).then(function () {
+          return reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(key) });
+        });
+      });
+    }).then(function (sub) { return pushPost("/api/push/subscribe", { subscription: sub.toJSON ? sub.toJSON() : sub }); });
+  }
+  function refreshPushState() {
+    var s = pushSupport(), p;
+    if (!s.ok) p = Promise.resolve(s.reason);
+    else if (Notification.permission === "denied") p = Promise.resolve("denied");
+    else if (Notification.permission !== "granted") p = Promise.resolve("off");
+    else p = navigator.serviceWorker.ready.then(function (reg) { return reg.pushManager.getSubscription(); }).then(function (sub) { return sub ? "on" : "off"; }, function () { return "off"; });
+    return p.then(function (st) { pushState = st; return st; });
+  }
+  function enablePush() {   // moet direct uit een tik komen, anders weigert de browser de toestemmingsvraag
+    var s = pushSupport();
+    if (!s.ok) return Promise.reject(new Error("Dit toestel ondersteunt geen meldingen."));
+    return Promise.resolve(Notification.requestPermission()).then(function (perm) {
+      if (perm !== "granted") { var e = new Error("Meldingen zijn niet toegestaan. Je kunt dat aanpassen in de instellingen van je toestel of browser."); e.code = "denied"; throw e; }
+      return registerPushDevice();
+    }).then(function () { setPushFlag(true); return refreshPushState(); });
+  }
+  function disablePush() {
+    setPushFlag(false);
+    if (!pushSupport().ok) return refreshPushState();
+    return navigator.serviceWorker.ready.then(function (reg) { return reg.pushManager.getSubscription(); }).then(function (sub) {
+      if (!sub) return null;
+      return pushPost("/api/push/unsubscribe", { endpoint: sub.endpoint }).catch(function () {}).then(function () { return sub.unsubscribe(); });
+    }).catch(function () {}).then(refreshPushState);
+  }
+  // Bij opstarten en na inloggen of omzetten: dit toestel opnieuw aanmelden voor de huidige gebruiker.
+  function syncPush() {
+    var s = pushSupport();
+    if (!s.ok || !pushFlagOn() || Notification.permission !== "granted" || !(window.authToken || !window.authRequired)) { refreshPushState().catch(function () {}); return; }
+    registerPushDevice().catch(function () {}).then(function () { return refreshPushState(); }).catch(function () {});
+  }
+  // Bij uitloggen het toestel bij dit account afmelden, zodat meldingen van dit account hier niet meer aankomen.
+  function leavePush(token) {
+    if (!token || !pushFlagOn() || !pushSupport().ok) return Promise.resolve();
+    return navigator.serviceWorker.ready.then(function (reg) { return reg.pushManager.getSubscription(); }).then(function (sub) {
+      if (sub) return pushPost("/api/push/unsubscribe", { endpoint: sub.endpoint }, token);
+    }).catch(function () {});
   }
 
   // ---- Mijn profiel ----
@@ -1462,6 +1665,36 @@
       seg.appendChild(b);
     });
     look.appendChild(seg);
+
+    var pushCard = accCard(main, "Meldingen");
+    var pushText = document.createElement("div"); pushText.className = "acc-sub"; pushText.id = "settingsPushText"; pushText.textContent = "Even kijken\u2026";
+    pushCard.appendChild(pushText);
+    var pushBtn = accButton(pushCard, "settingsPushBtn", "bell", "Meldingen aanzetten", function () {});
+    pushBtn.style.display = "none";
+    function paintPush(st) {
+      if (state.view !== "settings") return;
+      var texts = {
+        on: "Aan: je krijgt een melding als je gerechten klaar zijn terwijl je in een andere app zit.",
+        off: "Krijg een melding als je gerechten klaar zijn, ook als je even in een andere app zit.",
+        denied: "Meldingen staan geblokkeerd voor Balanza. Zet ze aan in de instellingen van je toestel of browser.",
+        "ios-install": "Op een iPhone werken meldingen alleen als Balanza op je beginscherm staat: tik op Deel, kies \u201cZet op beginscherm\u201d en open Balanza vanaf je beginscherm.",
+        unsupported: "Dit toestel of deze browser ondersteunt geen meldingen."
+      };
+      var t = document.getElementById("settingsPushText"), b = document.getElementById("settingsPushBtn");
+      if (t) t.textContent = texts[st] || texts.unsupported;
+      if (b) {
+        b.style.display = st === "on" || st === "off" ? "flex" : "none";
+        if (b.labelEl) b.labelEl.textContent = st === "on" ? "Meldingen uitzetten" : "Meldingen aanzetten";
+      }
+    }
+    pushBtn.onclick = function () {
+      pushBtn.disabled = true;
+      var p = pushState === "on" ? disablePush() : enablePush();   // enablePush start direct in deze tik, zoals de browser eist
+      p.then(function (st) { paintPush(st); showToast(st === "on" ? "Meldingen staan aan." : "Meldingen staan uit."); })
+        .catch(function (e) { refreshPushState().then(paintPush, function () {}); showToast(friendlyNetError(e)); })
+        .then(function () { pushBtn.disabled = false; });
+    };
+    refreshPushState().then(paintPush).catch(function () {});
 
     var mine = accCard(main, "Mijn Balanza");
     accButton(mine, "settingsProfile", "user", "Mijn profiel", function () { goto("account"); });
@@ -1594,6 +1827,7 @@
     window.setAuthToken(window.authToken);
     window.USER_ID = data.uid;
     window.setStoredUid(window.USER_ID);
+    syncPush();
   }
   function upgradeDoneMessage(m) {
     var what = describeMigrated(m);
@@ -1901,13 +2135,20 @@
   }
 
   function logout() {
-    window.authToken = null;
-    window.setAuthToken(null);
-    window.USER_ID = null;
-    window.setStoredUid(null);
-    // Reload so nothing of the previous user stays in memory (otherwise the next
-    // person to log in on this device could inherit the previous user's dishes).
-    try { window.location.reload(); } catch (e) { bootstrapApp(); }
+    var token = window.authToken;
+    var done = function () {
+      window.authToken = null;
+      window.setAuthToken(null);
+      window.USER_ID = null;
+      window.setStoredUid(null);
+      // Reload so nothing of the previous user stays in memory (otherwise the next
+      // person to log in on this device could inherit the previous user's dishes).
+      try { window.location.reload(); } catch (e) { bootstrapApp(); }
+    };
+    if (!token || !pushFlagOn()) return done();
+    var finished = false, once = function () { if (!finished) { finished = true; done(); } };
+    leavePush(token).then(once, once);   // eerst dit toestel bij het account afmelden, maar hooguit even wachten
+    setTimeout(once, 1500);
   }
 
   function renderWeeks() {
@@ -1944,6 +2185,19 @@
       factCard.appendChild(factProgress);
       factCard.appendChild(factNote);
       main.appendChild(factCard);
+      var awayHint = document.createElement("div");
+      awayHint.className = "acc-sub"; awayHint.id = "genAwayHint"; awayHint.style.textAlign = "center";
+      awayHint.textContent = "Je kunt gerust naar een andere app gaan. Zodra je terug bent, staan je gerechten hier klaar.";
+      main.appendChild(awayHint);
+      if (pushState === "off") {
+        var genPush = document.createElement("button");
+        genPush.className = "ghost-btn"; genPush.id = "genPushBtn"; genPush.textContent = "Stuur me een melding als het klaar is";
+        genPush.onclick = function () {
+          genPush.disabled = true;
+          enablePush().then(function () { showToast("Meldingen staan aan."); render(); }, function (e) { genPush.disabled = false; showToast(friendlyNetError(e)); });
+        };
+        main.appendChild(genPush);
+      }
     } else {
       stopFactCarousel();
     }
@@ -2740,6 +2994,40 @@
     });
   }
 
+  // Bouwt gerechten uit het antwoord van de AI (ook gebruikt om een opdracht af te ronden nadat de app was afgesloten).
+  function dishesFromGenerated(list, mealTypesSel) {
+    return list.map(function (d, idx) {
+      var kcal = Number(d.kcal) || 0;
+      var khG = Number(d.kh_g) || 0;
+      var eiwitG = Number(d.eiwit_g) || 0;
+      var vetG = Number(d.vet_g) || 0;
+      var khPct = kcal ? Math.round((khG * 4 / kcal) * 100) : 0;
+      var eiwitPct = kcal ? Math.round((eiwitG * 4 / kcal) * 100) : 0;
+      var vetPct = kcal ? Math.round((vetG * 9 / kcal) * 100) : 0;
+      var balans = computeBalance(khPct, eiwitPct, vetPct);
+      var dishMealType = mealTypesSel.indexOf(d.mealType) > -1 ? d.mealType : mealTypesSel[idx % mealTypesSel.length];
+      var steps = Array.isArray(d.steps) ? d.steps.map(function (s) {
+        var st = { title: String(s.title || "Stap"), content: String(s.content || "") };
+        if (s.timer_seconds) st.timer = Number(s.timer_seconds);
+        return st;
+      }) : [{ title: "Bereiding", content: "Geen bereidingsstappen ontvangen." }];
+      return {
+        id: "gen" + Date.now() + "_" + idx,
+        label: "Gerecht " + (idx + 1),
+        name: String(d.name || "Naamloos gerecht"),
+        kcal: kcal, kh: khPct, eiwit: eiwitPct, vet: vetPct, balans: balans,
+        khG: khG, eiwitG: eiwitG, vetG: vetG,
+        bereidingstijd: Number(d.bereidingstijd_minuten) || 0,
+        fotoZoekterm: String(d.foto_zoekterm || "").trim().slice(0, 80),
+        mealType: dishMealType,
+        benodigdheden: String(d.benodigdheden || ""),
+        ingredienten: Array.isArray(d.ingredienten) ? d.ingredienten.map(String) : [],
+        steps: steps,
+        profile: currentProfileSnapshot()
+      };
+    });
+  }
+
   function generateMeals(withImages) {
     if (state.generating) return;
     state.genError = null;
@@ -2770,41 +3058,12 @@
         age: prefs.age, activityLevel: prefs.activityLevel
       };
       var mealTypesSel = prefs.mealTypes.length ? prefs.mealTypes : ["Diner"];
-      sample.json({ action: "generate", params: genParams }, { modelTier: "default" }).then(function (result) {
+      sample.json({ action: "generate", params: genParams }, { modelTier: "default", jobMeta: { withImages: !!withImages, mealTypes: mealTypesSel } }).then(function (result) {
         var list = extractDishArray(result);
         if (!list || !list.length) throw new Error("Onverwacht antwoordformaat.");
         recordGenerationTiming((Date.now() - genStart) / 1000, genCritical);
 
-        var days = list.map(function (d, idx) {
-          var kcal = Number(d.kcal) || 0;
-          var khG = Number(d.kh_g) || 0;
-          var eiwitG = Number(d.eiwit_g) || 0;
-          var vetG = Number(d.vet_g) || 0;
-          var khPct = kcal ? Math.round((khG * 4 / kcal) * 100) : 0;
-          var eiwitPct = kcal ? Math.round((eiwitG * 4 / kcal) * 100) : 0;
-          var vetPct = kcal ? Math.round((vetG * 9 / kcal) * 100) : 0;
-          var balans = computeBalance(khPct, eiwitPct, vetPct);
-          var dishMealType = mealTypesSel.indexOf(d.mealType) > -1 ? d.mealType : mealTypesSel[idx % mealTypesSel.length];
-          var steps = Array.isArray(d.steps) ? d.steps.map(function (s) {
-            var st = { title: String(s.title || "Stap"), content: String(s.content || "") };
-            if (s.timer_seconds) st.timer = Number(s.timer_seconds);
-            return st;
-          }) : [{ title: "Bereiding", content: "Geen bereidingsstappen ontvangen." }];
-          return {
-            id: "gen" + Date.now() + "_" + idx,
-            label: "Gerecht " + (idx + 1),
-            name: String(d.name || "Naamloos gerecht"),
-            kcal: kcal, kh: khPct, eiwit: eiwitPct, vet: vetPct, balans: balans,
-            khG: khG, eiwitG: eiwitG, vetG: vetG,
-            bereidingstijd: Number(d.bereidingstijd_minuten) || 0,
-            fotoZoekterm: String(d.foto_zoekterm || "").trim().slice(0, 80),
-            mealType: dishMealType,
-            benodigdheden: String(d.benodigdheden || ""),
-            ingredienten: Array.isArray(d.ingredienten) ? d.ingredienten.map(String) : [],
-            steps: steps,
-            profile: currentProfileSnapshot()
-          };
-        });
+        var days = dishesFromGenerated(list, mealTypesSel);
 
         var imgStart = Date.now();
         if (withImages) {
@@ -6668,6 +6927,37 @@
     });
   }
 
+  // Een opdracht die liep toen de pagina werd afgesloten (bijv. door de telefoon) wordt bij het opstarten afgerond.
+  function recoverPendingJobs() {
+    var J = window.balanzaJobs;
+    if (!J) return;
+    var pending = J.pending();
+    Object.keys(pending).forEach(function (id) {
+      var rec = pending[id];
+      if (J.isActive(id)) return;
+      if (!rec || rec.action !== "generate" || Date.now() - (Number(rec.startedAt) || 0) > 2 * 60 * 60 * 1000) { J.claim(id); return; }
+      var busy = true;
+      busyStart("Je gerechten worden afgerond\u2026");
+      var stopBusy = function () { if (busy) { busy = false; busyEnd(); } };
+      J.wait(id, Number(rec.startedAt) || Date.now()).then(function (result) {
+        stopBusy();
+        if (!J.claim(id)) return;   // een ander tabblad was er eerder bij
+        var list = extractDishArray(result);
+        if (!list || !list.length) throw new Error("Onverwacht antwoordformaat.");
+        var days = dishesFromGenerated(list, Array.isArray(rec.mealTypes) && rec.mealTypes.length ? rec.mealTypes : ["Diner"]);
+        return Promise.resolve(rec.withImages ? Promise.all(days.map(fetchImageForDish)) : null).then(function () {
+          addToCacheLibrary(days);
+          persistDishesToDb(days);
+          showToast(days.length + (days.length === 1 ? " gerecht is" : " gerechten zijn") + " klaar en toegevoegd aan de lijst met opgeslagen gerechten.");
+          render();
+        });
+      }).catch(function (e) {
+        stopBusy(); J.claim(id);
+        showToast(e && e.code === "not_found" ? "Je vorige opdracht is niet afgerond. Genereer de gerechten opnieuw." : "Genereren is niet gelukt. Probeer het nogmaals.");
+      });
+    });
+  }
+
   function bootstrapApp() {
     configLoaded = false;
     render();
@@ -6682,7 +6972,7 @@
       try { var pendingNotice = sessionStorage.getItem("weekmenu_notice"); if (pendingNotice) { sessionStorage.removeItem("weekmenu_notice"); setTimeout(function () { showToast(pendingNotice); }, 400); } } catch (e) {}
       lastConfigRefresh = Date.now();
       configLoaded = true;
-      if (window.authToken || !window.authRequired) initPersistence();
+      if (window.authToken || !window.authRequired) { initPersistence(); recoverPendingJobs(); syncPush(); }
       render();
     });
   }

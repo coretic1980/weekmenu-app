@@ -881,8 +881,8 @@
   // =====================================================================================
   // Activiteit (logboek)
   // =====================================================================================
-  var TYPE_LABELS = { generate: "AI", tips: "Tips", auth: "Account" };
-  var LOG_ACTION_LABELS = { login: "Inloggen", register: "Registreren", upgrade: "Anoniem omgezet naar account", "password-change": "Wachtwoord gewijzigd (door gebruiker)", "email-change": "E-mailadres gewijzigd (door gebruiker)", "logout-others": "Op andere apparaten uitgelogd", "self-delete": "Account zelf verwijderd", export: "Gegevens gedownload", "reset-request": "Reset aangevraagd", "reset-done": "Wachtwoord gereset" };
+  var TYPE_LABELS = { generate: "AI", tips: "Tips", auth: "Account", push: "Melding" };
+  var LOG_ACTION_LABELS = { login: "Inloggen", register: "Registreren", upgrade: "Anoniem omgezet naar account", "password-change": "Wachtwoord gewijzigd (door gebruiker)", notify: "Pushmelding verstuurd", "email-change": "E-mailadres gewijzigd (door gebruiker)", "logout-others": "Op andere apparaten uitgelogd", "self-delete": "Account zelf verwijderd", export: "Gegevens gedownload", "reset-request": "Reset aangevraagd", "reset-done": "Wachtwoord gereset" };
   function logRow(l, compact) {
     var who = null;
     if (!compact) {
@@ -896,7 +896,7 @@
       h("td", {}, l.ok ? badge("OK" + (l.status && l.status !== 200 ? " " + l.status : ""), "good") : badge("Fout " + (l.status || ""), "bad")),
       h("td", { class: "nowrap", text: l.durationMs != null ? fmtMs(l.durationMs) : "—" }),
       compact ? null : who, compact ? null : h("td", { class: "mono", text: l.ip || "—" }),
-      h("td", { class: l.ok ? "" : "err", text: l.error || "" }));
+      h("td", { class: l.ok ? "" : "err", text: l.error || (l.type === "push" && l.sent != null ? l.sent + " van " + (l.sent + (l.failed || 0)) + (l.sent + (l.failed || 0) === 1 ? " toestel" : " toestellen") + " bereikt" : "") }));
   }
 
   VIEWS.activiteit = function (view, route, ctx) {
@@ -907,7 +907,7 @@
       el.oninput = debounce(function () { L[key] = el.value.trim(); L.page = 1; load(); }, 350); return el;
     }
     var q = bind("lQ", "q", "Zoek in actie, melding, IP, gebruiker…", "grow", "search");
-    var typeSel = select([["", "Alle soorten"], ["generate", "AI (genereren)"], ["tips", "Tips"], ["auth", "Account (inloggen)"]], L.type, function (v) { L.type = v; L.page = 1; load(); }, "Soort"); typeSel.id = "lType";
+    var typeSel = select([["", "Alle soorten"], ["generate", "AI (genereren)"], ["tips", "Tips"], ["auth", "Account (inloggen)"], ["push", "Meldingen (push)"]], L.type, function (v) { L.type = v; L.page = 1; load(); }, "Soort"); typeSel.id = "lType";
     var statusSel = select([["", "Alle uitkomsten"], ["ok", "Gelukt"], ["error", "Fouten"]], L.status, function (v) { L.status = v; L.page = 1; load(); }, "Uitkomst"); statusSel.id = "lStatus";
     var uidIn = bind("lUid", "uid", "Gebruikers-ID", "", "text"), ipIn = bind("lIp", "ip", "IP-adres", "", "text");
     var fromIn = h("input", { type: "date", id: "lFrom", "aria-label": "Vanaf datum" }); fromIn.value = L.from; fromIn.onchange = function () { L.from = fromIn.value; L.page = 1; load(); };

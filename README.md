@@ -303,6 +303,74 @@ Tijdens het genereren toont het startscherm een carrousel met weetjes en tips
 - Op de kaart staat "Algemene informatie, geen medisch advies". Let op: tips die het model schrijft kunnen
   fouten bevatten; de kaart zegt niet dat ze door een model zijn geschreven.
 
+## Genereren op de achtergrond en meldingen
+
+Gerechten maken duurt soms minuten. Ga je in die tijd naar een andere app of gaat je scherm op slot, dan
+pauzeert of sluit de telefoon de pagina, en ging het lopende verzoek (en het resultaat) verloren. Daarom
+draait genereren nu als een **opdracht op de server**, met drie lagen eromheen:
+
+1. **De server werkt zelfstandig door.** De app stuurt de opdracht (`POST /api/generate` met `async: true`) en krijgt
+   meteen een opdrachtnummer terug. Daarna peilt de app (`GET /api/generate/job/<nummer>`) tot het klaar is. Is de pagina
+   even weg, dan wacht het resultaat op je: zodra je terugkomt wordt meteen gekeken, zonder op een timer te wachten.
+2. **Ook als de pagina helemaal werd afgesloten** onthoudt de app de opdracht (in `localStorage`). Bij het volgende
+   opstarten pakt hij hem weer op en voegt de gerechten toe aan je lijst, met een melding.
+3. **Een pushmelding** als je gerechten klaar zijn terwijl je weg bent (zie hieronder). Daarnaast houdt de app je scherm
+   aan zolang hij bezig is (Screen Wake Lock, waar de browser dat ondersteunt).
+
+Wat je moet weten:
+
+| Onderwerp | Gedrag |
+|---|---|
+| Bewaartijd | Een klaar resultaat blijft **30 minuten** beschikbaar (`JOB_TTL_MS`), in het geheugen én in de opslag. Met MongoDB overleeft het dus een herstart van de server. |
+| Maximale duur | Een opdracht wordt na **10 minuten** opgegeven met een duidelijke melding (`JOB_MAX_RUN_MS`). |
+| Dubbel klikken of slecht bereik | Elke opdracht heeft een aanvraagnummer. Wordt hetzelfde verzoek herhaald (bijv. door een wegvallende verbinding), dan krijg je dezelfde opdracht terug en wordt er **niet dubbel betaald**. |
+| Limieten | Hoogstens **4 opdrachten tegelijk** per gebruiker. Opdrachten die nog lopen tellen mee voor `DAILY_GENERATE_CAP`, zodat de daglimiet niet met een stapel gelijktijdige opdrachten te omzeilen is. Een mislukte opdracht telt niet mee. |
+| Privacy | Een opdracht is alleen op te halen door de gebruiker die hem startte. Het nummer is een willekeurig getal van 128 bit. |
+| Omzetten naar een account | Een lopende opdracht (en de aangemelde toestellen) gaan mee naar het nieuwe account. |
+| Oudere app of server | Antwoordt de server meteen met een resultaat (zonder `jobId`), dan werkt de app als voorheen. |
+
+### Pushmeldingen (Web Push)
+
+Gebruikers zetten ze zelf aan onder **Instellingen → Meldingen**, of via de knop "Stuur me een melding als het klaar
+is" die tijdens het genereren in beeld staat. De melding komt alleen bij een opdracht om gerechten te maken, en
+alleen als de gebruiker niet meer meekijkt (niet gepeild in de laatste 20 seconden, `JOB_WATCH_MS`). Wie dus gewoon
+in de app blijft wachten krijgt er geen.
+
+- **iPhone en iPad**: meldingen werken alleen als de app **op het beginscherm staat** (deel-icoon → "Zet op beginscherm")
+  en vanaf daar geopend wordt, vanaf iOS 16.4. Dat geldt ook in Nederland en de rest van de EU. In Safari zelf ziet de
+  gebruiker daar uitleg over.
+- **Android, Windows, Mac**: werkt in Chrome, Edge en Firefox, ook zonder de app te installeren.
+- De melding is **versleuteld** (RFC 8291) en bevat geen persoonlijke gegevens, alleen "Je gerechten zijn klaar".
+  Meer dan 5 toestellen per gebruiker worden niet bewaard (het oudste valt weg). Toestellen die niet meer bestaan
+  worden vanzelf opgeruimd. Bij uitloggen wordt het toestel bij het account afgemeld.
+- De server verstuurt alleen naar de echte pushdiensten van de browsers (Google, Apple, Mozilla, Microsoft) en nooit
+  naar een willekeurig adres.
+- Er zijn geen extra pakketten nodig: de versleuteling en ondertekening (VAPID) gebruiken Node's eigen `crypto`.
+
+**Sleutels (VAPID).** Voor het versturen heeft de server een sleutelpaar nodig.
+
+- *Zonder iets in te stellen* maakt de server er één keer zelf een aan en bewaart dat in de database. Met MongoDB
+  (zie "Blijvende opslag") blijft het dus bestaan. **Zonder MongoDB verdwijnen de sleutels bij elke herstart**; telefoons
+  schrijven zich dan vanzelf opnieuw in zodra de app opent, maar meldingen tussendoor gaan verloren. De beheerconsole
+  waarschuwt daarvoor onder **Systeem → Meldingen (Web Push)**.
+- *Aanbevolen voor een vaste opzet*: maak zelf een sleutelpaar en zet het in de omgeving. Eenmalig te maken met:
+
+```
+node -e "const c=require('crypto');const k=c.generateKeyPairSync('ec',{namedCurve:'P-256'});const j=k.privateKey.export({format:'jwk'});console.log('VAPID_PUBLIC_KEY='+Buffer.concat([Buffer.from([4]),Buffer.from(j.x,'base64url'),Buffer.from(j.y,'base64url')]).toString('base64url'));console.log('VAPID_PRIVATE_KEY='+j.d)"
+```
+
+  Zet de twee regels in `.env` (of bij Render onder Environment). **Bewaar de privésleutel geheim** en verander hem niet
+  zonder reden: bij nieuwe sleutels moet elk toestel zich opnieuw inschrijven (dat gebeurt vanzelf bij de eerstvolgende keer openen).
+- `VAPID_SUBJECT` (optioneel) is een `mailto:`-adres of `https://`-adres waarmee pushdiensten je kunnen bereiken.
+  Standaard wordt het adres van je site gebruikt.
+
+**In de beheerconsole**: onder *Activiteit* staan de opdrachten (soort "AI") en de verstuurde meldingen (soort "Melding",
+met "1 van 1 toestel bereikt", zonder inhoud of sleutels). Onder *Systeem* staat de controle *Meldingen (Web Push)*.
+
+**Testen na het deployen**: dit is geprobeerd met nagebootste AI- en pushdiensten, niet op een echte telefoon. Doe daarom
+eenmaal een echte proef: zet meldingen aan, start een generatie, ga naar de beginschermknop of een andere app, en wacht
+tot de melding komt. Doe dat ook op een iPhone met de app op het beginscherm.
+
 ## Gerechtfoto's (optioneel)
 
 De app kan een foto bij elk gerecht tonen (in de gerechtenlijst en op het
@@ -352,6 +420,9 @@ onder Instellingen zijn ze ook live aan te passen, samen met de limieten voor ti
 
 - `PER_IP_HOURLY_CAP` (standaard 20) — max. generatie-verzoeken per uur, per IP-adres.
 - `DAILY_GENERATE_CAP` (standaard 300) — max. generatie-verzoeken per dag, voor alle gebruikers samen.
+
+Opdrachten die op de achtergrond nog lopen tellen mee voor de daglimiet, en één gebruiker kan er hoogstens 4
+tegelijk hebben (zie "Genereren op de achtergrond").
 
 Pas deze aan in `.env` op basis van hoeveel mensen je verwacht en welk
 kostenniveau je acceptabel vindt. Elke generatie-aanroep kost ruwweg een paar
@@ -409,7 +480,8 @@ kan iedereen hem op zijn telefoon "installeren":
   bereiken)
 
 Eenmaal geïnstalleerd opent de app als een losse app-icoon, zonder
-browserbalk.
+browserbalk. Op een iPhone zijn pushmeldingen alleen mogelijk voor de app op het beginscherm
+(zie "Pushmeldingen").
 
 **Belangrijk**: service workers (en dus installeerbaarheid als PWA) werken
 alleen over **HTTPS** — op `localhost` werkt het ook zonder HTTPS (voor

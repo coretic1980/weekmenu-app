@@ -34,6 +34,7 @@ const { MongoClient } = require("mongodb");
 const PORT = process.env.PORT || 3000;
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "";
 const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6";
+const ANTHROPIC_BASE_URL = String(process.env.ANTHROPIC_BASE_URL || "https://api.anthropic.com").replace(/\/+$/, "");   // alleen aanpassen voor een proxy of bij testen
 const DAILY_GENERATE_CAP = parseInt(process.env.DAILY_GENERATE_CAP || "300", 10);
 const PER_IP_HOURLY_CAP = parseInt(process.env.PER_IP_HOURLY_CAP || "20", 10);
 // Tips voor de wachtcarrousel: eigen limieten, zodat ze de generatielimieten niet opeten.
@@ -919,7 +920,7 @@ var BALANS_MIN_THRESHOLD = 75;
 var BALANS_MAX_ATTEMPTS = 3;
 
 function callAnthropicOnce(prompt, model, maxTokens) {
-  return fetch("https://api.anthropic.com/v1/messages", {
+  return fetch(ANTHROPIC_BASE_URL + "/v1/messages", {
     method: "POST",
     headers: {
       "x-api-key": ANTHROPIC_API_KEY,
@@ -1016,7 +1017,7 @@ function handleGenerate(req, res) {
       return getUsageToday();
     }).then(function (usedToday) {
       if (usedToday === null) return; // already answered with 401
-      if (usedToday >= liveLimits.dailyGenerateCap) {
+      if (usedToday + runningJobCount() >= liveLimits.dailyGenerateCap) {
         log("onbekend", false, 429, "Dagelijkse limiet bereikt");
         return sendJSON(res, 429, { code: "rate_limited", message: "De dagelijkse limiet voor het genereren van gerechten is bereikt. Probeer het morgen opnieuw." });
       }
@@ -1028,6 +1029,7 @@ function handleGenerate(req, res) {
           return sendJSON(res, 503, moduleOffBody("prices", settings));
         }
 
+        if (body && body.async === true) return startGenerateJob({ uid: uidForLog, body: body, action: action, host: req.headers.host, log: log, res: res });
         return runGenerateAction(body).then(function (parsed) {
           incrementUsageToday();
           log(action, true, 200);
@@ -1109,10 +1111,10 @@ function countWeeks(v) { return v && Array.isArray(v.list) ? v.list.length : (Ar
 // Wat er onder een anoniem ID staat (zonder iets te wijzigen).
 function readAnonData(anon) {
   return Promise.all(UPGRADE_SUBPATHS.map(function (s) { return dbGetDoc("data/users/" + anon + "/" + s); }).concat([
-    dbGetDoc("data/users/" + anon + "/meta"), dbGetDoc("adminMeta/" + anon), dbGetDoc("listsIndex/" + anon)
+    dbGetDoc("data/users/" + anon + "/meta"), dbGetDoc("adminMeta/" + anon), dbGetDoc("listsIndex/" + anon), dbGetDoc("push/" + anon)
   ])).then(function (r) {
     var tokens = r[5].exists && r[5].value && Array.isArray(r[5].value.tokens) ? r[5].value.tokens : [];
-    return { prefs: r[0], dishes: r[1], plannedWeeks: r[2], meta: r[3], adminMeta: r[4], tokens: tokens };
+    return { prefs: r[0], dishes: r[1], plannedWeeks: r[2], meta: r[3], adminMeta: r[4], tokens: tokens, push: r[6] };
   });
 }
 function anonSummary(d) {
@@ -1124,6 +1126,7 @@ function copyAnonData(anon, uid, d, email, resume) {
   var writes = [];
   UPGRADE_SUBPATHS.forEach(function (s) { if (d[s].exists) writes.push(dbSetDoc("data/users/" + uid + "/" + s, d[s].value)); });
   if (d.adminMeta.exists) writes.push(dbSetDoc("adminMeta/" + uid, d.adminMeta.value));
+  if (d.push && d.push.exists) writes.push(dbSetDoc("push/" + uid, d.push.value));
   var m = d.meta.exists && d.meta.value ? d.meta.value : {};
   // Bij een herhaalde aanvraag (bron al opgeruimd) laten we het bestaande "laatst gezien" met rust.
   if (d.meta.exists || !resume) writes.push(dbSetDoc("data/users/" + uid + "/meta", { lastIp: m.lastIp || null, lastSeenAt: m.lastSeenAt || new Date().toISOString(), email: email }));
@@ -1144,13 +1147,13 @@ function copyAnonData(anon, uid, d, email, resume) {
   return Promise.all(writes).then(function () { return listWork; });
 }
 function removeCopies(uid, tokens, anon) {
-  var paths = UPGRADE_SUBPATHS.map(function (s) { return "data/users/" + uid + "/" + s; }).concat(["data/users/" + uid + "/meta", "adminMeta/" + uid, "listsIndex/" + uid]);
+  var paths = UPGRADE_SUBPATHS.map(function (s) { return "data/users/" + uid + "/" + s; }).concat(["data/users/" + uid + "/meta", "adminMeta/" + uid, "listsIndex/" + uid, "push/" + uid]);
   return Promise.all(paths.map(dbDeleteDoc).concat((tokens || []).map(function (t) {
     return dbGetDoc("lists/" + t).then(function (r) { return r.exists && r.value ? dbSetDoc("lists/" + t, Object.assign({}, r.value, { ownerUid: anon })) : null; });
   }))).catch(function () {});
 }
 function cleanupAnon(anon) {
-  var paths = UPGRADE_SUBPATHS.map(function (s) { return "data/users/" + anon + "/" + s; }).concat(["data/users/" + anon + "/meta", "adminMeta/" + anon, "listsIndex/" + anon]);
+  var paths = UPGRADE_SUBPATHS.map(function (s) { return "data/users/" + anon + "/" + s; }).concat(["data/users/" + anon + "/meta", "adminMeta/" + anon, "listsIndex/" + anon, "push/" + anon]);
   return Promise.all(paths.map(dbDeleteDoc)).then(function () {
     return updateBlocked(function (b) { delete b.uids[anon]; delete b.invalidBefore[anon]; });
   }).then(function () { invalidateSummaries(); });
@@ -1203,6 +1206,8 @@ function handleAuthUpgrade(req, res) {
             return dbSetDoc("auth/users/" + email, { uid: uid, salt: record.salt, hash: record.hash, createdAt: now, createdBy: "self", upgradedFrom: anon, lastLoginAt: now, loginCount: 1 });
           })();
           return made.catch(function (e) { return removeCopies(uid, movedTokens, anon).then(function () { throw e; }); }).then(function () {
+            return reassignJobs(anon, uid);
+          }).then(function () {
             return cleanupAnon(anon);
           }).then(function () {
             var s = anonSummary(data); s.lists = movedTokens.length;
@@ -1362,6 +1367,276 @@ function handleAccountDelete(req, res) {
         });
       });
     });
+  });
+}
+
+// ---------- Opdrachten op de achtergrond ----------
+// Genereren duurt soms minuten. Een telefoon pauzeert of sluit een pagina die niet meer op de voorgrond staat, en dan
+// ging het lopende verzoek (en het resultaat) verloren. Daarom start de app een "opdracht": de server werkt zelfstandig
+// verder, bewaart het resultaat een tijd, en de app haalt het op zodra de gebruiker terug is. Duurt het lang en is de
+// gebruiker weg, dan sturen we (als hij dat heeft aangezet) een pushmelding.
+var JOB_TTL_MS = Number(process.env.JOB_TTL_MS) > 0 ? Number(process.env.JOB_TTL_MS) : 30 * 60 * 1000;   // hoe lang een klaar resultaat blijft staan
+var JOB_MAX_RUN_MS = Number(process.env.JOB_MAX_RUN_MS) > 0 ? Number(process.env.JOB_MAX_RUN_MS) : 10 * 60 * 1000;   // daarna geven we het op
+var JOB_WATCH_MS = Number(process.env.JOB_WATCH_MS) > 0 ? Number(process.env.JOB_WATCH_MS) : 20000;   // zo kort geleden gepeild = de gebruiker kijkt mee
+var JOB_MAX_RUNNING_PER_USER = 4;
+var jobs = new Map();            // id -> opdracht (lopend of klaar)
+var jobRequestIds = new Map();   // uid:requestId -> id, zodat een herhaald verzoek dezelfde opdracht teruggeeft
+var jobPollAllowed = makeHourlyLimiter(6000);
+var JOB_ID_RE = /^[a-f0-9]{32}$/;
+var REQUEST_ID_RE = /^[A-Za-z0-9_-]{8,64}$/;
+
+function runningJobCount(uid) {
+  var n = 0;
+  jobs.forEach(function (j) { if (j.status === "running" && (!uid || j.uid === uid)) n++; });
+  return n;
+}
+function saveJobDoc(job) {
+  return dbSetDoc("jobs/" + job.id, { uid: job.uid, action: job.action, status: job.status, result: job.result, error: job.error, createdAt: job.createdAt, finishedAt: job.finishedAt, expiresAt: job.expiresAt }).catch(function () {});
+}
+function loadJob(id) {
+  var j = jobs.get(id);
+  if (j && j.status !== "running" && Date.now() > j.expiresAt) { jobs.delete(id); dbDeleteDoc("jobs/" + id).catch(function () {}); return Promise.resolve(null); }
+  if (j) return Promise.resolve(j);
+  return dbGetDoc("jobs/" + id).then(function (r) {
+    if (!r.exists || !r.value) return null;
+    if (Date.now() > r.value.expiresAt) { dbDeleteDoc("jobs/" + id).catch(function () {}); return null; }
+    return Object.assign({ id: id, lastPollAt: 0 }, r.value);
+  });
+}
+function jobFailure(err) {
+  var bad = !!(err && err.isBadRequest);
+  return { status: bad ? 400 : 502, code: bad ? "bad_request" : "error", message: bad ? "Ongeldig verzoek." : "Genereren mislukt: " + (err && err.message ? err.message : "onbekende fout") };
+}
+function finishJob(job, err, result) {
+  if (job.status !== "running") return;
+  job.finishedAt = Date.now();
+  job.expiresAt = job.finishedAt + JOB_TTL_MS;
+  if (err) { job.status = "error"; job.error = jobFailure(err); } else { job.status = "done"; job.result = result; }
+  saveJobDoc(job);
+  notifyJobFinished(job);
+}
+function startGenerateJob(o) {
+  var uid = o.uid, body = o.body, action = o.action, res = o.res;
+  var rid = typeof body.requestId === "string" && REQUEST_ID_RE.test(body.requestId) ? body.requestId : null;
+  if (rid) {   // hetzelfde verzoek nog eens (bijv. de verbinding viel weg vóór het antwoord): dezelfde opdracht, geen tweede
+    var again = jobRequestIds.get(uid + ":" + rid);
+    if (again && jobs.has(again)) return sendJSON(res, 202, { jobId: again, pollAfterMs: 1500 });
+  }
+  if (runningJobCount(uid) >= JOB_MAX_RUNNING_PER_USER) {
+    o.log(action, false, 429, "Te veel lopende opdrachten");
+    return sendJSON(res, 429, { code: "rate_limited", message: "Er lopen al meerdere opdrachten. Wacht tot een daarvan klaar is." });
+  }
+  var job = { id: crypto.randomBytes(16).toString("hex"), uid: uid, action: action, status: "running", createdAt: Date.now(), lastPollAt: 0, expiresAt: Date.now() + JOB_MAX_RUN_MS + JOB_TTL_MS, host: o.host };
+  jobs.set(job.id, job);
+  if (rid) jobRequestIds.set(uid + ":" + rid, job.id);
+  sendJSON(res, 202, { jobId: job.id, pollAfterMs: 1500 });
+  var timer = setTimeout(function () {
+    var e = new Error("Het duurde te lang. Probeer het nogmaals."); o.log(action, false, 504, e.message); finishJob(job, e);
+  }, JOB_MAX_RUN_MS);
+  if (timer.unref) timer.unref();
+  var payload = Object.assign({}, body); delete payload.async; delete payload.requestId;
+  var run;
+  try { run = runGenerateAction(payload); } catch (e) { run = Promise.reject(e); }
+  run.then(function (parsed) {
+    clearTimeout(timer);
+    incrementUsageToday();   // de AI-kosten zijn gemaakt, ook als het resultaat te laat komt
+    if (job.status !== "running") return;
+    o.log(action, true, 200);
+    finishJob(job, null, parsed);
+  }, function (err) {
+    clearTimeout(timer);
+    if (job.status !== "running") return;
+    o.log(action, false, err && err.isBadRequest ? 400 : 502, err && err.message);
+    finishJob(job, err);
+  });
+}
+function handleGenerateJobGet(req, res, id) {
+  if (!jobPollAllowed(clientIp(req))) return sendJSON(res, 429, { code: "rate_limited", message: "Te veel verzoeken. Even geduld." });
+  return resolveUser(req).then(function (user) {
+    if (!user) return sendUnauthorized(res);
+    return loadJob(id).then(function (job) {
+      if (!job || job.uid !== user.uid) return sendJSON(res, 404, { code: "not_found", message: "Deze opdracht bestaat niet meer." });
+      job.lastPollAt = Date.now();
+      if (job.status === "running") return sendJSON(res, 200, { status: "running", elapsedMs: Date.now() - job.createdAt });
+      if (job.status === "done") return sendJSON(res, 200, { status: "done", result: job.result });
+      sendJSON(res, 200, { status: "error", code: job.error.code, message: job.error.message, httpStatus: job.error.status });
+    });
+  }).catch(function (err) {
+    sendJSON(res, 500, { code: "error", message: "Er ging iets mis: " + (err && err.message ? err.message : "onbekende fout") });
+  });
+}
+// Een omgezet anoniem profiel neemt zijn opdrachten mee, anders raakt een lopende opdracht zijn eigenaar kwijt.
+function reassignJobs(fromUid, toUid) {
+  jobs.forEach(function (j) { if (j.uid === fromUid) j.uid = toUid; });
+  return dbListDocs("jobs/").then(function (docs) {
+    return Promise.all(docs.filter(function (d) { return d.value && d.value.uid === fromUid; }).map(function (d) { return dbSetDoc(d.path, Object.assign({}, d.value, { uid: toUid })); }));
+  }).catch(function () {});
+}
+function sweepJobs() {
+  var now = Date.now();
+  jobs.forEach(function (j, id) { if (j.status !== "running" && now > j.expiresAt) jobs.delete(id); });
+  jobRequestIds.forEach(function (id, key) { if (!jobs.has(id)) jobRequestIds.delete(key); });
+  dbListDocs("jobs/").then(function (docs) {
+    return Promise.all(docs.filter(function (d) { return d.value && now > d.value.expiresAt; }).map(function (d) { return dbDeleteDoc(d.path); }));
+  }).catch(function () {});
+}
+var jobSweeper = setInterval(sweepJobs, 10 * 60 * 1000);
+if (jobSweeper.unref) jobSweeper.unref();
+
+// ---------- Meldingen (Web Push) ----------
+// Zonder extra pakketten: VAPID-handtekening (ES256) en versleuteling van de melding (RFC 8291) doen we met Node's eigen crypto.
+// De VAPID-sleutels komen uit VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY, of worden één keer aangemaakt en in de database bewaard.
+// Zonder blijvende opslag verdwijnen ze bij een herstart; dan schrijven telefoons zich vanzelf opnieuw in als de app opent.
+var pushKeysPromise = null;
+var pushSubscribeAllowed = makeHourlyLimiter(60);
+var PUSH_MAX_SUBS_PER_USER = 5;
+var PUSH_TEST_HOSTS = String(process.env.PUSH_TEST_HOSTS || "").split(",").map(function (s) { return s.trim(); }).filter(Boolean);   // alleen voor tests
+
+function fromBase64url(s) {
+  s = String(s).replace(/-/g, "+").replace(/_/g, "/");
+  while (s.length % 4) s += "=";
+  return Buffer.from(s, "base64");
+}
+function makeVapid(pubB64, privB64, source) {
+  var pub = fromBase64url(pubB64);
+  if (pub.length !== 65 || pub[0] !== 4) throw new Error("VAPID_PUBLIC_KEY is geen geldige sleutel (verwacht 65 bytes, base64url).");
+  var privateKey = crypto.createPrivateKey({ key: { kty: "EC", crv: "P-256", d: String(privB64), x: base64url(pub.slice(1, 33)), y: base64url(pub.slice(33, 65)) }, format: "jwk" });
+  return { publicKey: pubB64, privateKey: privateKey, source: source };
+}
+function getVapidKeys() {
+  if (pushKeysPromise) return pushKeysPromise;
+  pushKeysPromise = (function () {
+    var envPub = process.env.VAPID_PUBLIC_KEY, envPriv = process.env.VAPID_PRIVATE_KEY;
+    if (envPub && envPriv) { try { return Promise.resolve(makeVapid(envPub, envPriv, "env")); } catch (e) { return Promise.reject(e); } }
+    return dbGetDoc("settings/vapid").then(function (r) {
+      if (r.exists && r.value && r.value.publicKey && r.value.privateKey) return makeVapid(r.value.publicKey, r.value.privateKey, "database");
+      var kp = crypto.generateKeyPairSync("ec", { namedCurve: "P-256" });
+      var jwk = kp.privateKey.export({ format: "jwk" });
+      var doc = { publicKey: base64url(Buffer.concat([Buffer.from([4]), fromBase64url(jwk.x), fromBase64url(jwk.y)])), privateKey: jwk.d, createdAt: new Date().toISOString() };
+      return dbSetDoc("settings/vapid", doc).then(function () { return makeVapid(doc.publicKey, doc.privateKey, "database"); });
+    });
+  })();
+  pushKeysPromise.catch(function () { pushKeysPromise = null; });
+  return pushKeysPromise;
+}
+function signVapid(audience, subject, keys) {
+  var head = base64url(Buffer.from(JSON.stringify({ typ: "JWT", alg: "ES256" })));
+  var claims = base64url(Buffer.from(JSON.stringify({ aud: audience, exp: Math.floor(Date.now() / 1000) + 12 * 3600, sub: subject })));
+  var sig = crypto.sign("sha256", Buffer.from(head + "." + claims), { key: keys.privateKey, dsaEncoding: "ieee-p1363" });
+  return head + "." + claims + "." + base64url(sig);
+}
+// Versleutelt een melding voor één toestel (RFC 8291, aes128gcm). 'fixed' is alleen voor tests met vaste sleutels.
+function encryptWebPush(p256dh, authSecret, payload, fixed) {
+  var uaPublic = fromBase64url(p256dh), auth = fromBase64url(authSecret);
+  var ecdh = crypto.createECDH("prime256v1");
+  if (fixed && fixed.asPrivate) ecdh.setPrivateKey(fixed.asPrivate); else ecdh.generateKeys();
+  var asPublic = ecdh.getPublicKey();
+  var secret = ecdh.computeSecret(uaPublic);
+  var salt = fixed && fixed.salt ? fixed.salt : crypto.randomBytes(16);
+  var keyInfo = Buffer.concat([Buffer.from("WebPush: info\0"), uaPublic, asPublic]);
+  var ikm = Buffer.from(crypto.hkdfSync("sha256", secret, auth, keyInfo, 32));
+  var cek = Buffer.from(crypto.hkdfSync("sha256", ikm, salt, Buffer.from("Content-Encoding: aes128gcm\0"), 16));
+  var nonce = Buffer.from(crypto.hkdfSync("sha256", ikm, salt, Buffer.from("Content-Encoding: nonce\0"), 12));
+  var cipher = crypto.createCipheriv("aes-128-gcm", cek, nonce);
+  var enc = Buffer.concat([cipher.update(Buffer.concat([payload, Buffer.from([2])])), cipher.final(), cipher.getAuthTag()]);
+  var header = Buffer.alloc(21);
+  salt.copy(header, 0); header.writeUInt32BE(4096, 16); header[20] = asPublic.length;
+  return Buffer.concat([header, asPublic, enc]);
+}
+// De server stuurt alleen naar de bekende pushdiensten van de browsers (anders kon iemand ons laten aankloppen bij een intern adres).
+function pushEndpointAllowed(raw) {
+  var u;
+  try { u = new URL(String(raw)); } catch (e) { return false; }
+  if (u.username || u.password || String(raw).length > 600) return false;
+  if (PUSH_TEST_HOSTS.indexOf(u.host) > -1) return u.protocol === "http:" || u.protocol === "https:";
+  if (u.protocol !== "https:" || u.port) return false;
+  var h = u.hostname.toLowerCase();
+  return h === "fcm.googleapis.com" || h === "android.googleapis.com" || h === "updates.push.services.mozilla.com" ||
+    /(^|\.)push\.services\.mozilla\.com$/.test(h) || /(^|\.)push\.apple\.com$/.test(h) || /(^|\.)notify\.windows\.com$/.test(h);
+}
+function validPushSubscription(sub) {
+  if (!sub || typeof sub !== "object" || typeof sub.endpoint !== "string" || !pushEndpointAllowed(sub.endpoint)) return false;
+  var keys = sub.keys;
+  if (!keys || typeof keys.p256dh !== "string" || typeof keys.auth !== "string") return false;
+  var k = fromBase64url(keys.p256dh), a = fromBase64url(keys.auth);
+  return k.length === 65 && k[0] === 4 && a.length === 16;
+}
+function sendWebPush(sub, payload, host) {
+  return getVapidKeys().then(function (keys) {
+    var endpoint = new URL(sub.endpoint);
+    var subject = process.env.VAPID_SUBJECT || (host ? "https://" + String(host).replace(/[^A-Za-z0-9.:-]/g, "") : "mailto:beheer@balanza.invalid");
+    var jwt = signVapid(endpoint.origin, subject, keys);
+    var body = encryptWebPush(sub.p256dh, sub.auth, Buffer.from(JSON.stringify(payload)));
+    var ctrl = new AbortController();
+    var t = setTimeout(function () { ctrl.abort(); }, 10000);
+    return fetch(sub.endpoint, {
+      method: "POST", redirect: "manual", signal: ctrl.signal, body: body,
+      headers: { "Content-Type": "application/octet-stream", "Content-Encoding": "aes128gcm", "Content-Length": String(body.length), "TTL": "3600", "Urgency": "normal", "Authorization": "vapid t=" + jwt + ", k=" + keys.publicKey }
+    }).then(function (r) { clearTimeout(t); return r.status; }, function (e) { clearTimeout(t); throw e; });
+  });
+}
+function notifyUser(uid, payload, host) {
+  return dbGetDoc("push/" + uid).then(function (r) {
+    var subs = r.exists && r.value && Array.isArray(r.value.subs) ? r.value.subs : [];
+    if (!subs.length) return { sent: 0 };
+    return Promise.all(subs.map(function (s) {
+      return sendWebPush(s, payload, host).then(function (status) { return { s: s, status: status }; }, function () { return { s: s, status: 0 }; });
+    })).then(function (results) {
+      var sent = results.filter(function (x) { return x.status >= 200 && x.status < 300; }).length;
+      var dead = results.filter(function (x) { return [400, 401, 403, 404, 410].indexOf(x.status) > -1; }).map(function (x) { return x.s.endpoint; });
+      logEvent("push", "notify", sent > 0, sent > 0 ? 200 : (results[0] ? results[0].status : 0), { uid: uid, sent: sent, failed: results.length - sent, error: sent > 0 ? undefined : "Melding niet afgeleverd" });
+      if (!dead.length) return { sent: sent, removed: 0 };
+      return dbSetDoc("push/" + uid, { subs: subs.filter(function (s) { return dead.indexOf(s.endpoint) === -1; }) }).then(function () { return { sent: sent, removed: dead.length }; });
+    });
+  }).catch(function () { return { sent: 0 }; });
+}
+// Alleen bij een lange opdracht (gerechten maken) en alleen als de gebruiker niet meer meekijkt.
+function notifyJobFinished(job) {
+  if (job.action !== "generate") return;
+  var lastSeen = job.lastPollAt || job.createdAt;
+  if (Date.now() - lastSeen < JOB_WATCH_MS) return;
+  notifyUser(job.uid, job.status === "done"
+    ? { title: "Balanza", body: "Je gerechten zijn klaar. Tik om ze te bekijken.", url: "/", tag: "balanza-generate" }
+    : { title: "Balanza", body: "Het genereren is niet gelukt. Tik om het opnieuw te proberen.", url: "/", tag: "balanza-generate" }, job.host);
+}
+
+function handlePushKey(req, res) {
+  return getVapidKeys().then(function (k) { sendJSON(res, 200, { publicKey: k.publicKey }); }, function () {
+    sendJSON(res, 503, { code: "push_unavailable", message: "Meldingen zijn op deze server niet beschikbaar." });
+  });
+}
+function handlePushSubscribe(req, res) {
+  if (!pushSubscribeAllowed(clientIp(req))) return sendJSON(res, 429, { code: "rate_limited", message: "Te veel verzoeken. Probeer het later opnieuw." });
+  return resolveUser(req).then(function (user) {
+    if (!user) return sendUnauthorized(res);
+    return readBody(req).then(function (body) {
+      var sub = body && body.subscription;
+      if (!validPushSubscription(sub)) return sendJSON(res, 400, { code: "bad_request", message: "Dit toestel kan geen meldingen ontvangen (ongeldig abonnement)." });
+      return dbGetDoc("push/" + user.uid).then(function (r) {
+        var subs = r.exists && r.value && Array.isArray(r.value.subs) ? r.value.subs.filter(function (s) { return s.endpoint !== sub.endpoint; }) : [];
+        subs.push({ endpoint: sub.endpoint, p256dh: sub.keys.p256dh, auth: sub.keys.auth, createdAt: new Date().toISOString() });
+        while (subs.length > PUSH_MAX_SUBS_PER_USER) subs.shift();
+        return dbSetDoc("push/" + user.uid, { subs: subs });
+      }).then(function () { sendJSON(res, 200, { ok: true }); });
+    });
+  }).catch(function (err) {
+    sendJSON(res, 400, { code: "bad_request", message: err && err.message ? err.message : "Ongeldige aanvraag." });
+  });
+}
+function handlePushUnsubscribe(req, res) {
+  if (!pushSubscribeAllowed(clientIp(req))) return sendJSON(res, 429, { code: "rate_limited", message: "Te veel verzoeken. Probeer het later opnieuw." });
+  return resolveUser(req).then(function (user) {
+    if (!user) return sendUnauthorized(res);
+    return readBody(req).then(function (body) {
+      var endpoint = body && typeof body.endpoint === "string" ? body.endpoint : "";
+      return dbGetDoc("push/" + user.uid).then(function (r) {
+        var subs = r.exists && r.value && Array.isArray(r.value.subs) ? r.value.subs : [];
+        var next = subs.filter(function (s) { return s.endpoint !== endpoint; });
+        return next.length === subs.length ? null : (next.length ? dbSetDoc("push/" + user.uid, { subs: next }) : dbDeleteDoc("push/" + user.uid));
+      });
+    }).then(function () { sendJSON(res, 200, { ok: true }); });
+  }).catch(function (err) {
+    sendJSON(res, 400, { code: "bad_request", message: err && err.message ? err.message : "Ongeldige aanvraag." });
   });
 }
 
@@ -2919,7 +3194,7 @@ function deleteUserEverywhere(user) {
     var tokens = r.exists && r.value && Array.isArray(r.value.tokens) ? r.value.tokens : [];
     return Promise.all(tokens.map(function (t) { return dbDeleteDoc("lists/" + t); }));
   }).then(function () {
-    var paths = ["data/users/" + uid + "/prefs", "data/users/" + uid + "/dishes", "data/users/" + uid + "/plannedWeeks", "data/users/" + uid + "/meta", "listsIndex/" + uid, "adminMeta/" + uid];
+    var paths = ["data/users/" + uid + "/prefs", "data/users/" + uid + "/dishes", "data/users/" + uid + "/plannedWeeks", "data/users/" + uid + "/meta", "listsIndex/" + uid, "adminMeta/" + uid, "push/" + uid];
     if (user.email) paths.push("auth/users/" + user.email);
     return Promise.all(paths.map(dbDeleteDoc));
   }).then(function () {
@@ -3162,6 +3437,9 @@ var SERVER_STARTED_AT = new Date().toISOString();
 function handleAdminSystem(req, res) {
   var t0 = Date.now();
   return dbGetDoc("settings/app").then(function () { return { ok: true, ms: Date.now() - t0 }; }, function (e) { return { ok: false, ms: Date.now() - t0, error: e.message }; }).then(function (storage) {
+    return getVapidKeys().then(function (k) { return { storage: storage, push: { ok: true, source: k.source } }; }, function (e) { return { storage: storage, push: { ok: false, error: e.message } }; });
+  }).then(function (both) {
+    var storage = both.storage, pushInfo = both.push;
     var mem = process.memoryUsage();
     var checks = [
       { key: "storage", label: "Opslag", ok: storage.ok && mongoConnected, detail: (mongoConnected ? "MongoDB (blijvend)" : "Lokaal bestand: data gaat verloren bij een herstart of nieuwe deploy") + (storage.ok ? ", antwoordtijd " + storage.ms + " ms" : ", FOUT: " + storage.error) },
@@ -3169,6 +3447,7 @@ function handleAdminSystem(req, res) {
       { key: "adminPassword", label: "Beheerderswachtwoord", ok: ADMIN_PASSWORD.length >= 12, detail: ADMIN_PASSWORD.length >= 12 ? "sterk genoeg" : "korter dan 12 tekens: kies een langer wachtwoord (ADMIN_PASSWORD)" },
       { key: "sessionSecret", label: "Sessiegeheim (SESSION_SECRET)", ok: !!process.env.SESSION_SECRET, detail: process.env.SESSION_SECRET ? "vast ingesteld" : "niet ingesteld: iedereen wordt uitgelogd bij een herstart" },
       { key: "unsplash", label: "Foto's (UNSPLASH_ACCESS_KEY)", ok: !!UNSPLASH_ACCESS_KEY, optional: true, detail: UNSPLASH_ACCESS_KEY ? "ingesteld" : "niet ingesteld: gerechten krijgen geen foto" },
+      { key: "webPush", label: "Meldingen (Web Push)", ok: pushInfo.ok && (pushInfo.source === "env" || mongoConnected), optional: true, detail: !pushInfo.ok ? "niet beschikbaar: " + pushInfo.error : pushInfo.source === "env" ? "sleutels uit de omgeving (VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY)" : mongoConnected ? "sleutels bewaard in de database" : "sleutels staan alleen in het lokale bestand en verdwijnen bij een herstart: stel VAPID_PUBLIC_KEY en VAPID_PRIVATE_KEY in" },
       { key: "resend", label: "E-mail (RESEND_API_KEY)", ok: !!RESEND_API_KEY, optional: true, detail: RESEND_API_KEY ? "ingesteld" : "niet ingesteld: geen wachtwoord-vergeten-mails of uitnodigingen per e-mail" }
     ];
     sendJSON(res, 200, {
@@ -3342,6 +3621,11 @@ var server = http.createServer(function (req, res) {
   var url = new URL(req.url, "http://localhost");
 
   if (req.method === "POST" && url.pathname === "/api/generate") return handleGenerate(req, res);
+  var jobMatch = req.method === "GET" ? url.pathname.match(/^\/api\/generate\/job\/([a-f0-9]{32})$/) : null;
+  if (jobMatch) return handleGenerateJobGet(req, res, jobMatch[1]);
+  if (req.method === "GET" && url.pathname === "/api/push/key") return handlePushKey(req, res);
+  if (req.method === "POST" && url.pathname === "/api/push/subscribe") return handlePushSubscribe(req, res);
+  if (req.method === "POST" && url.pathname === "/api/push/unsubscribe") return handlePushUnsubscribe(req, res);
   if (req.method === "POST" && url.pathname === "/api/tips") return handleTips(req, res);
   if (req.method === "POST" && url.pathname === "/api/auth/register") return guardedRegister(req, res);
   if (req.method === "POST" && url.pathname === "/api/auth/upgrade") return guardedUpgrade(req, res);
