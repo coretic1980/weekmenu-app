@@ -481,6 +481,10 @@ var VARIATION_INSTRUCTIONS = {
   wisselkh: "Vervang de koolhydraatbron door een andere (bijv. rijst i.p.v. aardappel of andersom), maar behoud dezelfde macroverdeling."
 };
 
+var FOTO_TERM_LINE = "\"foto_zoekterm\" is een korte Engelse zoekterm (2 tot 4 woorden) om een passende stockfoto van dit gerecht te vinden: " +
+  "noem het hoofdingrediënt en het soort gerecht, zonder bijvoeglijke naamwoorden als pittig, gastronomisch of huisgemaakt " +
+  "(bijv. \"grilled salmon asparagus\" of \"chicken curry rice\"). ";
+
 var INGREDIENT_SPECIFICITY_LINE = "Elk ingrediënt moet specifiek en concreet benoemd zijn (bijv. \"1 tl oregano\" of \"2 tenen knoflook\"), " +
   "nooit een vaag verzamelwoord zoals \"kruiden\" of \"specerijen\" zonder te specificeren welke.\n";
 
@@ -553,10 +557,11 @@ function buildGeneratePrompt(p) {
     "Geef ALLEEN geldig JSON terug: een array van EXACT " + totalCount + " objecten (" + count +
     " per maaltijdmoment), exact dit schema, geen markdown-opmaak, geen uitleg erbuiten:\n" +
     '[{"name": "gerechtnaam", "mealType": "' + mealTypes[0] + '", "kcal": 600, "kh_g": 50, "eiwit_g": 48, "vet_g": 22, ' +
-    '"bereidingstijd_minuten": 30, "benodigdheden": "korte tekst met keukenapparatuur", "ingredienten": ["ingredient 1", "ingredient 2"], ' +
+    '"bereidingstijd_minuten": 30, "foto_zoekterm": "grilled salmon asparagus", "benodigdheden": "korte tekst met keukenapparatuur", "ingredienten": ["ingredient 1", "ingredient 2"], ' +
     '"steps": [{"title": "korte staptitel", "content": "volledige instructie", "timer_seconds": 300}]}]\n' +
     '"mealType" moet exact één van deze waarden zijn: ' + mealTypes.join(", ") + ". " +
     "\"bereidingstijd_minuten\" is de totale realistische bereidingstijd (voorbereiding + kooktijd samen) in hele minuten. " +
+    FOTO_TERM_LINE +
     "timer_seconds alleen toevoegen bij stappen met wachttijd (koken, bakken, grillen, oven, sudderen); anders weglaten.";
 }
 
@@ -578,10 +583,11 @@ function buildBackgroundGeneratePrompt(needed, p) {
     "Geef ALLEEN geldig JSON terug: een array van EXACT " + totalCount + " objecten, exact dit schema, " +
     "geen markdown-opmaak, geen uitleg erbuiten:\n" +
     '[{"name": "gerechtnaam", "mealType": "' + types[0] + '", "kcal": 600, "kh_g": 50, "eiwit_g": 48, "vet_g": 22, ' +
-    '"bereidingstijd_minuten": 30, "benodigdheden": "korte tekst met keukenapparatuur", "ingredienten": ["ingredient 1", "ingredient 2"], ' +
+    '"bereidingstijd_minuten": 30, "foto_zoekterm": "grilled salmon asparagus", "benodigdheden": "korte tekst met keukenapparatuur", "ingredienten": ["ingredient 1", "ingredient 2"], ' +
     '"steps": [{"title": "korte staptitel", "content": "volledige instructie", "timer_seconds": 300}]}]\n' +
     '"mealType" moet exact één van deze waarden zijn: ' + types.join(", ") + ". " +
     "\"bereidingstijd_minuten\" is de totale realistische bereidingstijd (voorbereiding + kooktijd samen) in hele minuten. " +
+    FOTO_TERM_LINE +
     "timer_seconds alleen toevoegen bij stappen met wachttijd; anders weglaten.";
 }
 
@@ -593,9 +599,10 @@ function buildVariationPromptServer(current, kind, p) {
     INGREDIENT_SPECIFICITY_LINE +
     "Geef ALLEEN geldig JSON terug, exact dit schema, geen markdown, geen uitleg erbuiten:\n" +
     '{"name": "gerechtnaam", "kcal": 600, "kh_g": 50, "eiwit_g": 48, "vet_g": 22, ' +
-    '"bereidingstijd_minuten": 30, "benodigdheden": "korte tekst met keukenapparatuur", "ingredienten": ["ingredient 1", "ingredient 2"], ' +
+    '"bereidingstijd_minuten": 30, "foto_zoekterm": "grilled salmon asparagus", "benodigdheden": "korte tekst met keukenapparatuur", "ingredienten": ["ingredient 1", "ingredient 2"], ' +
     '"steps": [{"title": "korte staptitel", "content": "volledige instructie", "timer_seconds": 300}]}\n' +
     "\"bereidingstijd_minuten\" is de bijgewerkte, realistische totale bereidingstijd in hele minuten, passend bij de opdracht. " +
+    "Werk ook \"foto_zoekterm\" bij als het hoofdingrediënt of het soort gerecht door de opdracht verandert. " + FOTO_TERM_LINE +
     "timer_seconds alleen toevoegen bij stappen met wachttijd; anders weglaten.";
 }
 
@@ -985,43 +992,235 @@ function handleDbSet(req, res) {
   });
 }
 
-// ---------- Image lookup (optional — only active if UNSPLASH_ACCESS_KEY is set) ----------
+// ---------- Foto's (Unsplash; alleen actief als UNSPLASH_ACCESS_KEY is ingesteld) ----------
+//
+// Zo komt een foto tot stand:
+//  1. Zoekterm: bij voorkeur de Engelse "foto_zoekterm" die de AI bij het gerecht
+//     leverde. Ontbreekt die (oudere gerechten), dan vertalen we de Nederlandse
+//     gerechtnaam met een woordenlijst.
+//  2. We halen 15 kandidaten op en beoordelen elk op beschrijving en tags:
+//     past het bij het gerecht, is het eten, staat er geen persoon of landschap op?
+//  3. Is er geen degelijke match, dan komt er één tweede poging met de kern van
+//     de zoekterm. Daarna geldt: liever géén foto dan een verkeerde foto.
+//  4. Definitieve uitkomsten worden onthouden. Tijdelijke storingen (bijv. de
+//     limiet van 50 aanvragen per uur bij een Unsplash-app in demomodus) worden
+//     NIET als "geen foto" vastgelegd, zodat er later opnieuw gezocht wordt.
 
-var imageCache = new Map(); // query (lowercased) -> { url, credit } | null, in-memory for this process
+var IMAGE_CACHE_MAX = 500;
+var IMAGE_CANDIDATES = 15;
+var UNSPLASH_BACKOFF_MS = 10 * 60 * 1000;
+
+var imageCache = new Map();      // zoekterm -> definitief resultaat { url, credit, final: true }
+var imageInflight = new Map();   // zoekterm -> Promise (gelijktijdige gelijke aanvragen delen 1 opzoeking)
+var unsplashBackoffUntil = 0;    // na een limiet-melding tijdelijk niet meer aankloppen
+
+var TERM_STOPWORDS = ["met", "en", "van", "op", "in", "de", "het", "een", "uit", "aan", "voor", "of", "naar", "bij", "door",
+  "onder", "over", "zonder", "la", "al", "alla", "di", "del", "the", "and", "with", "of", "on", "a", "food", "dish", "meal", "recipe"];
+
+var TERM_MODIFIERS = ["italian", "mexican", "asian", "thai", "indian", "greek", "japanese", "chinese", "french", "spanish", "turkish",
+  "moroccan", "grilled", "fried", "roasted", "braised", "smoked", "baked", "poached"];
+
+var NL_TO_EN = {
+  // vlees, vis, ei, vega-eiwit
+  kip: "chicken", kipfilet: "chicken breast", kippendij: "chicken thigh", kipdij: "chicken thigh", kalkoen: "turkey",
+  gehakt: "minced meat", gehaktballetjes: "meatballs", gehaktbal: "meatballs", gehaktballen: "meatballs",
+  rundvlees: "beef", rund: "beef", runderlappen: "beef stew", biefstuk: "steak", entrecote: "steak", ribeye: "steak",
+  varkensvlees: "pork", varkenshaas: "pork tenderloin", spek: "bacon", ham: "ham", worst: "sausage", lam: "lamb", lamsvlees: "lamb",
+  kalfsvlees: "veal", zalm: "salmon", tonijn: "tuna", kabeljauw: "cod", forel: "trout", makreel: "mackerel", garnalen: "shrimp",
+  gamba: "shrimp", gambas: "shrimp", mosselen: "mussels", inktvis: "squid", vis: "fish", ei: "egg", eieren: "eggs", omelet: "omelette",
+  roerei: "scrambled eggs", tofu: "tofu", tempeh: "tempeh", kikkererwten: "chickpeas", linzen: "lentils", bonen: "beans",
+  kidneybonen: "kidney beans", edamame: "edamame", shoarma: "shawarma", gyros: "gyros",
+  // groente
+  tomaat: "tomato", tomaten: "tomato", tomatensaus: "tomato sauce", komkommer: "cucumber", paprika: "bell pepper", ui: "onion", uien: "onion",
+  knoflook: "garlic", wortel: "carrot", wortels: "carrot", peen: "carrot", broccoli: "broccoli", bloemkool: "cauliflower",
+  spinazie: "spinach", courgette: "zucchini", aubergine: "eggplant", champignons: "mushrooms", paddenstoelen: "mushrooms",
+  prei: "leek", sla: "salad", rucola: "arugula", avocado: "avocado", pompoen: "pumpkin", aardappel: "potato", aardappelen: "potatoes",
+  aardappels: "potatoes", zoete: "sweet", mais: "corn", erwten: "peas", asperges: "asparagus", boerenkool: "kale", spruitjes: "brussels sprouts",
+  kool: "cabbage", snijbonen: "green beans", sperziebonen: "green beans", venkel: "fennel", radijs: "radish", bieten: "beetroot",
+  groenten: "vegetables", groente: "vegetables",
+  // fruit
+  bessen: "berries", bosbes: "blueberry", blauwe: "blue", rode: "red", groene: "green", gele: "yellow", witte: "white",
+  appel: "apple", banaan: "banana", aardbei: "strawberry", aardbeien: "strawberries", frambozen: "raspberries", bosbessen: "blueberries",
+  mango: "mango", ananas: "pineapple", citroen: "lemon", limoen: "lime", sinaasappel: "orange", peer: "pear", druiven: "grapes",
+  // granen en brood
+  rijst: "rice", pasta: "pasta", spaghetti: "spaghetti", penne: "penne", lasagne: "lasagna", noedels: "noodles", couscous: "couscous",
+  quinoa: "quinoa", bulgur: "bulgur", brood: "bread", wrap: "wrap", tortilla: "tortilla", pannenkoek: "pancake", pannenkoeken: "pancakes",
+  havermout: "oatmeal", muesli: "muesli", granola: "granola", boterham: "sandwich",
+  // zuivel
+  kaas: "cheese", feta: "feta", mozzarella: "mozzarella", parmezaan: "parmesan", yoghurt: "yogurt", kwark: "quark", skyr: "skyr",
+  room: "cream", roomkaas: "cream cheese", boter: "butter",
+  // soorten gerecht
+  soep: "soup", salade: "salad", stoofpot: "stew", curry: "curry", bowl: "bowl", burger: "burger", pizza: "pizza", taco: "taco", tacos: "tacos",
+  burrito: "burrito", sandwich: "sandwich", toast: "toast", smoothie: "smoothie", ovenschotel: "casserole", roerbak: "stir fry",
+  roerbakschotel: "stir fry", wok: "stir fry", risotto: "risotto", gratin: "gratin", frittata: "frittata", shakshuka: "shakshuka",
+  falafel: "falafel", hummus: "hummus", sushi: "sushi", ramen: "ramen", saus: "sauce", pesto: "pesto", satay: "satay", saté: "satay",
+  // bereiding
+  gegrild: "grilled", gebakken: "fried", gebraden: "roasted", geroosterd: "roasted", gestoofd: "braised", gerookt: "smoked",
+  ovengebakken: "baked", gepocheerd: "poached", gefrituurd: "fried",
+  // keuken
+  italiaans: "italian", mexicaans: "mexican", aziatisch: "asian", thais: "thai", indiaas: "indian", grieks: "greek",
+  japans: "japanese", chinees: "chinese", frans: "french", spaans: "spanish", turks: "turkish", marokkaans: "moroccan"
+};
+
+function tokenize(text) {
+  return String(text || "").toLowerCase().replace(/[^a-zà-ÿ0-9\s-]/g, " ").split(/[\s-]+/).filter(Boolean);
+}
+
+// Vertaalt één Nederlands woord (ook samenstellingen als "tomatensoep" of "kipsaté") naar Engelse woorden.
+function translateToken(tok) {
+  if (NL_TO_EN[tok]) return [NL_TO_EN[tok]];
+  var keys = Object.keys(NL_TO_EN);
+  for (var i = 0; i < keys.length; i++) {
+    var a = keys[i];
+    if (a.length < 3 || tok.indexOf(a) !== 0 || tok.length <= a.length) continue;
+    var restRaw = tok.slice(a.length);
+    var rest = NL_TO_EN[restRaw] ? restRaw : restRaw.replace(/^s/, ""); // "s" als schakelklank (bijv. kip-s-oep)
+    if (NL_TO_EN[rest]) return [NL_TO_EN[a], NL_TO_EN[rest]];
+  }
+  for (var j = 0; j < keys.length; j++) {
+    var k = keys[j];
+    if (k.length >= 3 && tok.length > k.length && tok.indexOf(k) === 0) return [NL_TO_EN[k]];
+  }
+  for (var m = 0; m < keys.length; m++) {
+    var s = keys[m];
+    if (s.length >= 4 && tok.length > s.length && tok.slice(-s.length) === s) return [NL_TO_EN[s]];
+  }
+  return [];
+}
+
+function uniqueWords(list) {
+  var seen = {}, out = [];
+  list.forEach(function (w) {
+    w.split(/\s+/).forEach(function (part) {
+      if (part && !seen[part]) { seen[part] = true; out.push(part); }
+    });
+  });
+  return out;
+}
+
+// De AI-zoekterm: kleine letters, alleen letters/cijfers/spaties, maximaal 6 woorden.
+function cleanSearchTerm(term) {
+  return tokenize(term).filter(function (w) { return TERM_STOPWORDS.indexOf(w) === -1; }).slice(0, 6).join(" ");
+}
+
+// Terugval voor gerechten zonder AI-zoekterm: Nederlandse naam -> Engelse zoekwoorden.
+function translateDutchDishName(name) {
+  var toks = tokenize(name).filter(function (w) { return TERM_STOPWORDS.indexOf(w) === -1; });
+  var english = [];
+  toks.forEach(function (t) { translateToken(t).forEach(function (w) { english.push(w); }); });
+  // Hoofdingrediënten eerst; keuken- en bereidingswoorden achteraan, zodat bij het
+  // afkappen op 4 woorden de kern van het gerecht behouden blijft.
+  var words = uniqueWords(english);
+  var core = words.filter(function (w) { return TERM_MODIFIERS.indexOf(w) === -1; });
+  var mods = words.filter(function (w) { return TERM_MODIFIERS.indexOf(w) > -1; });
+  var ordered = core.concat(mods).slice(0, 4);
+  return ordered.length ? ordered.join(" ") : toks.slice(0, 3).join(" ");
+}
+
+var FOOD_HINT_RE = /\b(food|dish|meal|plate|plated|bowl|salad|soup|stew|pasta|noodles?|rice|bread|toast|sandwich|burger|pizza|breakfast|lunch|dinner|snack|cuisine|cooking|cooked|grilled|roasted|baked|fried|dessert|vegetables?|fruits?|meat|steak|chicken|beef|pork|fish|seafood|salmon|eggs?|cheese|sauce|curry|tomato(es)?|cucumber|avocado|potato(es)?|pancakes?|yogh?urt|oatmeal|granola|smoothie|tacos?|wrap|sushi|ingredients?|healthy|gourmet|delicious|tasty|recipe|table)\b/;
+var PEOPLE_RE = /\b(man|men|woman|women|person|people|portrait|girl|boy|child|children|baby|face|couple|family|smiling|standing|sitting|walking)\b/;
+var NONFOOD_RE = /\b(landscape|mountain|city|building|street|beach|ocean|forest|sky|animal|dog|cat|car|road|logo|sign|book|phone|laptop|flower|flowers)\b/;
+
+function photoText(photo) {
+  var parts = [photo.alt_description, photo.description];
+  (photo.tags || []).forEach(function (t) { if (t && t.title) parts.push(t.title); });
+  return parts.filter(Boolean).join(" ").toLowerCase();
+}
+
+// Geeft de beste foto terug, of null als geen enkele kandidaat degelijk genoeg is.
+function pickBestPhoto(photos, keywords) {
+  var best = null;
+  (photos || []).forEach(function (photo, index) {
+    if (!photo || !photo.urls) return;
+    var text = photoText(photo);
+    var matched = 0;
+    keywords.forEach(function (kw) { if (text.indexOf(kw) > -1) matched++; });
+    var foodHint = matched > 0 || FOOD_HINT_RE.test(text);
+    var score = matched * 3 + (foodHint ? 2 : 0);
+    if (PEOPLE_RE.test(text)) score -= 4;
+    if (!foodHint && NONFOOD_RE.test(text)) score -= 5;
+    if (!foodHint || score < 2) return;
+    if (!best || score > best.score) best = { photo: photo, score: score, index: index };
+  });
+  return best ? best.photo : null;
+}
+
+function searchUnsplash(term) {
+  var url = "https://api.unsplash.com/search/photos?per_page=" + IMAGE_CANDIDATES +
+    "&orientation=landscape&content_filter=high&query=" + encodeURIComponent(term + " food");
+  return fetch(url, { headers: { "Authorization": "Client-ID " + UNSPLASH_ACCESS_KEY } }).then(function (r) {
+    if (r.status === 403 || r.status === 429) {
+      unsplashBackoffUntil = Date.now() + UNSPLASH_BACKOFF_MS;
+      var limitErr = new Error("Unsplash-limiet bereikt");
+      limitErr.transient = true;
+      throw limitErr;
+    }
+    if (!r.ok) {
+      var httpErr = new Error("Unsplash API error " + r.status);
+      httpErr.transient = true;
+      throw httpErr;
+    }
+    return r.json();
+  });
+}
+
+function photoResult(photo) {
+  return {
+    url: photo.urls.small || photo.urls.regular,
+    credit: photo.user ? { name: photo.user.name, profileUrl: photo.user.links && photo.user.links.html } : null,
+    final: true
+  };
+}
+
+function resolvePhoto(term) {
+  var keywords = term.split(" ").filter(function (w) { return w.length >= 3; });
+  return searchUnsplash(term).then(function (data) {
+    var best = pickBestPhoto(data.results, keywords);
+    if (best) return photoResult(best);
+    if (keywords.length < 2) return { url: null, credit: null, final: true };
+    var core = keywords.slice(0, 2).join(" ");
+    return searchUnsplash(core).then(function (data2) {
+      var best2 = pickBestPhoto(data2.results, core.split(" "));
+      return best2 ? photoResult(best2) : { url: null, credit: null, final: true };
+    });
+  });
+}
+
+function rememberImage(term, result) {
+  imageCache.set(term, result);
+  if (imageCache.size > IMAGE_CACHE_MAX) imageCache.delete(imageCache.keys().next().value);
+}
 
 function handleImage(req, res, query) {
-  var q = (query.get("query") || "").trim();
-  if (!q) return sendJSON(res, 400, { message: "query ontbreekt" });
+  var name = (query.get("query") || "").trim();
+  var aiTerm = (query.get("term") || "").trim();
+  if (!name && !aiTerm) return sendJSON(res, 400, { message: "query ontbreekt" });
 
   if (!UNSPLASH_ACCESS_KEY) {
-    return sendJSON(res, 200, { url: null, credit: null });
+    return sendJSON(res, 200, { url: null, credit: null, final: true });
   }
 
-  var cacheKey = q.toLowerCase();
-  if (imageCache.has(cacheKey)) {
-    return sendJSON(res, 200, imageCache.get(cacheKey));
-  }
+  var term = aiTerm ? cleanSearchTerm(aiTerm) : translateDutchDishName(name);
+  if (!term) return sendJSON(res, 200, { url: null, credit: null, final: true });
 
-  var url = "https://api.unsplash.com/search/photos?per_page=1&orientation=landscape&query=" + encodeURIComponent(q + " food dish");
-  fetch(url, { headers: { "Authorization": "Client-ID " + UNSPLASH_ACCESS_KEY } })
-    .then(function (r) {
-      if (!r.ok) throw new Error("Unsplash API error " + r.status);
-      return r.json();
-    })
-    .then(function (data) {
-      var photo = data.results && data.results[0];
-      var result = photo
-        ? {
-            url: photo.urls && (photo.urls.small || photo.urls.regular),
-            credit: photo.user ? { name: photo.user.name, profileUrl: photo.user.links && photo.user.links.html } : null
-          }
-        : { url: null, credit: null };
-      imageCache.set(cacheKey, result);
-      sendJSON(res, 200, result);
-    })
-    .catch(function () {
-      sendJSON(res, 200, { url: null, credit: null });
+  if (imageCache.has(term)) return sendJSON(res, 200, imageCache.get(term));
+  if (Date.now() < unsplashBackoffUntil) return sendJSON(res, 200, { url: null, credit: null, final: false });
+
+  var pending = imageInflight.get(term);
+  if (!pending) {
+    pending = resolvePhoto(term).then(function (result) {
+      rememberImage(term, result);
+      return result;
     });
+    imageInflight.set(term, pending);
+    var clear = function () { imageInflight.delete(term); };
+    pending.then(clear, clear);
+  }
+  pending.then(function (result) {
+    sendJSON(res, 200, result);
+  }).catch(function () {
+    sendJSON(res, 200, { url: null, credit: null, final: false });
+  });
 }
 
 var MIME_TYPES = {

@@ -66,9 +66,27 @@ receptdetailscherm), opgehaald via Unsplash. Dit is optioneel:
 4. Herstart de server
 
 Zonder deze sleutel werkt de app gewoon door — dan verschijnen er simpelweg
-geen foto's. Foto's worden per gerecht één keer opgehaald en daarna
-opgeslagen (in `data/store.json`), dus niet steeds opnieuw aangevraagd.
-Unsplash's gratis tier staat 50 aanvragen per uur toe.
+geen foto's. Foto's worden per gerecht één keer opgehaald en daarna bij het
+gerecht opgeslagen, dus niet steeds opnieuw aangevraagd.
+
+**Hoe een foto wordt gekozen**
+
+- Bij elk nieuw gerecht levert de AI een korte Engelse zoekterm
+  (`foto_zoekterm`, bijv. "grilled salmon asparagus"). Oudere gerechten zonder
+  zoekterm krijgen een zoekterm door hun Nederlandse naam te vertalen.
+- De server haalt 15 kandidaten op en beoordeelt ze op beschrijving en tags:
+  past het bij het gerecht, is het eten, staat er geen persoon of landschap op?
+  Is er geen degelijke match, dan volgt één tweede poging met de kern van de
+  zoekterm; daarna geldt liever géén foto dan een verkeerde foto.
+- Een tijdelijke storing (bijv. de Unsplash-limiet) wordt niet als "geen foto"
+  vastgelegd: er wordt later opnieuw gezocht (na 10 minuten).
+
+**Let op — Unsplash-limiet:** een Unsplash-app in demomodus mag 50 aanvragen
+per uur doen. Eén generatie van 28 gerechten met afbeeldingen kost er ongeveer
+28 (soms iets meer, bij een tweede poging). Wordt de limiet bereikt, dan wacht
+de server 10 minuten en verschijnen de ontbrekende foto's vanzelf zodra je de
+gerechten daarna opnieuw bekijkt. Wil je veel foto's per uur, vraag dan bij
+Unsplash "Production" aan (5.000 aanvragen per uur).
 
 ## Kostenbeheersing
 

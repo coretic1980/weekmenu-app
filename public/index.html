@@ -1851,14 +1851,44 @@
     genTickerId = setInterval(updateBusyUI, 1000);
   }
 
-  function fetchImageForDish(day) {
-    return fetch("/api/image?query=" + encodeURIComponent(day.name)).then(function (res) {
-      return res.ok ? res.json() : { url: null, credit: null };
-    }).then(function (data) {
-      day.imageUrl = data.url || null;
+  // ---------- Foto's ----------
+  // Het zoeken zelf gebeurt op de server (/api/image). Het antwoord bevat "final":
+  // true als de uitkomst definitief is (foto gevonden, of echt geen goede match).
+  // Bij een tijdelijke storing (bijv. de Unsplash-limiet) laten we het gerecht
+  // ongemoeid, zodat er later opnieuw gezocht wordt in plaats van voorgoed
+  // "geen foto". IMAGE_V markeert uitkomsten die met deze werkwijze zijn bepaald;
+  // een oudere "geen foto" zonder markering wordt daarom nog eens opnieuw bekeken.
+  var IMAGE_V = 2;
+  var imageRetryAt = {};
+  function imageRequestUrl(day) {
+    return "/api/image?query=" + encodeURIComponent(day.name || "") +
+      (day.fotoZoekterm ? "&term=" + encodeURIComponent(day.fotoZoekterm) : "");
+  }
+  // Slaat een definitieve uitkomst op het gerecht op (true), of stelt een nieuwe poging uit (false).
+  function applyImageResult(day, data) {
+    if (data && data.url) {
+      day.imageUrl = data.url;
       day.imageCredit = data.credit || null;
-    }).catch(function () {
+      day.imageV = IMAGE_V;
+      return true;
+    }
+    if (data && data.final) {
       day.imageUrl = null;
+      day.imageCredit = null;
+      day.imageV = IMAGE_V;
+      return true;
+    }
+    imageRetryAt[day.id || day.name] = Date.now() + 10 * 60 * 1000;
+    return false;
+  }
+
+  function fetchImageForDish(day) {
+    return fetch(imageRequestUrl(day)).then(function (res) {
+      return res.ok ? res.json() : { url: null, credit: null, final: false };
+    }).then(function (data) {
+      applyImageResult(day, data);
+    }).catch(function () {
+      applyImageResult(day, null);
     });
   }
 
@@ -1919,6 +1949,7 @@
             kcal: kcal, kh: khPct, eiwit: eiwitPct, vet: vetPct, balans: balans,
             khG: khG, eiwitG: eiwitG, vetG: vetG,
             bereidingstijd: Number(d.bereidingstijd_minuten) || 0,
+            fotoZoekterm: String(d.foto_zoekterm || "").trim().slice(0, 80),
             mealType: dishMealType,
             benodigdheden: String(d.benodigdheden || ""),
             ingredienten: Array.isArray(d.ingredienten) ? d.ingredienten.map(String) : [],
@@ -3839,6 +3870,14 @@
         day.kh = khPct; day.eiwit = eiwitPct; day.vet = vetPct;
         day.khG = khG; day.eiwitG = eiwitG; day.vetG = vetG;
         day.bereidingstijd = Number(d.bereidingstijd_minuten) || day.bereidingstijd;
+        var newPhotoTerm = String(d.foto_zoekterm || "").trim().slice(0, 80);
+        if (newPhotoTerm && newPhotoTerm !== day.fotoZoekterm) {
+          // Hoofdingrediënt of soort gerecht is veranderd: de oude foto past niet meer, zoek opnieuw.
+          day.fotoZoekterm = newPhotoTerm;
+          day.imageUrl = undefined;
+          day.imageCredit = null;
+          day.imageV = 0;
+        }
         day.balans = computeBalance(khPct, eiwitPct, vetPct);
         day.benodigdheden = String(d.benodigdheden || day.benodigdheden);
         day.ingredienten = Array.isArray(d.ingredienten) ? d.ingredienten.map(String) : day.ingredienten;
@@ -4139,7 +4178,9 @@
       ingredienten: day.ingredienten, steps: day.steps,
       profile: day.profile || null,
       imageUrl: day.imageUrl !== undefined ? day.imageUrl : null,
-      imageCredit: day.imageCredit || null
+      imageCredit: day.imageCredit || null,
+      imageV: day.imageV || 0,
+      fotoZoekterm: day.fotoZoekterm || ""
     };
   }
 
@@ -4158,6 +4199,7 @@
         if (idx === -1) return;
         arr[idx].imageUrl = day.imageUrl;
         arr[idx].imageCredit = day.imageCredit || null;
+        arr[idx].imageV = day.imageV || 0;
         ref.set(current).catch(function () {});
       }).catch(function () {});
     }).catch(function () {});
@@ -4165,12 +4207,13 @@
 
   function loadDishImageInto(day, imgEl, captionEl) {
     if (day.imageUrl) { imgEl.src = day.imageUrl; imgEl.style.display = ""; return; }
-    if (day.imageUrl === null) { imgEl.style.display = "none"; return; }
-    fetch("/api/image?query=" + encodeURIComponent(day.name)).then(function (res) {
-      return res.ok ? res.json() : { url: null, credit: null };
+    if (day.imageUrl === null && day.imageV === IMAGE_V) { imgEl.style.display = "none"; return; }
+    var retryKey = day.id || day.name;
+    if (imageRetryAt[retryKey] && Date.now() < imageRetryAt[retryKey]) { imgEl.style.display = "none"; return; }
+    fetch(imageRequestUrl(day)).then(function (res) {
+      return res.ok ? res.json() : { url: null, credit: null, final: false };
     }).then(function (data) {
-      day.imageUrl = data.url || null;
-      day.imageCredit = data.credit || null;
+      var definitive = applyImageResult(day, data);
       if (day.imageUrl) {
         imgEl.src = day.imageUrl;
         imgEl.style.display = "";
@@ -4181,9 +4224,9 @@
       } else {
         imgEl.style.display = "none";
       }
-      persistDishImageUpdate(day);
+      if (definitive) persistDishImageUpdate(day);
     }).catch(function () {
-      day.imageUrl = null;
+      applyImageResult(day, null);
       imgEl.style.display = "none";
     });
   }
@@ -4296,6 +4339,7 @@
         kcal: kcal, kh: khPct, eiwit: eiwitPct, vet: vetPct, balans: computeBalance(khPct, eiwitPct, vetPct),
         khG: khG, eiwitG: eiwitG, vetG: vetG,
         bereidingstijd: Number(d.bereidingstijd_minuten) || 0,
+        fotoZoekterm: String(d.foto_zoekterm || "").trim().slice(0, 80),
         mealType: dishMealType,
         benodigdheden: String(d.benodigdheden || ""),
         ingredienten: Array.isArray(d.ingredienten) ? d.ingredienten.map(String) : [],
