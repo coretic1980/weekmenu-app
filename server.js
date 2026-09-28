@@ -40,6 +40,10 @@ const PER_IP_HOURLY_CAP = parseInt(process.env.PER_IP_HOURLY_CAP || "20", 10);
 const TIPS_PER_IP_HOURLY = parseInt(process.env.TIPS_PER_IP_HOURLY || "40", 10);
 const DAILY_TIPS_CAP = parseInt(process.env.DAILY_TIPS_CAP || "500", 10);
 const TIPS_MODEL = process.env.ANTHROPIC_TIPS_MODEL || ANTHROPIC_MODEL;
+// Het openbare import-adres van Bring! (uit hun Import Developer Guide). De app haalt het via /api/config
+// hier vandaan, zodat er in de app zelf geen vast Bring!-adres staat; met BRING_IMPORT_ENDPOINT te overschrijven.
+const DEFAULT_BRING_IMPORT_ENDPOINT = "https://api.getbring.com/rest/bringrecipes/deeplink";
+const BRING_IMPORT_ENDPOINT = process.env.BRING_IMPORT_ENDPOINT || DEFAULT_BRING_IMPORT_ENDPOINT;
 const UNSPLASH_ACCESS_KEY = process.env.UNSPLASH_ACCESS_KEY || "";
 const MONGODB_URI = process.env.MONGODB_URI || "";
 const MONGODB_DB_NAME = process.env.MONGODB_DB || "weekmenu";
@@ -1636,9 +1640,17 @@ function handleListCreate(req, res) {
             return sendJSON(res, 429, { code: "rate_limited", message: "Je hebt deze lijst net al vaak bijgewerkt. Probeer het over een tijdje opnieuw." });
           }
           existing.title = title;
+          var oldIds = {};
+          existing.items.forEach(function (it) { oldIds[it.id] = true; });
           existing.removed = applyItemChangeFlags(existing.items, items, now, existing.removed);
           existing.items = items;
           existing.state = cleanListState(existing.state, items);
+          // Nieuwe producten nemen de stand van de maker over (bijvoorbeeld "niet nodig"); bestaande producten houden
+          // hun stand, zodat een update nooit overschrijft wat de ander net heeft afgevinkt.
+          var startState = cleanListState(body.state, items);
+          Object.keys(startState).forEach(function (id) {
+            if (!oldIds[id] && !existing.state[id]) existing.state[id] = startState[id];
+          });
           existing.rev = (existing.rev || 0) + 1;
           existing.updatedAt = now;
           existing.expiresAt = now + LIST_TTL_MS;
@@ -1961,7 +1973,7 @@ function handleAdminUserDetail(req, res, uid) {
 
 function handleConfig(req, res) {
   getAuthRequired().then(function (required) {
-    sendJSON(res, 200, { authRequired: required });
+    sendJSON(res, 200, { authRequired: required, bringImportEndpoint: BRING_IMPORT_ENDPOINT });
   });
 }
 

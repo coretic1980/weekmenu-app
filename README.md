@@ -55,6 +55,28 @@ Open daarna `http://localhost:3000` in je browser.
 
 Geen `npm install` nodig — er zijn geen externe dependencies.
 
+## Delen en exporteren (menu) en "Niet nodig"
+
+**Menu.** Op het boodschappenscherm zit één knop, **Delen en exporteren**, die een menu opent met alle opties:
+
+- *Deel via WhatsApp* — live lijst met een link waarmee jullie samen afvinken (daar kun je de link ook kopiëren)
+- *Stuur als tekst via WhatsApp*, *Kopieer als tekst* en (waar het apparaat het kent) *Deel via een andere app…* — een
+  gewoon lijstje zonder link of account; alleen wat nog nodig is
+- *Importeer in Bring!* en *Exporteer als PDF*
+
+**Niet nodig.** Bij elk product (in de weekweergave én per dag) staat altijd een knop **Niet nodig**; tikken op de regel
+of op **Toch nodig** maakt het weer nodig. Uitgesloten producten worden doorgestreept en tellen niet mee bij: de
+tekst-opties, de PDF, de kostenschatting, delen (je vrouw ziet ze als "niet nodig"; zie hieronder) en de Bring!-import.
+In de dagweergave geldt het voor het hele product (dus ook in het andere gerecht en in de weekweergave). Bovenaan staat
+een regel met het aantal en **Alles weer nodig**.
+
+- De keuze wordt per lijst (week of planning) op dit apparaat bewaard (`localStorage`, maximaal 40 lijsten) en overleeft
+  dus herstarten. Bij een gedeelde lijst geldt de gedeelde stand; die wordt lokaal gespiegeld, zodat het ook klopt als je
+  later stopt met delen. "Alles wissen" wist ook deze keuzes.
+- Bij het delen en bijwerken stuurt de app de stand mee. De server neemt die alleen over voor **nieuwe** producten;
+  producten die al op de gedeelde lijst staan, houden hun stand, zodat een update nooit overschrijft wat je vrouw net
+  afvinkte.
+
 ## Boodschappenlijst delen (WhatsApp)
 
 Op het boodschappenscherm staat de knop **Deel via WhatsApp**. Die maakt een momentopname van de
@@ -97,6 +119,13 @@ WhatsApp opent met een kant-en-klaar bericht; de link toont een voorbeeldkaart m
 Op het boodschappenscherm staat de knop **Importeer in Bring!**. Dit gebruikt de officiële "web-to-app"-import
 van Bring! (zie de Bring! Import Developer Guide):
 
+0. **De eerste keer** vraagt de app om de link van jouw eigen Bring!-lijst. Zonder die link kun je niet verder. De
+   link staat niet in de code: hij wordt bij jouw voorkeuren bewaard (dus ook op je andere apparaten, als je
+   ingelogd bent), en je kunt hem wijzigen via **Wijzigen** op het boodschappenscherm of het veld "Link naar je
+   Bring!-lijst" bij Voorkeuren (leeg maken verwijdert hem). Alleen https-links worden geaccepteerd; een adres
+   waar geen "bring" in voorkomt krijgt eerst een waarschuwing ("Toch opslaan"). Op het boodschappenscherm staat
+   daarna een regel "Jouw Bring!-lijst" met **Openen**. Let op: die link is voor jou; de import zelf kiest de lijst
+   in de Bring!-app (zie onder).
 1. De app zet je lijst online onder dezelfde geheime link als bij delen (bestaat die al, dan wordt hij bijgewerkt).
 2. Je tikt op **Open in Bring!**. Dat opent `https://api.getbring.com/rest/bringrecipes/deeplink?url=<pagina>&source=web`.
 3. Bring! haalt de pagina zelf op en opent de app om de producten te importeren. Doe dit dus op het apparaat
@@ -108,6 +137,9 @@ van Bring! (zie de Bring! Import Developer Guide):
 - **Alleen wat nog gekocht moet worden:** producten die al in het mandje liggen of op "niet nodig" staan, blijven weg
   (actueel op het moment dat Bring! de pagina ophaalt). Met `?alle=1` achter het adres komt alles mee.
 - **Naam en hoeveelheid** worden apart doorgegeven ("250 g" + "zalmfilet"); "2x uien" wordt "2 uien".
+- **Import-adres van Bring!:** dit staat niet in de app. De server geeft het door via `/api/config`; standaard het
+  openbare adres uit de Bring! Import Developer Guide, te overschrijven met de omgevingsvariabele
+  `BRING_IMPORT_ENDPOINT` (zie `.env.example`).
 - **CORS:** `bring.json` mag alleen door `*.getbring.com` vanuit een browser worden opgehaald.
 - **Beperking:** Bring! staat via deze import alleen toe dat jij het in de app bevestigt. In de documentatie is geen
   manier om zonder de app rechtstreeks in een bepaalde (gedeelde) Bring!-lijst te schrijven. Welke lijst het wordt,

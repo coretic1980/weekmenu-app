@@ -261,6 +261,32 @@
   }
   .confirm-msg { font-size: 15px; line-height: 1.6; color: var(--ink); margin-bottom: 18px; }
   .confirm-actions { display: flex; gap: 10px; }
+  .sheet-overlay {
+    position: fixed; inset: 0; background: rgba(10, 8, 5, 0.55); display: flex; align-items: flex-end; justify-content: center;
+    opacity: 0; pointer-events: none; transition: opacity 0.15s ease; z-index: 110;
+  }
+  .sheet-overlay.active { opacity: 1; pointer-events: auto; }
+  .sheet {
+    background: var(--surface); width: 100%; max-width: 520px; border-radius: 18px 18px 0 0;
+    padding: 10px 16px calc(16px + env(safe-area-inset-bottom, 0px)); max-height: 88vh; overflow-y: auto;
+    box-shadow: 0 -12px 36px rgba(0, 0, 0, 0.35); transform: translateY(24px); transition: transform 0.18s ease;
+  }
+  .sheet-overlay.active .sheet { transform: translateY(0); }
+  @media (min-width: 640px) { .sheet-overlay { align-items: center; } .sheet { border-radius: 18px; } }
+  .sheet-handle { width: 38px; height: 4px; background: var(--line); border-radius: 999px; margin: 4px auto 10px; }
+  .sheet-title { font-family: "Fraunces", serif; font-weight: 600; font-size: 20px; margin: 0 2px 4px; }
+  .sheet-section { font-size: 11px; font-weight: 700; letter-spacing: 0.13em; text-transform: uppercase; color: var(--label); margin: 16px 2px 4px; }
+  .sheet-item {
+    display: flex; align-items: center; gap: 14px; width: 100%; text-align: left; background: transparent; border: 0;
+    border-top: 1px solid var(--line); padding: 12px 4px; cursor: pointer; color: var(--ink); font: inherit;
+  }
+  .sheet-icon { flex: none; width: 36px; height: 36px; border-radius: 11px; background: var(--dark-panel); color: var(--accent2); display: flex; align-items: center; justify-content: center; }
+  .sheet-label { display: block; font-weight: 600; font-size: 15px; }
+  .sheet-sub { display: block; font-size: 12.5px; color: var(--muted); margin-top: 2px; line-height: 1.4; }
+  .sheet-close { width: 100%; margin-top: 14px; }
+  .confirm-box .confirm-title { font-family: "Fraunces", serif; font-weight: 600; font-size: 19px; margin-bottom: 8px; }
+  .confirm-box .textinput { margin: 0 0 10px; }
+  .confirm-box .errorbox { margin-bottom: 12px; padding: 10px 12px; font-size: 13px; }
   .confirm-actions .ghost-btn, .confirm-actions .primary-btn { flex: 1; width: auto; }
   .field-label { font-size: 13px; font-weight: 700; color: var(--ink); margin: 8px 0 2px; }
   .field-hint { font-size: 12.5px; color: var(--muted); margin: -4px 0 4px; }
@@ -368,6 +394,26 @@
     <div class="confirm-actions">
       <button id="confirmCancelBtn" class="ghost-btn">Annuleren</button>
       <button id="confirmOkBtn" class="primary-btn">Bevestigen</button>
+    </div>
+  </div>
+</div>
+<div id="shareMenuOverlay" class="sheet-overlay">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="shareMenuTitle">
+    <div class="sheet-handle"></div>
+    <div id="shareMenuTitle" class="sheet-title">Delen en exporteren</div>
+    <div id="shareMenuBody"></div>
+    <button id="shareMenuClose" class="ghost-btn sheet-close">Sluiten</button>
+  </div>
+</div>
+<div id="bringOverlay" class="confirm-overlay">
+  <div class="confirm-box">
+    <div id="bringTitle" class="confirm-title"></div>
+    <div id="bringMsg" class="confirm-msg"></div>
+    <input id="bringInput" class="textinput" type="url" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Plak hier de link">
+    <div id="bringError" class="errorbox" style="display:none"></div>
+    <div class="confirm-actions">
+      <button id="bringCancelBtn" class="ghost-btn">Annuleren</button>
+      <button id="bringSaveBtn" class="primary-btn">Opslaan</button>
     </div>
   </div>
 </div>
@@ -657,6 +703,7 @@
 
   var prefs = {
     name: "",
+    bringListLink: "",
     cuisines: [],
     flavors: [],
     level: "Home-style",
@@ -1436,6 +1483,7 @@
       clearAllDishesFromDb();
 
       prefs.name = "";
+      prefs.bringListLink = "";
       prefs.cuisines = [];
       prefs.flavors = [];
       prefs.level = "Home-style";
@@ -1457,6 +1505,8 @@
 
       completed = {};
       shoppingChecked = {};
+      skippedByList = {};
+      saveSkippedAll();
       libraryFilter = "Alle";
       libraryGoalFilter = "Alle";
 
@@ -1754,6 +1804,16 @@
     excl.placeholder = "geen";
     excl.oninput = function (e) { prefs.exclude = e.target.value; };
     main.appendChild(excl);
+
+    labelEl("Link naar je Bring!-lijst", "Voor \u201cImporteer in Bring!\u201d op het boodschappenscherm. Laat leeg om hem te verwijderen.");
+    var bringInp = document.createElement("input");
+    bringInp.className = "textinput";
+    bringInp.type = "url";
+    bringInp.maxLength = 500;
+    bringInp.value = prefs.bringListLink || "";
+    bringInp.placeholder = "Plak hier de link";
+    bringInp.oninput = function (e) { prefs.bringListLink = e.target.value; };
+    main.appendChild(bringInp);
 
     labelEl("Aantal gerechten per maaltijdmoment");
     var sel = document.createElement("select");
@@ -3439,10 +3499,79 @@
     return { items: items, idByKey: idByKey };
   }
 
-  function buildShareItems(entries) {
+  // ---------- "Niet nodig": producten uitsluiten (altijd beschikbaar, ook zonder delen) ----------
+  // Per lijst (scherm + titel) onthouden we welke producten je niet nodig hebt, op dit apparaat. Zulke producten
+  // tellen niet mee bij delen (staan daar als "niet nodig"), tekst, PDF, de Bring!-import en de kostenschatting.
+  // Is de lijst gedeeld, dan geldt de gedeelde stand en wordt die hier gespiegeld, zodat het ook klopt als je
+  // later stopt met delen.
+  var SKIPPED_KEY = "weekmenu_skipped";
+  var SKIPPED_MAX_LISTS = 40;
+  var skippedByList = null;
+  function loadSkippedAll() {
+    if (skippedByList) return skippedByList;
+    try { skippedByList = JSON.parse(localStorage.getItem(SKIPPED_KEY) || "{}") || {}; } catch (e) { skippedByList = {}; }
+    if (typeof skippedByList !== "object" || Array.isArray(skippedByList)) skippedByList = {};
+    return skippedByList;
+  }
+  function saveSkippedAll() {
+    try {
+      var all = loadSkippedAll(), keys = Object.keys(all);
+      if (keys.length > SKIPPED_MAX_LISTS) keys.slice(0, keys.length - SKIPPED_MAX_LISTS).forEach(function (k) { delete all[k]; });
+      localStorage.setItem(SKIPPED_KEY, JSON.stringify(all));
+    } catch (e) {}
+  }
+  function isSkipped(listKey, key) {
+    var arr = loadSkippedAll()[listKey];
+    return Array.isArray(arr) && arr.indexOf(key) > -1;
+  }
+  function setSkipped(listKey, key, on) {
+    var all = loadSkippedAll();
+    var arr = Array.isArray(all[listKey]) ? all[listKey] : [];
+    var i = arr.indexOf(key);
+    if (on && i === -1) arr.push(key);
+    else if (!on && i > -1) arr.splice(i, 1);
+    else return;                                                   // niets veranderd: niets bewaren
+    delete all[listKey];
+    if (arr.length) all[listKey] = arr;                             // (opnieuw) achteraan: de nieuwste lijsten blijven bewaard
+    saveSkippedAll();
+  }
+  function clearSkipped(listKey) {
+    var all = loadSkippedAll();
+    if (all[listKey]) { delete all[listKey]; saveSkippedAll(); }
+  }
+  function localItemStatus(listKey, key) { return isSkipped(listKey, key) ? "skip" : (shoppingChecked[key] ? "basket" : null); }
+  function toggleLocalBasket(listKey, key) {
+    if (isSkipped(listKey, key)) { setSkipped(listKey, key, false); shoppingChecked[key] = true; }
+    else shoppingChecked[key] = !shoppingChecked[key];
+  }
+  function toggleLocalSkip(listKey, key) {
+    if (isSkipped(listKey, key)) setSkipped(listKey, key, false);
+    else { setSkipped(listKey, key, true); shoppingChecked[key] = false; }
+  }
+  // Dezelfde sleutel als in de samengevoegde lijst, zodat "niet nodig" in de dagweergave voor het hele product geldt.
+  function aggKeyForLine(raw) {
+    var p = parseIngredientLine(raw);
+    var conv = UNIT_CONVERSION[p.unit];
+    return (conv ? conv.family : p.unit) + "|" + matchKeyForName(p.name);
+  }
+  function listKeyFor(kind, title) { return (kind === "plan" ? "planshopping" : "shopping") + "|" + title; }
+  // Id van het product op de gedeelde lijst, alleen als die lijst geladen is en het product er echt op staat.
+  function syncedIdFor(shareInfo, live, key) {
+    var sid = shareInfo ? shareInfo.idByKey[key] : null;
+    return sid && live && live.loaded && !live.gone && live.items[sid] ? sid : null;
+  }
+  function itemStatusByKey(listKey, key, shareInfo, live) {
+    var sid = syncedIdFor(shareInfo, live, key);
+    return sid ? liveStatus(live, sid) : localItemStatus(listKey, key);
+  }
+
+  function buildShareItems(entries, listKey) {
     var info = assignShareIds(buildAggregatedShoppingList(entries));
     var initial = {};
-    info.items.forEach(function (it) { if (shoppingChecked[it.key]) initial[it.id] = "basket"; });
+    info.items.forEach(function (it) {
+      if (listKey && isSkipped(listKey, it.key)) initial[it.id] = "skip";
+      else if (shoppingChecked[it.key]) initial[it.id] = "basket";
+    });
     return {
       items: info.items.map(function (it) { return { id: it.id, cat: it.cat, text: it.text, name: it.name, spec: it.spec }; }),
       state: initial
@@ -3663,7 +3792,7 @@
     fetch("/api/lists", {
       method: "POST",
       headers: shareHeaders(),
-      body: JSON.stringify({ token: token, updateOnly: true, title: title, items: built.items, state: {} })
+      body: JSON.stringify({ token: token, updateOnly: true, title: title, items: built.items, state: built.state })
     }).then(function (res) {
       return res.json().catch(function () { return {}; }).then(function (data) { return { status: res.status, data: data }; });
     }).then(function (r) {
@@ -3702,7 +3831,7 @@
       var meta = metas[token];
       var src = shareSourceFor(meta);
       if (!src || !src.entries.length) return;                        // bron weg of leeg: gedeelde lijst blijft zoals hij is
-      var built = buildShareItems(src.entries);
+      var built = buildShareItems(src.entries, listKeyFor(meta.kind, src.title));
       var sig = shareSignature(built.items);
       var rt = autoSyncRt[token] || (autoSyncRt[token] = {});
       if (sig === meta.sig) { rt.pendingSig = null; return; }
@@ -3764,7 +3893,7 @@
 
   // Deelt de lijst, of werkt een al gedeelde lijst bij (zelfde link). Met quiet=true zonder WhatsApp-venster.
   function shareShoppingList(title, entries, btn, quiet, onReady) {
-    var built = buildShareItems(entries);
+    var built = buildShareItems(entries, shareKeyFor(title));
     if (!built.items.length) { showToast("Er zijn nog geen producten om te delen."); return; }
     var shares = loadShares();
     var key = shareKeyFor(title);
@@ -3826,35 +3955,294 @@
   // de app om te importeren. Daarvoor staat de lijst online onder dezelfde geheime link als bij delen. Wat al
   // in het mandje ligt of "niet nodig" is, wordt niet meegenomen. Bring! laat dit alleen via de app doen: er
   // is (in de documentatie) geen manier om zonder de app rechtstreeks in een bepaalde lijst te schrijven.
+  //
+  // Voordat je kunt importeren vraagt de app om de link van jouw Bring!-lijst. Die staat niet in de code: hij
+  // wordt bij jouw voorkeuren bewaard (prefs.bringListLink) en je kunt hem op het boodschappenscherm of bij
+  // Voorkeuren wijzigen. Het import-adres van Bring! zelf komt van de server (/api/config).
+
+  // Geeft het genormaliseerde adres terug als het een geldige https-link is, anders null.
+  function validBringLink(value) {
+    var s = String(value == null ? "" : value).trim();
+    if (!s || s.length > 500) return null;
+    var u;
+    try { u = new URL(s); } catch (e) { return null; }
+    if (u.protocol !== "https:" || !u.hostname || u.username || u.password) return null;
+    return u.toString();
+  }
+  // Alleen een waarschuwing (geen blokkade): een link van Bring! bevat "bring" in de domeinnaam.
+  function looksLikeBring(link) {
+    try { return /bring/i.test(new URL(link).hostname); } catch (e) { return false; }
+  }
+  // Korte weergave van de link: domein en het einde (dat onderscheidt links van elkaar), het midden vervalt.
+  function bringLinkLabel(link) {
+    var u = new URL(link);
+    var path = u.pathname.replace(/\/$/, "");
+    var full = u.hostname + path;
+    if (full.length <= 34) return full;
+    var segs = path.split("/").filter(Boolean);
+    var last = segs.length ? segs[segs.length - 1] : "";
+    if (last.length > 16) last = "\u2026" + last.slice(-16);
+    return u.hostname + (segs.length > 1 ? "/\u2026/" : "/") + last;
+  }
+
+  var bringDialog = { onSave: null, warned: false, saveLabel: "Opslaan" };
+  function bringEl(id) { return document.getElementById(id); }
+  function showBringError(message) {
+    var err = bringEl("bringError");
+    err.textContent = message || "";
+    err.style.display = message ? "" : "none";
+  }
+  function closeBringDialog() {
+    var o = bringEl("bringOverlay");
+    if (o) o.classList.remove("active");
+    bringDialog.onSave = null;
+  }
+  function openBringLinkDialog(opts) {
+    bringDialog.onSave = opts.onSave || null;
+    bringDialog.warned = false;
+    bringDialog.saveLabel = opts.saveLabel || "Opslaan";
+    bringEl("bringTitle").textContent = opts.title;
+    bringEl("bringMsg").textContent = opts.message;
+    var input = bringEl("bringInput");
+    input.value = opts.value || "";
+    showBringError(opts.error || "");
+    bringEl("bringSaveBtn").textContent = bringDialog.saveLabel;
+    bringEl("bringOverlay").classList.add("active");
+    try { input.focus(); } catch (e) {}
+  }
+  function submitBringDialog() {
+    var link = validBringLink(bringEl("bringInput").value);
+    if (!link) {
+      bringDialog.warned = false;
+      bringEl("bringSaveBtn").textContent = bringDialog.saveLabel;
+      showBringError("Dit is geen geldige link. Plak de volledige link, beginnend met https://");
+      return;
+    }
+    if (!looksLikeBring(link) && !bringDialog.warned) {
+      bringDialog.warned = true;
+      bringEl("bringSaveBtn").textContent = "Toch opslaan";
+      showBringError("Dit adres lijkt niet van Bring! te zijn. Controleer of je de juiste link hebt geplakt, of kies \u201cToch opslaan\u201d.");
+      return;
+    }
+    prefs.bringListLink = link;
+    savePrefs();
+    var next = bringDialog.onSave;
+    closeBringDialog();
+    if (next) next(link); else render();
+  }
+  (function wireBringOverlay() {
+    var input = bringEl("bringInput"), save = bringEl("bringSaveBtn"), cancel = bringEl("bringCancelBtn");
+    if (save) save.onclick = submitBringDialog;
+    if (cancel) cancel.onclick = closeBringDialog;
+    if (input) {
+      input.onkeydown = function (e) { if (e && e.key === "Enter") submitBringDialog(); };
+      input.oninput = function () {
+        if (bringDialog.warned) {
+          bringDialog.warned = false;
+          bringEl("bringSaveBtn").textContent = bringDialog.saveLabel;
+        }
+        showBringError("");
+      };
+    }
+  })();
+
+  // Zorgt dat er een geldige Bring!-lijstlink is voordat de import verder gaat; vraagt er anders om.
+  function ensureBringLink(next) {
+    var stored = String(prefs.bringListLink || "").trim();
+    var link = validBringLink(stored);
+    if (link) { next(link); return; }
+    openBringLinkDialog({
+      title: "Koppel je Bring!-lijst",
+      message: "Plak hier de link van je (gedeelde) Bring!-lijst, bijvoorbeeld de link die Bring! geeft als je je lijst deelt. " +
+        "Je hebt hem nodig om verder te gaan. Hij wordt bij jouw voorkeuren bewaard en je kunt hem later wijzigen.",
+      value: stored,
+      error: stored ? "De opgeslagen link is niet geldig. Plak hem opnieuw." : "",
+      saveLabel: "Opslaan en verder",
+      onSave: next
+    });
+  }
+  function editBringLink() {
+    openBringLinkDialog({
+      title: "Bring!-link wijzigen",
+      message: "Plak de nieuwe link van je Bring!-lijst.",
+      value: String(prefs.bringListLink || ""),
+      saveLabel: "Opslaan",
+      onSave: null
+    });
+  }
+
   function bringDeeplink(pageUrl) {
-    return "https://api.getbring.com/rest/bringrecipes/deeplink?url=" + encodeURIComponent(pageUrl) + "&source=web";
+    return window.bringImportEndpoint + "?url=" + encodeURIComponent(pageUrl) + "&source=web";
   }
   function isPublicHttps(origin) {
     return /^https:\/\//.test(origin) && !/^https:\/\/(localhost|127\.|10\.|192\.168\.)/.test(origin);
   }
   function importToBring(title, entries, btn) {
+    if (!window.bringImportEndpoint) {
+      showToast("De Bring!-koppeling is op de server niet beschikbaar.");
+      return;
+    }
     if (!isPublicHttps(window.location.origin)) {
       showToast("Bring! kan alleen een openbare https-pagina importeren, dus niet vanaf dit adres.");
       return;
     }
-    shareShoppingList(title, entries, btn, false, function (data) {
-      var remaining = data.counts.total - data.counts.basket - data.counts.skip;
-      if (remaining <= 0) {
-        showToast("Alles staat al in het mandje of is niet nodig: er valt niets te importeren.");
-        return;
-      }
-      var page = window.location.origin + "/l/" + data.token;
-      askConfirm(
-        "Je lijst staat klaar voor Bring! (" + remaining + (remaining === 1 ? " product" : " producten") + "; wat al in het mandje ligt of op \u201cniet nodig\u201d staat, blijft weg). " +
-        "Bring! haalt de lijst op en opent de app om te importeren, dus doe dit op het apparaat waar Bring! op staat. " +
-        "De lijst staat daarvoor online onder dezelfde geheime link als bij delen. Komt er iets raars in Bring! te staan? Probeer dan de andere methode.",
-        function () { openExternal(bringDeeplink(page + "/bring")); },
-        "Open in Bring!",
-        "Andere methode",
-        function () { openExternal(bringDeeplink(page + "/bring.json")); }
-      );
+    ensureBringLink(function () {
+      shareShoppingList(title, entries, btn, false, function (data) {
+        var remaining = data.counts.total - data.counts.basket - data.counts.skip;
+        if (remaining <= 0) {
+          showToast("Alles staat al in het mandje of is niet nodig: er valt niets te importeren.");
+          return;
+        }
+        var page = window.location.origin + "/l/" + data.token;
+        askConfirm(
+          "Je lijst staat klaar voor Bring! (" + remaining + (remaining === 1 ? " product" : " producten") + "; wat al in het mandje ligt of op \u201cniet nodig\u201d staat, blijft weg). " +
+          "Bring! haalt de lijst op en opent de app om te importeren, dus doe dit op het apparaat waar Bring! op staat. " +
+          "Welke Bring!-lijst het wordt, kies je in de app. " +
+          "De lijst staat daarvoor online onder dezelfde geheime link als bij delen. Komt er iets raars in Bring! te staan? Probeer dan de andere methode.",
+          function () { openExternal(bringDeeplink(page + "/bring")); },
+          "Open in Bring!",
+          "Andere methode",
+          function () { openExternal(bringDeeplink(page + "/bring.json")); }
+        );
+      });
     });
   }
+
+  // ---------- Delen en exporteren: één menu met alle opties ----------
+  // Eén knop op het boodschappenscherm opent dit menu. Wat er in staat:
+  //   - Deel via WhatsApp        live lijst met een link (jullie vinken samen af); daar kun je ook de link kopiëren
+  //   - Stuur als tekst / kopieer / andere app   een gewoon lijstje zonder link, alleen wat nog nodig is
+  //   - Importeer in Bring!      zie hierboven
+  //   - Exporteer als PDF
+  var SHEET_ICONS = {
+    chat: '<path d="M21 11.5a8.4 8.4 0 0 1-12.4 7.4L3 20l1.2-5A8.4 8.4 0 1 1 21 11.5z"/>',
+    list: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
+    copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/>',
+    share: '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/>',
+    basket: '<path d="M3 9h18l-2 11H5L3 9z"/><path d="M8 9l3-5M16 9l-3-5"/>',
+    file: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/>'
+  };
+
+  // De producten die nog gekocht moeten worden, per categorie. Wat al in het mandje ligt of op "niet nodig" staat, blijft weg.
+  function stillNeededByCategory(title, entries) {
+    var agg = buildAggregatedShoppingList(entries);
+    var token = loadShares()[shareKeyFor(title)];
+    var live = token ? sharedLive[token] : null;
+    var info = live && live.loaded && !live.gone ? assignShareIds(agg) : null;
+    var listKey = shareKeyFor(title);
+    var groups = [], count = 0;
+    CATEGORY_ORDER.forEach(function (cat) {
+      var lines = [];
+      agg[cat].forEach(function (item) {
+        if (shoppingChecked[item.key]) return;
+        if (itemStatusByKey(listKey, item.key, info, live) === "skip") return;
+        lines.push(item.text);
+      });
+      if (lines.length) { groups.push({ cat: cat, lines: lines }); count += lines.length; }
+    });
+    return { groups: groups, count: count };
+  }
+  function shoppingListText(title, groups) {
+    return "\uD83D\uDED2 Boodschappenlijst: " + title + "\n\n" + groups.map(function (g) {
+      return g.cat + "\n" + g.lines.map(function (l) { return "\u2022 " + l; }).join("\n");
+    }).join("\n\n");
+  }
+
+  function closeShareMenu() {
+    var o = document.getElementById("shareMenuOverlay");
+    if (o) o.classList.remove("active");
+  }
+  function sheetSection(parent, label) {
+    var s = document.createElement("div");
+    s.className = "sheet-section";
+    s.textContent = label;
+    parent.appendChild(s);
+  }
+  // Een regel in het menu. Het menu sluit eerst (direct, zodat acties die een tik van de gebruiker nodig hebben,
+  // zoals de systeem-deelknop, gewoon werken) en voert dan de actie uit.
+  function sheetItem(parent, id, iconKey, label, sub, action) {
+    var b = document.createElement("button");
+    b.className = "sheet-item";
+    b.id = id;
+    var icon = document.createElement("span");
+    icon.className = "sheet-icon";
+    icon.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + SHEET_ICONS[iconKey] + "</svg>";
+    var text = document.createElement("span");
+    var l = document.createElement("span");
+    l.className = "sheet-label";
+    l.textContent = label;
+    var s = document.createElement("span");
+    s.className = "sheet-sub";
+    s.textContent = sub;
+    text.appendChild(l);
+    text.appendChild(s);
+    b.appendChild(icon);
+    b.appendChild(text);
+    b.onclick = function () { closeShareMenu(); action(); };
+    parent.appendChild(b);
+  }
+
+  function openShareMenu(title, entries, trigger) {
+    var body = document.getElementById("shareMenuBody");
+    body.innerHTML = "";
+
+    // Voor de tekst-opties: bepaalt op het moment van tikken wat er nog nodig is.
+    function withNeeded(next) {
+      var needed = stillNeededByCategory(title, entries);
+      if (!needed.count) { showToast("Er is niets meer te delen: alles staat al in het mandje of is niet nodig."); return; }
+      next(shoppingListText(title, needed.groups));
+    }
+
+    sheetSection(body, "Samen afvinken");
+    sheetItem(body, "shareMenuWhatsApp", "chat", "Deel via WhatsApp",
+      "Stuurt een link waarmee jullie samen afvinken. Daar kun je de link ook kopi\u00ebren.",
+      function () { shareShoppingList(title, entries, trigger); });
+
+    sheetSection(body, "Als tekst");
+    sheetItem(body, "shareMenuTextWhatsApp", "list", "Stuur als tekst via WhatsApp",
+      "Een gewoon lijstje, zonder link. Alleen wat nog nodig is.",
+      function () { withNeeded(function (text) { openWhatsApp(text); }); });
+    sheetItem(body, "shareMenuCopyText", "copy", "Kopieer als tekst",
+      "Om te plakken in een andere app.",
+      function () {
+        withNeeded(function (text) {
+          copyToClipboard(text).then(function () { showToast("Tekst gekopieerd."); }).catch(function () { showToast("Kopi\u00ebren lukte niet."); });
+        });
+      });
+    if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+      sheetItem(body, "shareMenuNative", "share", "Deel via een andere app\u2026",
+        "Kies zelf een app op je apparaat.",
+        function () {
+          withNeeded(function (text) {
+            try {
+              var p = navigator.share({ title: "Boodschappenlijst: " + title, text: text });
+              if (p && p.catch) p.catch(function () {});   // geannuleerd door de gebruiker: geen melding
+            } catch (e) {}
+          });
+        });
+    }
+
+    sheetSection(body, "Apps en bestanden");
+    sheetItem(body, "shareMenuBring", "basket", "Importeer in Bring!",
+      "Zet de producten in je Bring!-lijst.",
+      function () { importToBring(title, entries, trigger); });
+    sheetItem(body, "shareMenuPdf", "file", "Exporteer als PDF",
+      "Om te printen of te bewaren.",
+      function () {
+        if (!window.jspdf || !window.jspdf.jsPDF) { showToast("De PDF-bibliotheek is niet geladen. Controleer je verbinding en probeer het opnieuw."); return; }
+        exportShoppingPdf(title, entries, null, shoppingViewMode);
+      });
+
+    document.getElementById("shareMenuOverlay").classList.add("active");
+  }
+  (function wireShareMenu() {
+    var overlay = document.getElementById("shareMenuOverlay"), close = document.getElementById("shareMenuClose");
+    if (close) close.onclick = closeShareMenu;
+    if (overlay) overlay.onclick = function (e) { if (e && e.target === overlay) closeShareMenu(); };
+    if (typeof document.addEventListener === "function") {
+      document.addEventListener("keydown", function (e) { if (e && e.key === "Escape") closeShareMenu(); });
+    }
+  })();
 
   function stopSharing(title, token) {
     askConfirm("Delen stoppen? De link werkt daarna niet meer, ook niet voor wie de lijst nog open heeft staan. Wat jullie al hebben afgevinkt blijft in je eigen lijst staan.", function () {
@@ -3892,30 +4280,42 @@
     eyebrow.textContent = title;
     headerRow.appendChild(eyebrow);
 
-    var exportBtn = document.createElement("button");
-    exportBtn.className = "ghost-btn";
-    exportBtn.id = "shopPdfExportBtn";
-    exportBtn.textContent = "Exporteer boodschappenlijst";
-    exportBtn.onclick = function () { exportShoppingPdf(title, entries, exportBtn, shoppingViewMode); };
     if (entries.length) {
-      var shareBtn = document.createElement("button");
-      shareBtn.className = "ghost-btn";
-      shareBtn.id = "shopShareBtn";
-      shareBtn.textContent = "Deel via WhatsApp";
-      shareBtn.onclick = function () { shareShoppingList(title, entries, shareBtn); };
-      headerRow.appendChild(shareBtn);
-    }
-    headerRow.appendChild(exportBtn);
-    if (entries.length) {
-      var bringBtn = document.createElement("button");
-      bringBtn.className = "ghost-btn";
-      bringBtn.id = "shopBringBtn";
-      bringBtn.textContent = "Importeer in Bring!";
-      bringBtn.onclick = function () { importToBring(title, entries, bringBtn); };
-      headerRow.appendChild(bringBtn);
+      var menuBtn = document.createElement("button");
+      menuBtn.className = "ghost-btn";
+      menuBtn.id = "shopMenuBtn";
+      menuBtn.textContent = "Delen en exporteren";
+      menuBtn.onclick = function () { openShareMenu(title, entries, menuBtn); };
+      headerRow.appendChild(menuBtn);
     }
 
     main.appendChild(headerRow);
+
+    var myBringLink = validBringLink(prefs.bringListLink);
+    if (myBringLink && entries.length) {
+      var bringBox = document.createElement("div");
+      bringBox.className = "share-box";
+      var bringText = document.createElement("div");
+      bringText.className = "share-text";
+      bringText.textContent = "Jouw Bring!-lijst \u00b7 " + bringLinkLabel(myBringLink);
+      bringBox.appendChild(bringText);
+      var bringActions = document.createElement("div");
+      bringActions.className = "share-actions";
+      var bringOpen = document.createElement("a");
+      bringOpen.className = "ghost-btn";
+      bringOpen.href = myBringLink;
+      bringOpen.target = "_blank";
+      bringOpen.rel = "noopener";
+      bringOpen.textContent = "Openen";
+      bringActions.appendChild(bringOpen);
+      var bringEdit = document.createElement("button");
+      bringEdit.className = "ghost-btn";
+      bringEdit.textContent = "Wijzigen";
+      bringEdit.onclick = editBringLink;
+      bringActions.appendChild(bringEdit);
+      bringBox.appendChild(bringActions);
+      main.appendChild(bringBox);
+    }
 
     var sharedToken = loadShares()[shareKeyFor(title)];
     var shareInfo = null, live = null;
@@ -3973,8 +4373,28 @@
 
     var byCategory = shoppingViewMode === "day" ? null : buildAggregatedShoppingList(entries);
     var pricingCategories = byCategory || buildAggregatedShoppingList(entries);
+    var listKey = shareKeyFor(title);
+    // Gedeelde lijst: de stand van de server bepaalt; die spiegelen we lokaal (vinkje en "niet nodig").
+    if (shareInfo && live && live.loaded && !live.gone) {
+      CATEGORY_ORDER.forEach(function (cat) {
+        pricingCategories[cat].forEach(function (item) {
+          var sid0 = syncedIdFor(shareInfo, live, item.key);
+          if (!sid0) return;
+          var st0 = liveStatus(live, sid0);
+          shoppingChecked[item.key] = st0 === "basket";
+          setSkipped(listKey, item.key, st0 === "skip");
+        });
+      });
+    }
+    // Uitgesloten ("niet nodig") producten tellen niet mee in de kostenschatting.
     var currentItemTexts = [];
-    CATEGORY_ORDER.forEach(function (cat) { pricingCategories[cat].forEach(function (item) { currentItemTexts.push(item.text); }); });
+    var skippedTotal = 0;
+    CATEGORY_ORDER.forEach(function (cat) {
+      pricingCategories[cat].forEach(function (item) {
+        if (itemStatusByKey(listKey, item.key, shareInfo, live) === "skip") { skippedTotal++; return; }
+        currentItemTexts.push(item.text);
+      });
+    });
 
     var priceRow = document.createElement("div");
     priceRow.style.display = "flex";
@@ -4018,6 +4438,34 @@
       main.appendChild(priceNote);
     }
 
+    if (skippedTotal > 0) {
+      var skipSummary = document.createElement("div");
+      skipSummary.className = "share-note";
+      skipSummary.style.display = "flex";
+      skipSummary.style.alignItems = "center";
+      skipSummary.style.gap = "10px";
+      skipSummary.style.flexWrap = "wrap";
+      var skipSummaryText = document.createElement("span");
+      skipSummaryText.textContent = skippedTotal + (skippedTotal === 1 ? " product staat" : " producten staan") + " op \u201cniet nodig\u201d en tel" + (skippedTotal === 1 ? "t" : "len") + " niet mee bij delen, tekst, PDF en kosten.";
+      skipSummary.appendChild(skipSummaryText);
+      var skipAllBtn = document.createElement("button");
+      skipAllBtn.className = "ghost-btn";
+      skipAllBtn.id = "shopSkipResetBtn";
+      skipAllBtn.textContent = "Alles weer nodig";
+      skipAllBtn.onclick = function () {
+        CATEGORY_ORDER.forEach(function (cat) {
+          pricingCategories[cat].forEach(function (item) {
+            var sidX = syncedIdFor(shareInfo, live, item.key);
+            if (sidX && liveStatus(live, sidX) === "skip") liveToggle(sharedToken, sidX, "skip");
+          });
+        });
+        clearSkipped(listKey);
+        render();
+      };
+      skipSummary.appendChild(skipAllBtn);
+      main.appendChild(skipSummary);
+    }
+
     var modeRow = document.createElement("div");
     modeRow.className = "segrow";
     [["week", "Per week (samengevoegd)"], ["day", "Per dag"]].forEach(function (pair) {
@@ -4037,12 +4485,12 @@
     }
 
     if (shoppingViewMode === "day") {
-      if (sharedToken) {
-        var dayNote = document.createElement("div");
-        dayNote.className = "share-note";
-        dayNote.textContent = "Vinkjes in deze weergave worden niet gedeeld. Kies \u201cPer week (samengevoegd)\u201d om samen af te vinken.";
-        main.appendChild(dayNote);
-      }
+      var dayNote = document.createElement("div");
+      dayNote.className = "share-note";
+      dayNote.textContent = sharedToken
+        ? "Vinkjes in deze weergave worden niet gedeeld, \u201cNiet nodig\u201d w\u00e9l: dat geldt voor het hele product. Kies \u201cPer week (samengevoegd)\u201d om samen af te vinken."
+        : "\u201cNiet nodig\u201d geldt voor het hele product (ook in de weekweergave) en telt niet mee bij delen, PDF en kosten.";
+      main.appendChild(dayNote);
       entries.forEach(function (entry) {
         var day = entry.day;
         var label = document.createElement("div");
@@ -4055,9 +4503,12 @@
         day.ingredienten.forEach(function (ing, idx) {
           if (isTapWater(parseIngredientLine(ing).name)) return;
           var key = entry.key + "|" + idx;
+          var aggKey = aggKeyForLine(ing);
+          var dSid = syncedIdFor(shareInfo, live, aggKey);
+          var dSkipped = itemStatusByKey(listKey, aggKey, shareInfo, live) === "skip";
           var isChecked = !!shoppingChecked[key];
           var row = document.createElement("div");
-          row.className = "shop-item" + (isChecked ? " checked" : "");
+          row.className = "shop-item" + (isChecked ? " checked" : "") + (dSkipped ? " skipped" : "");
           var box = document.createElement("span");
           box.className = "shop-check" + (isChecked ? " on" : "");
           box.innerHTML = isChecked
@@ -4067,7 +4518,21 @@
           txt.textContent = scaleIngredientText(ing, entry.servings || 1);
           row.appendChild(box);
           row.appendChild(txt);
+          var dSkipBtn = document.createElement("button");
+          dSkipBtn.className = "shop-skip";
+          dSkipBtn.textContent = dSkipped ? "Toch nodig" : "Niet nodig";
+          dSkipBtn.onclick = function (ev) {
+            if (ev && ev.stopPropagation) ev.stopPropagation();
+            if (dSid) { liveToggle(sharedToken, dSid, "skip"); return; }
+            toggleLocalSkip(listKey, aggKey);
+            render();
+          };
+          row.appendChild(dSkipBtn);
           row.onclick = function () {
+            if (dSkipped) {                                   // tikken op een uitgesloten regel maakt het weer nodig
+              if (dSid) liveToggle(sharedToken, dSid, "skip"); else { toggleLocalSkip(listKey, aggKey); render(); }
+              return;
+            }
             shoppingChecked[key] = !shoppingChecked[key];
             render();
           };
@@ -4088,10 +4553,9 @@
         var group = document.createElement("div");
         group.className = "shop-group";
         items.forEach(function (item) {
-          var sid = shareInfo ? shareInfo.idByKey[item.key] : null;
-          var synced = !!(sid && live && live.loaded && !live.gone && live.items[sid]);
-          var st = synced ? liveStatus(live, sid) : (shoppingChecked[item.key] ? "basket" : null);
-          if (synced) shoppingChecked[item.key] = st === "basket";   // eigen lijst blijft de gedeelde stand volgen
+          var sid = syncedIdFor(shareInfo, live, item.key);
+          var synced = !!sid;
+          var st = itemStatusByKey(listKey, item.key, shareInfo, live);
           var isChecked = st === "basket";
           var row = document.createElement("div");
           row.className = "shop-item" + (isChecked ? " checked" : "") + (st === "skip" ? " skipped" : "");
@@ -4114,18 +4578,20 @@
               flagPill.textContent = srvFlag.kind === "new" ? "Nieuw" : "Aangepast";
               row.appendChild(flagPill);
             }
-            var skipBtn = document.createElement("button");
-            skipBtn.className = "shop-skip";
-            skipBtn.textContent = st === "skip" ? "Toch nodig" : "Niet nodig";
-            skipBtn.onclick = function (ev) {
-              if (ev && ev.stopPropagation) ev.stopPropagation();
-              liveToggle(sharedToken, sid, "skip");
-            };
-            row.appendChild(skipBtn);
           }
+          var skipBtn = document.createElement("button");
+          skipBtn.className = "shop-skip";
+          skipBtn.textContent = st === "skip" ? "Toch nodig" : "Niet nodig";
+          skipBtn.onclick = function (ev) {
+            if (ev && ev.stopPropagation) ev.stopPropagation();
+            if (synced) { liveToggle(sharedToken, sid, "skip"); return; }
+            toggleLocalSkip(listKey, item.key);
+            render();
+          };
+          row.appendChild(skipBtn);
           row.onclick = function () {
             if (synced) { liveToggle(sharedToken, sid, "basket"); return; }
-            shoppingChecked[item.key] = !shoppingChecked[item.key];
+            toggleLocalBasket(listKey, item.key);
             render();
           };
           group.appendChild(row);
@@ -4200,10 +4666,12 @@
     doc.setLineWidth(1);
     y += 10;
 
+    var pdfListKey = shareKeyFor(title);
     if (mode === "day") {
       entries.forEach(function (entry) {
         var day = entry.day;
-        var visibleIngs = day.ingredienten.filter(function (ing) { return !isTapWater(parseIngredientLine(ing).name); });
+        var visibleIngs = day.ingredienten.filter(function (ing) { return !isTapWater(parseIngredientLine(ing).name) && !isSkipped(pdfListKey, aggKeyForLine(ing)); });
+        if (!visibleIngs.length) return;
         var estHeight = 16 + 13 + 8;
         visibleIngs.forEach(function (ing) { estHeight += measureWrappedLines(scaleIngredientText(ing, entry.servings || 1), 11.5) * lineH; });
         estHeight += 6;
@@ -4220,7 +4688,7 @@
     } else {
       var byCategory = buildAggregatedShoppingList(entries);
       CATEGORY_ORDER.forEach(function (cat) {
-        var items = byCategory[cat];
+        var items = byCategory[cat].filter(function (it) { return !isSkipped(pdfListKey, it.key); });
         if (!items.length) return;
         var estHeight = 16 + 13 + 8;
         items.forEach(function (item) { estHeight += measureWrappedLines(item.text, 11.5) * lineH; });
@@ -5068,6 +5536,7 @@
       if (!uid) return;
       dbCap.doc("data/users/" + uid + "/prefs").set({
         name: String(prefs.name || "").trim().slice(0, 40),
+        bringListLink: String(prefs.bringListLink || "").trim().slice(0, 500),
         cuisines: prefs.cuisines,
         flavors: prefs.flavors,
         level: prefs.level,
@@ -5340,7 +5809,7 @@
               return;
             }
             var pdata = psnap.data() || {};
-            ["name", "cuisines", "flavors", "level", "dietStyle", "equipment", "exclude", "count", "mealTypes", "gender", "heightCm", "weightKg", "age", "activityLevel", "goal"].forEach(function (k) {
+            ["name", "bringListLink", "cuisines", "flavors", "level", "dietStyle", "equipment", "exclude", "count", "mealTypes", "gender", "heightCm", "weightKg", "age", "activityLevel", "goal"].forEach(function (k) {
               if (pdata[k] !== undefined) prefs[k] = deepClone(pdata[k]);
             });
             render();
@@ -5541,6 +6010,7 @@
       return { authRequired: true };
     }).then(function (cfg) {
       window.authRequired = cfg.authRequired !== false;
+      window.bringImportEndpoint = typeof cfg.bringImportEndpoint === "string" ? cfg.bringImportEndpoint : "";
       configLoaded = true;
       if (window.authToken || !window.authRequired) initPersistence();
       render();
