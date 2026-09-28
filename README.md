@@ -66,15 +66,52 @@ WhatsApp opent met een kant-en-klaar bericht; de link toont een voorbeeldkaart m
   wissen" zitten op de pagina. De vinkjes staan op de server, dus jullie zien elkaars stand (elke
   8 seconden ververst). Zonder bereik in de winkel blijven wijzigingen bewaard en gaan ze mee zodra er
   weer bereik is; de pagina opent ook zonder bereik uit het geheugen van de telefoon.
-- **Maker:** ziet onder de knop de stand ("3 in mandje · 1 niet nodig · 1 nog te doen"), kan de lijst
-  openen, opnieuw delen (dezelfde link wordt bijgewerkt en vinkjes blijven staan) of **Stoppen**.
+- **Aanpassingen gaan vanzelf mee:** wijzig je het plan (gerecht erbij of eraf, andere porties), dan werkt
+  de app de gedeelde lijst na ongeveer 5 seconden rust op de achtergrond bij (alleen terwijl de app openstaat,
+  ook buiten het boodschappenscherm; dezelfde link, alle vinkjes blijven staan). De ontvanger ziet dat in het
+  product zelf: **Nieuw** of **Aangepast**, bij een aangepast product ook wat het eerst was ("was: 250 g
+  zalmfilet") en hoe lang geleden ("zojuist", "15 min geleden"). Bovenaan staat een melding met wat er
+  aangepast is en wat niet meer nodig is. Een markering blijft 12 uur staan, of tot het product is aangetikt
+  of op **Oké** is gedrukt; wijzigt het product opnieuw, dan komt de markering terug (met de oorspronkelijke
+  "was"). Wat er veranderd is bepaalt de server, dus je ziet het ook als je de link pas daarna opent. Bij de
+  maker staat dezelfde markering 5 minuten. Bestaat de gedeelde lijst niet meer, dan maakt de app er nooit
+  stilletjes een nieuwe voor aan.
+- **Maker:** werkt met dezelfde lijst, live, in de app (bij "Per week"): vinkjes van de ander verschijnen
+  vanzelf en jouw eigen tikken (ook **Niet nodig**) gaan naar de ander. Zonder bereik wachten jouw tikken en
+  gaan ze later mee. Onder de knop staat de stand ("3 in mandje · 1 niet nodig · 1 nog te doen"). Wijkt de
+  lijst in de app af van wat gedeeld is (bijvoorbeeld door een aangepast plan), dan verschijnt **Bijwerken**:
+  dezelfde link wordt bijgewerkt en alle vinkjes blijven staan. Producten die nog niet gedeeld zijn, vink je
+  lokaal af. Bij **Stoppen** blijft wat jullie hadden afgevinkt in je eigen lijst staan. In de weergave "Per dag"
+  worden vinkjes niet gedeeld (daar staat een korte uitleg). Overal geldt: bij twee tikken op hetzelfde
+  product tegelijk wint de laatste.
 - **Beveiliging:** wie de link heeft, kan de lijst zien en afvinken (dat is de bedoeling); alleen de maker
   kan de inhoud bijwerken of het delen stoppen. In de lijst staat nooit een naam of e-mailadres. De pagina
   is `noindex` en stuurt geen referrer mee.
 - **Limieten:** maximaal 300 producten per lijst, 20 lijsten per persoon (de oudste vervalt), 30 nieuwe
-  lijsten per uur per IP-adres. Lijsten verlopen 30 dagen na de laatste wijziging.
+  lijsten en 300 bijwerkingen per uur per IP-adres. Lijsten verlopen 30 dagen na de laatste wijziging.
 - **Opslag:** de lijsten staan in dezelfde database als de rest (`lists/<code>`). Zonder `MONGODB_URI` gaan
   ze verloren bij een herstart van de server; met MongoDB blijven ze bewaard.
+
+## Importeren in Bring!
+
+Op het boodschappenscherm staat de knop **Importeer in Bring!**. Dit gebruikt de officiële "web-to-app"-import
+van Bring! (zie de Bring! Import Developer Guide):
+
+1. De app zet je lijst online onder dezelfde geheime link als bij delen (bestaat die al, dan wordt hij bijgewerkt).
+2. Je tikt op **Open in Bring!**. Dat opent `https://api.getbring.com/rest/bringrecipes/deeplink?url=<pagina>&source=web`.
+3. Bring! haalt de pagina zelf op en opent de app om de producten te importeren. Doe dit dus op het apparaat
+   waar Bring! op staat. De app moet op een openbaar bereikbaar https-adres draaien (dus niet op localhost).
+
+- **Pagina's die Bring! ophaalt:** `/l/<code>/bring` (HTML met schema.org-markup, `itemprop="ingredients recipeIngredient"`,
+  het formaat dat Bring! aanraadt) en `/l/<code>/bring.json` (JSON-bestand met `items` van `{ itemId, spec }`; door
+  Bring! "niet aanbevolen" genoemd, maar eenduidig). Werkt de eerste niet goed in Bring!, dan is er **Andere methode**.
+- **Alleen wat nog gekocht moet worden:** producten die al in het mandje liggen of op "niet nodig" staan, blijven weg
+  (actueel op het moment dat Bring! de pagina ophaalt). Met `?alle=1` achter het adres komt alles mee.
+- **Naam en hoeveelheid** worden apart doorgegeven ("250 g" + "zalmfilet"); "2x uien" wordt "2 uien".
+- **CORS:** `bring.json` mag alleen door `*.getbring.com` vanuit een browser worden opgehaald.
+- **Beperking:** Bring! staat via deze import alleen toe dat jij het in de app bevestigt. In de documentatie is geen
+  manier om zonder de app rechtstreeks in een bepaalde (gedeelde) Bring!-lijst te schrijven. Welke lijst het wordt,
+  bepaal je in de Bring!-app.
 
 ## Wachtcarrousel met tips
 

@@ -1406,6 +1406,7 @@ var LIST_MAX_TEXT = 140;
 var LIST_MAX_CAT = 40;
 var LIST_MAX_TITLE = 80;
 var LIST_MAX_PER_OWNER = 20;
+var LIST_FLAG_TTL_MS = 12 * 60 * 60 * 1000;   // zo lang blijft een product als 'nieuw' of 'aangepast' gemarkeerd
 var LIST_TOKEN_RE = /^[A-Za-z0-9_-]{22}$/;
 var LIST_ID_RE = /^[a-z0-9-]{1,80}$/;
 
@@ -1424,7 +1425,8 @@ function makeHourlyLimiter(maxPerHour) {
     return entry.count <= maxPerHour;
   };
 }
-var listCreateAllowed = makeHourlyLimiter(30);
+var listCreateAllowed = makeHourlyLimiter(30);     // nieuwe lijsten
+var listUpdateAllowed = makeHourlyLimiter(300);    // bijwerken van een eigen lijst (ook automatisch vanuit de app)
 var listReadAllowed = makeHourlyLimiter(2400);
 var listWriteAllowed = makeHourlyLimiter(1200);
 
@@ -1494,7 +1496,12 @@ function sanitizeListItems(raw) {
     var text = cleanListText(it.text, LIST_MAX_TEXT);
     if (!LIST_ID_RE.test(id) || !text || seen[id]) return;
     seen[id] = true;
-    out.push({ id: id, cat: cleanListText(it.cat, LIST_MAX_CAT) || "Overige", text: text });
+    var item = { id: id, cat: cleanListText(it.cat, LIST_MAX_CAT) || "Overige", text: text };
+    // Naam en hoeveelheid apart (optioneel): daar heeft de Bring!-import iets aan.
+    var nm = cleanListText(it.name, 80), sp = cleanListText(it.spec, 40);
+    if (nm) item.name = nm;
+    if (sp) item.spec = sp;
+    out.push(item);
   });
   return out;
 }
@@ -1520,8 +1527,49 @@ function listCounts(doc) {
   return { total: (doc.items || []).length, basket: basket, skip: skip };
 }
 
+// Bepaalt bij een bijwerking wat er is veranderd, zodat de ontvanger dat in het product zelf ziet:
+// nieuw (kind "new"), aangepast (kind "changed", met de eerdere tekst in "was"), of weggehaald.
+// Een markering blijft 12 uur staan, ook als er intussen nog een keer wordt bijgewerkt, en vervalt
+// als een product terug is naar wat de ontvanger al kende. Deze velden zet alleen de server; wat de
+// aanvrager meestuurt, wordt bij het opschonen weggegooid.
+function applyItemChangeFlags(oldItems, newItems, now, removedBefore) {
+  var oldById = {};
+  (oldItems || []).forEach(function (it) { oldById[it.id] = it; });
+  var newIds = {};
+  newItems.forEach(function (it) {
+    newIds[it.id] = true;
+    var old = oldById[it.id];
+    if (!old) { it.changedAt = now; it.kind = "new"; return; }
+    var fresh = !!old.changedAt && now - old.changedAt < LIST_FLAG_TTL_MS;
+    if (old.text !== it.text) {
+      if (fresh && old.kind === "new") { it.changedAt = now; it.kind = "new"; return; }
+      var was = fresh && old.kind === "changed" && old.was ? old.was : old.text;
+      if (was === it.text) return;
+      it.changedAt = now; it.kind = "changed"; it.was = was;
+      return;
+    }
+    if (fresh) { it.changedAt = old.changedAt; it.kind = old.kind; if (old.was) it.was = old.was; }
+  });
+  var removed = (removedBefore || []).filter(function (r) { return now - r.at < LIST_FLAG_TTL_MS && !newIds[r.id]; });
+  (oldItems || []).forEach(function (it) { if (!newIds[it.id]) removed.push({ id: it.id, text: it.text, at: now }); });
+  return removed.slice(-20);
+}
+
 function publicList(doc) {
-  return { title: doc.title, items: doc.items, state: doc.state || {}, rev: doc.rev || 1, updatedAt: doc.updatedAt, counts: listCounts(doc) };
+  var now = Date.now();
+  return {
+    title: doc.title,
+    items: (doc.items || []).map(function (it) {
+      var out = { id: it.id, cat: it.cat, text: it.text };
+      if (it.changedAt && now - it.changedAt < LIST_FLAG_TTL_MS) {
+        out.flag = { kind: it.kind, was: it.was || null, ageSec: Math.round((now - it.changedAt) / 1000) };
+      }
+      return out;
+    }),
+    removed: (doc.removed || []).filter(function (r) { return now - r.at < LIST_FLAG_TTL_MS; })
+      .map(function (r) { return { text: r.text, ageSec: Math.round((now - r.at) / 1000) }; }),
+    state: doc.state || {}, rev: doc.rev || 1, updatedAt: doc.updatedAt, counts: listCounts(doc)
+  };
 }
 
 // Geeft de lijst terug, of null als die niet bestaat of verlopen is (verlopen lijsten ruimen we meteen op).
@@ -1560,9 +1608,13 @@ function listNotFound(res) {
 }
 
 // POST /api/lists — maakt een lijst, of werkt een eigen bestaande lijst bij (zelfde link blijft werken).
+// Met updateOnly: true wordt er nooit een nieuwe lijst gemaakt; bestaat de lijst niet (meer) of is hij van
+// iemand anders, dan volgt een 404. Zo maakt het automatisch bijwerken vanuit de app nooit stilletjes een
+// nieuwe lijst aan naast een link die niet meer bestaat.
 function handleListCreate(req, res) {
-  if (!listCreateAllowed(clientIp(req))) {
-    return sendJSON(res, 429, { code: "rate_limited", message: "Je hebt net al veel lijsten gedeeld. Probeer het over een tijdje opnieuw." });
+  var ip = clientIp(req);
+  if (!listWriteAllowed(ip)) {
+    return sendJSON(res, 429, { code: "rate_limited", message: "Even rustig aan. Probeer het over een tijdje opnieuw." });
   }
   resolveUser(req).then(function (user) {
     if (!user) return sendUnauthorized(res);
@@ -1572,18 +1624,28 @@ function handleListCreate(req, res) {
       var title = cleanListText(body.title, LIST_MAX_TITLE) || "Boodschappenlijst";
       var now = Date.now();
       var wanted = typeof body.token === "string" && LIST_TOKEN_RE.test(body.token) ? body.token : null;
+      var updateOnly = body.updateOnly === true;
       return (wanted ? getLiveList(wanted) : Promise.resolve(null)).then(function (existing) {
         function reply(token, doc) {
           sendJSON(res, 200, { token: token, path: "/l/" + token, counts: listCounts(doc), rev: doc.rev });
         }
-        if (existing && existing.ownerUid === user.uid) {
+        var mine = !!existing && existing.ownerUid === user.uid;
+        if (updateOnly && !mine) return listNotFound(res);
+        if (mine) {
+          if (!listUpdateAllowed(ip)) {
+            return sendJSON(res, 429, { code: "rate_limited", message: "Je hebt deze lijst net al vaak bijgewerkt. Probeer het over een tijdje opnieuw." });
+          }
           existing.title = title;
+          existing.removed = applyItemChangeFlags(existing.items, items, now, existing.removed);
           existing.items = items;
           existing.state = cleanListState(existing.state, items);
           existing.rev = (existing.rev || 0) + 1;
           existing.updatedAt = now;
           existing.expiresAt = now + LIST_TTL_MS;
           return dbSetDoc("lists/" + wanted, existing).then(function () { reply(wanted, existing); });
+        }
+        if (!listCreateAllowed(ip)) {
+          return sendJSON(res, 429, { code: "rate_limited", message: "Je hebt net al veel lijsten gedeeld. Probeer het over een tijdje opnieuw." });
         }
         var token = crypto.randomBytes(16).toString("base64url");
         var doc = { title: title, ownerUid: user.uid, createdAt: now, updatedAt: now, expiresAt: now + LIST_TTL_MS, rev: 1,
@@ -1662,6 +1724,93 @@ function handleListDelete(req, res, token) {
     });
   }).catch(function () {
     sendJSON(res, 500, { code: "error", message: "Stoppen mislukt." });
+  });
+}
+
+// ---------- Importeren in Bring! ----------
+// Bring! kent een officiële "web-to-app"-import: je geeft Bring! het adres van een openbare pagina (of een
+// JSON-bestand) met producten, en Bring! haalt die op en opent de app om ze te importeren. Daarvoor serveren
+// we een gedeelde lijst in de twee formaten uit de Bring!-documentatie:
+//   /l/<code>/bring        pagina met schema.org-markup (Bring! raadt dit aan)
+//   /l/<code>/bring.json   JSON-bestand (door Bring! "niet aanbevolen" genoemd, maar eenduidig)
+// Standaard alleen producten die nog niet in het mandje liggen of op "niet nodig" staan; met ?alle=1 alles.
+// De lijst is dezelfde als die je deelt, dus wie de link heeft, kan hem lezen (zoals altijd bij delen).
+
+var BRING_UNITS = "g|gr|gram|kg|ml|cl|dl|l|el|tl|stuks|stuk|blik|blikje|blikjes|bosje|bosjes|teen|tenen|teentje|teentjes|plak|plakjes|snee|sneetjes|pak|pakje|zak|zakje|handvol|snuf|scheut|takje|takjes|bol|bollen|doosje|potje|pot";
+var BRING_SPLIT_RE = new RegExp("^(\\d+(?:[.,/]\\d+)?(?:\\s*(?:" + BRING_UNITS + "))?)\\s+(.+)$", "i");
+
+// Splitst een product in hoeveelheid ("250 g", "2") en naam ("zalmfilet"). Zonder losse velden
+// (lijsten van vóór deze functie) proberen we de tekst zelf te splitsen.
+function bringParts(it) {
+  if (it.name) {
+    return { name: it.name, spec: String(it.spec || "").replace(/^(\d+(?:[.,]\d+)?)\s*x$/i, "$1").trim() };
+  }
+  var text = String(it.text || "").replace(/^(\d+(?:[.,]\d+)?)\s*x\s+/i, "$1 ");
+  var m = BRING_SPLIT_RE.exec(text);
+  return m ? { spec: m[1].trim(), name: m[2].trim() } : { spec: "", name: text.trim() };
+}
+
+function bringItems(doc, includeAll) {
+  var state = doc.state || {};
+  return (doc.items || []).filter(function (it) { return includeAll || !state[it.id]; }).map(bringParts);
+}
+
+// Bring! mag dit bestand ophalen vanuit zijn eigen pagina's/scripts (CORS), maar niemand anders.
+function bringCorsHeaders(req) {
+  var origin = String(req.headers.origin || "");
+  return /^https?:\/\/([a-z0-9-]+\.)*getbring\.com(:\d{1,5})?$/i.test(origin) ? { "Access-Control-Allow-Origin": origin, "Vary": "Origin" } : { "Vary": "Origin" };
+}
+
+function handleListBring(req, res, token, asJson, query) {
+  if (!listReadAllowed(clientIp(req))) { res.writeHead(429, { "Content-Type": "text/plain" }); res.end("Even rustig aan."); return; }
+  getLiveList(token).then(function (doc) {
+    var headers = Object.assign({
+      "Cache-Control": "no-store",
+      "X-Robots-Tag": "noindex, nofollow",
+      "Referrer-Policy": "no-referrer"
+    }, bringCorsHeaders(req));
+    if (!doc) {
+      res.writeHead(404, Object.assign({ "Content-Type": "text/plain; charset=utf-8" }, headers));
+      res.end("Deze lijst bestaat niet meer of is verlopen.");
+      return;
+    }
+    var host = req.headers["x-forwarded-host"] || req.headers.host || "localhost";
+    var proto = String(req.headers["x-forwarded-proto"] || (/^localhost|^127\./.test(host) ? "http" : "https")).split(",")[0].trim();
+    var origin = proto + "://" + host;
+    var parts = bringItems(doc, query.get("alle") === "1");
+    var title = "Boodschappenlijst \u00b7 " + doc.title;
+    if (asJson) {
+      var json = {
+        author: "Balanza",
+        linkOutUrl: origin + "/l/" + token,
+        imageUrl: origin + "/icons/icon-512.png",
+        name: title,
+        tagline: "",
+        yield: "",
+        time: "",
+        nutrition: { calories: "" },
+        items: parts.map(function (p) { var o = { itemId: p.name }; if (p.spec) o.spec = p.spec; return o; })
+      };
+      res.writeHead(200, Object.assign({ "Content-Type": "application/json; charset=utf-8" }, headers));
+      res.end(JSON.stringify(json));
+      return;
+    }
+    var lis = parts.map(function (p) {
+      return '    <li itemprop="ingredients recipeIngredient">' + escapeHtmlAttr((p.spec ? p.spec + " " : "") + p.name) + "</li>";
+    }).join("\n");
+    var html = '<!DOCTYPE html>\n<html lang="nl">\n<head>\n<meta charset="utf-8">\n<meta name="robots" content="noindex, nofollow">\n<meta name="referrer" content="no-referrer">\n' +
+      "<title>" + escapeHtmlAttr(title) + "</title>\n</head>\n<body>\n" +
+      '<div itemscope itemtype="http://schema.org/Recipe">\n' +
+      '  <h1 itemprop="name">' + escapeHtmlAttr(title) + "</h1>\n" +
+      '  <div>Door <span itemprop="author">Balanza</span></div>\n' +
+      '  <img src="' + escapeHtmlAttr(origin + "/icons/icon-512.png") + '" itemprop="image" alt="">\n' +
+      "  <p>Producten om te importeren in Bring!</p>\n" +
+      "  <ul>\n" + lis + "\n  </ul>\n</div>\n</body>\n</html>\n";
+    res.writeHead(200, Object.assign({ "Content-Type": "text/html; charset=utf-8" }, headers));
+    res.end(html);
+  }).catch(function () {
+    res.writeHead(500, { "Content-Type": "text/plain" });
+    res.end("Lijst ophalen mislukt.");
   });
 }
 
@@ -1885,6 +2034,8 @@ var server = http.createServer(function (req, res) {
     if (req.method === "POST" && listApi[2] === "reset") return handleListReset(req, res, listApi[1]);
     if (req.method === "POST" && listApi[2] === "delete") return handleListDelete(req, res, listApi[1]);
   }
+  var listBring = url.pathname.match(/^\/l\/([A-Za-z0-9_-]{22})\/(bring|bring\.json)$/);
+  if ((req.method === "GET" || req.method === "HEAD") && listBring) return handleListBring(req, res, listBring[1], listBring[2] === "bring.json", url.searchParams);
   var listPage = url.pathname.match(/^\/l\/([A-Za-z0-9_-]{22})$/);
   if (req.method === "GET" && listPage) return handleListPage(req, res, listPage[1]);
   if (req.method === "GET" && url.pathname === "/manifest.json") return serveFile(req, res, "manifest.json");

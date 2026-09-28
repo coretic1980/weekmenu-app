@@ -56,9 +56,15 @@
   .check span { width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--muted); display: flex; align-items: center; justify-content: center; transition: background .15s, border-color .15s; }
   .item.basket .check span { background: var(--accent2); border-color: var(--accent2); }
   .item.skip .check span { border-style: dashed; opacity: .5; }
-  .txt { flex: 1; font-size: 16px; line-height: 1.35; padding: 8px 0; cursor: pointer; word-break: break-word; }
-  .item.basket .txt { text-decoration: line-through; color: var(--muted); }
-  .item.skip .txt { text-decoration: line-through; color: var(--muted); font-style: italic; opacity: .75; }
+  .txt { flex: 1; padding: 8px 0; cursor: pointer; word-break: break-word; }
+  .name { font-size: 16px; line-height: 1.35; }
+  .item.basket .name { text-decoration: line-through; color: var(--muted); }
+  .item.skip .name { text-decoration: line-through; color: var(--muted); font-style: italic; opacity: .75; }
+  .flaginfo { margin-top: 3px; font-size: 12px; color: var(--muted); line-height: 1.4; }
+  .flag { display: inline-block; background: var(--accent2); color: var(--accent-ink); border-radius: 999px; font-size: 11px; font-weight: 700; padding: 2px 8px; margin-right: 6px; letter-spacing: .02em; }
+  .notice { margin: 14px 0 0; padding: 12px 14px; border: 1px solid var(--accent2); border-radius: 12px; background: var(--surface); font-size: 14px; line-height: 1.45; display: flex; gap: 12px; align-items: center; justify-content: space-between; }
+  .notice b { font-family: "Fraunces", Georgia, serif; font-weight: 600; font-size: 16px; display: block; margin-bottom: 2px; }
+  .notice button { flex: none; border: 0; background: var(--accent); color: var(--accent-ink); border-radius: 10px; padding: 10px 16px; font: inherit; font-weight: 700; cursor: pointer; }
   .skipbtn { flex: none; border: 1px solid var(--line); background: transparent; color: var(--muted); border-radius: 999px; padding: 8px 12px; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; min-height: 36px; }
   .item.skip .skipbtn { color: var(--ink); border-color: var(--accent2); }
   .item.basket .skipbtn { opacity: .35; }
@@ -89,6 +95,9 @@
   var online = true;
   var gone = false;      // lijst bestaat niet meer
   var flushing = null;   // lopende verzending (Promise)
+  var seen = {};         // markeringen die jij al gezien hebt: product-id -> "nieuw|tekst" / "aangepast|tekst"
+  var fetchedAt = 0;     // wanneer de lijst voor het laatst is opgehaald (voor "zojuist", "5 min geleden")
+  var FLAG_TTL_S = 12 * 3600;
 
   var app = document.getElementById("app");
 
@@ -101,7 +110,7 @@
 
   // ---- lokaal bewaren, zodat de lijst ook zonder bereik opent en wijzigingen niet verloren gaan ----
   function save() {
-    try { localStorage.setItem(STORE_KEY, JSON.stringify({ data: data, pending: pending, filter: filter })); } catch (e) {}
+    try { localStorage.setItem(STORE_KEY, JSON.stringify({ data: data, pending: pending, filter: filter, seen: seen, fetchedAt: fetchedAt })); } catch (e) {}
   }
   function restore() {
     try {
@@ -110,8 +119,40 @@
         data = raw.data;
         pending = raw.pending && typeof raw.pending === "object" ? raw.pending : {};
         if (raw.filter === "todo") filter = "todo";
+        if (raw.seen && typeof raw.seen === "object") seen = raw.seen;
+        fetchedAt = Number(raw.fetchedAt) || Date.now();
       }
     } catch (e) {}
+  }
+
+  // Markeringen van de afzender: een product dat nieuw is of is aangepast (met wat het eerst was), en
+  // producten die zijn weggehaald. De server bepaalt wat er veranderd is en hoe lang geleden; hier
+  // tellen we alleen de tijd bij die sinds het ophalen verstreken is.
+  function elapsedSince() { return Math.max(0, (Date.now() - fetchedAt) / 1000); }
+  function flagKey(it) { return it.flag.kind + "|" + it.text; }
+  function flagOf(it) {
+    var f = it && it.flag;
+    if (!f) return null;
+    var age = f.ageSec + elapsedSince();
+    if (age >= FLAG_TTL_S) return null;
+    if (seen[it.id] === flagKey(it)) return null;
+    return { kind: f.kind, was: f.was, age: age };
+  }
+  function removedNow() {
+    return ((data && data.removed) || []).filter(function (r) {
+      return r.ageSec + elapsedSince() < FLAG_TTL_S && !seen["removed:" + r.text];
+    });
+  }
+  function ageText(sec) {
+    if (sec < 600) return "zojuist";
+    if (sec < 3600) return Math.round(sec / 60) + " min geleden";
+    return Math.round(sec / 3600) + " uur geleden";
+  }
+  function acknowledgeAll() {
+    data.items.forEach(function (it) { if (flagOf(it)) seen[it.id] = flagKey(it); });
+    removedNow().forEach(function (r) { seen["removed:" + r.text] = 1; });
+    save();
+    render();
   }
 
   function statusOf(id) {
@@ -192,6 +233,27 @@
     bar.appendChild(fill);
     app.appendChild(bar);
 
+    var flagged = data.items.filter(function (it) { return !!flagOf(it); });
+    var removedList = removedNow();
+    if (flagged.length || removedList.length) {
+      var newCount = flagged.filter(function (it) { return it.flag.kind === "new"; }).length;
+      var changedCount = flagged.length - newCount;
+      var ages = flagged.map(function (it) { return flagOf(it).age; }).concat(removedList.map(function (r) { return r.ageSec + elapsedSince(); }));
+      var box = el("div", "notice");
+      var msg = el("div");
+      msg.appendChild(el("b", null, "De lijst is " + (Math.min.apply(null, ages) < 600 ? "zojuist" : ageText(Math.min.apply(null, ages))) + " aangepast"));
+      var parts = [];
+      if (newCount) parts.push(newCount + " nieuw");
+      if (changedCount) parts.push(changedCount + " aangepast");
+      if (parts.length) msg.appendChild(el("div", null, parts.join(" \u00b7 ") + " (zie de gemarkeerde producten)"));
+      if (removedList.length) msg.appendChild(el("div", null, "Niet meer nodig: " + removedList.map(function (r) { return r.text; }).join(", ")));
+      box.appendChild(msg);
+      var okBtn = el("button", null, "Ok\u00e9");
+      okBtn.onclick = acknowledgeAll;
+      box.appendChild(okBtn);
+      app.appendChild(box);
+    }
+
     var filters = el("div", "filters");
     [["all", "Alles"], ["todo", "Nog te doen"]].forEach(function (p) {
       var b = el("button", "chip" + (filter === p[0] ? " on" : ""), p[1]);
@@ -247,7 +309,15 @@
     check.appendChild(ring);
     check.onclick = function () { toggle(it.id, "basket"); };
 
-    var txt = el("div", "txt", it.text);
+    var txt = el("div", "txt");
+    txt.appendChild(el("div", "name", it.text));
+    var fl = flagOf(it);
+    if (fl) {
+      var info = el("div", "flaginfo");
+      info.appendChild(el("span", "flag", fl.kind === "new" ? "Nieuw" : "Aangepast"));
+      info.appendChild(el("span", null, (fl.kind === "changed" && fl.was ? "was: " + fl.was + " \u00b7 " : "") + ageText(fl.age)));
+      txt.appendChild(info);
+    }
     txt.onclick = function () { toggle(it.id, "basket"); };
 
     var skip = el("button", "skipbtn", s === "skip" ? "Toch nodig" : "Niet nodig");
@@ -261,6 +331,8 @@
 
   // ---- afvinken ----
   function toggle(id, kind) {
+    var item = data && data.items.filter(function (x) { return x.id === id; })[0];
+    if (item && flagOf(item)) seen[id] = flagKey(item);   // wie een product aantikt, heeft de markering gezien
     var current = statusOf(id);
     pending[id] = current === kind ? null : kind;
     try { if (navigator.vibrate) navigator.vibrate(8); } catch (e) {}
@@ -327,7 +399,8 @@
     }).then(function (body) {
       online = true;
       if (body && !body.unchanged && Array.isArray(body.items)) {
-        data = { title: body.title, items: body.items, state: body.state || {}, rev: body.rev, updatedAt: body.updatedAt };
+        data = { title: body.title, items: body.items, removed: body.removed || [], state: body.state || {}, rev: body.rev, updatedAt: body.updatedAt };
+        fetchedAt = Date.now();
         Object.keys(pending).forEach(function (id) {
           if (!data.items.some(function (it) { return it.id === id; })) delete pending[id];
         });

@@ -123,6 +123,13 @@
     padding: 13px 20px; border-radius: 11px; cursor: pointer;
   }
   .ghost-btn:hover { border-color: var(--accent2); color: var(--accent2); }
+  .shop-item.skipped { color: var(--muted); text-decoration: line-through; font-style: italic; opacity: 0.75; }
+  .shop-item.skipped .shop-check { border-style: dashed; }
+  .shop-skip { margin-left: auto; flex: none; border: 1px solid var(--line); background: transparent; color: var(--muted); border-radius: 999px; padding: 6px 11px; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; text-decoration: none; font-style: normal; }
+  .shop-item.skipped .shop-skip { color: var(--ink); border-color: var(--accent2); }
+  .shop-item.checked .shop-skip { opacity: 0.4; }
+  .shop-flag { flex: none; background: var(--accent2); color: var(--accent2-ink); border-radius: 999px; font-size: 11px; font-weight: 700; padding: 2px 8px; }
+  .share-note { font-size: 12px; color: var(--muted); line-height: 1.5; }
   .share-box { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); font-size: 13px; }
   .share-box .share-text { flex: 1; min-width: 180px; line-height: 1.45; color: var(--muted); }
   .share-box .share-actions { display: flex; gap: 8px; }
@@ -3332,7 +3339,7 @@
         text = g.raws[0];
       }
       var cat = categorizeIngredient(displayName);
-      byCategory[cat].push({ key: key, text: text });
+      byCategory[cat].push({ key: key, text: text, name: displayName, spec: g.hasAmount ? amtText : "" });
     });
     return byCategory;
   }
@@ -3377,17 +3384,28 @@
     return "€" + n.toFixed(2).replace(".", ",");
   }
 
-  // ---------- Boodschappenlijst delen (WhatsApp) ----------
+  // ---------- Boodschappenlijst delen (WhatsApp) en samen afvinken ----------
   // Delen maakt op de server een momentopname met een eigen link (/l/<code>). Wie de link opent, kan
-  // per product "in mandje" of "niet nodig" aanvinken, en jullie zien elkaars vinkjes. Deel je
-  // dezelfde lijst opnieuw, dan wordt dezelfde link bijgewerkt, zodat een eerder verstuurde link
-  // blijft werken. Welke link bij welke lijst hoort, onthouden we op dit apparaat.
+  // per product "in mandje" of "niet nodig" aanvinken. Zolang een lijst gedeeld is, toont het
+  // boodschappenscherm hier (bij "Per week") dezelfde live stand als de gedeelde pagina: vinkjes van
+  // de ander verschijnen vanzelf, en jouw tikken gaan naar de ander. Deel je dezelfde lijst opnieuw,
+  // dan wordt dezelfde link bijgewerkt, zodat een eerder verstuurde link blijft werken. Welke link bij
+  // welke lijst hoort, onthouden we op dit apparaat.
   var SHARES_KEY = "weekmenu_shares";
-  var shareStatus = {};          // code -> { counts, at } | { gone: true, at }
-  var shareStatusLoading = {};
+  var SHARE_PENDING_KEY = "weekmenu_share_pending";
+  var SHARE_POLL_MS = 8000;
+  var SHARE_META_KEY = "weekmenu_share_meta";   // code -> { kind, refId, title, sig }: waaruit de lijst is opgebouwd
+  var AUTO_SYNC_MS = 3000;                      // hoe vaak we kijken of het plan is veranderd
+  var AUTO_SYNC_STABLE_MS = 5000;               // zo lang moet een wijziging ongemoeid blijven voordat we bijwerken
+  var OWNER_FLAG_SECONDS = 300;                 // zo lang toont jouw scherm 'Nieuw' / 'Aangepast' bij een product
+  var autoSyncTimer = null;
+  var autoSyncRt = {};                          // code -> { pendingSig, since, sending, retryAt }
+  var sharedLive = {};           // code -> live stand: { loaded, gone, items, order, state, rev, pending, online, ... }
+  var shareDrifting = {};        // code -> true als de lijst in de app afwijkt van wat gedeeld is
   var shareStatusEl = null;
   var shareStatusToken = null;
-  var shareStatusTimer = null;
+  var shareTimer = null;
+  var shareLastTapAt = 0;
 
   function loadShares() {
     try { return JSON.parse(localStorage.getItem(SHARES_KEY) || "{}") || {}; } catch (e) { return {}; }
@@ -3396,6 +3414,7 @@
     try { localStorage.setItem(SHARES_KEY, JSON.stringify(map)); } catch (e) {}
   }
   function shareKeyFor(title) { return state.view + "|" + title; }
+  function onShoppingView() { return state.view === "shopping" || state.view === "planshopping"; }
 
   function shareSlug(text) {
     var s = String(text).toLowerCase();
@@ -3403,22 +3422,300 @@
     return s.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 70);
   }
 
-  // Maakt van de samengevoegde boodschappenlijst de producten voor het delen. De id is afgeleid van het
-  // product zelf (niet van de hoeveelheid), zodat vinkjes blijven staan als de lijst later wordt bijgewerkt.
-  function buildShareItems(entries) {
-    var byCat = buildAggregatedShoppingList(entries);
-    var items = [], initial = {}, used = {};
+  // Kent elk product uit de samengevoegde lijst een vaste id toe. De id is afgeleid van het product zelf
+  // (niet van de hoeveelheid), zodat vinkjes blijven staan als de lijst later wordt bijgewerkt.
+  function assignShareIds(byCat) {
+    var items = [], idByKey = {}, used = {};
     CATEGORY_ORDER.forEach(function (cat) {
       byCat[cat].forEach(function (item) {
         var base = shareSlug(item.key) || "product";
         var id = base, n = 2;
         while (used[id]) { id = base + "-" + n; n++; }
         used[id] = true;
-        items.push({ id: id, cat: cat, text: item.text });
-        if (shoppingChecked[item.key]) initial[id] = "basket";
+        idByKey[item.key] = id;
+        items.push({ id: id, cat: cat, text: item.text, key: item.key, name: item.name, spec: item.spec });
       });
     });
-    return { items: items, state: initial };
+    return { items: items, idByKey: idByKey };
+  }
+
+  function buildShareItems(entries) {
+    var info = assignShareIds(buildAggregatedShoppingList(entries));
+    var initial = {};
+    info.items.forEach(function (it) { if (shoppingChecked[it.key]) initial[it.id] = "basket"; });
+    return {
+      items: info.items.map(function (it) { return { id: it.id, cat: it.cat, text: it.text, name: it.name, spec: it.spec }; }),
+      state: initial
+    };
+  }
+
+  // ---- live stand van een gedeelde lijst ----
+  function loadPending(token) {
+    try {
+      var all = JSON.parse(localStorage.getItem(SHARE_PENDING_KEY) || "{}") || {};
+      return all[token] && typeof all[token] === "object" ? all[token] : {};
+    } catch (e) { return {}; }
+  }
+  function savePending(token, pending) {
+    try {
+      var all = JSON.parse(localStorage.getItem(SHARE_PENDING_KEY) || "{}") || {};
+      if (Object.keys(pending).length) all[token] = pending; else delete all[token];
+      localStorage.setItem(SHARE_PENDING_KEY, JSON.stringify(all));
+    } catch (e) {}
+  }
+  function liveFor(token) {
+    if (!sharedLive[token]) {
+      sharedLive[token] = { loaded: false, gone: false, items: {}, order: [], state: {}, rev: 0, pending: loadPending(token), online: true, flushing: null, ticking: null };
+    }
+    return sharedLive[token];
+  }
+  function liveStatus(live, id) {
+    if (Object.prototype.hasOwnProperty.call(live.pending, id)) return live.pending[id];
+    return live.state[id] || null;
+  }
+  function liveCounts(live) {
+    var basket = 0, skip = 0;
+    live.order.forEach(function (id) {
+      var s = liveStatus(live, id);
+      if (s === "basket") basket++; else if (s === "skip") skip++;
+    });
+    return { total: live.order.length, basket: basket, skip: skip, todo: live.order.length - basket - skip };
+  }
+  function forgetShare(token) {
+    var shares = loadShares();
+    Object.keys(shares).forEach(function (k) { if (shares[k] === token) delete shares[k]; });
+    saveShares(shares);
+    setShareMeta(token, null);
+  }
+
+  // Verstuurt eigen, nog niet bevestigde tikken één voor één. Lukt dat niet (geen bereik), dan blijven ze
+  // bewaard en proberen we het bij de volgende ronde opnieuw.
+  function liveFlush(token) {
+    var live = liveFor(token);
+    if (live.flushing) return live.flushing;
+    function next() {
+      var ids = Object.keys(live.pending);
+      if (!ids.length) return Promise.resolve();
+      var id = ids[0], status = live.pending[id];
+      return fetch("/api/lists/" + token + "/item", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: id, status: status })
+      }).then(function (res) {
+        if (res.status === 404 || res.status === 400) {
+          // product staat niet meer op de gedeelde lijst (of de lijst is weg): niet blijven proberen
+          if (live.pending[id] === status) delete live.pending[id];
+          return;
+        }
+        if (!res.ok) throw new Error("http " + res.status);
+        if (live.pending[id] === status) {
+          delete live.pending[id];
+          if (status) live.state[id] = status; else delete live.state[id];
+        }
+      }).then(function () { savePending(token, live.pending); return next(); });
+    }
+    live.flushing = next().then(function () { live.online = true; }, function () { live.online = false; }).then(function () {
+      live.flushing = null;
+      refreshShareUi(false);
+    });
+    return live.flushing;
+  }
+
+  // Haalt de stand van de server op. Geeft true terug als er iets veranderd is.
+  function livePoll(token) {
+    var live = liveFor(token);
+    return fetch("/api/lists/" + token + (live.rev ? "?rev=" + live.rev : "")).then(function (res) {
+      if (res.status === 404) return { gone: true };
+      if (!res.ok) throw new Error("http " + res.status);
+      return res.json();
+    }).then(function (body) {
+      live.online = true;
+      if (body.gone) {
+        live.gone = true;
+        forgetShare(token);
+        return true;
+      }
+      if (!body.unchanged && Array.isArray(body.items)) {
+        live.items = {};
+        live.order = [];
+        body.items.forEach(function (it) { live.items[it.id] = it; live.order.push(it.id); });
+        live.state = body.state || {};
+        live.rev = body.rev;
+        live.fetchedAt = Date.now();
+        live.loaded = true;
+        Object.keys(live.pending).forEach(function (id) { if (!live.items[id]) delete live.pending[id]; });
+        savePending(token, live.pending);
+        return true;
+      }
+      live.loaded = true;
+      return false;
+    }).catch(function () {
+      live.online = false;
+      return false;
+    });
+  }
+
+  function liveTick(token) {
+    var live = liveFor(token);
+    if (live.ticking) return live.ticking;
+    live.ticking = liveFlush(token).then(function () { return livePoll(token); }).then(function (changed) {
+      live.ticking = null;
+      refreshShareUi(changed);
+    });
+    return live.ticking;
+  }
+
+  // Tik van de gebruiker op een product van de gedeelde lijst ("basket" = in mandje, "skip" = niet nodig).
+  function liveToggle(token, id, kind) {
+    var live = liveFor(token);
+    var current = liveStatus(live, id);
+    live.pending[id] = current === kind ? null : kind;
+    savePending(token, live.pending);
+    shareLastTapAt = Date.now();
+    render();
+    liveFlush(token);
+  }
+
+  function shareStatusLine(token) {
+    var live = sharedLive[token];
+    if (!live || (!live.loaded && !live.gone)) return "Gedeelde lijst \u00b7 stand ophalen\u2026";
+    if (live.gone) return "Deze gedeelde lijst bestaat niet meer (verlopen of gestopt).";
+    var c = liveCounts(live);
+    var pend = Object.keys(live.pending).length;
+    var line = "Gedeelde lijst \u00b7 " + c.basket + " in mandje" + (c.skip ? " \u00b7 " + c.skip + " niet nodig" : "") + " \u00b7 " + c.todo + " nog te doen";
+    if (!live.online) line += " \u00b7 geen verbinding" + (pend ? " (" + pend + " wijziging" + (pend === 1 ? "" : "en") + " volgt)" : "");
+    if (shareDrifting[token]) {
+      var rt = autoSyncRt[token];
+      if (!loadShareMeta()[token]) line += " \u00b7 de lijst is aangepast sinds je deelde";
+      else if (rt && rt.retryAt && Date.now() < rt.retryAt) line += " \u00b7 bijwerken lukte niet, nieuwe poging volgt";
+      else line += " \u00b7 wordt zo automatisch bijgewerkt";
+    }
+    return line;
+  }
+
+  // Is de lijst in de app anders dan wat gedeeld is (bijvoorbeeld door een aangepast plan)?
+  function shareDrift(token, info) {
+    var live = sharedLive[token];
+    if (!live || !live.loaded || live.gone) return false;
+    if (info.items.length !== live.order.length) return true;
+    return info.items.some(function (it) { var s = live.items[it.id]; return !s || s.text !== it.text || s.cat !== it.cat; });
+  }
+
+  // Ververst het scherm als er iets veranderd is (niet midden in een tik van de gebruiker), en anders alleen de statusregel.
+  function refreshShareUi(changed) {
+    if (!onShoppingView()) return;
+    if (changed) {
+      var wait = 1200 - (Date.now() - shareLastTapAt);
+      if (wait > 0) setTimeout(function () { if (onShoppingView()) render(); }, wait + 50);
+      else render();
+      return;
+    }
+    if (shareStatusEl && shareStatusToken) shareStatusEl.textContent = shareStatusLine(shareStatusToken);
+  }
+
+  // Elke 8 seconden bijwerken zolang je op het boodschappenscherm bent.
+  function startShareTimer() {
+    if (shareTimer) return;
+    shareTimer = setInterval(function () {
+      if (!onShoppingView() || !shareStatusToken) { clearInterval(shareTimer); shareTimer = null; return; }
+      if (typeof document !== "undefined" && document.hidden) return;
+      liveTick(shareStatusToken);
+    }, SHARE_POLL_MS);
+  }
+
+  // ---- automatisch bijwerken ----
+  // Wijzig je het plan (gerecht erbij, eraf, andere porties), dan werken we de gedeelde lijst na een paar
+  // seconden rust vanzelf bij, ook als je niet op het boodschappenscherm bent. We vergelijken steeds wat de
+  // lijst nu zou zijn met wat we het laatst deelden. Zo hoeft er geen aparte handeling; wel alleen zolang
+  // de app openstaat. De server maakt hier nooit een nieuwe lijst voor aan (updateOnly).
+  function shareSignature(items) {
+    return items.map(function (i) { return i.id + "|" + i.cat + "|" + i.text; }).join("\n");
+  }
+  function loadShareMeta() {
+    try { return JSON.parse(localStorage.getItem(SHARE_META_KEY) || "{}") || {}; } catch (e) { return {}; }
+  }
+  function setShareMeta(token, meta) {
+    try {
+      var all = loadShareMeta();
+      if (meta) all[token] = meta; else delete all[token];
+      localStorage.setItem(SHARE_META_KEY, JSON.stringify(all));
+    } catch (e) {}
+  }
+  function currentShareSource() {
+    if (state.view === "planshopping") return { kind: "plan", refId: state.planWeekId };
+    if (state.view === "shopping") return { kind: "week", refId: state.weekId };
+    return null;
+  }
+  // Bouwt de gerechten van een gedeelde lijst opnieuw op uit het plan waar hij van komt.
+  function shareSourceFor(meta) {
+    if (meta.kind === "plan") {
+      var pw = findPlannedWeek(meta.refId);
+      return pw ? { title: formatWeekLabel(new Date(pw.weekStart)), entries: buildPlanEntries(pw) } : null;
+    }
+    if (meta.kind === "week") {
+      var wk = findWeek(meta.refId);
+      return wk ? { title: wk.title, entries: buildDayEntries(wk) } : null;
+    }
+    return null;
+  }
+
+  function autoSyncPush(token, title, built, sig) {
+    var rt = autoSyncRt[token];
+    rt.sending = true;
+    fetch("/api/lists", {
+      method: "POST",
+      headers: shareHeaders(),
+      body: JSON.stringify({ token: token, updateOnly: true, title: title, items: built.items, state: {} })
+    }).then(function (res) {
+      return res.json().catch(function () { return {}; }).then(function (data) { return { status: res.status, data: data }; });
+    }).then(function (r) {
+      if (r.status === 200 && r.data.token === token) {
+        var all = loadShareMeta();
+        if (all[token]) { all[token].sig = sig; all[token].title = title; try { localStorage.setItem(SHARE_META_KEY, JSON.stringify(all)); } catch (e) {} }
+        rt.pendingSig = null;
+        rt.retryAt = 0;
+        showToast("Gedeelde boodschappenlijst bijgewerkt.");
+        if (sharedLive[token]) liveTick(token);
+      } else if (r.status === 404) {
+        // de lijst bestaat niet meer: niet stilletjes een nieuwe maken naast een link die niet meer werkt
+        forgetShare(token);
+        delete sharedLive[token];
+        delete shareDrifting[token];
+        showToast("De gedeelde boodschappenlijst bestaat niet meer.");
+      } else {
+        rt.retryAt = Date.now() + 60000;
+      }
+    }).catch(function () {
+      rt.retryAt = Date.now() + 30000;
+    }).then(function () {
+      rt.sending = false;
+    });
+  }
+
+  function autoSyncTick() {
+    var metas = loadShareMeta();
+    var tokens = Object.keys(metas);
+    if (!tokens.length) { if (autoSyncTimer) { clearInterval(autoSyncTimer); autoSyncTimer = null; } return; }
+    if (typeof document !== "undefined" && document.hidden) return;
+    var shares = loadShares(), active = {};
+    Object.keys(shares).forEach(function (k) { active[shares[k]] = true; });
+    tokens.forEach(function (token) {
+      if (!active[token]) { setShareMeta(token, null); return; }      // delen is gestopt of vergeten
+      var meta = metas[token];
+      var src = shareSourceFor(meta);
+      if (!src || !src.entries.length) return;                        // bron weg of leeg: gedeelde lijst blijft zoals hij is
+      var built = buildShareItems(src.entries);
+      var sig = shareSignature(built.items);
+      var rt = autoSyncRt[token] || (autoSyncRt[token] = {});
+      if (sig === meta.sig) { rt.pendingSig = null; return; }
+      if (rt.pendingSig !== sig) { rt.pendingSig = sig; rt.since = Date.now(); return; }   // nieuw verschil: even afwachten
+      if (rt.sending || Date.now() - rt.since < AUTO_SYNC_STABLE_MS) return;
+      if (rt.retryAt && Date.now() < rt.retryAt) return;
+      autoSyncPush(token, src.title, built, sig);
+    });
+  }
+
+  function startAutoSyncTimer() {
+    if (autoSyncTimer) return;
+    autoSyncTimer = setInterval(autoSyncTick, AUTO_SYNC_MS);
   }
 
   function shareMessageText(title, url, count) {
@@ -3427,15 +3724,18 @@
   }
 
   // Opent WhatsApp met de tekst alvast ingevuld (op de telefoon kies je daar het contact, op de computer
-  // opent WhatsApp Web). Via een link met target=_blank: dat mag ook binnen een geïnstalleerde app.
-  function openWhatsApp(text) {
+  // opent WhatsApp Web). Via een link met target=_blank: dat mag ook binnen een ge\u00efnstalleerde app.
+  function openExternal(url) {
     var a = document.createElement("a");
-    a.href = "https://wa.me/?text=" + encodeURIComponent(text);
+    a.href = url;
     a.target = "_blank";
     a.rel = "noopener";
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+  }
+  function openWhatsApp(text) {
+    openExternal("https://wa.me/?text=" + encodeURIComponent(text));
   }
 
   function copyToClipboard(text) {
@@ -3455,53 +3755,6 @@
     });
   }
 
-  function shareStatusLine(token) {
-    var s = shareStatus[token];
-    if (!s) return "Gedeelde lijst \u00b7 stand ophalen\u2026";
-    if (s.gone) return "Deze gedeelde lijst bestaat niet meer (verlopen of gestopt).";
-    var c = s.counts;
-    if (!c) return "Gedeelde lijst";
-    var todo = c.total - c.basket - c.skip;
-    return "Gedeelde lijst \u00b7 " + c.basket + " in mandje" + (c.skip ? " \u00b7 " + c.skip + " niet nodig" : "") + " \u00b7 " + todo + " nog te doen";
-  }
-
-  // Haalt de stand van de gedeelde lijst op (hoeveel in mandje / niet nodig) en zet die in de statusregel.
-  function refreshShareStatus(token, force) {
-    var s = shareStatus[token];
-    if (shareStatusLoading[token] || (!force && s && Date.now() - s.at < 12000)) return;
-    shareStatusLoading[token] = true;
-    fetch("/api/lists/" + token).then(function (res) {
-      if (res.status === 404) return { gone: true };
-      if (!res.ok) throw new Error("http " + res.status);
-      return res.json();
-    }).then(function (data) {
-      if (data.gone) {
-        shareStatus[token] = { gone: true, at: Date.now() };
-        var shares = loadShares();
-        Object.keys(shares).forEach(function (k) { if (shares[k] === token) delete shares[k]; });
-        saveShares(shares);
-      } else {
-        shareStatus[token] = { counts: data.counts, at: Date.now() };
-      }
-    }).catch(function () {
-      var prev = shareStatus[token] || {};
-      shareStatus[token] = { counts: prev.counts, gone: prev.gone, at: Date.now() };
-    }).then(function () {
-      shareStatusLoading[token] = false;
-      if (shareStatusEl && shareStatusToken === token) shareStatusEl.textContent = shareStatusLine(token);
-    });
-  }
-
-  // Ververst de statusregel elke 15 seconden zolang je op het boodschappenscherm bent.
-  function startShareStatusTimer() {
-    if (shareStatusTimer) return;
-    shareStatusTimer = setInterval(function () {
-      var onShopping = state.view === "shopping" || state.view === "planshopping";
-      if (!onShopping || !shareStatusEl || !shareStatusToken) { clearInterval(shareStatusTimer); shareStatusTimer = null; return; }
-      refreshShareStatus(shareStatusToken, true);
-    }, 15000);
-  }
-
   function shareHeaders() {
     var h = { "Content-Type": "application/json" };
     var a = window.authHeaders ? window.authHeaders() : {};
@@ -3509,14 +3762,15 @@
     return h;
   }
 
-  function shareShoppingList(title, entries, btn) {
+  // Deelt de lijst, of werkt een al gedeelde lijst bij (zelfde link). Met quiet=true zonder WhatsApp-venster.
+  function shareShoppingList(title, entries, btn, quiet, onReady) {
     var built = buildShareItems(entries);
     if (!built.items.length) { showToast("Er zijn nog geen producten om te delen."); return; }
     var shares = loadShares();
     var key = shareKeyFor(title);
     var existing = shares[key] || null;
     var label = btn ? btn.textContent : "";
-    if (btn) { btn.disabled = true; btn.textContent = "Lijst wordt klaargezet\u2026"; }
+    if (btn) { btn.disabled = true; btn.textContent = quiet ? "Bijwerken\u2026" : "Lijst wordt klaargezet\u2026"; }
 
     fetch("/api/lists", {
       method: "POST",
@@ -3531,20 +3785,33 @@
       var updated = existing && data.token === existing;
       shares[key] = data.token;
       saveShares(shares);
-      shareStatus[data.token] = { counts: data.counts, at: Date.now() };
+      delete sharedLive[data.token];      // stand opnieuw ophalen
+      delete shareDrifting[data.token];
+      var src = currentShareSource();
+      if (src) {
+        setShareMeta(data.token, { kind: src.kind, refId: src.refId, title: title, sig: shareSignature(built.items) });
+        autoSyncRt[data.token] = {};
+        startAutoSyncTimer();
+      }
       var url = window.location.origin + data.path;
       var text = shareMessageText(title, url, built.items.length);
-      askConfirm(
-        updated
-          ? "Je gedeelde lijst is bijgewerkt (" + built.items.length + " producten). De link die je eerder deelde blijft gewoon werken."
-          : "Je lijst is klaar om te delen (" + built.items.length + " producten). Wie de link opent, kan producten afvinken als \u201cin mandje\u201d of \u201cniet nodig\u201d, en jullie zien elkaars vinkjes direct.",
-        function () { openWhatsApp(text); },
-        "Deel via WhatsApp",
-        "Kopieer link",
-        function () {
-          copyToClipboard(url).then(function () { showToast("Link gekopieerd."); }).catch(function () { showToast("Kopi\u00ebren lukte niet. Link: " + url); });
-        }
-      );
+      if (onReady) {
+        onReady(data, url);
+      } else if (quiet) {
+        showToast("Gedeelde lijst bijgewerkt.");
+      } else {
+        askConfirm(
+          updated
+            ? "Je gedeelde lijst is bijgewerkt (" + built.items.length + " producten). De link die je eerder deelde blijft gewoon werken."
+            : "Je lijst is klaar om te delen (" + built.items.length + " producten). Wie de link opent, kan producten afvinken als \u201cin mandje\u201d of \u201cniet nodig\u201d, en jullie zien elkaars vinkjes direct.",
+          function () { openWhatsApp(text); },
+          "Deel via WhatsApp",
+          "Kopieer link",
+          function () {
+            copyToClipboard(url).then(function () { showToast("Link gekopieerd."); }).catch(function () { showToast("Kopi\u00ebren lukte niet. Link: " + url); });
+          }
+        );
+      }
       render();
     }).catch(function (e) {
       showToast(e.status === 401 ? "Log eerst in om een lijst te kunnen delen." : (e.status ? e.message : "Delen mislukt. Controleer je verbinding en probeer het opnieuw."));
@@ -3553,14 +3820,54 @@
     });
   }
 
+  // ---------- Importeren in Bring! ----------
+  // Bring! heeft een officiële "web-to-app"-import: we geven Bring! het adres van een openbare pagina met de
+  // producten (/l/<code>/bring, met schema.org-markup, of /l/<code>/bring.json), Bring! haalt die op en opent
+  // de app om te importeren. Daarvoor staat de lijst online onder dezelfde geheime link als bij delen. Wat al
+  // in het mandje ligt of "niet nodig" is, wordt niet meegenomen. Bring! laat dit alleen via de app doen: er
+  // is (in de documentatie) geen manier om zonder de app rechtstreeks in een bepaalde lijst te schrijven.
+  function bringDeeplink(pageUrl) {
+    return "https://api.getbring.com/rest/bringrecipes/deeplink?url=" + encodeURIComponent(pageUrl) + "&source=web";
+  }
+  function isPublicHttps(origin) {
+    return /^https:\/\//.test(origin) && !/^https:\/\/(localhost|127\.|10\.|192\.168\.)/.test(origin);
+  }
+  function importToBring(title, entries, btn) {
+    if (!isPublicHttps(window.location.origin)) {
+      showToast("Bring! kan alleen een openbare https-pagina importeren, dus niet vanaf dit adres.");
+      return;
+    }
+    shareShoppingList(title, entries, btn, false, function (data) {
+      var remaining = data.counts.total - data.counts.basket - data.counts.skip;
+      if (remaining <= 0) {
+        showToast("Alles staat al in het mandje of is niet nodig: er valt niets te importeren.");
+        return;
+      }
+      var page = window.location.origin + "/l/" + data.token;
+      askConfirm(
+        "Je lijst staat klaar voor Bring! (" + remaining + (remaining === 1 ? " product" : " producten") + "; wat al in het mandje ligt of op \u201cniet nodig\u201d staat, blijft weg). " +
+        "Bring! haalt de lijst op en opent de app om te importeren, dus doe dit op het apparaat waar Bring! op staat. " +
+        "De lijst staat daarvoor online onder dezelfde geheime link als bij delen. Komt er iets raars in Bring! te staan? Probeer dan de andere methode.",
+        function () { openExternal(bringDeeplink(page + "/bring")); },
+        "Open in Bring!",
+        "Andere methode",
+        function () { openExternal(bringDeeplink(page + "/bring.json")); }
+      );
+    });
+  }
+
   function stopSharing(title, token) {
-    askConfirm("Delen stoppen? De link werkt daarna niet meer, ook niet voor wie de lijst nog open heeft staan.", function () {
+    askConfirm("Delen stoppen? De link werkt daarna niet meer, ook niet voor wie de lijst nog open heeft staan. Wat jullie al hebben afgevinkt blijft in je eigen lijst staan.", function () {
       fetch("/api/lists/" + token + "/delete", { method: "POST", headers: shareHeaders(), body: "{}" }).then(function (res) {
         if (!res.ok && res.status !== 404) throw new Error("http " + res.status);
         var shares = loadShares();
         delete shares[shareKeyFor(title)];
         saveShares(shares);
-        delete shareStatus[token];
+        delete sharedLive[token];
+        delete shareDrifting[token];
+        setShareMeta(token, null);
+        delete autoSyncRt[token];
+        savePending(token, {});
         showToast("Delen gestopt.");
         render();
       }).catch(function () { showToast("Stoppen mislukt. Probeer het opnieuw."); });
@@ -3599,11 +3906,32 @@
       headerRow.appendChild(shareBtn);
     }
     headerRow.appendChild(exportBtn);
+    if (entries.length) {
+      var bringBtn = document.createElement("button");
+      bringBtn.className = "ghost-btn";
+      bringBtn.id = "shopBringBtn";
+      bringBtn.textContent = "Importeer in Bring!";
+      bringBtn.onclick = function () { importToBring(title, entries, bringBtn); };
+      headerRow.appendChild(bringBtn);
+    }
 
     main.appendChild(headerRow);
 
     var sharedToken = loadShares()[shareKeyFor(title)];
+    var shareInfo = null, live = null;
     if (sharedToken && entries.length) {
+      shareInfo = assignShareIds(buildAggregatedShoppingList(entries));
+      live = liveFor(sharedToken);
+      var drifting = shareDrift(sharedToken, shareInfo);
+      shareDrifting[sharedToken] = drifting;
+      if (live.loaded && !live.gone && !loadShareMeta()[sharedToken]) {
+        // een lijst die gedeeld is met een eerdere versie van de app: alsnog vastleggen waar hij vandaan komt
+        var legacySrc = currentShareSource();
+        if (legacySrc) {
+          setShareMeta(sharedToken, { kind: legacySrc.kind, refId: legacySrc.refId, title: title, sig: drifting ? "" : shareSignature(shareInfo.items) });
+          startAutoSyncTimer();
+        }
+      }
       var shareBox = document.createElement("div");
       shareBox.className = "share-box";
       var shareText = document.createElement("div");
@@ -3612,6 +3940,13 @@
       shareBox.appendChild(shareText);
       var shareActions = document.createElement("div");
       shareActions.className = "share-actions";
+      if (drifting) {
+        var updateBtn = document.createElement("button");
+        updateBtn.className = "ghost-btn";
+        updateBtn.textContent = "Bijwerken";
+        updateBtn.onclick = function () { shareShoppingList(title, entries, updateBtn, true); };
+        shareActions.appendChild(updateBtn);
+      }
       var openLink = document.createElement("a");
       openLink.className = "ghost-btn";
       openLink.href = "/l/" + sharedToken;
@@ -3628,11 +3963,12 @@
       main.appendChild(shareBox);
       shareStatusEl = shareText;
       shareStatusToken = sharedToken;
-      refreshShareStatus(sharedToken, false);
-      startShareStatusTimer();
+      if (!live.loaded && !live.gone && !live.ticking) liveTick(sharedToken);
+      startShareTimer();
     } else {
       shareStatusEl = null;
       shareStatusToken = null;
+      sharedToken = null;
     }
 
     var byCategory = shoppingViewMode === "day" ? null : buildAggregatedShoppingList(entries);
@@ -3701,6 +4037,12 @@
     }
 
     if (shoppingViewMode === "day") {
+      if (sharedToken) {
+        var dayNote = document.createElement("div");
+        dayNote.className = "share-note";
+        dayNote.textContent = "Vinkjes in deze weergave worden niet gedeeld. Kies \u201cPer week (samengevoegd)\u201d om samen af te vinken.";
+        main.appendChild(dayNote);
+      }
       entries.forEach(function (entry) {
         var day = entry.day;
         var label = document.createElement("div");
@@ -3746,9 +4088,13 @@
         var group = document.createElement("div");
         group.className = "shop-group";
         items.forEach(function (item) {
-          var isChecked = !!shoppingChecked[item.key];
+          var sid = shareInfo ? shareInfo.idByKey[item.key] : null;
+          var synced = !!(sid && live && live.loaded && !live.gone && live.items[sid]);
+          var st = synced ? liveStatus(live, sid) : (shoppingChecked[item.key] ? "basket" : null);
+          if (synced) shoppingChecked[item.key] = st === "basket";   // eigen lijst blijft de gedeelde stand volgen
+          var isChecked = st === "basket";
           var row = document.createElement("div");
-          row.className = "shop-item" + (isChecked ? " checked" : "");
+          row.className = "shop-item" + (isChecked ? " checked" : "") + (st === "skip" ? " skipped" : "");
           var box = document.createElement("span");
           box.className = "shop-check" + (isChecked ? " on" : "");
           box.innerHTML = isChecked
@@ -3759,7 +4105,26 @@
           txt.textContent = item.text + (itemPriceInfo ? " (" + formatEuro(itemPriceInfo.laag) + " – " + formatEuro(itemPriceInfo.hoog) + ")" : "");
           row.appendChild(box);
           row.appendChild(txt);
+          if (synced) {
+            var srvItem = live.items[sid];
+            var srvFlag = srvItem && srvItem.flag;
+            if (srvFlag && srvFlag.ageSec + (Date.now() - (live.fetchedAt || Date.now())) / 1000 < OWNER_FLAG_SECONDS) {
+              var flagPill = document.createElement("span");
+              flagPill.className = "shop-flag";
+              flagPill.textContent = srvFlag.kind === "new" ? "Nieuw" : "Aangepast";
+              row.appendChild(flagPill);
+            }
+            var skipBtn = document.createElement("button");
+            skipBtn.className = "shop-skip";
+            skipBtn.textContent = st === "skip" ? "Toch nodig" : "Niet nodig";
+            skipBtn.onclick = function (ev) {
+              if (ev && ev.stopPropagation) ev.stopPropagation();
+              liveToggle(sharedToken, sid, "skip");
+            };
+            row.appendChild(skipBtn);
+          }
           row.onclick = function () {
+            if (synced) { liveToggle(sharedToken, sid, "basket"); return; }
             shoppingChecked[item.key] = !shoppingChecked[item.key];
             render();
           };
@@ -5184,6 +5549,7 @@
 
   window.render = render;
   window.bootstrapApp = bootstrapApp;
+  startAutoSyncTimer();
   bootstrapApp();
 })();
 if ("serviceWorker" in navigator) {
