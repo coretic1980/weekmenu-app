@@ -216,10 +216,13 @@
     display: flex; flex-direction: column; gap: 14px;
   }
   .fact-card .eyebrow { color: var(--accent2); }
-  .fact-card p { margin: 0; font-family: "Fraunces", serif; font-size: 17px; line-height: 1.5; font-style: italic; min-height: 3.2em; }
-  .fact-dots { display: flex; gap: 6px; justify-content: center; }
-  .fact-dot { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,0.25); }
-  .fact-dot.active { background: var(--accent2); }
+  .fact-card p { margin: 0; font-family: "Fraunces", serif; font-size: 17px; line-height: 1.5; font-style: italic; min-height: 6.2em; }
+  .fact-label { font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent2); margin-bottom: -6px; }
+  .fact-progress { height: 2px; border-radius: 2px; background: rgba(255,255,255,0.14); overflow: hidden; }
+  .fact-progress span { display: block; height: 100%; background: var(--accent2); transform-origin: left center; animation: fact-fill 8s linear forwards; }
+  @keyframes fact-fill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+  .fact-note { font-size: 11px; line-height: 1.4; opacity: 0.6; }
+  @media (prefers-reduced-motion: reduce) { .fact-progress span { animation: none; transform: scaleX(1); } }
   .greeting { font-family: "Fraunces", serif; font-size: 24px; text-align: center; margin: 6px 0 4px; letter-spacing: 0.01em; }
   .greeting .name { color: var(--accent2); }
   .pdf-preview-overlay {
@@ -442,7 +445,7 @@
       if (name === "sample") {
         return Promise.resolve({
           json: function (payload) {
-            return fetch("/api/generate", {
+            return fetch(payload && payload.action === "tips" ? "/api/tips" : "/api/generate", {
               method: "POST",
               headers: Object.assign({ "Content-Type": "application/json" }, authHeaders()),
               body: JSON.stringify(payload)
@@ -773,31 +776,174 @@
     return wrap;
   }
 
-  var FUN_FACTS = [
-    "Wist je dat? Eiwitrijke maaltijden houden je langer verzadigd dan koolhydraatrijke maaltijden met evenveel calorieën.",
-    "Balanza-tip: de Balans-score op elk gerecht laat zien hoe dicht de macroverdeling bij jouw doel zit — hoe hoger, hoe beter passend.",
-    "Wist je dat? Bij \u201cCutting\u201d ligt de nadruk bewust op meer eiwit, om spierbehoud te ondersteunen tijdens een calorietekort.",
-    "Balanza-tip: je kunt bij elk maaltijdmoment aangeven voor hoeveel personen je kookt — handig bij het avondeten met het gezin.",
-    "Wist je dat? Vezels uit groente en volkoren producten dragen niet alleen bij aan verzadiging, maar ook aan een gezonde spijsvertering.",
-    "Balanza-tip: sta je iets te haasten met koken? Kies \u201cBasic\u201d als culinair niveau voor snellere, eenvoudigere recepten.",
-    "Wist je dat? Bij \u201cSpieropbouw (lean bulk)\u201d ligt het accent bewust op meer koolhydraten, als brandstof voor training en herstel.",
-    "Balanza-tip: de boodschappenlijst kan dezelfde ingrediënten uit verschillende gerechten automatisch voor je bij elkaar optellen.",
-    "Wist je dat? Vet is niet de vijand — het is nodig voor de opname van vitamines A, D, E en K, en voor hormoonproductie.",
-    "Balanza-tip: een prepdag stelt een geconsolideerd plan samen om in bulk voor te bereiden, gebaseerd op precies jouw geplande week.",
-    "Wist je dat? Op \u201cOnderhoud\u201d streven we naar een gelijke verdeling tussen koolhydraten, eiwit en vet — duurzaam vol te houden.",
-    "Balanza-tip: niet tevreden met een gerecht? Laat het pittiger, simpeler of juist fine dining maken — de macro's blijven kloppen."
+  // Controleert een door de AI geleverde lijst met tips en houdt alleen bruikbare items over.
+  function cleanTipList(raw) {
+    var list = Array.isArray(raw) ? raw : (raw && Array.isArray(raw.tips) ? raw.tips : []);
+    var out = [], seen = {};
+    list.forEach(function (item) {
+      if (!item || typeof item !== "object") return;
+      var text = String(item.tekst || item.text || "").replace(/\s+/g, " ").trim();
+      if (text.length < 20 || text.length > 240) return;
+      var key = text.toLowerCase().slice(0, 50);
+      if (seen[key]) return;
+      seen[key] = true;
+      var type = item.type === "feit" || item.type === "balanza" ? item.type : "tip";
+      out.push({ type: type, tekst: text });
+    });
+    return out.slice(0, 12);
+  }
+
+  // ---------- Wachtscherm-carrousel: steeds nieuwe weetjes en tips ----------
+  // Tijdens het genereren toont het startscherm een carrousel. De tips worden in
+  // pakketjes van 8 door de AI geschreven (zie requestTips), zodat er steeds
+  // nieuwe bijkomen. Zolang er nog geen (of geen) AI-tips zijn, staat er een
+  // handgeschreven reservelijst klaar. Er wordt alleen om nieuwe tips gevraagd
+  // zolang de carrousel zichtbaar is.
+  var TIP_LABELS = { feit: "Wist je dat?", tip: "Tip", balanza: "Balanza-tip" };
+  var TIP_SLIDE_MS = 8000;
+  var TIP_MAX_BATCHES = 10;      // per keer dat je de carrousel bekijkt (ruim 10 minuten aan tips)
+  var TIP_REFILL_AT = 3;         // nieuwe tips ophalen zodra er nog maar zo weinig in de rij staan
+  var TIP_TIMEOUT_MS = 45000;
+  var TIP_SEEN_KEY = "weekmenu_tips_seen";
+  var TIP_SEEN_MAX = 60;
+
+  var STATIC_TIPS = [
+    { t: "feit", s: "Eiwitrijke maaltijden houden je meestal langer verzadigd dan koolhydraatrijke maaltijden met evenveel calorieën." },
+    { t: "feit", s: "Vezels uit groente en volkoren producten dragen niet alleen bij aan verzadiging, maar ook aan een gezonde spijsvertering." },
+    { t: "feit", s: "Vet is niet de vijand: je lichaam heeft het nodig voor de opname van de vitamines A, D, E en K en voor de aanmaak van hormonen." },
+    { t: "feit", s: "Gram voor gram levert vet ruim twee keer zoveel energie als eiwit of koolhydraten: 9 tegenover 4 kilocalorieën." },
+    { t: "feit", s: "Je lichaam verbruikt relatief meer energie aan het verteren van eiwit dan aan het verteren van koolhydraten of vet." },
+    { t: "feit", s: "Spiereiwit wordt voortdurend afgebroken en opnieuw opgebouwd; eiwit verspreid over de dag ondersteunt dat herstel." },
+    { t: "feit", s: "Een bord met veel verschillende kleuren groente levert doorgaans ook een breder scala aan vitamines, mineralen en plantenstoffen." },
+    { t: "feit", s: "Vezels vertragen de opname van suikers, waardoor je energie gelijkmatiger beschikbaar komt." },
+    { t: "feit", s: "Zetmeel dat na het koken afkoelt, zoals in rijst, pasta of aardappelen, bevat meer resistent zetmeel dat zich deels als vezel gedraagt." },
+    { t: "feit", s: "Bij \u201cCutting\u201d ligt de nadruk bewust op meer eiwit, om spierbehoud te ondersteunen tijdens een calorietekort." },
+    { t: "feit", s: "Bij \u201cSpieropbouw (lean bulk)\u201d ligt het accent bewust op meer koolhydraten, als brandstof voor training en herstel." },
+    { t: "feit", s: "Op \u201cOnderhoud\u201d streven we naar een gelijke verdeling tussen koolhydraten, eiwit en vet, duurzaam vol te houden." },
+    { t: "feit", s: "Bij \u201cAtleet (prestatiegericht)\u201d staan koolhydraten centraal als brandstof, met voldoende eiwit voor herstel." },
+    { t: "feit", s: "Kruiden en specerijen geven veel smaak zonder noemenswaardig calorieën toe te voegen." },
+    { t: "feit", s: "Zout, zuur, vet en hitte zijn de basis van smaak; een scheutje citroensap of azijn maakt een gerecht vaak levendiger." },
+    { t: "feit", s: "Het kookwater van pasta bevat zetmeel; een klein scheutje ervan helpt een saus mooi te binden." },
+    { t: "tip", s: "Laat gebakken vlees even rusten voordat je het aansnijdt; het vocht verdeelt zich dan beter en blijft meer in het vlees." },
+    { t: "tip", s: "Zet de pan eerst goed heet en vul hem niet te vol: dan bruinen groenten en vlees mooier in plaats van te stomen." },
+    { t: "tip", s: "Voeg stevige kruiden zoals tijm en rozemarijn vroeg toe, en zachte kruiden zoals peterselie en basilicum pas aan het eind." },
+    { t: "tip", s: "Verdeel meal prep meteen in porties en koel het snel af; dat is beter voor de smaak en houdt het gerecht veiliger." },
+    { t: "tip", s: "Proef vlak voor het serveren en pas zout en zuur aan: dat is vaak het verschil tussen goed en heel goed." },
+    { t: "tip", s: "Snijd alle ingrediënten klaar voordat je gaat koken. Dat maakt koken rustiger en sneller." },
+    { t: "tip", s: "Bak kip of vis niet te lang: net gaar blijft veel sappiger dan kurkdroog gebakken." },
+    { t: "tip", s: "Kook een grote pan rijst of graan voor meerdere maaltijden, maar koel het snel af en bewaar het in de koelkast." },
+    { t: "tip", s: "Loop je boodschappen per categorie langs (groente, zuivel, droge voorraad): zo ben je sneller door de winkel." },
+    { t: "balanza", s: "De Balans-score op elk gerecht laat zien hoe dicht de macroverdeling bij jouw doel zit: hoe hoger, hoe beter het past." },
+    { t: "balanza", s: "Bij elk maaltijdmoment kun je aangeven voor hoeveel personen je kookt; de hoeveelheden en de boodschappenlijst schalen mee." },
+    { t: "balanza", s: "De boodschappenlijst telt dezelfde ingrediënten uit verschillende gerechten automatisch bij elkaar op." },
+    { t: "balanza", s: "Een prepdag maakt \u00e9\u00e9n overzichtelijk plan om in bulk voor te bereiden, gebaseerd op precies jouw geplande week." },
+    { t: "balanza", s: "Niet helemaal tevreden met een gerecht? Laat het pittiger, simpeler of juist fine dining maken; de macro's blijven kloppen." },
+    { t: "balanza", s: "In de kookmodus krijg je de stappen \u00e9\u00e9n voor \u00e9\u00e9n, met timers bij stappen met een wachttijd." },
+    { t: "balanza", s: "Je kunt je boodschappenlijst of weekplanning als PDF exporteren om te printen of te delen." },
+    { t: "balanza", s: "Bij elk gerecht staat de bereidingstijd, zodat je kunt kiezen wat past bij een drukke avond." },
+    { t: "balanza", s: "Met \u201cSchat de kosten\u201d zie je een indicatie van wat je boodschappen ongeveer kosten." },
+    { t: "balanza", s: "Kies \u201cBasic\u201d als culinair niveau voor snellere, eenvoudigere recepten als je weinig tijd hebt." }
   ];
+
+  var tipQueue = [];
+  var tipLoading = false;
+  var tipBatches = 0;
+  var tipFailures = 0;
+  var tipDeck = [];
+  var tipSeen = [];
+  try {
+    var rawSeen = JSON.parse(localStorage.getItem(TIP_SEEN_KEY) || "[]");
+    if (Array.isArray(rawSeen)) tipSeen = rawSeen.filter(function (x) { return typeof x === "string"; }).slice(-TIP_SEEN_MAX);
+  } catch (e) {}
+
+  function tipKey(text) { return String(text).toLowerCase().replace(/[^a-z0-9\u00e0-\u00ff]+/g, " ").trim().slice(0, 50); }
+  function tipIsSeen(text) {
+    var k = tipKey(text);
+    return tipSeen.some(function (s) { return tipKey(s) === k; });
+  }
+  function rememberTip(text) {
+    tipSeen.push(String(text).slice(0, 90));
+    if (tipSeen.length > TIP_SEEN_MAX) tipSeen = tipSeen.slice(-TIP_SEEN_MAX);
+    try { localStorage.setItem(TIP_SEEN_KEY, JSON.stringify(tipSeen)); } catch (e) {}
+  }
+  function recentTipTexts() { return tipSeen.slice(-25); }
+
+  function nextStaticTip() {
+    if (!tipDeck.length) {
+      var pool = [];
+      STATIC_TIPS.forEach(function (t, i) { if (!tipIsSeen(t.s)) pool.push(i); });
+      if (!pool.length) STATIC_TIPS.forEach(function (t, i) { pool.push(i); });
+      for (var i = pool.length - 1; i > 0; i--) {
+        var j = Math.floor(Math.random() * (i + 1));
+        var tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp;
+      }
+      tipDeck = pool;
+    }
+    return STATIC_TIPS[tipDeck.pop()];
+  }
+
+  function addTips(raw) {
+    cleanTipList(raw).forEach(function (tip) {
+      if (tipIsSeen(tip.tekst)) return;
+      var k = tipKey(tip.tekst);
+      if (tipQueue.some(function (q) { return tipKey(q.s) === k; })) return;
+      tipQueue.push({ t: tip.type, s: tip.tekst, ai: true });
+    });
+  }
+
+  function withTimeout(promise, ms) {
+    return new Promise(function (resolve, reject) {
+      var timer = setTimeout(function () { reject(new Error("timeout")); }, ms);
+      promise.then(function (v) { clearTimeout(timer); resolve(v); }, function (e) { clearTimeout(timer); reject(e); });
+    });
+  }
+
+  // De standalone-versie stuurt alleen de ruwe gegevens; de server stelt de opdracht samen.
+  function requestTips() {
+    return claude.use("sample").then(function (sample) {
+      if (!sample) throw new Error("niet beschikbaar");
+      return sample.json({ action: "tips", params: { goal: prefs.goal, dietStyle: prefs.dietStyle, avoid: recentTipTexts() } }, { modelTier: "default" });
+    });
+  }
+
+  function fetchTipBatch() {
+    if (tipLoading || tipFailures >= 2 || tipBatches >= TIP_MAX_BATCHES) return;
+    tipLoading = true;
+    tipBatches++;
+    withTimeout(requestTips(), TIP_TIMEOUT_MS).then(function (raw) {
+      tipLoading = false;
+      var before = tipQueue.length;
+      addTips(raw);
+      if (tipQueue.length === before) tipFailures++; else tipFailures = 0;
+    }).catch(function () {
+      tipLoading = false;
+      tipFailures++;
+    });
+  }
+
+  function nextTip() {
+    var tip = tipQueue.shift() || nextStaticTip();
+    rememberTip(tip.s);
+    if (tipQueue.length <= TIP_REFILL_AT) fetchTipBatch();
+    return tip;
+  }
 
   var factInterval = null;
   function startFactCarousel() {
     if (factInterval) return;
+    tipBatches = 0;
+    tipFailures = 0;
+    state.tip = nextTip();
+    state.tipShownAt = Date.now();
     factInterval = setInterval(function () {
-      state.factIndex = ((state.factIndex || 0) + 1) % FUN_FACTS.length;
+      state.tip = nextTip();
+      state.tipShownAt = Date.now();
       render();
-    }, 8000);
+    }, TIP_SLIDE_MS);
   }
   function stopFactCarousel() {
     if (factInterval) { clearInterval(factInterval); factInterval = null; }
+    state.tip = null;
   }
 
   var authState = { mode: "login", error: null, busy: false, info: null };
@@ -1099,23 +1245,31 @@
 
     if (state.generating) {
       startFactCarousel();
+      var tip = state.tip || { t: "tip", s: "", ai: false };
       var factCard = document.createElement("div");
       factCard.className = "fact-card";
       var factEyebrow = document.createElement("div");
       factEyebrow.className = "eyebrow";
       factEyebrow.textContent = "Terwijl je wacht…";
+      var factLabel = document.createElement("div");
+      factLabel.className = "fact-label";
+      factLabel.textContent = TIP_LABELS[tip.t] || "Tip";
       var factText = document.createElement("p");
-      factText.textContent = FUN_FACTS[(state.factIndex || 0) % FUN_FACTS.length];
-      var factDots = document.createElement("div");
-      factDots.className = "fact-dots";
-      FUN_FACTS.forEach(function (f, i) {
-        var d = document.createElement("div");
-        d.className = "fact-dot" + (i === (state.factIndex || 0) ? " active" : "");
-        factDots.appendChild(d);
-      });
+      factText.textContent = tip.s;
+      var factProgress = document.createElement("div");
+      factProgress.className = "fact-progress";
+      var factBar = document.createElement("span");
+      var shownFor = Math.min(TIP_SLIDE_MS, Math.max(0, Date.now() - (state.tipShownAt || Date.now())));
+      factBar.style.animationDelay = "-" + shownFor + "ms";
+      factProgress.appendChild(factBar);
+      var factNote = document.createElement("div");
+      factNote.className = "fact-note";
+      factNote.textContent = "Algemene informatie, geen medisch advies";
       factCard.appendChild(factEyebrow);
+      factCard.appendChild(factLabel);
       factCard.appendChild(factText);
-      factCard.appendChild(factDots);
+      factCard.appendChild(factProgress);
+      factCard.appendChild(factNote);
       main.appendChild(factCard);
     } else {
       stopFactCarousel();
@@ -3166,7 +3320,8 @@
         render();
       }).catch(function (e) {
         shoppingPriceLoading = false;
-        shoppingPriceError = "Prijsschatting mislukt: " + (e && e.message ? e.message : "onbekende fout") + " — probeer opnieuw.";
+        // Alleen onze eigen (Nederlandse) limietmeldingen tonen, geen technische details.
+        shoppingPriceError = "Prijsschatting mislukt" + ((e && e.code === "rate_limited" && e.message) ? ": " + e.message : "") + " — probeer opnieuw.";
         render();
       });
     });
