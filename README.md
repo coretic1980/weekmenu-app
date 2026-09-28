@@ -55,6 +55,27 @@ Open daarna `http://localhost:3000` in je browser.
 
 Geen `npm install` nodig — er zijn geen externe dependencies.
 
+## Boodschappenlijst delen (WhatsApp)
+
+Op het boodschappenscherm staat de knop **Deel via WhatsApp**. Die maakt een momentopname van de
+(samengevoegde) lijst op de server en geeft een lange, willekeurige link (`/l/<code>`, 128 bit).
+WhatsApp opent met een kant-en-klaar bericht; de link toont een voorbeeldkaart met de titel.
+
+- **Ontvanger:** opent de link (geen account nodig), ziet de lijst per categorie en tikt per product op
+  **in mandje** (cirkel of tekst) of **Niet nodig**. Voortgang, filter "Nog te doen" en "Alle vinkjes
+  wissen" zitten op de pagina. De vinkjes staan op de server, dus jullie zien elkaars stand (elke
+  8 seconden ververst). Zonder bereik in de winkel blijven wijzigingen bewaard en gaan ze mee zodra er
+  weer bereik is; de pagina opent ook zonder bereik uit het geheugen van de telefoon.
+- **Maker:** ziet onder de knop de stand ("3 in mandje · 1 niet nodig · 1 nog te doen"), kan de lijst
+  openen, opnieuw delen (dezelfde link wordt bijgewerkt en vinkjes blijven staan) of **Stoppen**.
+- **Beveiliging:** wie de link heeft, kan de lijst zien en afvinken (dat is de bedoeling); alleen de maker
+  kan de inhoud bijwerken of het delen stoppen. In de lijst staat nooit een naam of e-mailadres. De pagina
+  is `noindex` en stuurt geen referrer mee.
+- **Limieten:** maximaal 300 producten per lijst, 20 lijsten per persoon (de oudste vervalt), 30 nieuwe
+  lijsten per uur per IP-adres. Lijsten verlopen 30 dagen na de laatste wijziging.
+- **Opslag:** de lijsten staan in dezelfde database als de rest (`lists/<code>`). Zonder `MONGODB_URI` gaan
+  ze verloren bij een herstart van de server; met MongoDB blijven ze bewaard.
+
 ## Wachtcarrousel met tips
 
 Tijdens het genereren toont het startscherm een carrousel met weetjes en tips

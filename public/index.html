@@ -123,6 +123,10 @@
     padding: 13px 20px; border-radius: 11px; cursor: pointer;
   }
   .ghost-btn:hover { border-color: var(--accent2); color: var(--accent2); }
+  .share-box { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); font-size: 13px; }
+  .share-box .share-text { flex: 1; min-width: 180px; line-height: 1.45; color: var(--muted); }
+  .share-box .share-actions { display: flex; gap: 8px; }
+  .share-box .ghost-btn { padding: 8px 14px; font-size: 13px; text-decoration: none; display: inline-block; }
   .cook-progress { display: flex; gap: 6px; }
   .cook-dot { flex: 1; height: 5px; border-radius: 999px; background: var(--line); }
   .cook-dot.done { background: var(--accent); }
@@ -3215,12 +3219,12 @@
 
   var CATEGORY_ORDER = ["Groente & Fruit", "Brood & Granen", "Vlees, Vis & Kip", "Zuivel & Eieren", "Kruiden & Sausen", "Noten & Zaden", "Overige"];
   var CATEGORY_KEYWORDS = [
-    { label: "Noten & Zaden", keywords: ["amandel", "walnoot", "walnoten", "hazelnoot", "hazelnoten", "cashewnoot", "cashewnoten", "cashew", "pistache", "pinda", "macadamia", "paranoot", "pecannoot", "pecan", "pompoenpitten", "zonnebloempitten", "sesamzaad", "chiazaad", "lijnzaad", "maanzaad", "hennepzaad", "pindakaas", "notenmix", "amandelpasta", "tahin"] },
-    { label: "Groente & Fruit", keywords: ["aardappel", "ui", "knoflook", "paprika", "tomaat", "tomaatjes", "komkommer", "spinazie", "prei", "wortel", "broccoli", "sla", "citroen", "limoen", "appel", "banaan", "avocado", "doperwten", "groene bonen", "bloemkool", "courgette", "champignon", "peterselie", "koriander", "basilicum", "gember", "rucola", "venkel", "asperge", "framboos", "aardbei", "druif", "mango", "ananas", "selderij", "radijs", "biet", "spruitjes", "pompoen", "aubergine", "peer", "kiwi", "sinaasappel", "edamame", "boerenkool", "andijvie", "witlof", "raapstelen", "snijbonen", "sperziebonen", "zoete aardappel", "veldsla", "paksoi", "chinese kool", "rode kool", "witte kool", "savooiekool", "meloen", "granaatappel", "bosui", "sjalot"] },
-    { label: "Brood & Granen", keywords: ["brood", "wrap", "pasta", "rijst", "zilvervlies", "volkoren", "havermout", "quinoa", "bulgur", "couscous", "cracker", "beschuit", "tortilla", "noedels", "spaghetti", "penne", "cracotte", "toast"] },
-    { label: "Vlees, Vis & Kip", keywords: ["kip", "kalkoen", "gehakt", "vis", "zalm", "tonijn", "garnalen", "spek", "ham", "worst", "biefstuk", "eend", "varkenshaas", "runderlappen", "kabeljauw", "kroket", "rundvlees", "rund", "lamsvlees", "varkensvlees", "kalfsvlees", "gehaktbal", "shoarma", "gyros", "bacon", "chorizo", "salami", "pancetta", "forel", "makreel", "mosselen", "inktvis", "octopus", "krab", "kreeft", "kipfilet", "kipdij", "speklapjes", "entrecote", "ribeye"] },
-    { label: "Zuivel & Eieren", keywords: ["kwark", "yoghurt", "skyr", "hüttenkäse", "hutten kaas", "cottage cheese", "melk", "kaas", "boter", "eieren", "ei ", " ei", "room", "mozzarella", "feta", "crème fraîche", "parmezaan", "ricotta", "mascarpone", "burrata", "halloumi", "geitenkaas", "roomkaas", "karnemelk", "slagroom"] },
-    { label: "Kruiden & Sausen", keywords: ["zout", "peper", "paprikapoeder", "kerriepoeder", "kerrie", "komijn", "kaneel", "nootmuskaat", "oregano", "tijm", "rozemarijn", "laurier", "kruidnagel", "knoflookpoeder", "uipoeder", "chilipoeder", "chilivlokken", "specerij", "kruidenmix", "provençaalse kruiden", "sojasaus", "ketjap", "sriracha", "mosterd", "mayonaise", "ketchup", "pesto", "tomatensaus", "currypaste", "vissaus", "worcestersaus", "barbecuesaus", "bbq-saus", "hoisin", "sambal", "tabasco", "dressing", "azijn", "sesamolie", "visolie", "bouillon", "maggi", "teriyaki", "pindasaus", "satesaus", "chilisaus", "cocktailsaus", "knoflooksaus", "yoghurtsaus", "tzatziki", "chimichurri", "harissa", "piri piri", "oestersaus", "hoisinsaus", "honingmosterd", "honing", "balsamico", "appelazijn", "wijnazijn", "ahornsiroop", "esdoornsiroop", "agavesiroop", "vanille-extract", "vanillesuiker", "olijfolie", "zonnebloemolie", "kokosolie", "arachideolie", "raapolie", "walnootolie", "truffelolie", "frituurolie", "bakolie"] }
+    { label: "Noten & Zaden", keywords: ["amandel", "walnoot", "walnoten", "hazelnoot", "hazelnoten", "cashewnoot", "cashewnoten", "cashew", "pistache", "pinda", "macadamia", "paranoot", "pecannoot", "pecan", "pompoenpitten", "zonnebloempitten", "sesamzaad", "chiazaad", "lijnzaad", "maanzaad", "hennepzaad", "pindakaas", "notenmix", "amandelpasta", "tahin", "noten", "zaden", "pitten"] },
+    { label: "Groente & Fruit", keywords: ["aardappel", "ui", "knoflook", "paprika", "tomaat", "tomaatjes", "komkommer", "spinazie", "prei", "wortel", "broccoli", "sla", "citroen", "limoen", "appel", "banaan", "avocado", "doperwten", "groene bonen", "bloemkool", "courgette", "champignon", "peterselie", "koriander", "basilicum", "gember", "rucola", "venkel", "asperge", "framboos", "aardbei", "druif", "mango", "ananas", "selderij", "radijs", "biet", "spruitjes", "pompoen", "aubergine", "peer", "kiwi", "sinaasappel", "edamame", "boerenkool", "andijvie", "witlof", "raapstelen", "snijbonen", "sperziebonen", "zoete aardappel", "veldsla", "paksoi", "chinese kool", "rode kool", "witte kool", "savooiekool", "meloen", "granaatappel", "bosui", "sjalot", "tomaten", "cherrytomaten", "tomatenblokjes", "bananen", "peren", "mandarijn", "bessen", "bosbes", "kikkererwt", "linzen", "bonen", "erwten", "mais", "dille", "bieslook", "munt", "salie", "salade", "olijven", "shiitake", "paddenstoel", "oesterzwam", "cherrytomaat", "tuinbonen", "kapucijners", "lente-ui"] },
+    { label: "Brood & Granen", keywords: ["brood", "wrap", "pasta", "rijst", "zilvervlies", "volkoren", "havermout", "quinoa", "bulgur", "couscous", "cracker", "beschuit", "tortilla", "noedels", "spaghetti", "penne", "cracotte", "toast", "boterham", "gnocchi", "bloem", "meel", "paneermeel"] },
+    { label: "Vlees, Vis & Kip", keywords: ["kip", "kalkoen", "gehakt", "vis", "zalm", "tonijn", "garnalen", "spek", "ham", "worst", "biefstuk", "eend", "varkenshaas", "runderlappen", "kabeljauw", "kroket", "rundvlees", "rund", "lamsvlees", "varkensvlees", "kalfsvlees", "gehaktbal", "shoarma", "gyros", "bacon", "chorizo", "salami", "pancetta", "forel", "makreel", "mosselen", "inktvis", "octopus", "krab", "kreeft", "kipfilet", "kipdij", "speklapjes", "entrecote", "ribeye", "filet", "vlees", "burger", "hamburger", "rookvlees", "haring", "sardine", "sardientjes", "schol", "heek", "koolvis", "tilapia", "pangasius", "zeebaars", "zeebrasem", "dorade", "sliptong", "tongfilet", "witvis", "vissticks", "visstick", "kippendij", "kippenvleugel", "kippenlever", "kipsaté", "tofu", "tempeh", "seitan"] },
+    { label: "Zuivel & Eieren", keywords: ["kwark", "yoghurt", "skyr", "hüttenkäse", "hutten kaas", "cottage cheese", "melk", "kaas", "boter", "eieren", "room", "mozzarella", "feta", "crème fraîche", "parmezaan", "ricotta", "mascarpone", "burrata", "halloumi", "geitenkaas", "roomkaas", "karnemelk", "slagroom", "amandelmelk", "sojamelk", "notenmelk", "ei"] },
+    { label: "Kruiden & Sausen", keywords: ["zout", "peper", "paprikapoeder", "kerriepoeder", "kerrie", "komijn", "kaneel", "nootmuskaat", "oregano", "tijm", "rozemarijn", "laurier", "kruidnagel", "knoflookpoeder", "uipoeder", "chilipoeder", "chilivlokken", "specerij", "kruidenmix", "provençaalse kruiden", "sojasaus", "ketjap", "sriracha", "mosterd", "mayonaise", "ketchup", "pesto", "tomatensaus", "currypaste", "vissaus", "worcestersaus", "barbecuesaus", "bbq-saus", "hoisin", "sambal", "tabasco", "dressing", "azijn", "sesamolie", "visolie", "bouillon", "maggi", "teriyaki", "pindasaus", "satesaus", "chilisaus", "cocktailsaus", "knoflooksaus", "yoghurtsaus", "tzatziki", "chimichurri", "harissa", "piri piri", "oestersaus", "hoisinsaus", "honingmosterd", "honing", "balsamico", "appelazijn", "wijnazijn", "ahornsiroop", "esdoornsiroop", "agavesiroop", "vanille-extract", "vanillesuiker", "olijfolie", "zonnebloemolie", "kokosolie", "arachideolie", "raapolie", "walnootolie", "truffelolie", "frituurolie", "bakolie", "kruiden", "kurkuma", "gemberpoeder", "currypoeder", "garam masala", "passata", "tomatenpuree", "kappertjes", "olie"] }
   ];
   var CATEGORY_OVERRIDES = {
     "pindasaus": "Kruiden & Sausen",
@@ -3229,18 +3233,46 @@
     "appelazijn": "Kruiden & Sausen",
     "walnootolie": "Kruiden & Sausen"
   };
+  // Hoe een ingrediënt in een categorie komt:
+  //  1. Alleen het hoofdingrediënt telt: het deel vóór "met", "in", "op", "uit", een komma of een haakje.
+  //     ("zalmfilet met citroen" is vis, geen fruit.) Vindt dat deel niets, dan kijken we naar de hele tekst.
+  //  2. Het langste (meest specifieke) trefwoord wint, ongeacht de categorie. ("knoflookpoeder" is een
+  //     kruid, ook al staat "knoflook" bij de groente; "slagroom" is zuivel, ook al begint het met "sla".)
+  //  3. Korte woorden (tot 3 letters, plus "olie") tellen alleen als heel woord, met eventueel een
+  //     meervoud- of verkleinvorm. Zo telt "ui" wel in "uien" maar niet in "suiker", "bouillon" of "kruiden",
+  //     en "ham" wel als ham maar niet in "boterham". "kip" en "vis" mogen ook begin van een samenstelling zijn.
+  var CATEGORY_PREFIX_OK = { "kip": true, "vis": true };
+  var CATEGORY_STRICT_EXTRA = { "olie": true };
+  var CATEGORY_SUFFIXES = ["", "en", "s", "je", "jes", "tje", "tjes"];
+  function categoryKeywordMatches(keyword, text, tokens) {
+    if (keyword.length <= 3 || CATEGORY_STRICT_EXTRA[keyword]) {
+      for (var t = 0; t < tokens.length; t++) {
+        var tok = tokens[t];
+        if (tok.indexOf(keyword) !== 0) continue;
+        if (CATEGORY_PREFIX_OK[keyword] || CATEGORY_SUFFIXES.indexOf(tok.slice(keyword.length)) > -1) return true;
+      }
+      return false;
+    }
+    return text.indexOf(keyword) > -1;
+  }
+  function bestCategoryFor(text) {
+    var tokens = text.split(/[^a-z\u00e0-\u00ff]+/).filter(Boolean);
+    var best = null, bestLen = 0;
+    CATEGORY_KEYWORDS.forEach(function (cat) {
+      cat.keywords.forEach(function (kw) {
+        if (kw.length > bestLen && categoryKeywordMatches(kw, text, tokens)) { best = cat.label; bestLen = kw.length; }
+      });
+    });
+    return best;
+  }
   function categorizeIngredient(name) {
-    var lower = " " + name.toLowerCase() + " ";
+    var lower = String(name).toLowerCase().trim();
     for (var key in CATEGORY_OVERRIDES) {
       if (lower.indexOf(key) > -1) return CATEGORY_OVERRIDES[key];
     }
-    for (var i = 0; i < CATEGORY_KEYWORDS.length; i++) {
-      var cat = CATEGORY_KEYWORDS[i];
-      for (var j = 0; j < cat.keywords.length; j++) {
-        if (lower.indexOf(cat.keywords[j]) > -1) return cat.label;
-      }
-    }
-    return "Overige";
+    var cut = lower.search(/\s(?:met|in|op|uit|zonder|voor|om)\s|[,(;:]/);
+    var head = cut > 0 ? lower.slice(0, cut) : lower;
+    return bestCategoryFor(head) || (head !== lower ? bestCategoryFor(lower) : null) || "Overige";
   }
 
   function scaleIngredientText(raw, multiplier) {
@@ -3345,6 +3377,196 @@
     return "€" + n.toFixed(2).replace(".", ",");
   }
 
+  // ---------- Boodschappenlijst delen (WhatsApp) ----------
+  // Delen maakt op de server een momentopname met een eigen link (/l/<code>). Wie de link opent, kan
+  // per product "in mandje" of "niet nodig" aanvinken, en jullie zien elkaars vinkjes. Deel je
+  // dezelfde lijst opnieuw, dan wordt dezelfde link bijgewerkt, zodat een eerder verstuurde link
+  // blijft werken. Welke link bij welke lijst hoort, onthouden we op dit apparaat.
+  var SHARES_KEY = "weekmenu_shares";
+  var shareStatus = {};          // code -> { counts, at } | { gone: true, at }
+  var shareStatusLoading = {};
+  var shareStatusEl = null;
+  var shareStatusToken = null;
+  var shareStatusTimer = null;
+
+  function loadShares() {
+    try { return JSON.parse(localStorage.getItem(SHARES_KEY) || "{}") || {}; } catch (e) { return {}; }
+  }
+  function saveShares(map) {
+    try { localStorage.setItem(SHARES_KEY, JSON.stringify(map)); } catch (e) {}
+  }
+  function shareKeyFor(title) { return state.view + "|" + title; }
+
+  function shareSlug(text) {
+    var s = String(text).toLowerCase();
+    try { s = s.normalize("NFD").replace(/[\u0300-\u036f]/g, ""); } catch (e) {}
+    return s.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 70);
+  }
+
+  // Maakt van de samengevoegde boodschappenlijst de producten voor het delen. De id is afgeleid van het
+  // product zelf (niet van de hoeveelheid), zodat vinkjes blijven staan als de lijst later wordt bijgewerkt.
+  function buildShareItems(entries) {
+    var byCat = buildAggregatedShoppingList(entries);
+    var items = [], initial = {}, used = {};
+    CATEGORY_ORDER.forEach(function (cat) {
+      byCat[cat].forEach(function (item) {
+        var base = shareSlug(item.key) || "product";
+        var id = base, n = 2;
+        while (used[id]) { id = base + "-" + n; n++; }
+        used[id] = true;
+        items.push({ id: id, cat: cat, text: item.text });
+        if (shoppingChecked[item.key]) initial[id] = "basket";
+      });
+    });
+    return { items: items, state: initial };
+  }
+
+  function shareMessageText(title, url, count) {
+    return "\uD83D\uDED2 Boodschappenlijst: " + title + "\n" + count +
+      (count === 1 ? " product" : " producten") + ". Vink af wat in je mandje ligt, of tik \u201cNiet nodig\u201d.\n" + url;
+  }
+
+  // Opent WhatsApp met de tekst alvast ingevuld (op de telefoon kies je daar het contact, op de computer
+  // opent WhatsApp Web). Via een link met target=_blank: dat mag ook binnen een geïnstalleerde app.
+  function openWhatsApp(text) {
+    var a = document.createElement("a");
+    a.href = "https://wa.me/?text=" + encodeURIComponent(text);
+    a.target = "_blank";
+    a.rel = "noopener";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(text);
+    return new Promise(function (resolve, reject) {
+      try {
+        var ta = document.createElement("textarea");
+        ta.value = text;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        var copied = document.execCommand("copy");
+        document.body.removeChild(ta);
+        if (copied) resolve(); else reject(new Error("kopi\u00ebren mislukt"));
+      } catch (e) { reject(e); }
+    });
+  }
+
+  function shareStatusLine(token) {
+    var s = shareStatus[token];
+    if (!s) return "Gedeelde lijst \u00b7 stand ophalen\u2026";
+    if (s.gone) return "Deze gedeelde lijst bestaat niet meer (verlopen of gestopt).";
+    var c = s.counts;
+    if (!c) return "Gedeelde lijst";
+    var todo = c.total - c.basket - c.skip;
+    return "Gedeelde lijst \u00b7 " + c.basket + " in mandje" + (c.skip ? " \u00b7 " + c.skip + " niet nodig" : "") + " \u00b7 " + todo + " nog te doen";
+  }
+
+  // Haalt de stand van de gedeelde lijst op (hoeveel in mandje / niet nodig) en zet die in de statusregel.
+  function refreshShareStatus(token, force) {
+    var s = shareStatus[token];
+    if (shareStatusLoading[token] || (!force && s && Date.now() - s.at < 12000)) return;
+    shareStatusLoading[token] = true;
+    fetch("/api/lists/" + token).then(function (res) {
+      if (res.status === 404) return { gone: true };
+      if (!res.ok) throw new Error("http " + res.status);
+      return res.json();
+    }).then(function (data) {
+      if (data.gone) {
+        shareStatus[token] = { gone: true, at: Date.now() };
+        var shares = loadShares();
+        Object.keys(shares).forEach(function (k) { if (shares[k] === token) delete shares[k]; });
+        saveShares(shares);
+      } else {
+        shareStatus[token] = { counts: data.counts, at: Date.now() };
+      }
+    }).catch(function () {
+      var prev = shareStatus[token] || {};
+      shareStatus[token] = { counts: prev.counts, gone: prev.gone, at: Date.now() };
+    }).then(function () {
+      shareStatusLoading[token] = false;
+      if (shareStatusEl && shareStatusToken === token) shareStatusEl.textContent = shareStatusLine(token);
+    });
+  }
+
+  // Ververst de statusregel elke 15 seconden zolang je op het boodschappenscherm bent.
+  function startShareStatusTimer() {
+    if (shareStatusTimer) return;
+    shareStatusTimer = setInterval(function () {
+      var onShopping = state.view === "shopping" || state.view === "planshopping";
+      if (!onShopping || !shareStatusEl || !shareStatusToken) { clearInterval(shareStatusTimer); shareStatusTimer = null; return; }
+      refreshShareStatus(shareStatusToken, true);
+    }, 15000);
+  }
+
+  function shareHeaders() {
+    var h = { "Content-Type": "application/json" };
+    var a = window.authHeaders ? window.authHeaders() : {};
+    for (var k in a) h[k] = a[k];
+    return h;
+  }
+
+  function shareShoppingList(title, entries, btn) {
+    var built = buildShareItems(entries);
+    if (!built.items.length) { showToast("Er zijn nog geen producten om te delen."); return; }
+    var shares = loadShares();
+    var key = shareKeyFor(title);
+    var existing = shares[key] || null;
+    var label = btn ? btn.textContent : "";
+    if (btn) { btn.disabled = true; btn.textContent = "Lijst wordt klaargezet\u2026"; }
+
+    fetch("/api/lists", {
+      method: "POST",
+      headers: shareHeaders(),
+      body: JSON.stringify({ token: existing, title: title, items: built.items, state: built.state })
+    }).then(function (res) {
+      return res.json().catch(function () { return {}; }).then(function (data) {
+        if (!res.ok) { var err = new Error(data.message || "Delen mislukt."); err.status = res.status; throw err; }
+        return data;
+      });
+    }).then(function (data) {
+      var updated = existing && data.token === existing;
+      shares[key] = data.token;
+      saveShares(shares);
+      shareStatus[data.token] = { counts: data.counts, at: Date.now() };
+      var url = window.location.origin + data.path;
+      var text = shareMessageText(title, url, built.items.length);
+      askConfirm(
+        updated
+          ? "Je gedeelde lijst is bijgewerkt (" + built.items.length + " producten). De link die je eerder deelde blijft gewoon werken."
+          : "Je lijst is klaar om te delen (" + built.items.length + " producten). Wie de link opent, kan producten afvinken als \u201cin mandje\u201d of \u201cniet nodig\u201d, en jullie zien elkaars vinkjes direct.",
+        function () { openWhatsApp(text); },
+        "Deel via WhatsApp",
+        "Kopieer link",
+        function () {
+          copyToClipboard(url).then(function () { showToast("Link gekopieerd."); }).catch(function () { showToast("Kopi\u00ebren lukte niet. Link: " + url); });
+        }
+      );
+      render();
+    }).catch(function (e) {
+      showToast(e.status === 401 ? "Log eerst in om een lijst te kunnen delen." : (e.status ? e.message : "Delen mislukt. Controleer je verbinding en probeer het opnieuw."));
+    }).then(function () {
+      if (btn) { btn.disabled = false; btn.textContent = label; }
+    });
+  }
+
+  function stopSharing(title, token) {
+    askConfirm("Delen stoppen? De link werkt daarna niet meer, ook niet voor wie de lijst nog open heeft staan.", function () {
+      fetch("/api/lists/" + token + "/delete", { method: "POST", headers: shareHeaders(), body: "{}" }).then(function (res) {
+        if (!res.ok && res.status !== 404) throw new Error("http " + res.status);
+        var shares = loadShares();
+        delete shares[shareKeyFor(title)];
+        saveShares(shares);
+        delete shareStatus[token];
+        showToast("Delen gestopt.");
+        render();
+      }).catch(function () { showToast("Stoppen mislukt. Probeer het opnieuw."); });
+    }, "Delen stoppen", "Annuleren");
+  }
+
   function renderShoppingList(title, entries, backFn) {
     var app = document.getElementById("app");
     app.innerHTML = "";
@@ -3368,9 +3590,50 @@
     exportBtn.id = "shopPdfExportBtn";
     exportBtn.textContent = "Exporteer boodschappenlijst";
     exportBtn.onclick = function () { exportShoppingPdf(title, entries, exportBtn, shoppingViewMode); };
+    if (entries.length) {
+      var shareBtn = document.createElement("button");
+      shareBtn.className = "ghost-btn";
+      shareBtn.id = "shopShareBtn";
+      shareBtn.textContent = "Deel via WhatsApp";
+      shareBtn.onclick = function () { shareShoppingList(title, entries, shareBtn); };
+      headerRow.appendChild(shareBtn);
+    }
     headerRow.appendChild(exportBtn);
 
     main.appendChild(headerRow);
+
+    var sharedToken = loadShares()[shareKeyFor(title)];
+    if (sharedToken && entries.length) {
+      var shareBox = document.createElement("div");
+      shareBox.className = "share-box";
+      var shareText = document.createElement("div");
+      shareText.className = "share-text";
+      shareText.textContent = shareStatusLine(sharedToken);
+      shareBox.appendChild(shareText);
+      var shareActions = document.createElement("div");
+      shareActions.className = "share-actions";
+      var openLink = document.createElement("a");
+      openLink.className = "ghost-btn";
+      openLink.href = "/l/" + sharedToken;
+      openLink.target = "_blank";
+      openLink.rel = "noopener";
+      openLink.textContent = "Openen";
+      shareActions.appendChild(openLink);
+      var stopBtn = document.createElement("button");
+      stopBtn.className = "ghost-btn";
+      stopBtn.textContent = "Stoppen";
+      stopBtn.onclick = function () { stopSharing(title, sharedToken); };
+      shareActions.appendChild(stopBtn);
+      shareBox.appendChild(shareActions);
+      main.appendChild(shareBox);
+      shareStatusEl = shareText;
+      shareStatusToken = sharedToken;
+      refreshShareStatus(sharedToken, false);
+      startShareStatusTimer();
+    } else {
+      shareStatusEl = null;
+      shareStatusToken = null;
+    }
 
     var byCategory = shoppingViewMode === "day" ? null : buildAggregatedShoppingList(entries);
     var pricingCategories = byCategory || buildAggregatedShoppingList(entries);

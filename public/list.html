@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<meta name="theme-color" content="#0A0805">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Boodschappen">
+<title>{{OG_TITLE}}</title>
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Balanza">
+<meta property="og:title" content="{{OG_TITLE}}">
+<meta property="og:description" content="{{OG_DESC}}">
+<meta property="og:image" content="{{OG_IMAGE}}">
+<meta property="og:url" content="{{OG_URL}}">
+<link rel="icon" href="/favicon.png">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Public+Sans:wght@400;500;600;700&display=swap">
+<style>
+  :root {
+    box-sizing: border-box;
+    --bg: #0A0805; --surface: #17130C; --ink: #F3EEE2; --muted: #A89A80; --line: #2E2517;
+    --accent: #C6A15B; --accent-ink: #14110C; --accent2: #D4A24A; --ok: #7FB77E; --warn: #E0A458;
+  }
+  @media (prefers-color-scheme: light) {
+    :root { --bg: #F7F2E7; --surface: #FFFDF8; --ink: #10182B; --muted: #6B6152; --line: #E7DFCC; --accent: #0E1A30; --accent-ink: #FFFFFF; --accent2: #B8863B; --ok: #3E8E41; --warn: #B0731B; }
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); font-family: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif; }
+  body { min-height: 100vh; padding: env(safe-area-inset-top, 0) 0 env(safe-area-inset-bottom, 0); }
+  #app { max-width: 620px; margin: 0 auto; padding: 18px 16px 80px; }
+  .brand { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; font-weight: 600; }
+  h1 { font-family: "Fraunces", Georgia, serif; font-weight: 600; font-size: 26px; line-height: 1.2; margin: 10px 0 2px; }
+  .sub { color: var(--muted); font-size: 13px; }
+  .sync { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--muted); margin-top: 10px; }
+  .sync i { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); display: inline-block; }
+  .sync.off i { background: var(--warn); }
+  .sync.off { color: var(--warn); }
+  .stats { display: flex; gap: 8px; margin: 16px 0 10px; }
+  .stat { flex: 1; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px 6px; text-align: center; }
+  .stat b { display: block; font-family: "Fraunces", Georgia, serif; font-size: 22px; font-weight: 600; }
+  .stat span { font-size: 11px; color: var(--muted); }
+  .bar { height: 5px; background: var(--line); border-radius: 999px; overflow: hidden; }
+  .bar > div { height: 100%; background: var(--accent2); width: 0; transition: width .25s ease; }
+  .filters { display: flex; gap: 8px; margin: 16px 0 4px; }
+  .chip { border: 1px solid var(--line); background: transparent; color: var(--ink); border-radius: 999px; padding: 9px 16px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .chip.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  .cat { margin: 22px 0 8px; font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-weight: 700; display: flex; justify-content: space-between; }
+  .items { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+  .item { display: flex; align-items: center; gap: 12px; padding: 6px 8px 6px 6px; min-height: 60px; border-top: 1px solid var(--line); }
+  .item:first-child { border-top: 0; }
+  .check { flex: none; width: 46px; height: 46px; border: 0; background: transparent; padding: 0; display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--accent-ink); }
+  .check span { width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--muted); display: flex; align-items: center; justify-content: center; transition: background .15s, border-color .15s; }
+  .item.basket .check span { background: var(--accent2); border-color: var(--accent2); }
+  .item.skip .check span { border-style: dashed; opacity: .5; }
+  .txt { flex: 1; font-size: 16px; line-height: 1.35; padding: 8px 0; cursor: pointer; word-break: break-word; }
+  .item.basket .txt { text-decoration: line-through; color: var(--muted); }
+  .item.skip .txt { text-decoration: line-through; color: var(--muted); font-style: italic; opacity: .75; }
+  .skipbtn { flex: none; border: 1px solid var(--line); background: transparent; color: var(--muted); border-radius: 999px; padding: 8px 12px; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; min-height: 36px; }
+  .item.skip .skipbtn { color: var(--ink); border-color: var(--accent2); }
+  .item.basket .skipbtn { opacity: .35; }
+  .foot { margin-top: 26px; text-align: center; color: var(--muted); font-size: 12px; }
+  .linkbtn { background: none; border: 0; color: var(--muted); font: inherit; font-size: 12px; text-decoration: underline; cursor: pointer; margin-top: 10px; padding: 8px; }
+  .done { margin: 18px 0 0; padding: 16px; border-radius: 14px; background: var(--surface); border: 1px solid var(--accent2); text-align: center; font-family: "Fraunces", Georgia, serif; font-size: 18px; }
+  .msg { text-align: center; padding: 70px 10px; color: var(--muted); line-height: 1.5; }
+  .msg h2 { color: var(--ink); font-family: "Fraunces", Georgia, serif; font-size: 22px; margin: 0 0 8px; }
+  .btn { margin-top: 16px; border: 0; background: var(--accent); color: var(--accent-ink); border-radius: 12px; padding: 13px 22px; font: inherit; font-weight: 700; cursor: pointer; }
+  .empty { padding: 26px 10px; text-align: center; color: var(--muted); font-size: 14px; }
+</style>
+</head>
+<body>
+<div id="app"><div class="msg">Lijst laden…</div></div>
+<script>
+(function () {
+  "use strict";
+
+  var m = location.pathname.match(/\/l\/([A-Za-z0-9_-]{22})/);
+  var token = m ? m[1] : null;
+  var API = "/api/lists/" + token;
+  var STORE_KEY = "balanza-list-" + token;
+  var POLL_MS = 8000;
+
+  var data = null;       // laatste stand van de server: { title, items, state, rev, updatedAt }
+  var pending = {};      // product-id -> "basket" | "skip" | null : nog niet bevestigd door de server
+  var filter = "all";    // "all" | "todo"
+  var online = true;
+  var gone = false;      // lijst bestaat niet meer
+  var flushing = null;   // lopende verzending (Promise)
+
+  var app = document.getElementById("app");
+
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text !== undefined && text !== null) e.textContent = text;
+    return e;
+  }
+
+  // ---- lokaal bewaren, zodat de lijst ook zonder bereik opent en wijzigingen niet verloren gaan ----
+  function save() {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify({ data: data, pending: pending, filter: filter })); } catch (e) {}
+  }
+  function restore() {
+    try {
+      var raw = JSON.parse(localStorage.getItem(STORE_KEY) || "null");
+      if (raw && raw.data && Array.isArray(raw.data.items)) {
+        data = raw.data;
+        pending = raw.pending && typeof raw.pending === "object" ? raw.pending : {};
+        if (raw.filter === "todo") filter = "todo";
+      }
+    } catch (e) {}
+  }
+
+  function statusOf(id) {
+    if (Object.prototype.hasOwnProperty.call(pending, id)) return pending[id];
+    return (data && data.state && data.state[id]) || null;
+  }
+
+  function counts() {
+    var basket = 0, skip = 0;
+    data.items.forEach(function (it) {
+      var s = statusOf(it.id);
+      if (s === "basket") basket++; else if (s === "skip") skip++;
+    });
+    return { total: data.items.length, basket: basket, skip: skip, todo: data.items.length - basket - skip };
+  }
+
+  // ---- weergave ----
+  var LOGO = '<svg width="22" height="22" viewBox="0 0 512 512" fill="none" stroke="currentColor" stroke-width="18" stroke-linecap="round">' +
+    '<line x1="256" y1="134" x2="256" y2="350"/><line x1="186" y1="376" x2="256" y2="350"/><line x1="326" y1="376" x2="256" y2="350"/>' +
+    '<line x1="186" y1="376" x2="326" y2="376"/><line x1="126" y1="120" x2="386" y2="120"/>' +
+    '<line x1="126" y1="120" x2="126" y2="220" stroke-width="12"/><line x1="386" y1="120" x2="386" y2="220" stroke-width="12"/>' +
+    '<circle cx="126" cy="220" r="34" stroke-width="12"/><circle cx="386" cy="220" r="34" stroke-width="12"/></svg>';
+  var CHECK = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>';
+
+  function message(title, text, buttonLabel, onClick) {
+    app.innerHTML = "";
+    var box = el("div", "msg");
+    box.appendChild(el("h2", null, title));
+    box.appendChild(el("div", null, text));
+    if (buttonLabel) {
+      var b = el("button", "btn", buttonLabel);
+      b.onclick = onClick;
+      box.appendChild(b);
+    }
+    app.appendChild(box);
+  }
+
+  function render() {
+    if (gone) {
+      message("Deze lijst bestaat niet meer", "De link is verlopen of het delen is gestopt. Vraag de afzender om een nieuwe link.");
+      return;
+    }
+    if (!data) {
+      message(online ? "Lijst laden…" : "Geen verbinding", online ? "" : "We kunnen de lijst nu niet ophalen. Controleer je verbinding en probeer het opnieuw.",
+        online ? null : "Opnieuw proberen", function () { tick(); });
+      return;
+    }
+    var c = counts();
+    app.innerHTML = "";
+
+    var brand = el("div", "brand");
+    var logo = el("span");
+    logo.innerHTML = LOGO;
+    brand.appendChild(logo);
+    brand.appendChild(el("span", null, "Balanza"));
+    app.appendChild(brand);
+    app.appendChild(el("h1", null, data.title));
+
+    var sync = el("div", "sync" + (online ? "" : " off"));
+    sync.appendChild(el("i"));
+    var pendingCount = Object.keys(pending).length;
+    sync.appendChild(el("span", null,
+      !online ? "Geen bereik" + (pendingCount ? " \u2014 " + pendingCount + " wijziging" + (pendingCount === 1 ? "" : "en") + " worden verzonden zodra je weer bereik hebt" : "")
+              : "Live \u00b7 " + (data.updatedAt ? "bijgewerkt " + new Date(data.updatedAt).toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" }) : "gesynchroniseerd")));
+    app.appendChild(sync);
+
+    var stats = el("div", "stats");
+    [["In mandje", c.basket], ["Niet nodig", c.skip], ["Nog te doen", c.todo]].forEach(function (p) {
+      var s = el("div", "stat");
+      s.appendChild(el("b", null, String(p[1])));
+      s.appendChild(el("span", null, p[0]));
+      stats.appendChild(s);
+    });
+    app.appendChild(stats);
+    var bar = el("div", "bar");
+    var fill = el("div");
+    fill.style.width = (c.total ? Math.round(((c.basket + c.skip) / c.total) * 100) : 0) + "%";
+    bar.appendChild(fill);
+    app.appendChild(bar);
+
+    var filters = el("div", "filters");
+    [["all", "Alles"], ["todo", "Nog te doen"]].forEach(function (p) {
+      var b = el("button", "chip" + (filter === p[0] ? " on" : ""), p[1]);
+      b.onclick = function () { filter = p[0]; save(); render(); };
+      filters.appendChild(b);
+    });
+    app.appendChild(filters);
+
+    if (c.todo === 0 && c.total > 0) {
+      app.appendChild(el("div", "done", "Alles gehaald! \uD83C\uDF89"));
+    }
+
+    var order = [], groups = {};
+    data.items.forEach(function (it) {
+      if (!groups[it.cat]) { groups[it.cat] = []; order.push(it.cat); }
+      groups[it.cat].push(it);
+    });
+    var shown = 0;
+    order.forEach(function (cat) {
+      var items = groups[cat].filter(function (it) { return filter === "all" || !statusOf(it.id); });
+      if (!items.length) return;
+      shown += items.length;
+      var doneInCat = groups[cat].filter(function (it) { return statusOf(it.id); }).length;
+      var head = el("div", "cat");
+      head.appendChild(el("span", null, cat));
+      head.appendChild(el("span", null, doneInCat + " van " + groups[cat].length + " klaar"));
+      app.appendChild(head);
+      var box = el("div", "items");
+      items.forEach(function (it) { box.appendChild(renderItem(it)); });
+      app.appendChild(box);
+    });
+    if (!shown && filter === "todo" && c.total > 0) {
+      app.appendChild(el("div", "empty", "Niets meer te doen op deze lijst."));
+    }
+
+    var foot = el("div", "foot");
+    var reset = el("button", "linkbtn", "Alle vinkjes wissen en opnieuw beginnen");
+    reset.onclick = resetAll;
+    foot.appendChild(reset);
+    app.appendChild(foot);
+  }
+
+  function renderItem(it) {
+    var s = statusOf(it.id);
+    var row = el("div", "item" + (s === "basket" ? " basket" : s === "skip" ? " skip" : ""));
+
+    var check = el("button", "check");
+    check.setAttribute("role", "checkbox");
+    check.setAttribute("aria-checked", s === "basket" ? "true" : "false");
+    check.setAttribute("aria-label", "In mandje: " + it.text);
+    var ring = el("span");
+    if (s === "basket") ring.innerHTML = CHECK;
+    check.appendChild(ring);
+    check.onclick = function () { toggle(it.id, "basket"); };
+
+    var txt = el("div", "txt", it.text);
+    txt.onclick = function () { toggle(it.id, "basket"); };
+
+    var skip = el("button", "skipbtn", s === "skip" ? "Toch nodig" : "Niet nodig");
+    skip.onclick = function () { toggle(it.id, "skip"); };
+
+    row.appendChild(check);
+    row.appendChild(txt);
+    row.appendChild(skip);
+    return row;
+  }
+
+  // ---- afvinken ----
+  function toggle(id, kind) {
+    var current = statusOf(id);
+    pending[id] = current === kind ? null : kind;
+    try { if (navigator.vibrate) navigator.vibrate(8); } catch (e) {}
+    save();
+    render();
+    flush();
+  }
+
+  function postJSON(path, body) {
+    return fetch(API + path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) });
+  }
+
+  // Verstuurt alle nog niet bevestigde wijzigingen, één voor één. Lukt dat niet (geen bereik), dan
+  // blijven ze bewaard en proberen we het bij de volgende ronde opnieuw.
+  function flush() {
+    if (flushing) return flushing;
+    function next() {
+      var ids = Object.keys(pending);
+      if (!ids.length) return Promise.resolve(true);
+      var id = ids[0], status = pending[id];
+      return postJSON("/item", { id: id, status: status }).then(function (res) {
+        if (res.status === 404 || res.status === 400) {
+          // product bestaat niet meer (lijst is bijgewerkt) of lijst is weg: niet blijven proberen
+          if (pending[id] === status) delete pending[id];
+          return res.status === 404 ? res.json().catch(function () { return {}; }).then(function (b) { if (b.code === "not_found") gone = true; return true; }) : true;
+        }
+        if (!res.ok) throw new Error("http " + res.status);
+        if (pending[id] === status) {
+          delete pending[id];
+          if (data) { if (status) data.state[id] = status; else delete data.state[id]; }
+        }
+        return true;
+      }).then(function () { save(); return next(); });
+    }
+    flushing = next().then(function () { online = true; }, function () { online = false; }).then(function () {
+      flushing = null;
+      save();
+      render();
+    });
+    return flushing;
+  }
+
+  function resetAll() {
+    if (!window.confirm("Alle vinkjes wissen en opnieuw beginnen? Dit geldt voor iedereen met deze lijst.")) return;
+    postJSON("/reset").then(function (res) {
+      if (!res.ok) throw new Error("http " + res.status);
+      pending = {};
+      if (data) data.state = {};
+      save();
+      render();
+      poll();
+    }).catch(function () {
+      online = false;
+      render();
+    });
+  }
+
+  // ---- bijwerken vanaf de server ----
+  function poll() {
+    return fetch(API + "?rev=" + (data ? data.rev : 0)).then(function (res) {
+      if (res.status === 404) { gone = true; try { localStorage.removeItem(STORE_KEY); } catch (e) {} return null; }
+      if (!res.ok) throw new Error("http " + res.status);
+      return res.json();
+    }).then(function (body) {
+      online = true;
+      if (body && !body.unchanged && Array.isArray(body.items)) {
+        data = { title: body.title, items: body.items, state: body.state || {}, rev: body.rev, updatedAt: body.updatedAt };
+        Object.keys(pending).forEach(function (id) {
+          if (!data.items.some(function (it) { return it.id === id; })) delete pending[id];
+        });
+        save();
+      }
+      render();
+    }).catch(function () {
+      online = false;
+      render();
+    });
+  }
+
+  function tick() {
+    if (gone || !token) return Promise.resolve();
+    return flush().then(poll);
+  }
+
+  // ---- scherm aan houden tijdens het winkelen (waar de telefoon dat ondersteunt) ----
+  var wakeLock = null;
+  function keepAwake() {
+    try {
+      if (navigator.wakeLock && document.visibilityState === "visible" && !wakeLock) {
+        navigator.wakeLock.request("screen").then(function (l) {
+          wakeLock = l;
+          l.addEventListener("release", function () { wakeLock = null; });
+        }).catch(function () {});
+      }
+    } catch (e) {}
+  }
+
+  function start() {
+    if (!token) { message("Ongeldige link", "Deze link klopt niet. Vraag de afzender om een nieuwe link."); return; }
+    restore();
+    render();
+    tick();
+    setInterval(function () { if (!document.hidden) tick(); }, POLL_MS);
+    document.addEventListener("visibilitychange", function () { if (!document.hidden) { keepAwake(); tick(); } });
+    window.addEventListener("online", function () { tick(); });
+    keepAwake();
+    try { if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(function () {}); } catch (e) {}
+  }
+
+  start();
+})();
+</script>
+</body>
+</html>

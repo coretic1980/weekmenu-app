@@ -385,7 +385,8 @@ function sendJSON(res, status, body) {
   var data = JSON.stringify(body);
   res.writeHead(status, {
     "Content-Type": "application/json; charset=utf-8",
-    "Content-Length": Buffer.byteLength(data)
+    "Content-Length": Buffer.byteLength(data),
+    "Cache-Control": "no-store"
   });
   res.end(data);
 }
@@ -1391,6 +1392,310 @@ function handlePhoto(req, res, query) {
   });
 }
 
+// ---------- Gedeelde boodschappenlijst ----------
+// Een lijst delen maakt een momentopname op de server, bereikbaar via een lange, willekeurige
+// link (/l/<code>, 128 bit). Iedereen met de link kan de lijst zien en per product "in mandje" of
+// "niet nodig" aanvinken; de vinkjes staan op de server, zodat iedereen dezelfde stand ziet.
+// Alleen wie de lijst maakte kan de inhoud bijwerken of het delen stoppen. In de lijst staat
+// alleen wat de maker meestuurt (producten, categorie, titel), nooit een naam of e-mailadres.
+// Lijsten verlopen 30 dagen na de laatste wijziging.
+
+var LIST_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+var LIST_MAX_ITEMS = 300;
+var LIST_MAX_TEXT = 140;
+var LIST_MAX_CAT = 40;
+var LIST_MAX_TITLE = 80;
+var LIST_MAX_PER_OWNER = 20;
+var LIST_TOKEN_RE = /^[A-Za-z0-9_-]{22}$/;
+var LIST_ID_RE = /^[a-z0-9-]{1,80}$/;
+
+// Eenvoudige begrenzing per IP-adres per uur (in het geheugen).
+function makeHourlyLimiter(maxPerHour) {
+  var hits = new Map();
+  return function (ip) {
+    var now = Date.now();
+    var entry = hits.get(ip);
+    if (!entry || now - entry.start > 60 * 60 * 1000) entry = { count: 0, start: now };
+    entry.count++;
+    hits.set(ip, entry);
+    if (hits.size > 5000) {
+      hits.forEach(function (v, k) { if (now - v.start > 60 * 60 * 1000) hits.delete(k); });
+    }
+    return entry.count <= maxPerHour;
+  };
+}
+var listCreateAllowed = makeHourlyLimiter(30);
+var listReadAllowed = makeHourlyLimiter(2400);
+var listWriteAllowed = makeHourlyLimiter(1200);
+
+function dbDeleteDoc(docPath) {
+  return mongoReady.then(function (db) {
+    if (!db) {
+      var store = loadStore();
+      delete store.docs[docPath];
+      saveStore(store);
+      return;
+    }
+    return db.collection("docs").deleteOne({ _id: docPath });
+  });
+}
+
+// Zet of wist het vinkje van één product. Bewust per product (niet de hele lijst overschrijven),
+// zodat twee telefoons die tegelijk afvinken elkaars wijzigingen niet wissen.
+function dbSetListItemState(docPath, itemId, status, now) {
+  return mongoReady.then(function (db) {
+    if (!db) {
+      var store = loadStore();
+      var doc = store.docs[docPath];
+      if (!doc) return;
+      doc.state = doc.state || {};
+      if (status) doc.state[itemId] = status; else delete doc.state[itemId];
+      doc.rev = (doc.rev || 0) + 1;
+      doc.updatedAt = now;
+      doc.expiresAt = now + LIST_TTL_MS;
+      saveStore(store);
+      return;
+    }
+    var set = { "value.updatedAt": now, "value.expiresAt": now + LIST_TTL_MS };
+    var update = { $set: set, $inc: { "value.rev": 1 } };
+    if (status) set["value.state." + itemId] = status;
+    else { update.$unset = {}; update.$unset["value.state." + itemId] = ""; }
+    return db.collection("docs").updateOne({ _id: docPath }, update);
+  });
+}
+
+function dbResetListState(docPath, now) {
+  return mongoReady.then(function (db) {
+    if (!db) {
+      var store = loadStore();
+      var doc = store.docs[docPath];
+      if (!doc) return;
+      doc.state = {};
+      doc.rev = (doc.rev || 0) + 1;
+      doc.updatedAt = now;
+      doc.expiresAt = now + LIST_TTL_MS;
+      saveStore(store);
+      return;
+    }
+    return db.collection("docs").updateOne({ _id: docPath },
+      { $set: { "value.state": {}, "value.updatedAt": now, "value.expiresAt": now + LIST_TTL_MS }, $inc: { "value.rev": 1 } });
+  });
+}
+
+function cleanListText(v, max) {
+  return String(v == null ? "" : v).replace(/\s+/g, " ").trim().slice(0, max);
+}
+
+function sanitizeListItems(raw) {
+  var out = [], seen = {};
+  (Array.isArray(raw) ? raw : []).slice(0, LIST_MAX_ITEMS).forEach(function (it) {
+    if (!it || typeof it !== "object") return;
+    var id = String(it.id || "");
+    var text = cleanListText(it.text, LIST_MAX_TEXT);
+    if (!LIST_ID_RE.test(id) || !text || seen[id]) return;
+    seen[id] = true;
+    out.push({ id: id, cat: cleanListText(it.cat, LIST_MAX_CAT) || "Overige", text: text });
+  });
+  return out;
+}
+
+function cleanListState(raw, items) {
+  var ids = {};
+  items.forEach(function (it) { ids[it.id] = true; });
+  var out = {};
+  if (raw && typeof raw === "object") {
+    Object.keys(raw).forEach(function (k) {
+      if (ids[k] && (raw[k] === "basket" || raw[k] === "skip")) out[k] = raw[k];
+    });
+  }
+  return out;
+}
+
+function listCounts(doc) {
+  var state = doc.state || {}, basket = 0, skip = 0;
+  (doc.items || []).forEach(function (it) {
+    if (state[it.id] === "basket") basket++;
+    else if (state[it.id] === "skip") skip++;
+  });
+  return { total: (doc.items || []).length, basket: basket, skip: skip };
+}
+
+function publicList(doc) {
+  return { title: doc.title, items: doc.items, state: doc.state || {}, rev: doc.rev || 1, updatedAt: doc.updatedAt, counts: listCounts(doc) };
+}
+
+// Geeft de lijst terug, of null als die niet bestaat of verlopen is (verlopen lijsten ruimen we meteen op).
+function getLiveList(token) {
+  return dbGetDoc("lists/" + token).then(function (r) {
+    if (!r.exists || !r.value) return null;
+    if (r.value.expiresAt && r.value.expiresAt < Date.now()) {
+      dbDeleteDoc("lists/" + token).catch(function () {});
+      return null;
+    }
+    return r.value;
+  });
+}
+
+// Bijhouden welke lijsten iemand heeft gemaakt, zodat het aantal begrensd blijft (oudste vervalt).
+function addToOwnerIndex(uid, token) {
+  return dbGetDoc("listsIndex/" + uid).then(function (r) {
+    var tokens = r.exists && r.value && Array.isArray(r.value.tokens) ? r.value.tokens.slice() : [];
+    tokens.push(token);
+    var drop = [];
+    while (tokens.length > LIST_MAX_PER_OWNER) drop.push(tokens.shift());
+    return Promise.all(drop.map(function (t) { return dbDeleteDoc("lists/" + t); })).then(function () {
+      return dbSetDoc("listsIndex/" + uid, { tokens: tokens });
+    });
+  });
+}
+function removeFromOwnerIndex(uid, token) {
+  return dbGetDoc("listsIndex/" + uid).then(function (r) {
+    if (!r.exists || !r.value || !Array.isArray(r.value.tokens)) return;
+    return dbSetDoc("listsIndex/" + uid, { tokens: r.value.tokens.filter(function (t) { return t !== token; }) });
+  });
+}
+
+function listNotFound(res) {
+  sendJSON(res, 404, { code: "not_found", message: "Deze lijst bestaat niet meer of is verlopen." });
+}
+
+// POST /api/lists — maakt een lijst, of werkt een eigen bestaande lijst bij (zelfde link blijft werken).
+function handleListCreate(req, res) {
+  if (!listCreateAllowed(clientIp(req))) {
+    return sendJSON(res, 429, { code: "rate_limited", message: "Je hebt net al veel lijsten gedeeld. Probeer het over een tijdje opnieuw." });
+  }
+  resolveUser(req).then(function (user) {
+    if (!user) return sendUnauthorized(res);
+    return readBody(req).then(function (body) {
+      var items = sanitizeListItems(body && body.items);
+      if (!items.length) return sendJSON(res, 400, { code: "bad_request", message: "De lijst is leeg." });
+      var title = cleanListText(body.title, LIST_MAX_TITLE) || "Boodschappenlijst";
+      var now = Date.now();
+      var wanted = typeof body.token === "string" && LIST_TOKEN_RE.test(body.token) ? body.token : null;
+      return (wanted ? getLiveList(wanted) : Promise.resolve(null)).then(function (existing) {
+        function reply(token, doc) {
+          sendJSON(res, 200, { token: token, path: "/l/" + token, counts: listCounts(doc), rev: doc.rev });
+        }
+        if (existing && existing.ownerUid === user.uid) {
+          existing.title = title;
+          existing.items = items;
+          existing.state = cleanListState(existing.state, items);
+          existing.rev = (existing.rev || 0) + 1;
+          existing.updatedAt = now;
+          existing.expiresAt = now + LIST_TTL_MS;
+          return dbSetDoc("lists/" + wanted, existing).then(function () { reply(wanted, existing); });
+        }
+        var token = crypto.randomBytes(16).toString("base64url");
+        var doc = { title: title, ownerUid: user.uid, createdAt: now, updatedAt: now, expiresAt: now + LIST_TTL_MS, rev: 1,
+          items: items, state: cleanListState(body.state, items) };
+        return dbSetDoc("lists/" + token, doc).then(function () {
+          return addToOwnerIndex(user.uid, token);
+        }).then(function () { reply(token, doc); });
+      });
+    });
+  }).catch(function () {
+    sendJSON(res, 400, { code: "bad_request", message: "Ongeldige aanvraag." });
+  });
+}
+
+// GET /api/lists/<code>[?rev=n] — iedereen met de link. Met rev: alleen antwoorden als er iets veranderd is.
+function handleListGet(req, res, token, query) {
+  if (!listReadAllowed(clientIp(req))) return sendJSON(res, 429, { code: "rate_limited", message: "Even rustig aan." });
+  getLiveList(token).then(function (doc) {
+    if (!doc) return listNotFound(res);
+    var rev = parseInt(query.get("rev") || "0", 10);
+    if (rev && rev === (doc.rev || 1)) return sendJSON(res, 200, { unchanged: true, rev: rev });
+    sendJSON(res, 200, publicList(doc));
+  }).catch(function () {
+    sendJSON(res, 500, { code: "error", message: "Lijst ophalen mislukt." });
+  });
+}
+
+// POST /api/lists/<code>/item  { id, status: "basket" | "skip" | null }
+function handleListItem(req, res, token) {
+  if (!listWriteAllowed(clientIp(req))) return sendJSON(res, 429, { code: "rate_limited", message: "Even rustig aan." });
+  readBody(req).then(function (body) {
+    var id = String((body && body.id) || "");
+    var status = body ? body.status : undefined;
+    if (!LIST_ID_RE.test(id) || !(status === "basket" || status === "skip" || status === null)) {
+      return sendJSON(res, 400, { code: "bad_request", message: "Ongeldige aanvraag." });
+    }
+    return getLiveList(token).then(function (doc) {
+      if (!doc) return listNotFound(res);
+      if (!doc.items.some(function (it) { return it.id === id; })) {
+        return sendJSON(res, 404, { code: "item_not_found", message: "Dit product staat niet meer op de lijst." });
+      }
+      return dbSetListItemState("lists/" + token, id, status, Date.now()).then(function () {
+        return getLiveList(token);
+      }).then(function (fresh) {
+        sendJSON(res, 200, { ok: true, counts: fresh ? listCounts(fresh) : null });
+      });
+    });
+  }).catch(function () {
+    sendJSON(res, 400, { code: "bad_request", message: "Ongeldige aanvraag." });
+  });
+}
+
+// POST /api/lists/<code>/reset — alle vinkjes wissen.
+function handleListReset(req, res, token) {
+  if (!listWriteAllowed(clientIp(req))) return sendJSON(res, 429, { code: "rate_limited", message: "Even rustig aan." });
+  getLiveList(token).then(function (doc) {
+    if (!doc) return listNotFound(res);
+    return dbResetListState("lists/" + token, Date.now()).then(function () {
+      sendJSON(res, 200, { ok: true });
+    });
+  }).catch(function () {
+    sendJSON(res, 500, { code: "error", message: "Wissen mislukt." });
+  });
+}
+
+// POST /api/lists/<code>/delete — alleen de maker.
+function handleListDelete(req, res, token) {
+  resolveUser(req).then(function (user) {
+    if (!user) return sendUnauthorized(res);
+    return getLiveList(token).then(function (doc) {
+      if (!doc) return sendJSON(res, 200, { ok: true });
+      if (doc.ownerUid !== user.uid) return sendJSON(res, 403, { code: "forbidden", message: "Alleen wie de lijst deelde kan het delen stoppen." });
+      return dbDeleteDoc("lists/" + token).then(function () {
+        return removeFromOwnerIndex(user.uid, token);
+      }).then(function () { sendJSON(res, 200, { ok: true }); });
+    });
+  }).catch(function () {
+    sendJSON(res, 500, { code: "error", message: "Stoppen mislukt." });
+  });
+}
+
+function escapeHtmlAttr(s) {
+  return String(s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[c]; });
+}
+
+// GET /l/<code> — de pagina die de ontvanger opent. De titel en omschrijving komen in de
+// link-voorbeeldtags te staan, zodat WhatsApp een nette kaart met titel toont.
+function handleListPage(req, res, token) {
+  fs.readFile(path.join(PUBLIC_DIR, "list.html"), "utf8", function (err, html) {
+    if (err) { res.writeHead(500, { "Content-Type": "text/plain" }); res.end("Kan de lijstpagina niet laden"); return; }
+    getLiveList(token).catch(function () { return null; }).then(function (doc) {
+      var host = req.headers["x-forwarded-host"] || req.headers.host || "localhost";
+      var proto = String(req.headers["x-forwarded-proto"] || (/^localhost|^127\./.test(host) ? "http" : "https")).split(",")[0].trim();
+      var origin = proto + "://" + host;
+      var title = doc ? "Boodschappenlijst \u00b7 " + doc.title : "Boodschappenlijst";
+      var desc = doc ? listCounts(doc).total + " producten. Vink af wat in je mandje ligt, of tik \u201cNiet nodig\u201d." : "Gedeelde boodschappenlijst";
+      var page = html
+        .replace(/\{\{OG_TITLE\}\}/g, escapeHtmlAttr(title))
+        .replace(/\{\{OG_DESC\}\}/g, escapeHtmlAttr(desc))
+        .replace(/\{\{OG_IMAGE\}\}/g, escapeHtmlAttr(origin + "/icons/icon-512.png"))
+        .replace(/\{\{OG_URL\}\}/g, escapeHtmlAttr(origin + "/l/" + token));
+      res.writeHead(200, {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "X-Robots-Tag": "noindex, nofollow",
+        "Referrer-Policy": "no-referrer"
+      });
+      res.end(page);
+    });
+  });
+}
+
 var MIME_TYPES = {
   ".json": "application/json; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
@@ -1572,6 +1877,16 @@ var server = http.createServer(function (req, res) {
   if (req.method === "POST" && url.pathname === "/api/db") return handleDbSet(req, res);
   if (req.method === "GET" && url.pathname === "/api/image") return handleImage(req, res, url.searchParams);
   if (req.method === "GET" && url.pathname === "/api/photo") return handlePhoto(req, res, url.searchParams);
+  if (req.method === "POST" && url.pathname === "/api/lists") return handleListCreate(req, res);
+  var listApi = url.pathname.match(/^\/api\/lists\/([A-Za-z0-9_-]{22})(?:\/(item|reset|delete))?$/);
+  if (listApi) {
+    if (req.method === "GET" && !listApi[2]) return handleListGet(req, res, listApi[1], url.searchParams);
+    if (req.method === "POST" && listApi[2] === "item") return handleListItem(req, res, listApi[1]);
+    if (req.method === "POST" && listApi[2] === "reset") return handleListReset(req, res, listApi[1]);
+    if (req.method === "POST" && listApi[2] === "delete") return handleListDelete(req, res, listApi[1]);
+  }
+  var listPage = url.pathname.match(/^\/l\/([A-Za-z0-9_-]{22})$/);
+  if (req.method === "GET" && listPage) return handleListPage(req, res, listPage[1]);
   if (req.method === "GET" && url.pathname === "/manifest.json") return serveFile(req, res, "manifest.json");
   if (req.method === "GET" && url.pathname === "/sw.js") return serveFile(req, res, "sw.js");
   if (req.method === "GET" && url.pathname === "/favicon.png") return serveFile(req, res, "favicon.png");
