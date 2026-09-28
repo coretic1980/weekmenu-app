@@ -198,6 +198,8 @@
   .fact-dots { display: flex; gap: 6px; justify-content: center; }
   .fact-dot { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,0.25); }
   .fact-dot.active { background: var(--accent2); }
+  .greeting { font-family: "Fraunces", serif; font-size: 24px; text-align: center; margin: 6px 0 4px; letter-spacing: 0.01em; }
+  .greeting .name { color: var(--accent2); }
   .pdf-preview-overlay {
     position: fixed; inset: 0; z-index: 70; background: var(--bg);
     display: flex; flex-direction: column;
@@ -340,16 +342,64 @@
 (function () {
   "use strict";
 
-  function getUserId() {
-    var id;
-    try { id = localStorage.getItem("weekmenu_uid"); } catch (e) { id = null; }
-    if (!id) {
-      id = "u_" + Math.random().toString(36).slice(2) + Date.now().toString(36);
-      try { localStorage.setItem("weekmenu_uid", id); } catch (e) {}
+  var AUTH_TOKEN_KEY = "weekmenu_token";
+  var AUTH_UID_KEY = "weekmenu_uid";
+  function getAuthToken() {
+    try { return localStorage.getItem(AUTH_TOKEN_KEY); } catch (e) { return null; }
+  }
+  function setAuthToken(t) {
+    try { if (t) localStorage.setItem(AUTH_TOKEN_KEY, t); else localStorage.removeItem(AUTH_TOKEN_KEY); } catch (e) {}
+  }
+  function getStoredUid() {
+    try { return localStorage.getItem(AUTH_UID_KEY); } catch (e) { return null; }
+  }
+  function setStoredUid(u) {
+    try { if (u) localStorage.setItem(AUTH_UID_KEY, u); else localStorage.removeItem(AUTH_UID_KEY); } catch (e) {}
+  }
+  window.authToken = getAuthToken();
+  window.USER_ID = getStoredUid();
+  window.setAuthToken = setAuthToken;
+  window.setStoredUid = setStoredUid;
+
+  // Anonymous profile ID: only accepted by the server while the admin has
+  // switched login off. Account IDs can never be used this way.
+  function getAnonId() {
+    var id = null;
+    try { id = localStorage.getItem("weekmenu_anon"); } catch (e) {}
+    if (id && /^anon_[a-z0-9]{10,40}$/.test(id)) return id;
+    var hex = "";
+    try {
+      var arr = new Uint8Array(12);
+      window.crypto.getRandomValues(arr);
+      for (var i = 0; i < arr.length; i++) hex += ("0" + arr[i].toString(16)).slice(-2);
+    } catch (e) {
+      for (var j = 0; j < 24; j++) hex += Math.floor(Math.random() * 16).toString(16);
     }
+    id = "anon_" + hex;
+    try { localStorage.setItem("weekmenu_anon", id); } catch (e) {}
     return id;
   }
-  var USER_ID = getUserId();
+  window.anonId = getAnonId();
+  window.isStandalone = true; // deze versie genereert per maaltijdmoment parallel
+
+  function authHeaders() {
+    var h = {};
+    if (window.authToken) h["Authorization"] = "Bearer " + window.authToken;
+    if (window.anonId) h["X-Anon-Id"] = window.anonId;
+    return h;
+  }
+  // On a 401 (expired session, or the admin just switched login on) start
+  // fresh: a reload clears all in-memory data and re-checks the login setting.
+  // The guard prevents a reload loop if 401s keep coming.
+  function handleAuthExpired() {
+    window.authToken = null;
+    setAuthToken(null);
+    var last = 0;
+    try { last = Number(sessionStorage.getItem("weekmenu_401_reload") || 0); } catch (e) {}
+    if (Date.now() - last < 5000) return;
+    try { sessionStorage.setItem("weekmenu_401_reload", String(Date.now())); } catch (e) {}
+    try { window.location.reload(); } catch (e) { if (window.bootstrapApp) window.bootstrapApp(); }
+  }
 
   function parseErrorFromResponse(res) {
     return res.json().catch(function () { return {}; }).then(function (body) {
@@ -366,9 +416,10 @@
           json: function (payload) {
             return fetch("/api/generate", {
               method: "POST",
-              headers: { "Content-Type": "application/json" },
+              headers: Object.assign({ "Content-Type": "application/json" }, authHeaders()),
               body: JSON.stringify(payload)
             }).then(function (res) {
+              if (res.status === 401) handleAuthExpired();
               if (!res.ok) return parseErrorFromResponse(res).then(function (e) { throw e; });
               return res.json();
             }).then(function (data) { return data.result; });
@@ -378,9 +429,11 @@
       if (name === "db") {
         return Promise.resolve({
           doc: function (path) {
+            var subpath = path.split("/").pop();
             return {
               get: function () {
-                return fetch("/api/db?path=" + encodeURIComponent(path)).then(function (res) {
+                return fetch("/api/db?subpath=" + encodeURIComponent(subpath), { headers: authHeaders() }).then(function (res) {
+                  if (res.status === 401) { handleAuthExpired(); }
                   if (!res.ok) return { exists: false, data: function () { return undefined; } };
                   return res.json();
                 }).then(function (body) {
@@ -390,9 +443,10 @@
               set: function (value) {
                 return fetch("/api/db", {
                   method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ path: path, value: value })
+                  headers: Object.assign({ "Content-Type": "application/json" }, authHeaders()),
+                  body: JSON.stringify({ subpath: subpath, value: value })
                 }).then(function (res) {
+                  if (res.status === 401) handleAuthExpired();
                   if (!res.ok) return parseErrorFromResponse(res).then(function (e) { throw e; });
                 });
               }
@@ -401,7 +455,7 @@
         });
       }
       if (name === "user") {
-        return Promise.resolve({ id: function () { return Promise.resolve(USER_ID); } });
+        return Promise.resolve({ id: function () { return Promise.resolve((window.authToken && window.USER_ID) || window.anonId); } });
       }
       if (name === "downloads") {
         return Promise.resolve({
@@ -494,7 +548,8 @@
     if (!el) return;
     if (busyCount > 0) {
       el.classList.add("active");
-      if (textEl) textEl.textContent = busyMessages.length ? busyMessages[busyMessages.length - 1] : "Bezig…";
+      var topMsg = busyMessages.length ? busyMessages[busyMessages.length - 1] : "Bezig…";
+      if (textEl) textEl.textContent = typeof topMsg === "function" ? topMsg() : topMsg;
     } else {
       el.classList.remove("active");
     }
@@ -556,6 +611,7 @@
   var ACTIVITY_LEVELS = ["Zittend", "Licht actief", "Gemiddeld actief", "Zeer actief"];
 
   var prefs = {
+    name: "",
     cuisines: [],
     flavors: [],
     level: "Home-style",
@@ -714,6 +770,297 @@
     if (factInterval) { clearInterval(factInterval); factInterval = null; }
   }
 
+  var authState = { mode: "login", error: null, busy: false, info: null };
+  (function () {
+    try {
+      var params = new URLSearchParams(window.location.search);
+      var resetToken = params.get("reset");
+      if (resetToken) {
+        authState.mode = "reset";
+        authState.resetToken = resetToken;
+        window.authToken = null;
+      }
+    } catch (e) {}
+  })();
+
+  function submitAuth(action) {
+    var emailEl = document.getElementById("authEmail");
+    var pwEl = document.getElementById("authPassword");
+    var email = emailEl ? emailEl.value.trim() : "";
+    var password = pwEl ? pwEl.value : "";
+    authState.error = null;
+    authState.busy = true;
+    render();
+    fetch("/api/auth/" + action, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: email, password: password })
+    }).then(function (res) {
+      return res.json().then(function (data) {
+        if (!res.ok) throw new Error(data.message || "Er ging iets mis.");
+        return data;
+      });
+    }).then(function (data) {
+      window.authToken = data.token;
+      window.setAuthToken(window.authToken);
+      window.USER_ID = data.uid;
+      window.setStoredUid(window.USER_ID);
+      authState.busy = false;
+      goto("weeks");
+      initPersistence();
+    }).catch(function (e) {
+      authState.busy = false;
+      authState.error = e.message;
+      render();
+    });
+  }
+
+  function submitForgotPassword() {
+    var emailEl = document.getElementById("authEmail");
+    var email = emailEl ? emailEl.value.trim() : "";
+    authState.error = null;
+    authState.info = null;
+    authState.busy = true;
+    render();
+    fetch("/api/auth/forgot-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: email })
+    }).then(function (res) {
+      return res.json().then(function (data) {
+        if (!res.ok) throw new Error(data.message || "Er ging iets mis.");
+        return data;
+      });
+    }).then(function (data) {
+      authState.busy = false;
+      authState.info = data.message;
+      render();
+    }).catch(function (e) {
+      authState.busy = false;
+      authState.error = e.message;
+      render();
+    });
+  }
+
+  function submitResetPassword() {
+    var pwEl = document.getElementById("authPassword");
+    var pw2El = document.getElementById("authPassword2");
+    var password = pwEl ? pwEl.value : "";
+    var password2 = pw2El ? pw2El.value : "";
+    authState.error = null;
+    if (password !== password2) {
+      authState.error = "Wachtwoorden komen niet overeen.";
+      render();
+      return;
+    }
+    authState.busy = true;
+    render();
+    fetch("/api/auth/reset-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: authState.resetToken, newPassword: password })
+    }).then(function (res) {
+      return res.json().then(function (data) {
+        if (!res.ok) throw new Error(data.message || "Er ging iets mis.");
+        return data;
+      });
+    }).then(function (data) {
+      window.authToken = data.token;
+      window.setAuthToken(window.authToken);
+      window.USER_ID = data.uid;
+      window.setStoredUid(window.USER_ID);
+      authState.busy = false;
+      authState.mode = "login";
+      authState.resetToken = null;
+      try { window.history.replaceState({}, "", window.location.pathname); } catch (e) {}
+      goto("weeks");
+      initPersistence();
+    }).catch(function (e) {
+      authState.busy = false;
+      authState.error = e.message;
+      render();
+    });
+  }
+
+  function renderAuth() {
+    var app = document.getElementById("app");
+    app.innerHTML = "";
+    var main = document.createElement("main");
+    main.style.paddingTop = "60px";
+
+    var logoWrap = document.createElement("div");
+    logoWrap.style.display = "flex";
+    logoWrap.style.justifyContent = "center";
+    logoWrap.style.padding = "4px 0 20px";
+    logoWrap.innerHTML =
+      '<svg width="46" height="46" viewBox="0 0 512 512" fill="none" stroke="var(--accent2)" stroke-width="11" stroke-linecap="round">' +
+      '<line x1="256" y1="134" x2="256" y2="350"/><line x1="186" y1="376" x2="256" y2="350"/>' +
+      '<line x1="326" y1="376" x2="256" y2="350"/><line x1="186" y1="376" x2="326" y2="376"/>' +
+      '<line x1="126" y1="120" x2="386" y2="120"/>' +
+      '<line x1="256" y1="120" x2="256" y2="134"/><circle cx="256" cy="120" r="10" fill="var(--accent2)" stroke="none"/>' +
+      '<line x1="126" y1="120" x2="106" y2="190"/><line x1="126" y1="120" x2="146" y2="190"/>' +
+      '<path d="M86 190 a40 40 0 0 0 80 0 Z"/>' +
+      '<line x1="386" y1="120" x2="366" y2="190"/><line x1="386" y1="120" x2="406" y2="190"/>' +
+      '<path d="M346 190 a40 40 0 0 0 80 0 Z"/></svg>';
+    main.appendChild(logoWrap);
+
+    var titles = { login: "Welkom terug", register: "Account aanmaken", forgot: "Wachtwoord vergeten", reset: "Nieuw wachtwoord instellen" };
+    var subtitles = {
+      login: "Log in om je gerechten en planning te zien.",
+      register: "Je gegevens worden bewaard onder dit account.",
+      forgot: "Vul je e-mailadres in, dan sturen we je een link.",
+      reset: "Kies een nieuw wachtwoord voor je account."
+    };
+
+    var h1 = document.createElement("h1");
+    h1.style.textAlign = "center";
+    h1.style.fontFamily = "Fraunces, serif";
+    h1.style.fontSize = "22px";
+    h1.style.marginBottom = "4px";
+    h1.textContent = titles[authState.mode] || "Balanza";
+    main.appendChild(h1);
+
+    var sub = document.createElement("div");
+    sub.className = "muted";
+    sub.style.textAlign = "center";
+    sub.style.marginBottom = "24px";
+    sub.textContent = subtitles[authState.mode] || "";
+    main.appendChild(sub);
+
+    if (authState.error) {
+      var err = document.createElement("div");
+      err.className = "errorbox";
+      err.style.marginBottom = "14px";
+      err.textContent = authState.error;
+      main.appendChild(err);
+    }
+    if (authState.info) {
+      var info = document.createElement("div");
+      info.className = "tag balans";
+      info.style.marginBottom = "14px";
+      info.style.display = "block";
+      info.textContent = authState.info;
+      main.appendChild(info);
+    }
+
+    if (authState.mode === "login" || authState.mode === "register") {
+      var emailInput = document.createElement("input");
+      emailInput.type = "email";
+      emailInput.id = "authEmail";
+      emailInput.placeholder = "E-mailadres";
+      emailInput.className = "textinput";
+      emailInput.style.marginBottom = "10px";
+      main.appendChild(emailInput);
+
+      var pwInput = document.createElement("input");
+      pwInput.type = "password";
+      pwInput.id = "authPassword";
+      pwInput.placeholder = "Wachtwoord (minstens 8 tekens)";
+      pwInput.className = "textinput";
+      pwInput.style.marginBottom = "10px";
+      main.appendChild(pwInput);
+
+      if (authState.mode === "login") {
+        var forgotLink = document.createElement("button");
+        forgotLink.className = "wizard-skip";
+        forgotLink.style.marginBottom = "8px";
+        forgotLink.textContent = "Wachtwoord vergeten?";
+        forgotLink.onclick = function () {
+          authState.mode = "forgot"; authState.error = null; authState.info = null; render();
+        };
+        main.appendChild(forgotLink);
+      }
+
+      var submitBtn = document.createElement("button");
+      submitBtn.className = "primary-btn";
+      submitBtn.style.marginTop = "8px";
+      submitBtn.disabled = authState.busy;
+      submitBtn.textContent = authState.busy ? "Even geduld…" : (authState.mode === "login" ? "Inloggen" : "Account aanmaken");
+      submitBtn.onclick = function () { submitAuth(authState.mode === "login" ? "login" : "register"); };
+      main.appendChild(submitBtn);
+
+      var toggle = document.createElement("button");
+      toggle.className = "wizard-skip";
+      toggle.style.marginTop = "14px";
+      toggle.textContent = authState.mode === "login" ? "Nog geen account? Account aanmaken" : "Al een account? Inloggen";
+      toggle.onclick = function () {
+        authState.mode = authState.mode === "login" ? "register" : "login";
+        authState.error = null; authState.info = null;
+        render();
+      };
+      main.appendChild(toggle);
+
+      app.appendChild(main);
+      var pwField = document.getElementById("authPassword");
+      if (pwField) {
+        pwField.addEventListener("keydown", function (e) {
+          if (e.key === "Enter") submitAuth(authState.mode === "login" ? "login" : "register");
+        });
+      }
+    } else if (authState.mode === "forgot") {
+      var fEmailInput = document.createElement("input");
+      fEmailInput.type = "email";
+      fEmailInput.id = "authEmail";
+      fEmailInput.placeholder = "E-mailadres";
+      fEmailInput.className = "textinput";
+      fEmailInput.style.marginBottom = "18px";
+      main.appendChild(fEmailInput);
+
+      var fSubmitBtn = document.createElement("button");
+      fSubmitBtn.className = "primary-btn";
+      fSubmitBtn.disabled = authState.busy;
+      fSubmitBtn.textContent = authState.busy ? "Even geduld…" : "Verstuur reset-link";
+      fSubmitBtn.onclick = submitForgotPassword;
+      main.appendChild(fSubmitBtn);
+
+      var backToLogin = document.createElement("button");
+      backToLogin.className = "wizard-skip";
+      backToLogin.style.marginTop = "14px";
+      backToLogin.textContent = "Terug naar inloggen";
+      backToLogin.onclick = function () {
+        authState.mode = "login"; authState.error = null; authState.info = null; render();
+      };
+      main.appendChild(backToLogin);
+
+      app.appendChild(main);
+    } else if (authState.mode === "reset") {
+      var rPwInput = document.createElement("input");
+      rPwInput.type = "password";
+      rPwInput.id = "authPassword";
+      rPwInput.placeholder = "Nieuw wachtwoord (minstens 8 tekens)";
+      rPwInput.className = "textinput";
+      rPwInput.style.marginBottom = "10px";
+      main.appendChild(rPwInput);
+
+      var rPwInput2 = document.createElement("input");
+      rPwInput2.type = "password";
+      rPwInput2.id = "authPassword2";
+      rPwInput2.placeholder = "Herhaal nieuw wachtwoord";
+      rPwInput2.className = "textinput";
+      rPwInput2.style.marginBottom = "18px";
+      main.appendChild(rPwInput2);
+
+      var rSubmitBtn = document.createElement("button");
+      rSubmitBtn.className = "primary-btn";
+      rSubmitBtn.disabled = authState.busy;
+      rSubmitBtn.textContent = authState.busy ? "Even geduld…" : "Wachtwoord instellen";
+      rSubmitBtn.onclick = submitResetPassword;
+      main.appendChild(rSubmitBtn);
+
+      app.appendChild(main);
+    }
+  }
+
+  function logout() {
+    window.authToken = null;
+    window.setAuthToken(null);
+    window.USER_ID = null;
+    window.setStoredUid(null);
+    // Reload so nothing of the previous user stays in memory (otherwise the next
+    // person to log in on this device could inherit the previous user's dishes).
+    try { window.location.reload(); } catch (e) { bootstrapApp(); }
+  }
+
   function renderWeeks() {
     var app = document.getElementById("app");
     app.innerHTML = "";
@@ -758,6 +1105,18 @@
       '<circle cx="126" cy="220" r="34" fill="none" stroke-width="8"/><circle cx="386" cy="220" r="34" fill="none" stroke-width="8"/>' +
       '</svg>';
     main.appendChild(logoWrap);
+
+    var greetName = String(prefs.name || "").trim();
+    if (greetName) {
+      var greet = document.createElement("div");
+      greet.className = "greeting";
+      greet.appendChild(document.createTextNode("Welkom terug, "));
+      var greetSpan = document.createElement("span");
+      greetSpan.className = "name";
+      greetSpan.textContent = greetName;
+      greet.appendChild(greetSpan);
+      main.appendChild(greet);
+    }
 
     var tiles = document.createElement("div");
     tiles.className = "tilerow";
@@ -860,6 +1219,18 @@
     resetBtn.onclick = function () { resetEverything(); };
     main.appendChild(resetBtn);
 
+    if (window.authToken) {
+      var logoutSpacer = document.createElement("div");
+      logoutSpacer.style.height = "8px";
+      main.appendChild(logoutSpacer);
+
+      var logoutBtn = document.createElement("button");
+      logoutBtn.className = "ghost-btn";
+      logoutBtn.textContent = "Uitloggen";
+      logoutBtn.onclick = function () { logout(); };
+      main.appendChild(logoutBtn);
+    }
+
     app.appendChild(main);
   }
 
@@ -868,6 +1239,7 @@
       WEEKS.length = 0;
       clearAllDishesFromDb();
 
+      prefs.name = "";
       prefs.cuisines = [];
       prefs.flavors = [];
       prefs.level = "Home-style";
@@ -981,6 +1353,15 @@
 
     if (state.wizardStep === 0) {
       heading("Welkom bij Balanza", "Laten we in een paar korte stapjes je voorkeuren instellen, zodat de gerechten die we voor je maken meteen goed passen. Dit duurt minder dan een minuut.");
+      labelEl("Hoe mogen we je noemen?", "Optioneel — je naam verschijnt op het startscherm");
+      var wNameInp = document.createElement("input");
+      wNameInp.className = "textinput";
+      wNameInp.type = "text";
+      wNameInp.maxLength = 40;
+      wNameInp.value = prefs.name || "";
+      wNameInp.placeholder = "Bijv. Dave";
+      wNameInp.oninput = function (e) { prefs.name = e.target.value; };
+      main.appendChild(wNameInp);
       labelEl("Voor welke maaltijdmomenten wil je gerechten?", "Meerdere mogelijk");
       chipGroupMulti(PLAN_MEALS, prefs.mealTypes);
     } else if (state.wizardStep === 1) {
@@ -1115,6 +1496,16 @@
       });
       main.appendChild(row);
     }
+
+    labelEl("Jouw naam", "Optioneel — wordt op het startscherm getoond");
+    var nameInp = document.createElement("input");
+    nameInp.className = "textinput";
+    nameInp.type = "text";
+    nameInp.maxLength = 40;
+    nameInp.value = prefs.name || "";
+    nameInp.placeholder = "Bijv. Dave";
+    nameInp.oninput = function (e) { prefs.name = e.target.value; };
+    main.appendChild(nameInp);
 
     labelEl("Maaltijdmoment", "Meerdere mogelijk");
     chipGroup(PLAN_MEALS, prefs.mealTypes);
@@ -1272,7 +1663,18 @@
     goBtn.textContent = state.generating
       ? "Bezig met genereren… (" + formatEstimateRange(estSecs) + ")"
       : "Genereer gerechten (" + formatEstimateRange(estSecs) + ")";
-    goBtn.onclick = function () { goto("weeks"); generateMeals(false); };
+    goBtn.onclick = function () {
+      var planned = plannedGenerationCount();
+      var withRange = formatEstimateRange(estimateGenerationSeconds(planned, true));
+      var withoutRange = formatEstimateRange(estimateGenerationSeconds(planned, false));
+      askConfirm(
+        "Wil je bij de gerechten ook afbeeldingen laten zoeken? Met afbeeldingen duurt het iets langer: " + withRange + " (zonder: " + withoutRange + ").",
+        function () { goto("weeks"); generateMeals(true); },
+        "Met afbeeldingen",
+        "Zonder afbeeldingen",
+        function () { goto("weeks"); generateMeals(false); }
+      );
+    };
     main.appendChild(goBtn);
 
     app.appendChild(main);
@@ -1310,16 +1712,113 @@
     return prefs.count * n;
   }
 
+  // ---------- Tijdschatting voor genereren ----------
+  // Leert van je eigen generaties: na elke geslaagde generatie onthouden we hoe
+  // lang het per gerecht duurde (en hoe lang het ophalen van afbeeldingen
+  // kostte). De schatting gebruikt de mediaan van de laatste 10 metingen en de
+  // werkelijke spreiding daarin. Zolang er nog geen metingen zijn, geldt een
+  // voorzichtige standaardwaarde. In de standalone-versie wordt per
+  // maaltijdmoment parallel gegenereerd, dus telt alleen het aantal gerechten
+  // per maaltijdmoment mee; de claude.ai-versie genereert alles in één keer.
+  var TIMING_KEY = "weekmenu_timing_v1";
+  var TIMING_BASE_SECS = 5;
+  var TIMING_DEFAULT_PER_DISH = window.isStandalone ? 14 : 12;
+  var TIMING_DEFAULT_IMG_SECS = 5;
+  var TIMING_KEEP = 10;
+  var timingMem = { rates: [], imgs: [] };
+
+  function loadTiming() {
+    try {
+      var raw = localStorage.getItem(TIMING_KEY);
+      if (raw) {
+        var t = JSON.parse(raw);
+        if (t && Array.isArray(t.rates) && Array.isArray(t.imgs)) return t;
+      }
+    } catch (e) {}
+    return timingMem;
+  }
+  function saveTiming(t) {
+    timingMem = t;
+    try { localStorage.setItem(TIMING_KEY, JSON.stringify(t)); } catch (e) {}
+  }
+  function quantile(values, q) {
+    if (!values.length) return 0;
+    var s = values.slice().sort(function (a, b) { return a - b; });
+    var pos = (s.length - 1) * q;
+    var lo = Math.floor(pos), hi = Math.ceil(pos);
+    return s[lo] + (s[hi] - s[lo]) * (pos - lo);
+  }
+  function criticalDishes(totalDishes) {
+    if (!window.isStandalone) return totalDishes;
+    return Math.ceil(totalDishes / Math.max(1, prefs.mealTypes.length || 1));
+  }
+  function recordGenerationTiming(seconds, critical) {
+    if (!(seconds > 0) || !(critical > 0)) return;
+    var rate = Math.max(1, (seconds - TIMING_BASE_SECS) / critical);
+    var t = loadTiming();
+    t.rates.push(Math.round(rate * 10) / 10);
+    if (t.rates.length > TIMING_KEEP) t.rates = t.rates.slice(-TIMING_KEEP);
+    saveTiming(t);
+  }
+  function recordImageTiming(seconds) {
+    if (!(seconds > 0)) return;
+    var t = loadTiming();
+    t.imgs.push(Math.round(seconds * 10) / 10);
+    if (t.imgs.length > TIMING_KEEP) t.imgs = t.imgs.slice(-TIMING_KEEP);
+    saveTiming(t);
+  }
   function estimateGenerationSeconds(count, withImages) {
-    var base = 4;
-    var perDish = 4.5;
-    var imageOverhead = withImages ? 3 : 0;
-    return base + count * perDish + imageOverhead;
+    var t = loadTiming();
+    var perDish = t.rates.length ? quantile(t.rates, 0.5) : TIMING_DEFAULT_PER_DISH;
+    var img = withImages ? (t.imgs.length ? quantile(t.imgs, 0.5) : TIMING_DEFAULT_IMG_SECS) : 0;
+    return TIMING_BASE_SECS + criticalDishes(count) * perDish + img;
+  }
+  function timingSpread() {
+    var lowF = 0.75, highF = 1.7;
+    var rates = loadTiming().rates;
+    if (rates.length >= 3) {
+      var med = quantile(rates, 0.5);
+      if (med > 0) {
+        lowF = Math.min(0.9, Math.max(0.6, quantile(rates, 0.2) / med));
+        highF = Math.min(2.5, Math.max(1.3, quantile(rates, 0.9) / med));
+      }
+    }
+    return { lowF: lowF, highF: highF };
+  }
+  function estimateBounds(seconds) {
+    var sp = timingSpread();
+    return { low: seconds * sp.lowF, high: seconds * sp.highF };
+  }
+  function formatSecondsRange(low, high) {
+    low = Math.max(5, low);
+    high = Math.max(low, high);
+    if (high < 100) {
+      var l = Math.max(5, Math.round(low / 5) * 5);
+      var h = Math.max(l, Math.round(high / 5) * 5);
+      return l === h ? l + " sec" : l + "–" + h + " sec";
+    }
+    function half(s) { return Math.max(0.5, Math.round(s / 30) / 2); }
+    function fmt(m) { return String(m).replace(".", ","); }
+    var lm = half(low), hm = half(high);
+    return lm === hm ? fmt(lm) + " min" : fmt(lm) + "–" + fmt(hm) + " min";
   }
   function formatEstimateRange(seconds) {
-    var low = Math.max(3, Math.round(seconds * 0.7));
-    var high = Math.round(seconds * 1.4);
-    return "~" + low + "-" + high + " sec";
+    var b = estimateBounds(seconds);
+    return "~" + formatSecondsRange(b.low, b.high);
+  }
+  function genRemainingText(startMs, bounds) {
+    var elapsed = (Date.now() - startMs) / 1000;
+    if (elapsed >= bounds.high) return "· duurt langer dan verwacht, nog even geduld…";
+    if (bounds.low - elapsed < 15) return "· nog maximaal ca. " + formatSecondsRange(bounds.high - elapsed, bounds.high - elapsed);
+    return "· nog ca. " + formatSecondsRange(bounds.low - elapsed, bounds.high - elapsed);
+  }
+  var genTickerId = null;
+  function stopGenTicker() {
+    if (genTickerId) { clearInterval(genTickerId); genTickerId = null; }
+  }
+  function startGenTicker() {
+    stopGenTicker();
+    genTickerId = setInterval(updateBusyUI, 1000);
   }
 
   function fetchImageForDish(day) {
@@ -1338,14 +1837,19 @@
     state.genError = null;
     state.genSuccess = null;
     state.generating = true;
-    var estRange = formatEstimateRange(estimateGenerationSeconds(plannedGenerationCount(), withImages));
-    busyStart("Gerechten worden gegenereerd… (" + estRange + ")");
+    var genStart = Date.now();
+    var genTotal = plannedGenerationCount();
+    var genCritical = criticalDishes(genTotal);
+    var genBounds = estimateBounds(estimateGenerationSeconds(genTotal, false));
+    busyStart(function () { return "Gerechten worden gegenereerd… " + genRemainingText(genStart, genBounds); });
+    startGenTicker();
     savePrefs();
     render();
 
     claude.use("sample").then(function (sample) {
       if (!sample) {
         state.generating = false;
+        stopGenTicker();
         busyEnd();
         state.genError = "Genereren is in deze weergave niet beschikbaar.";
         render();
@@ -1361,6 +1865,7 @@
       sample.json({ action: "generate", params: genParams }, { modelTier: "default" }).then(function (result) {
         var list = extractDishArray(result);
         if (!list || !list.length) throw new Error("Onverwacht antwoordformaat.");
+        recordGenerationTiming((Date.now() - genStart) / 1000, genCritical);
 
         var days = list.map(function (d, idx) {
           var kcal = Number(d.kcal) || 0;
@@ -1392,11 +1897,14 @@
           };
         });
 
+        var imgStart = Date.now();
         if (withImages) {
           busyEnd();
           busyStart("Afbeeldingen worden opgehaald…");
         }
         Promise.resolve(withImages ? Promise.all(days.map(fetchImageForDish)) : null).then(function () {
+          if (withImages) recordImageTiming((Date.now() - imgStart) / 1000);
+          stopGenTicker();
           busyEnd();
           addToCacheLibrary(days);
           persistDishesToDb(days);
@@ -1409,6 +1917,7 @@
         });
       }).catch(function (e) {
         state.generating = false;
+        stopGenTicker();
         busyEnd();
         var msg = (e && e.code === "not_granted") ? "Je hebt genereren niet toegestaan voor deze pagina." :
                    (e && e.code === "rate_limited") ? "Even geduld, probeer over een moment opnieuw." :
@@ -1454,7 +1963,7 @@
 
   var GUIDE_STEPS = [
     { title: "Stel je voorkeuren in", body: "Ga naar \u201cGerechten ontwerpen\u201d en vul in wat voor jou relevant is: keukenstijl, smaakprofiel, culinair niveau, apparatuur, uitsluitingen, en optioneel je lichaamsprofiel (geslacht, lengte, gewicht, leeftijd, activiteitsniveau) en je doel (Onderhoud, Vetverlies, Cutting, Spieropbouw of Atleet)." },
-    { title: "Genereer gerechten", body: "Kies bij welk maaltijdmoment(en) het gaat (Ontbijt/Lunch/Diner/Snack) en hoeveel gerechten je per moment wilt, en tik op \u201cGenereer gerechten\u201d. Elk gerecht krijgt een Balans-score: hoe dichter bij het streefpercentage van jouw doel, hoe hoger de score." },
+    { title: "Genereer gerechten", body: "Kies bij welk maaltijdmoment(en) het gaat (Ontbijt/Lunch/Diner/Snack) en hoeveel gerechten je per moment wilt, en tik op \u201cGenereer gerechten\u201d. Daarna kies je of er ook afbeeldingen bij worden gezocht (duurt iets langer). Elk gerecht krijgt een Balans-score: hoe dichter bij het streefpercentage van jouw doel, hoe hoger de score." },
     { title: "Bekijk je bibliotheek", body: "Onder \u201cOpgeslagen gerechten\u201d vind je alles wat je ooit heb ontworpen of gegenereerd, gegroepeerd per maaltijdmoment. Filter op maaltijdmoment of doel, of verwijder gerechten die je niet meer wilt." },
     { title: "Plan een week", body: "Onder \u201cPlannen\u201d kies je de huidige week of een week in de toekomst. Elke dag heeft 6 momenten: Ontbijt, Snack na ontbijt, Lunch, Snack na lunch, Diner en Snack na diner. Tik een moment aan om er een gerecht aan toe te wijzen." },
     { title: "Stel het aantal personen in", body: "Bij een ingevuld moment kun je met + en \u2212 aangeven voor hoeveel personen je kookt. Dat aantal telt automatisch mee in de boodschappenlijst en de prepdag \u2014 handig als je bijvoorbeeld voor het avondeten met het hele gezin kookt." },
@@ -3536,6 +4045,7 @@
     userCap.id().then(function (uid) {
       if (!uid) return;
       dbCap.doc("data/users/" + uid + "/prefs").set({
+        name: String(prefs.name || "").trim().slice(0, 40),
         cuisines: prefs.cuisines,
         flavors: prefs.flavors,
         level: prefs.level,
@@ -3803,7 +4313,7 @@
               return;
             }
             var pdata = psnap.data() || {};
-            ["cuisines", "flavors", "level", "dietStyle", "equipment", "exclude", "count", "mealTypes", "gender", "heightCm", "weightKg", "age", "activityLevel", "goal"].forEach(function (k) {
+            ["name", "cuisines", "flavors", "level", "dietStyle", "equipment", "exclude", "count", "mealTypes", "gender", "heightCm", "weightKg", "age", "activityLevel", "goal"].forEach(function (k) {
               if (pdata[k] !== undefined) prefs[k] = deepClone(pdata[k]);
             });
             render();
@@ -3958,6 +4468,9 @@
 
   function render() {
     try {
+      if (!configLoaded) return renderLoading();
+      if (authState.mode === "reset" && authState.resetToken) return renderAuth();
+      if (!window.authToken && window.authRequired) return renderAuth();
       if (state.view === "weeks") renderWeeks();
       else if (state.view === "library") renderLibrary();
       else if (state.view === "guide") renderGuide();
@@ -3983,8 +4496,33 @@
     }
   }
 
-  initPersistence();
-  render();
+  // ---------- Startup: ask the server whether login is currently required ----------
+  var configLoaded = false;
+  window.authRequired = true; // safe default until the server has answered
+
+  function renderLoading() {
+    var app = document.getElementById("app");
+    app.innerHTML = '<div class="empty-hint" style="padding-top:120px;">Laden…</div>';
+  }
+
+  function bootstrapApp() {
+    configLoaded = false;
+    render();
+    fetch("/api/config").then(function (res) {
+      return res.ok ? res.json() : { authRequired: true };
+    }).catch(function () {
+      return { authRequired: true };
+    }).then(function (cfg) {
+      window.authRequired = cfg.authRequired !== false;
+      configLoaded = true;
+      if (window.authToken || !window.authRequired) initPersistence();
+      render();
+    });
+  }
+
+  window.render = render;
+  window.bootstrapApp = bootstrapApp;
+  bootstrapApp();
 })();
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", function () {

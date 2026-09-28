@@ -5,6 +5,7 @@
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
 const { MongoClient } = require("mongodb");
 
 // ---------- Minimal .env loader (no dependency) ----------
@@ -39,6 +40,9 @@ const UNSPLASH_ACCESS_KEY = process.env.UNSPLASH_ACCESS_KEY || "";
 const MONGODB_URI = process.env.MONGODB_URI || "";
 const MONGODB_DB_NAME = process.env.MONGODB_DB || "weekmenu";
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "";
+const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString("hex");
+const RESEND_API_KEY = process.env.RESEND_API_KEY || "";
+const RESEND_FROM = process.env.RESEND_FROM || "Balanza <onboarding@resend.dev>";
 
 const DATA_DIR = path.join(__dirname, "data");
 const DATA_FILE = path.join(DATA_DIR, "store.json");
@@ -62,6 +66,98 @@ function saveStore(store) {
 }
 function todayKey() {
   return new Date().toISOString().slice(0, 10);
+}
+
+// ---------- User accounts: password hashing + stateless signed sessions ----------
+// No external auth library — scrypt (built into Node) for password hashing,
+// HMAC-SHA256 signed tokens for sessions. Signed tokens mean sessions survive
+// server restarts (important: Render's free tier sleeps/restarts often)
+// without needing a server-side session store.
+
+function hashPassword(password, salt) {
+  return crypto.scryptSync(password, salt, 64).toString("hex");
+}
+function makePasswordRecord(password) {
+  var salt = crypto.randomBytes(16).toString("hex");
+  return { salt: salt, hash: hashPassword(password, salt) };
+}
+function verifyPassword(password, record) {
+  if (!record || !record.salt || !record.hash) return false;
+  var candidate = Buffer.from(hashPassword(password, record.salt), "hex");
+  var expected = Buffer.from(record.hash, "hex");
+  if (candidate.length !== expected.length) return false;
+  return crypto.timingSafeEqual(candidate, expected);
+}
+
+function base64url(buf) {
+  return buf.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+function signSessionToken(payload) {
+  var body = base64url(Buffer.from(JSON.stringify(payload)));
+  var sig = base64url(crypto.createHmac("sha256", SESSION_SECRET).update(body).digest());
+  return body + "." + sig;
+}
+function verifySessionToken(token) {
+  if (!token || token.indexOf(".") === -1) return null;
+  var parts = token.split(".");
+  if (parts.length !== 2) return null;
+  var expectedSig = base64url(crypto.createHmac("sha256", SESSION_SECRET).update(parts[0]).digest());
+  if (expectedSig !== parts[1]) return null;
+  try {
+    var payload = JSON.parse(Buffer.from(parts[0].replace(/-/g, "+").replace(/_/g, "/"), "base64").toString());
+    if (payload.exp && Date.now() > payload.exp) return null;
+    return payload;
+  } catch (e) { return null; }
+}
+var SESSION_TTL_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
+function issueUserSession(uid, email) {
+  return signSessionToken({ uid: uid, email: email, exp: Date.now() + SESSION_TTL_MS });
+}
+// ---------- Login on/off (admin setting) ----------
+// When login is required, only valid account sessions are accepted. When the
+// admin switches it off, browsers may instead identify with an anonymous ID
+// (prefix "anon_") — account IDs ("u_...") are never accepted that way, so
+// existing accounts stay protected even while login is switched off.
+
+// Default is "no login". Login is only required once the admin has explicitly
+// switched it on. (If the setting can't be read because of a storage error,
+// we fail closed and require login, since we can't tell what the admin chose.)
+var authRequiredCache = { value: null, expiry: 0 };
+
+function getAuthRequired() {
+  if (authRequiredCache.value !== null && Date.now() < authRequiredCache.expiry) {
+    return Promise.resolve(authRequiredCache.value);
+  }
+  return dbGetDoc("settings/app").then(function (r) {
+    var value = !!(r.exists && r.value && r.value.authRequired === true);
+    authRequiredCache = { value: value, expiry: Date.now() + 5000 };
+    return value;
+  }).catch(function () { return true; });
+}
+
+function setAuthRequired(value) {
+  return dbSetDoc("settings/app", { authRequired: !!value }).then(function () {
+    authRequiredCache = { value: !!value, expiry: Date.now() + 5000 };
+  });
+}
+
+var ANON_ID_PATTERN = /^anon_[a-z0-9]{10,40}$/;
+
+// Resolves to { uid, email } for a valid account session, or (only while login
+// is switched off) for a well-formed anonymous ID. Resolves to null otherwise.
+function resolveUser(req) {
+  var auth = req.headers["authorization"] || "";
+  var token = auth.indexOf("Bearer ") === 0 ? auth.slice(7) : "";
+  var payload = verifySessionToken(token);
+  if (payload && payload.uid) return Promise.resolve({ uid: payload.uid, email: payload.email });
+  var anon = String(req.headers["x-anon-id"] || "");
+  if (!ANON_ID_PATTERN.test(anon)) return Promise.resolve(null);
+  return getAuthRequired().then(function (required) {
+    return required ? null : { uid: anon, email: null };
+  });
+}
+function sendUnauthorized(res) {
+  sendJSON(res, 401, { code: "unauthorized", message: "Niet ingelogd of sessie verlopen." });
 }
 
 // ---------- Request logging (for the admin page) ----------
@@ -216,15 +312,22 @@ function dbListUserIds() {
   return mongoReady.then(function (db) {
     if (!db) {
       var store = loadStore();
-      var uids = [];
+      var users = [];
       Object.keys(store.docs).forEach(function (key) {
-        var m = key.match(/^data\/users\/([^\/]+)\/prefs$/);
-        if (m) uids.push(m[1]);
+        var m = key.match(/^auth\/users\/(.+)$/);
+        if (m) { users.push({ uid: store.docs[key].uid, email: m[1] }); return; }
+        var a = key.match(/^data\/users\/(anon_[^\/]+)\/meta$/);
+        if (a) users.push({ uid: a[1], email: null });
       });
-      return uids;
+      return users;
     }
-    return db.collection("docs").find({ _id: { $regex: "^data/users/[^/]+/prefs$" } }).toArray().then(function (docs) {
-      return docs.map(function (d) { return d._id.split("/")[2]; });
+    return Promise.all([
+      db.collection("docs").find({ _id: { $regex: "^auth/users/" } }).toArray(),
+      db.collection("docs").find({ _id: { $regex: "^data/users/anon_[^/]+/meta$" } }).toArray()
+    ]).then(function (results) {
+      var accounts = results[0].map(function (d) { return { uid: d.value.uid, email: d._id.slice("auth/users/".length) }; });
+      var anons = results[1].map(function (d) { return { uid: d._id.split("/")[2], email: null }; });
+      return accounts.concat(anons);
     });
   });
 }
@@ -236,7 +339,7 @@ var adminTokens = new Map(); // token -> expiry timestamp
 var ADMIN_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 
 function issueAdminToken() {
-  var token = require("crypto").randomBytes(24).toString("hex");
+  var token = crypto.randomBytes(24).toString("hex");
   adminTokens.set(token, Date.now() + ADMIN_TOKEN_TTL_MS);
   return token;
 }
@@ -530,14 +633,61 @@ function buildPriceEstimatePrompt(items) {
     list.map(function (t, i) { return (i + 1) + ". " + t; }).join("\n");
 }
 
-function buildPromptFromRequest(body) {
+function mergeDishArrays(results) {
+  var merged = [];
+  results.forEach(function (arr) { if (Array.isArray(arr)) merged = merged.concat(arr); });
+  return merged;
+}
+
+// Runs the requested action, splitting a multi-mealtype "generate" or
+// "background" request into one parallel sub-request per mealtype (each
+// smaller and thus faster) instead of one big sequential request — same
+// total tokens/cost, but wall-clock time drops roughly N-fold for N
+// mealtypes since they're generated concurrently rather than one after
+// another. Falls back to a single request when there's only one mealtype.
+function runGenerateAction(body) {
   var action = body && body.action;
-  if (action === "generate") return buildGeneratePrompt(body.params || {});
-  if (action === "background") return buildBackgroundGeneratePrompt(body.needed || {}, body.params || {});
-  if (action === "variation") return buildVariationPromptServer(body.current || {}, body.kind, body.params || {});
-  if (action === "prep") return buildPrepPromptServer(body.dishes || []);
-  if (action === "price") return buildPriceEstimatePrompt(body.items || []);
-  return null;
+  var params = (body && body.params) || {};
+
+  if (action === "generate") {
+    var mealTypes = (params.mealTypes && params.mealTypes.length) ? params.mealTypes : ["Diner"];
+    if (mealTypes.length > 1) {
+      return Promise.all(mealTypes.map(function (mt) {
+        var subParams = Object.assign({}, params, { mealTypes: [mt] });
+        return generateWithBalansRetry(buildGeneratePrompt(subParams), params.goal);
+      })).then(mergeDishArrays);
+    }
+    return generateWithBalansRetry(buildGeneratePrompt(params), params.goal);
+  }
+
+  if (action === "background") {
+    var needed = (body && body.needed) || {};
+    var types = Object.keys(needed);
+    if (types.length > 1) {
+      return Promise.all(types.map(function (mt) {
+        var subNeeded = {};
+        subNeeded[mt] = needed[mt];
+        return generateWithBalansRetry(buildBackgroundGeneratePrompt(subNeeded, params), params.goal);
+      })).then(mergeDishArrays);
+    }
+    return generateWithBalansRetry(buildBackgroundGeneratePrompt(needed, params), params.goal);
+  }
+
+  if (action === "variation") {
+    return generateWithBalansRetry(buildVariationPromptServer(body.current || {}, body.kind, params), params.goal);
+  }
+
+  if (action === "prep") {
+    return generateWithBalansRetry(buildPrepPromptServer(body.dishes || []), null);
+  }
+
+  if (action === "price") {
+    return generateWithBalansRetry(buildPriceEstimatePrompt(body.items || []), null);
+  }
+
+  var badRequestErr = new Error("Ongeldig verzoek.");
+  badRequestErr.isBadRequest = true;
+  return Promise.reject(badRequestErr);
 }
 
 var GOAL_TARGETS = {
@@ -637,12 +787,20 @@ function handleGenerate(req, res) {
     return sendJSON(res, 429, { code: "rate_limited", message: "Te veel verzoeken vanaf dit adres. Probeer later opnieuw." });
   }
 
-  if (!ANTHROPIC_API_KEY) {
-    logRequest({ ts: new Date().toISOString(), action: "onbekend", durationMs: Date.now() - startTime, ok: false, status: 500, error: "ANTHROPIC_API_KEY niet ingesteld", ip: ip });
-    return sendJSON(res, 500, { code: "not_configured", message: "Server heeft nog geen ANTHROPIC_API_KEY ingesteld." });
-  }
-
-  getUsageToday().then(function (usedToday) {
+  resolveUser(req).then(function (user) {
+    if (!user) {
+      logRequest({ ts: new Date().toISOString(), action: "onbekend", durationMs: Date.now() - startTime, ok: false, status: 401, error: "Niet ingelogd", ip: ip });
+      sendUnauthorized(res);
+      return null;
+    }
+    if (!ANTHROPIC_API_KEY) {
+      logRequest({ ts: new Date().toISOString(), action: "onbekend", durationMs: Date.now() - startTime, ok: false, status: 500, error: "ANTHROPIC_API_KEY niet ingesteld", ip: ip });
+      sendJSON(res, 500, { code: "not_configured", message: "Server heeft nog geen ANTHROPIC_API_KEY ingesteld." });
+      return null;
+    }
+    return getUsageToday();
+  }).then(function (usedToday) {
+    if (usedToday === null) return; // already answered with 401
     if (usedToday >= DAILY_GENERATE_CAP) {
       logRequest({ ts: new Date().toISOString(), action: "onbekend", durationMs: Date.now() - startTime, ok: false, status: 429, error: "Dagelijkse limiet bereikt", ip: ip });
       return sendJSON(res, 429, { code: "rate_limited", message: "De dagelijkse limiet voor het genereren van gerechten is bereikt. Probeer het morgen opnieuw." });
@@ -650,22 +808,17 @@ function handleGenerate(req, res) {
 
     readBody(req).then(function (body) {
       var action = (body && body.action) || "onbekend";
-      var prompt = buildPromptFromRequest(body);
-      if (!prompt) {
-        logRequest({ ts: new Date().toISOString(), action: action, durationMs: Date.now() - startTime, ok: false, status: 400, error: "Ongeldig verzoek", ip: ip });
-        return sendJSON(res, 400, { code: "bad_request", message: "Ongeldig verzoek." });
-      }
-      var goalForValidation = (body.action === "generate" || body.action === "background" || body.action === "variation")
-        ? ((body.params && body.params.goal) || null)
-        : null;
 
-      return generateWithBalansRetry(prompt, goalForValidation).then(function (parsed) {
+      return runGenerateAction(body).then(function (parsed) {
         incrementUsageToday();
         logRequest({ ts: new Date().toISOString(), action: action, durationMs: Date.now() - startTime, ok: true, status: 200, ip: ip });
         sendJSON(res, 200, { result: parsed });
       }).catch(function (err) {
-        logRequest({ ts: new Date().toISOString(), action: action, durationMs: Date.now() - startTime, ok: false, status: 502, error: err.message, ip: ip });
-        sendJSON(res, 502, { code: "error", message: "Genereren mislukt: " + err.message });
+        var status = err && err.isBadRequest ? 400 : 502;
+        var code = err && err.isBadRequest ? "bad_request" : "error";
+        var message = err && err.isBadRequest ? "Ongeldig verzoek." : "Genereren mislukt: " + err.message;
+        logRequest({ ts: new Date().toISOString(), action: action, durationMs: Date.now() - startTime, ok: false, status: status, error: err.message, ip: ip });
+        sendJSON(res, status, { code: code, message: message });
       });
     }).catch(function () {
       logRequest({ ts: new Date().toISOString(), action: "onbekend", durationMs: Date.now() - startTime, ok: false, status: 400, error: "Ongeldige aanvraag", ip: ip });
@@ -677,11 +830,138 @@ function handleGenerate(req, res) {
   });
 }
 
+function normalizeEmail(email) {
+  return String(email || "").trim().toLowerCase();
+}
+
+function handleAuthRegister(req, res) {
+  readBody(req).then(function (body) {
+    var email = normalizeEmail(body && body.email);
+    var password = (body && body.password) || "";
+    if (!email || email.indexOf("@") === -1) {
+      return sendJSON(res, 400, { code: "bad_request", message: "Vul een geldig e-mailadres in." });
+    }
+    if (password.length < 8) {
+      return sendJSON(res, 400, { code: "bad_request", message: "Wachtwoord moet minstens 8 tekens zijn." });
+    }
+    return dbGetDoc("auth/users/" + email).then(function (existing) {
+      if (existing.exists) {
+        return sendJSON(res, 409, { code: "conflict", message: "Er bestaat al een account met dit e-mailadres." });
+      }
+      var uid = "u_" + crypto.randomBytes(12).toString("hex");
+      var record = makePasswordRecord(password);
+      return dbSetDoc("auth/users/" + email, { uid: uid, salt: record.salt, hash: record.hash, createdAt: new Date().toISOString() }).then(function () {
+        sendJSON(res, 200, { token: issueUserSession(uid, email), uid: uid });
+      });
+    });
+  }).catch(function (err) {
+    sendJSON(res, 500, { code: "error", message: "Registreren mislukt: " + (err && err.message ? err.message : "onbekende fout") });
+  });
+}
+
+function handleAuthLogin(req, res) {
+  readBody(req).then(function (body) {
+    var email = normalizeEmail(body && body.email);
+    var password = (body && body.password) || "";
+    return dbGetDoc("auth/users/" + email).then(function (result) {
+      if (!result.exists || !verifyPassword(password, result.value)) {
+        return sendJSON(res, 401, { code: "unauthorized", message: "E-mailadres of wachtwoord onjuist." });
+      }
+      sendJSON(res, 200, { token: issueUserSession(result.value.uid, email), uid: result.value.uid });
+    });
+  }).catch(function (err) {
+    sendJSON(res, 500, { code: "error", message: "Inloggen mislukt: " + (err && err.message ? err.message : "onbekende fout") });
+  });
+}
+
+var ALLOWED_SUBPATHS = ["prefs", "dishes", "plannedWeeks"];
+var RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+function sendResetEmail(email, resetLink) {
+  if (!RESEND_API_KEY) return Promise.reject(new Error("RESEND_API_KEY niet ingesteld."));
+  return fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { "Authorization": "Bearer " + RESEND_API_KEY, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      from: RESEND_FROM,
+      to: [email],
+      subject: "Wachtwoord resetten — Balanza",
+      html: "<p>Je hebt een wachtwoordreset aangevraagd voor je Balanza-account.</p>" +
+        "<p><a href=\"" + resetLink + "\">Klik hier om een nieuw wachtwoord in te stellen</a></p>" +
+        "<p>Deze link is 1 uur geldig. Heb je dit niet zelf aangevraagd, dan kun je deze e-mail gewoon negeren.</p>"
+    })
+  }).then(function (res) {
+    if (!res.ok) {
+      return res.text().then(function (t) { throw new Error("Resend API error " + res.status + ": " + t.slice(0, 200)); });
+    }
+  });
+}
+
+function handleForgotPassword(req, res) {
+  readBody(req).then(function (body) {
+    var email = normalizeEmail(body && body.email);
+    // Always return the same generic message, whether or not the account
+    // exists — this prevents anyone from using this endpoint to check which
+    // e-mail addresses have an account.
+    function genericResponse() {
+      sendJSON(res, 200, { message: "Als dit e-mailadres bekend is, ontvang je een link om je wachtwoord te resetten." });
+    }
+    if (!email) return genericResponse();
+    dbGetDoc("auth/users/" + email).then(function (result) {
+      if (!result.exists) return genericResponse();
+      var token = crypto.randomBytes(24).toString("hex");
+      return dbSetDoc("auth/resets/" + token, { email: email, expiresAt: Date.now() + RESET_TOKEN_TTL_MS, used: false }).then(function () {
+        var host = req.headers.host;
+        var resetLink = "https://" + host + "/?reset=" + token;
+        return sendResetEmail(email, resetLink);
+      }).then(genericResponse).catch(function () {
+        // Don't leak email-sending failures to the client either.
+        genericResponse();
+      });
+    }).catch(genericResponse);
+  }).catch(function () {
+    sendJSON(res, 400, { code: "bad_request", message: "Ongeldige aanvraag." });
+  });
+}
+
+function handleResetPassword(req, res) {
+  readBody(req).then(function (body) {
+    var token = body && body.token;
+    var newPassword = (body && body.newPassword) || "";
+    if (!token) return sendJSON(res, 400, { code: "bad_request", message: "Ongeldige of verlopen link." });
+    if (newPassword.length < 8) return sendJSON(res, 400, { code: "bad_request", message: "Wachtwoord moet minstens 8 tekens zijn." });
+    dbGetDoc("auth/resets/" + token).then(function (result) {
+      if (!result.exists || result.value.used || Date.now() > result.value.expiresAt) {
+        return sendJSON(res, 400, { code: "bad_request", message: "Deze link is ongeldig of verlopen. Vraag een nieuwe aan." });
+      }
+      var email = result.value.email;
+      return dbGetDoc("auth/users/" + email).then(function (userResult) {
+        if (!userResult.exists) return sendJSON(res, 400, { code: "bad_request", message: "Account niet gevonden." });
+        var uid = userResult.value.uid;
+        var record = makePasswordRecord(newPassword);
+        return Promise.all([
+          dbSetDoc("auth/users/" + email, { uid: uid, salt: record.salt, hash: record.hash, createdAt: userResult.value.createdAt }),
+          dbSetDoc("auth/resets/" + token, { email: email, expiresAt: 0, used: true })
+        ]).then(function () {
+          sendJSON(res, 200, { token: issueUserSession(uid, email), uid: uid });
+        });
+      });
+    }).catch(function (err) {
+      sendJSON(res, 500, { code: "error", message: "Resetten mislukt: " + (err && err.message ? err.message : "onbekende fout") });
+    });
+  }).catch(function () {
+    sendJSON(res, 400, { code: "bad_request", message: "Ongeldige aanvraag." });
+  });
+}
+
 function handleDbGet(req, res, query) {
-  var p = query.get("path");
-  if (!p) return sendJSON(res, 400, { message: "path ontbreekt" });
-  dbGetDoc(p).then(function (result) {
-    sendJSON(res, 200, result);
+  var subpath = query.get("subpath");
+  if (ALLOWED_SUBPATHS.indexOf(subpath) === -1) return sendJSON(res, 400, { message: "Ongeldig subpath." });
+  resolveUser(req).then(function (user) {
+    if (!user) return sendUnauthorized(res);
+    return dbGetDoc("data/users/" + user.uid + "/" + subpath).then(function (result) {
+      sendJSON(res, 200, result);
+    });
   }).catch(function (err) {
     sendJSON(res, 500, { message: "Opslag niet bereikbaar: " + err.message });
   });
@@ -689,14 +969,16 @@ function handleDbGet(req, res, query) {
 
 function handleDbSet(req, res) {
   readBody(req).then(function (body) {
-    if (!body || !body.path) return sendJSON(res, 400, { message: "path ontbreekt" });
-    var ip = clientIp(req);
-    var userMatch = body.path.match(/^data\/users\/([^\/]+)\//);
-    var trackIp = userMatch
-      ? dbSetDoc("data/users/" + userMatch[1] + "/meta", { lastIp: ip, lastSeenAt: new Date().toISOString() }).catch(function () {})
-      : Promise.resolve();
-    return Promise.all([dbSetDoc(body.path, body.value), trackIp]).then(function () {
-      sendJSON(res, 200, { ok: true });
+    return resolveUser(req).then(function (user) {
+      if (!user) return sendUnauthorized(res);
+      var subpath = body && body.subpath;
+      if (ALLOWED_SUBPATHS.indexOf(subpath) === -1) return sendJSON(res, 400, { message: "Ongeldig subpath." });
+      var ip = clientIp(req);
+      var fullPath = "data/users/" + user.uid + "/" + subpath;
+      var trackIp = dbSetDoc("data/users/" + user.uid + "/meta", { lastIp: ip, lastSeenAt: new Date().toISOString(), email: user.email }).catch(function () {});
+      return Promise.all([dbSetDoc(fullPath, body.value), trackIp]).then(function () {
+        sendJSON(res, 200, { ok: true });
+      });
     });
   }).catch(function (err) {
     sendJSON(res, 400, { message: err && err.message ? err.message : "Ongeldige aanvraag." });
@@ -791,8 +1073,9 @@ function handleAdminLogin(req, res) {
 
 function handleAdminUsers(req, res) {
   if (!requireAdmin(req, res)) return;
-  dbListUserIds().then(function (uids) {
-    return Promise.all(uids.map(function (uid) {
+  dbListUserIds().then(function (accounts) {
+    return Promise.all(accounts.map(function (account) {
+      var uid = account.uid;
       return Promise.all([
         dbGetDoc("data/users/" + uid + "/prefs"),
         dbGetDoc("data/users/" + uid + "/dishes"),
@@ -811,6 +1094,8 @@ function handleAdminUsers(req, res) {
         return locationPromise.then(function (location) {
           return {
             uid: uid,
+            email: account.email,
+            name: prefs && typeof prefs.name === "string" ? prefs.name.slice(0, 40) : null,
             goal: prefs ? prefs.goal : null,
             dietStyle: prefs ? prefs.dietStyle : null,
             level: prefs ? prefs.level : null,
@@ -853,6 +1138,33 @@ function handleAdminUserDetail(req, res, uid) {
   });
 }
 
+function handleConfig(req, res) {
+  getAuthRequired().then(function (required) {
+    sendJSON(res, 200, { authRequired: required });
+  });
+}
+
+function handleAdminSettingsGet(req, res) {
+  if (!requireAdmin(req, res)) return;
+  getAuthRequired().then(function (required) {
+    sendJSON(res, 200, { authRequired: required });
+  });
+}
+
+function handleAdminSettingsSet(req, res) {
+  if (!requireAdmin(req, res)) return;
+  readBody(req).then(function (body) {
+    if (!body || typeof body.authRequired !== "boolean") {
+      return sendJSON(res, 400, { code: "bad_request", message: "authRequired (true/false) ontbreekt." });
+    }
+    return setAuthRequired(body.authRequired).then(function () {
+      sendJSON(res, 200, { authRequired: body.authRequired });
+    });
+  }).catch(function (err) {
+    sendJSON(res, 500, { code: "error", message: "Opslaan mislukt: " + (err && err.message ? err.message : "onbekende fout") });
+  });
+}
+
 function handleAdminStats(req, res) {
   if (!requireAdmin(req, res)) return;
   Promise.all([dbListUserIds(), getUsageToday(), getRecentLogs(LOG_CAP)]).then(function (results) {
@@ -884,6 +1196,10 @@ var server = http.createServer(function (req, res) {
   var url = new URL(req.url, "http://localhost");
 
   if (req.method === "POST" && url.pathname === "/api/generate") return handleGenerate(req, res);
+  if (req.method === "POST" && url.pathname === "/api/auth/register") return handleAuthRegister(req, res);
+  if (req.method === "POST" && url.pathname === "/api/auth/login") return handleAuthLogin(req, res);
+  if (req.method === "POST" && url.pathname === "/api/auth/forgot-password") return handleForgotPassword(req, res);
+  if (req.method === "POST" && url.pathname === "/api/auth/reset-password") return handleResetPassword(req, res);
   if (req.method === "GET" && url.pathname === "/api/db") return handleDbGet(req, res, url.searchParams);
   if (req.method === "POST" && url.pathname === "/api/db") return handleDbSet(req, res);
   if (req.method === "GET" && url.pathname === "/api/image") return handleImage(req, res, url.searchParams);
@@ -892,6 +1208,9 @@ var server = http.createServer(function (req, res) {
   if (req.method === "GET" && url.pathname === "/favicon.png") return serveFile(req, res, "favicon.png");
   if (req.method === "GET" && url.pathname.indexOf("/icons/") === 0) return serveFile(req, res, url.pathname);
   if (req.method === "POST" && url.pathname === "/api/admin/login") return handleAdminLogin(req, res);
+  if (req.method === "GET" && url.pathname === "/api/config") return handleConfig(req, res);
+  if (req.method === "GET" && url.pathname === "/api/admin/settings") return handleAdminSettingsGet(req, res);
+  if (req.method === "POST" && url.pathname === "/api/admin/settings") return handleAdminSettingsSet(req, res);
   if (req.method === "GET" && url.pathname === "/api/admin/stats") return handleAdminStats(req, res);
   if (req.method === "GET" && url.pathname === "/api/admin/logs") return handleAdminLogs(req, res);
   if (req.method === "GET" && url.pathname === "/api/admin/users") return handleAdminUsers(req, res);

@@ -85,6 +85,17 @@
   <main>
     <div class="stats" id="statsRow"></div>
 
+    <div id="settingsCard" class="card">
+      <div class="section-label" style="margin-top:0;">Instellingen</div>
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:14px;">
+        <div>
+          <div id="authStatusText" style="font-weight:600;">Inloggen: laden…</div>
+          <div class="muted" id="authStatusHint" style="margin-top:4px;"></div>
+        </div>
+        <button id="authToggleBtn" class="ghost" disabled>…</button>
+      </div>
+    </div>
+
     <div id="logCard" class="card">
       <div class="section-label">Recente activiteit</div>
       <div id="logList"><div class="muted">Laden…</div></div>
@@ -128,9 +139,58 @@
     document.getElementById("loginView").style.display = "none";
     document.getElementById("dashView").style.display = "block";
     loadStats();
+    loadSettings();
     loadLogs();
     loadUsers();
   }
+
+  var authRequiredNow = null;
+
+  function renderSettings() {
+    var text = document.getElementById("authStatusText");
+    var hint = document.getElementById("authStatusHint");
+    var btn = document.getElementById("authToggleBtn");
+    if (authRequiredNow === null) return;
+    btn.disabled = false;
+    if (authRequiredNow) {
+      text.textContent = "Inloggen is verplicht";
+      hint.textContent = "Bezoekers moeten een account aanmaken of inloggen om de app te gebruiken.";
+      btn.textContent = "Zet inloggen uit";
+    } else {
+      text.textContent = "Inloggen staat uit";
+      hint.textContent = "Iedereen kan de app zonder account gebruiken (anoniem profiel per browser). Bestaande accounts blijven afgeschermd.";
+      btn.textContent = "Zet inloggen aan";
+    }
+  }
+
+  function loadSettings() {
+    api("/api/admin/settings").then(function (data) {
+      authRequiredNow = data.authRequired;
+      renderSettings();
+    }).catch(function (e) {
+      document.getElementById("authStatusText").textContent = "Instelling niet te laden";
+      document.getElementById("authStatusHint").textContent = e.message;
+    });
+  }
+
+  document.getElementById("authToggleBtn").onclick = function () {
+    var turnOn = !authRequiredNow;
+    var question = turnOn
+      ? "Inloggen weer verplicht stellen?\n\nGebruikers zonder account moeten dan een account aanmaken. Hun anonieme gegevens blijven bewaard, maar worden niet automatisch aan een nieuw account gekoppeld."
+      : "Inloggen uitzetten?\n\nIedereen kan de app dan zonder account gebruiken. Bestaande accounts blijven afgeschermd.";
+    if (!window.confirm(question)) return;
+    var btn = document.getElementById("authToggleBtn");
+    btn.disabled = true;
+    api("/api/admin/settings", { method: "POST", body: { authRequired: turnOn } }).then(function (data) {
+      authRequiredNow = data.authRequired;
+      renderSettings();
+      loadStats();
+      loadUsers();
+    }).catch(function (e) {
+      window.alert("Opslaan mislukt: " + e.message);
+      renderSettings();
+    });
+  };
 
   document.getElementById("loginBtn").onclick = function () {
     var pw = document.getElementById("pwInput").value;
@@ -171,7 +231,7 @@
       ].forEach(function (pair) {
         var el = document.createElement("div");
         el.className = "stat";
-        el.innerHTML = '<div class="num">' + pair[1] + '</div><div class="label">' + pair[0] + '</div>';
+        el.innerHTML = '<div class="num">' + escapeHtml(pair[1]) + '</div><div class="label">' + escapeHtml(pair[0]) + '</div>';
         row.appendChild(el);
       });
     }).catch(function (e) {
@@ -194,14 +254,14 @@
         var time = l.ts ? new Date(l.ts).toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" }) : "?";
         var label = l.action + (l.ok ? "" : " — " + (l.error || "fout"));
         row.innerHTML =
-          '<span class="log-time">' + time + '</span>' +
-          '<span class="log-action">' + label + '</span>' +
-          '<span class="log-duration">' + l.durationMs + ' ms</span>';
+          '<span class="log-time">' + escapeHtml(time) + '</span>' +
+          '<span class="log-action">' + escapeHtml(label) + '</span>' +
+          '<span class="log-duration">' + escapeHtml(l.durationMs + " ms") + '</span>';
         listEl.appendChild(row);
       });
     }).catch(function (e) {
       if (e.message.indexOf("unauthorized") > -1 || e.message.indexOf("Niet ingelogd") > -1) showLogin();
-      else listEl.innerHTML = '<div class="error">' + e.message + '</div>';
+      else listEl.innerHTML = '<div class="error">' + escapeHtml(e.message) + '</div>';
     });
   }
 
@@ -219,15 +279,15 @@
         row.className = "user-row";
         var loc = u.location ? (u.location.city ? u.location.city + ", " : "") + (u.location.country || "") : "onbekende locatie";
         row.innerHTML =
-          '<div><div class="uid">' + u.uid + '</div>' +
-          '<div class="badge">' + (u.goal || "geen doel") + (u.dietStyle ? " · " + u.dietStyle : "") + ' · ' + loc + '</div></div>' +
-          '<div class="badge">' + u.dishCount + ' gerechten · ' + u.plannedWeekCount + ' weken</div>';
+          '<div><div class="uid">' + escapeHtml((u.name ? u.name + " — " : "") + (u.email || ("anoniem · " + u.uid))) + '</div>' +
+          '<div class="badge">' + escapeHtml((u.goal || "geen doel") + (u.dietStyle ? " · " + u.dietStyle : "") + " · " + loc) + '</div></div>' +
+          '<div class="badge">' + escapeHtml(u.dishCount + " gerechten · " + u.plannedWeekCount + " weken") + '</div>';
         row.onclick = function () { openUserDetail(u.uid); };
         listEl.appendChild(row);
       });
     }).catch(function (e) {
       if (e.message.indexOf("unauthorized") > -1 || e.message.indexOf("Niet ingelogd") > -1) showLogin();
-      else listEl.innerHTML = '<div class="error">' + e.message + '</div>';
+      else listEl.innerHTML = '<div class="error">' + escapeHtml(e.message) + '</div>';
     });
   }
 
@@ -240,19 +300,22 @@
     api("/api/admin/users/" + encodeURIComponent(uid)).then(function (data) {
       var loc = data.location ? (data.location.city ? data.location.city + ", " : "") + (data.location.country || "") : "onbekende locatie";
       var lastSeen = data.lastSeenAt ? new Date(data.lastSeenAt).toLocaleString("nl-NL") : "onbekend";
+      var detailName = data.prefs && typeof data.prefs.name === "string" ? data.prefs.name : "";
       body.innerHTML =
-        '<h2 style="font-family:Fraunces,serif; margin-top:0;">' + uid + '</h2>' +
-        '<div class="badge" style="margin-bottom:14px;">' + loc + ' · voor het laatst actief: ' + lastSeen + '</div>' +
+        '<h2 style="font-family:Fraunces,serif; margin-top:0;">' + escapeHtml(detailName || uid) + '</h2>' +
+        '<div class="badge" style="margin-bottom:14px;">' + escapeHtml((detailName ? uid + " · " : "") + loc + " · voor het laatst actief: " + lastSeen) + '</div>' +
         '<div class="section-label">Voorkeuren</div><pre>' + escapeHtml(JSON.stringify(data.prefs, null, 2)) + '</pre>' +
         '<div class="section-label">Opgeslagen gerechten</div><pre>' + escapeHtml(JSON.stringify(data.dishes, null, 2)) + '</pre>' +
         '<div class="section-label">Geplande weken</div><pre>' + escapeHtml(JSON.stringify(data.plannedWeeks, null, 2)) + '</pre>';
     }).catch(function (e) {
-      body.innerHTML = '<div class="error">' + e.message + '</div>';
+      body.innerHTML = '<div class="error">' + escapeHtml(e.message) + '</div>';
     });
   }
 
   function escapeHtml(s) {
-    return String(s).replace(/[&<>]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]; });
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
   }
 
   if (token) showDash(); else showLogin();

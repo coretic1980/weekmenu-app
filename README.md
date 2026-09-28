@@ -29,6 +29,20 @@ browser wordt verstuurd. Wie de Netwerk-tab of de paginabron van de browser
 bekijkt, ziet dus alleen losse instellingen — niet de prompt-engineering
 zelf.
 
+## Inloggen aan/uit (admin)
+
+Op `/admin` staat onder "Instellingen" een schakelaar voor inloggen.
+
+- **Uit (standaard):** de app werkt zonder account; elke browser krijgt een anoniem profiel
+  (ID met prefix `anon_`). Accounts blijven afgeschermd — alleen `anon_`-ID's
+  worden zonder inlog geaccepteerd. Wie al is ingelogd, blijft gewoon zijn
+  eigen account gebruiken.
+- **Aan:** bezoekers moeten een account aanmaken of inloggen. Anonieme gegevens
+  blijven bewaard, maar worden niet automatisch aan een nieuw account gekoppeld.
+- De instelling staat in de database (`settings/app`). Inloggen is alleen
+  verplicht als jij dat expliciet hebt aangezet; kan de instelling door een
+  opslagfout niet worden gelezen, dan geldt veilig: inloggen verplicht.
+
 ## Lokaal draaien
 
 ```bash
