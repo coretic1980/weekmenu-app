@@ -262,8 +262,8 @@ van Bring! (zie de Bring! Import Developer Guide):
 
 0. **De eerste keer** vraagt de app om de link van jouw eigen Bring!-lijst. Zonder die link kun je niet verder. De
    link staat niet in de code: hij wordt bij jouw voorkeuren bewaard (dus ook op je andere apparaten, als je
-   ingelogd bent), en je kunt hem wijzigen via **Wijzigen** op het boodschappenscherm of het veld "Link naar je
-   Bring!-lijst" bij Voorkeuren (leeg maken verwijdert hem). Alleen https-links worden geaccepteerd; een adres
+   ingelogd bent), en je kunt hem wijzigen via **Wijzigen** op het boodschappenscherm of de kaart "Bring!" bij
+   Instellingen (leeg maken verwijdert hem). Alleen https-links worden geaccepteerd; een adres
    waar geen "bring" in voorkomt krijgt eerst een waarschuwing ("Toch opslaan"). Op het boodschappenscherm staat
    daarna een regel "Jouw Bring!-lijst" met **Openen**. Let op: die link is voor jou; de import zelf kiest de lijst
    in de Bring!-app (zie onder).

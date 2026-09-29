@@ -3806,6 +3806,8 @@ function sanitizePrefsPatch(patch) {
       case "level": case "activityLevel": case "dietStyle": clean[k] = cleanText(v, 40); break;
       case "gender": clean.gender = cleanText(v, 20); break;
       case "exclude": clean.exclude = cleanText(v, 300); break;
+      case "bringListLink": clean.bringListLink = cleanText(v, 500); break;
+      case "familyMode": clean.familyMode = v === true; break;
       case "goal":
         if (typeof v !== "string" || !GOAL_TARGETS[v]) errors.push("Onbekend doel: " + cleanText(v, 60) + "."); else clean.goal = v;
         break;

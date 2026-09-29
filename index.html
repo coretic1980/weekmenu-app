@@ -863,14 +863,65 @@
     "Snack na diner": "Snack"
   };
 
-  var CUISINES = ["Italiaans", "Aziatisch", "Mediterraan", "Midden-Oosters", "Nederlands", "Mexicaans"];
+  var CUISINES = ["Italiaans", "Aziatisch", "Mediterraan", "Midden-Oosters", "Nederlands", "Mexicaans", "Indiaas", "Thais", "Japans", "Koreaans", "Frans", "Grieks", "Spaans", "Marokkaans", "Vietnamees", "Amerikaans"];
   var FLAVORS = ["Fris", "Romig", "Pittig", "Kruidig", "Hartig", "Umami"];
   var LEVELS = ["Basic", "Home-style", "Gastronomisch"];
-  var EQUIPMENT = ["Gasfornuis", "Oven", "Airfryer", "Vleesgrill"];
+  var EQUIPMENT = ["Gasfornuis", "Inductiekookplaat", "Oven", "Airfryer", "Vleesgrill", "Wokpan", "Barbecue", "Slowcooker", "Blender of foodprocessor"];
   var DIET_STYLES = ["Omnivoor", "Flexitarisch", "Vegetarisch", "Veganistisch"];
 
   var GENDERS = ["Man", "Vrouw", "Anders"];
   var ACTIVITY_LEVELS = ["Zittend", "Licht actief", "Gemiddeld actief", "Zeer actief"];
+
+  // Veelvoorkomende allergenen en afkeuren, als snelkeuze bovenop het vrije tekstveld voor "iets anders".
+  var EXCLUDE_COMMON = ["Pinda's", "Noten", "Schaal- en schelpdieren", "Lactose", "Gluten", "Ei",
+    "Soja", "Sesam", "Vis", "Varkensvlees", "Champignons", "Koriander", "Ui en knoflook"];
+  function excludeTokens() {
+    return String(prefs.exclude || "").split(",").map(function (s) { return s.trim(); }).filter(Boolean);
+  }
+  function excludeHasTerm(list, term) {
+    return list.some(function (t) { return t.toLowerCase() === term.toLowerCase(); });
+  }
+  // Bouwt de gebruiksvriendelijke "wat wil je niet eten"-editor: snelkeuzechips voor bekende allergenen/afkeuren,
+  // plus een los tekstveld voor alles wat daar niet bij staat. Beide werken op hetzelfde onderliggende tekstveld
+  // (prefs.exclude, komma-gescheiden), dus dit blijft verenigbaar met hoe het altijd is opgeslagen en verstuurd.
+  function renderExcludeEditor(main, onToggle) {
+    var chipsRow = document.createElement("div");
+    chipsRow.className = "chiprow";
+    var tokens = excludeTokens();
+    EXCLUDE_COMMON.forEach(function (term) {
+      var chip = document.createElement("button");
+      chip.className = "chip" + (excludeHasTerm(tokens, term) ? " selected" : "");
+      chip.textContent = term;
+      chip.onclick = function () {
+        var cur = excludeTokens();
+        if (excludeHasTerm(cur, term)) cur = cur.filter(function (t) { return t.toLowerCase() !== term.toLowerCase(); });
+        else cur.push(term);
+        prefs.exclude = cur.join(", ");
+        onToggle();
+      };
+      chipsRow.appendChild(chip);
+    });
+    main.appendChild(chipsRow);
+
+    var customHint = document.createElement("div");
+    customHint.className = "field-hint";
+    customHint.style.marginTop = "10px";
+    customHint.textContent = "Nog iets anders? Vul het hieronder aan, gescheiden door een komma.";
+    main.appendChild(customHint);
+
+    var customTokens = excludeTokens().filter(function (t) { return !excludeHasTerm(EXCLUDE_COMMON, t); });
+    var customInp = document.createElement("input");
+    customInp.className = "textinput";
+    customInp.type = "text";
+    customInp.value = customTokens.join(", ");
+    customInp.placeholder = "Bijv. kokos, blauwe kaas";
+    customInp.oninput = function (e) {
+      var common = excludeTokens().filter(function (t) { return excludeHasTerm(EXCLUDE_COMMON, t); });
+      var extra = e.target.value.split(",").map(function (s) { return s.trim(); }).filter(Boolean);
+      prefs.exclude = common.concat(extra).join(", ");
+    };
+    main.appendChild(customInp);
+  }
 
   var prefs = {
     name: "",
@@ -1923,6 +1974,22 @@
     accButton(mine, "settingsPrefs", "sliders", "Mijn voorkeuren", function () { goto("prefs"); });
     accButton(mine, "settingsGuide", "help", "Hoe werkt Balanza", function () { goto("guide"); });
 
+    var bringCard = accCard(main, "Bring!");
+    var bringSub = document.createElement("div"); bringSub.className = "acc-sub";
+    bringSub.textContent = "De link naar je eigen Bring!-lijst, voor \u201cImporteer in Bring!\u201d op het boodschappenscherm. Laat leeg om hem te verwijderen.";
+    bringCard.appendChild(bringSub);
+    var bringInp = accInput(bringCard, "settingsBringLink", "url", "Plak hier de link", "url");
+    bringInp.maxLength = 500;
+    bringInp.value = prefs.bringListLink || "";
+    var bringBefore = prefs.bringListLink || "";
+    bringInp.oninput = function (e) { prefs.bringListLink = e.target.value; };
+    bringInp.onblur = function () {
+      if ((prefs.bringListLink || "") === bringBefore) return;
+      bringBefore = prefs.bringListLink || "";
+      savePrefs();
+      showToast(bringBefore ? "Bring!-link opgeslagen." : "Bring!-link verwijderd.");
+    };
+
     if (loggedIn) {
       var acc = accCard(main, "Account en beveiliging");
       var mailLine = document.createElement("div"); mailLine.className = "acc-sub"; mailLine.id = "settingsEmailLine";
@@ -2604,7 +2671,7 @@
     if (i === -1) arr.push(val); else arr.splice(i, 1);
   }
 
-  var WIZARD_STEP_COUNT = 6;
+  var WIZARD_STEP_COUNT = 9;
 
   function finishWizard(goHome) {
     savePrefs();
@@ -2682,7 +2749,7 @@
     }
 
     if (state.wizardStep === 0) {
-      heading("Welkom bij Balanza", "Laten we in een paar korte stapjes je voorkeuren instellen, zodat de gerechten die we voor je maken meteen goed passen. Dit duurt minder dan een minuut.");
+      heading("Welkom bij Balanza", "Laten we in een paar korte stapjes je voorkeuren instellen, zodat de gerechten die we voor je maken meteen goed passen. Dit duurt minder dan een minuut, en je kunt alles later nog aanpassen bij \u201cMijn voorkeuren\u201d.");
       labelEl("Hoe mogen we je noemen?", "Optioneel — je naam verschijnt op het startscherm");
       var wNameInp = document.createElement("input");
       wNameInp.className = "textinput";
@@ -2692,10 +2759,10 @@
       wNameInp.placeholder = "Bijv. Dave";
       wNameInp.oninput = function (e) { prefs.name = e.target.value; };
       main.appendChild(wNameInp);
-      labelEl("Voor welke maaltijdmomenten wil je gerechten?", "Meerdere mogelijk");
+      labelEl("Voor welke maaltijdmomenten wil je gerechten?", "Bepaalt voor welke maaltijden we straks gerechten voorstellen. Meerdere mogelijk.");
       chipGroupMulti(PLAN_MEALS, prefs.mealTypes);
     } else if (state.wizardStep === 1) {
-      heading("Wat is je doel?", "Dit bepaalt de macroverdeling (koolhydraten/eiwit/vet) waar we naar streven.");
+      heading("Wat is je doel?", "Dit bepaalt de macroverdeling (koolhydraten/eiwit/vet) waar elk gerecht naar streeft \u2014 de basis van de Balans-score. De winst: gerechten die echt bij je doel passen, niet alleen lekker maar ook macrotechnisch kloppend.");
       var goalPairs = Object.keys(GOAL_DESCRIPTIONS).map(function (g) { return [g, g]; });
       chipGroupSingle(goalPairs, prefs.goal, function (g) { prefs.goal = g; });
       var descBox = document.createElement("div");
@@ -2703,16 +2770,20 @@
       descBox.textContent = GOAL_DESCRIPTIONS[prefs.goal];
       main.appendChild(descBox);
     } else if (state.wizardStep === 2) {
-      heading("Heb je een voedingsstijl?", "Kies \u201cGeen voorkeur\u201d als dit niet van toepassing is.");
+      heading("Heb je een voedingsstijl?", "Dit is een harde regel, geen suggestie: gerechten die hier niet aan voldoen worden nooit voorgesteld. Kies \u201cGeen voorkeur\u201d als dit niet van toepassing is.");
       var dietPairs = [["", "Geen voorkeur"]].concat(DIET_STYLES.map(function (d) { return [d, d]; }));
       chipGroupSingle(dietPairs, prefs.dietStyle, function (d) { prefs.dietStyle = d; });
     } else if (state.wizardStep === 3) {
-      heading("Smaak en niveau", "Ook dit mag je overslaan als je geen voorkeur hebt.");
-      labelEl("Keukenstijl", "Meerdere mogelijk, of laat leeg");
+      heading("Welke keuken en smaak spreken je aan?", "Mag je overslaan als je geen voorkeur hebt \u2014 dan houden we alle keukens en smaken open.");
+      labelEl("Keukenstijl", "Bepaalt de stijl van de gerechten. Meerdere kiezen geeft meer afwisseling.");
       chipGroupMulti(CUISINES, prefs.cuisines);
-      labelEl("Culinair niveau");
+      labelEl("Smaakprofiel", "Stuurt de smaakrichting los van de keuken \u2014 ook hier kun je er meerdere combineren.");
+      chipGroupMulti(FLAVORS, prefs.flavors);
+    } else if (state.wizardStep === 4) {
+      heading("Hoeveel moeite wil je erin steken?", "Bepaalt hoe uitdagend de technieken en stappen in een recept zijn.");
+      labelEl("Culinair niveau", "Basic houdt het simpel met alledaagse technieken; Gastronomisch geeft uitdagender recepten met meer stappen.");
       chipGroupSingle(LEVELS.map(function (l) { return [l, l]; }), prefs.level, function (l) { prefs.level = l; });
-      labelEl("Kindvriendelijk", "Mildere smaken en herkenbare ingrediënten voor het hele gezin — mag je overslaan");
+      labelEl("Kindvriendelijk", "Mildere smaken en herkenbare ingrediënten, zodat het hele gezin hetzelfde bord kan eten — mag je overslaan.");
       var wFamilySeg = document.createElement("div");
       wFamilySeg.className = "segrow";
       [[false, "Uit"], [true, "Aan"]].forEach(function (pair) {
@@ -2723,8 +2794,14 @@
         wFamilySeg.appendChild(chip);
       });
       main.appendChild(wFamilySeg);
-    } else if (state.wizardStep === 4) {
-      heading("Lichaamsprofiel", "Optioneel \u2014 helpt om de porties nauwkeuriger af te stemmen. Mag je leeg laten.");
+    } else if (state.wizardStep === 5) {
+      heading("Welke apparatuur heb je?", "Alleen gerechten die hiermee te maken zijn worden voorgesteld \u2014 zo krijg je nooit een recept dat om iets vraagt wat je niet hebt staan. Mag je overslaan; dan gaan we uit van een standaard fornuis en oven.");
+      chipGroupMulti(EQUIPMENT, prefs.equipment);
+    } else if (state.wizardStep === 6) {
+      heading("Wat wil je niet eten?", "Allergieën of dingen die je gewoon niet lust. Deze ingrediënten worden nooit voorgesteld \u2014 dat scheelt tijd bij het aanpassen achteraf. Mag je overslaan.");
+      renderExcludeEditor(main, render);
+    } else if (state.wizardStep === 7) {
+      heading("Lichaamsprofiel", "Optioneel, maar wel de winst: hoe vollediger dit is ingevuld, hoe nauwkeuriger we de portiegrootte en calorieën op jou afstemmen in plaats van op een gemiddelde persoon.");
       var bioRow = document.createElement("div");
       bioRow.className = "segrow";
       bioRow.style.flexWrap = "wrap";
@@ -2744,7 +2821,7 @@
       chipGroupSingle([["", "Geen voorkeur"]].concat(GENDERS.map(function (g) { return [g, g]; })), prefs.gender, function (g) { prefs.gender = g; });
       labelEl("Activiteitsniveau");
       chipGroupSingle(ACTIVITY_LEVELS.map(function (a) { return [a, a]; }), prefs.activityLevel, function (a) { prefs.activityLevel = a; });
-    } else if (state.wizardStep === 5) {
+    } else if (state.wizardStep === 8) {
       heading("Alvast aan de slag?", "Wil je nu meteen gerechten laten genereren op basis van je voorkeuren?");
 
       var plannedCount = plannedGenerationCount();
@@ -2903,24 +2980,8 @@
     labelEl("Beschikbare apparatuur");
     chipGroup(EQUIPMENT, prefs.equipment);
 
-    labelEl("Ingrediënten uitsluiten", "Bijv. kaas, pinda's, schaaldieren");
-    var excl = document.createElement("input");
-    excl.className = "textinput";
-    excl.type = "text";
-    excl.value = prefs.exclude;
-    excl.placeholder = "geen";
-    excl.oninput = function (e) { prefs.exclude = e.target.value; };
-    main.appendChild(excl);
-
-    labelEl("Link naar je Bring!-lijst", "Voor \u201cImporteer in Bring!\u201d op het boodschappenscherm. Laat leeg om hem te verwijderen.");
-    var bringInp = document.createElement("input");
-    bringInp.className = "textinput";
-    bringInp.type = "url";
-    bringInp.maxLength = 500;
-    bringInp.value = prefs.bringListLink || "";
-    bringInp.placeholder = "Plak hier de link";
-    bringInp.oninput = function (e) { prefs.bringListLink = e.target.value; };
-    main.appendChild(bringInp);
+    labelEl("Wat wil je niet eten?", "Allergieën of dingen die je niet lust \u2014 deze ingrediënten worden nooit voorgesteld.");
+    renderExcludeEditor(main, render);
 
     labelEl("Aantal gerechten per maaltijdmoment");
     var sel = document.createElement("select");
@@ -3389,7 +3450,7 @@
   }
 
   var GUIDE_STEPS = [
-    { title: "Stel je voorkeuren in", body: "Ga naar \u201cGerechten ontwerpen\u201d en vul in wat voor jou relevant is: keukenstijl, smaakprofiel, culinair niveau, kindvriendelijk (gezinsmodus), apparatuur, uitsluitingen, en optioneel je lichaamsprofiel (geslacht, lengte, gewicht, leeftijd, activiteitsniveau) en je doel (Onderhoud, Vetverlies, Cutting, Spieropbouw of Atleet)." },
+    { title: "Stel je voorkeuren in", body: "Bij het eerste gebruik loop je een korte wizard door die alles in stapjes uitvraagt, elk met uitleg over wat die keuze precies doet. Later kun je alles terugvinden en aanpassen bij \u201cGerechten ontwerpen\u201d: doel (Onderhoud, Vetverlies, Cutting, Spieropbouw of Atleet), voedingsstijl, keukenstijl, smaakprofiel, culinair niveau, kindvriendelijk (gezinsmodus), beschikbare apparatuur, wat je niet wilt eten, en optioneel je lichaamsprofiel (geslacht, lengte, gewicht, leeftijd, activiteitsniveau)." },
     { title: "Genereer gerechten", body: "Kies bij welk maaltijdmoment(en) het gaat (Ontbijt/Lunch/Diner/Snack) en hoeveel gerechten je per moment wilt, en tik op \u201cGenereer gerechten\u201d. Daarna kies je of er ook afbeeldingen bij worden gezocht (duurt iets langer). Elk gerecht krijgt een Balans-score: hoe dichter bij het streefpercentage van jouw doel, hoe hoger de score. Het genereren kan even duren; je hoeft niet in de app te blijven wachten. Geldt er een limiet voor het aantal nieuwe gerechten per maand, dan zie je hier hoeveel je er nog over hebt." },
     { title: "Macro's berekend met NEVO", body: "De macro's van je gerechten worden uitgerekend met het Nederlands Voedingsstoffenbestand (NEVO) van het RIVM, niet alleen geschat: een groen \u201cNEVO-berekend\u201d label (in de app en in de PDF) laat zien wanneer dat is gelukt. Lukt het matchen van een ingredi\u00ebnt een keer niet, dan blijft de AI-schatting zichtbaar en duidelijk gelabeld. In \u201cOpgeslagen gerechten\u201d kun je oudere gerechten met \u00e9\u00e9n tik laten herberekenen." },
     { title: "Krijg een melding als het klaar is", body: "Ga je tijdens het genereren naar een andere app, dan werkt Balanza gewoon door en staan je gerechten klaar zodra je terugkomt. Wil je een seintje? Zet onder Instellingen \u2192 Meldingen de meldingen aan (of tik tijdens het genereren op \u201cStuur me een melding als het klaar is\u201d). Op een iPhone werkt dat als Balanza op je beginscherm staat: tik op Deel en kies \u201cZet op beginscherm\u201d." },
