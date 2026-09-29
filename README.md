@@ -477,6 +477,21 @@ deze vijf een extra keuzelijst naast de aan/uit-schakelaar: "Iedereen" of "Allee
 - **PDF-export** heeft geen eigen server-eindpunt (het draait volledig in de browser), dus die instelling werkt
   uitsluitend door de exportknop wel of niet te tonen.
 
+## Openbare marketingpagina
+
+`public/welkom.html`, bereikbaar op **/welkom**, is een aparte, openbare landingspagina die uitlegt wat Balanza is,
+wat het uniek maakt (NEVO-berekende macro's, Nederlandse boodschappenworkflow, geen advertenties) en wat je ermee
+kunt. Los van de app zelf: geen inlogscherm, geen sessie nodig, bedoeld om te delen (social, een advertentie, een
+QR-code op een flyer) voordat iemand de app opent.
+
+- Alle knoppen linken naar `/` (de app). Er is geen apart inlogformulier op deze pagina.
+- Het prijzenblok haalt de **actuele** prijzen live op via `/api/config` en `/api/billing` (met een wegwerp-anoniem-id,
+  puur om de openbare prijsinformatie te lezen — er wordt niets voor die bezoeker opgeslagen). Staan abonnementen uit,
+  dan toont de pagina alleen dat Balanza gratis te gebruiken is, zonder pech kans op een verouderd bedrag.
+- Dezelfde lettertypen en kleuren als de app (Fraunces + Public Sans, warme crème/goud-tinten, met NEVO-groen voor
+  de macro-differentiator), zodat het voelt als hetzelfde product.
+- Pas de tekst gerust aan `public/welkom.html` naar eigen inzicht aan; het is een gewoon, zelfstandig HTML-bestand.
+
 ## Genereren op de achtergrond en meldingen
 
 Gerechten maken duurt soms minuten. Ga je in die tijd naar een andere app of gaat je scherm op slot, dan

@@ -4544,6 +4544,7 @@ var server = http.createServer(function (req, res) {
   if (url.pathname.indexOf("/api/admin/") === 0) return handleAdminApi(req, res, url);
   if (req.method === "GET" && url.pathname === "/admin") return serveFile(req, res, "admin.html");
   if (req.method === "GET" && (url.pathname === "/" || url.pathname === "/index.html")) return serveStatic(req, res);
+  if (req.method === "GET" && url.pathname === "/welkom") return serveFile(req, res, "welkom.html");
 
   res.writeHead(404, { "Content-Type": "text/plain" });
   res.end("Not found");
