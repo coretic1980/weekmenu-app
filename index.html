@@ -3379,6 +3379,7 @@
     { title: "Start het kookproces", body: "Vanuit een receptdetail start je de stap-voor-stap kookmodus, met een voortgangsbalk en een timer bij stappen die wachttijd hebben (koken, bakken, grillen, oven, sudderen)." },
     { title: "Exporteer als PDF", body: "Zowel een boodschappenlijst als een compleet weekmenu kun je exporteren als PDF, opgemaakt als een echt kookboek \u2014 met omslagpagina, inhoudsopgave en een gerecht dat nooit halverwege afbreekt over een pagina." },
     { title: "Bewaar je gegevens met een account", body: "Zonder account staan je gerechten en planning alleen op dit apparaat. Kies in het menu (je avatar rechtsboven) \u201cAccount aanmaken\u201d om ze te bewaren en op elk apparaat te gebruiken; wat je al hebt gaat mee. Onder Instellingen kun je ook je wachtwoord of e-mailadres wijzigen, je gegevens downloaden en het account verwijderen." },
+    { ifBilling: true, title: "Balanza Plus", body: "Naast je avatar rechtsboven en in het accountmenu zie je een label met je huidige abonnement: Gratis of Plus. Tik op \u201cAbonnement vergelijken\u201d (in het accountmenu of in Mijn profiel) om te zien wat elk niveau biedt en om over te stappen \u2014 Plus geeft in ieder geval meer nieuwe gerechten per maand. Je betaalt met iDEAL of kaart en kunt op elk moment opzeggen: Plus blijft dan actief tot het einde van de betaalde periode." },
     { title: "Begin opnieuw", body: "Via je avatar rechtsboven (het accountmenu) kies je \u201cReset app \u2014 begin opnieuw\u201d: dit wist al je opgeslagen gerechten, voorkeuren en planning in \u00e9\u00e9n keer, mocht je helemaal fris willen beginnen." }
   ];
 
@@ -3466,7 +3467,8 @@
     intro.textContent = "Balanza ontwerpt macro-gebalanceerde maaltijden op basis van jouw voorkeuren, en helpt je ze in te plannen, klaar te maken en ervoor te boodschappen. Hieronder staat alles stap voor stap.";
     main.appendChild(intro);
 
-    GUIDE_STEPS.forEach(function (step, idx) {
+    var guideSteps = GUIDE_STEPS.filter(function (s) { return !s.ifBilling || billingOn(); });
+    guideSteps.forEach(function (step, idx) {
       if (idx > 0) {
         var divider = document.createElement("div");
         divider.className = "guide-divider";
