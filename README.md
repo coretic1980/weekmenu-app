@@ -487,6 +487,11 @@ node -e "const c=require('crypto');const k=c.generateKeyPairSync('ec',{namedCurv
 **In de beheerconsole**: onder *Activiteit* staan de opdrachten (soort "AI") en de verstuurde meldingen (soort "Melding",
 met "1 van 1 toestel bereikt", zonder inhoud of sleutels). Onder *Systeem* staat de controle *Meldingen (Web Push)*.
 
+**Zichtbaar voor gebruikers.** Zodra abonnementen aan staan, ziet een gebruiker altijd welk plan hij heeft: een klein label
+("Gratis" of "Plus") naast de avatar rechtsboven en in het accountmenu. Vanuit het accountmenu, de Plus-kaart in Mijn profiel
+en de limietmelding op het generatiescherm gaat een link "Abonnement vergelijken" naar een pagina met Gratis en Plus naast
+elkaar. Staan abonnementen uit, dan is dit label en die pagina nergens te zien.
+
 **Testen na het deployen**: dit is geprobeerd met nagebootste AI- en pushdiensten, niet op een echte telefoon. Doe daarom
 eenmaal een echte proef: zet meldingen aan, start een generatie, ga naar de beginschermknop of een andere app, en wacht
 tot de melding komt. Doe dat ook op een iPhone met de app op het beginscherm.

@@ -304,6 +304,17 @@
   .am-name { font-family: "Fraunces", serif; font-weight: 600; font-size: 18px; overflow-wrap: anywhere; }
   .am-mail { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; margin-top: 1px; }
   .am-link { background: none; border: 0; padding: 0; margin-top: 6px; color: var(--accent2); font: inherit; font-weight: 600; font-size: 14px; cursor: pointer; text-align: left; }
+  .plan-badge { font-size: 10px; font-weight: 700; letter-spacing: 0.04em; padding: 2px 7px; border-radius: 999px; background: var(--line); color: var(--muted); white-space: nowrap; }
+  .plan-badge.plus { background: var(--accent); color: var(--accent-ink); }
+  .acct-btn .plan-badge { margin-left: -2px; }
+  .am-name-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .plan-table { width: 100%; border-collapse: collapse; }
+  .plan-table th, .plan-table td { padding: 10px 8px; text-align: left; border-bottom: 1px solid var(--line); font-size: 14px; vertical-align: top; }
+  .plan-table th { font-family: "Fraunces", serif; font-weight: 600; font-size: 15px; }
+  .plan-table td.center, .plan-table th.center { text-align: center; }
+  .plan-table .cur { color: var(--accent2); font-weight: 700; }
+  .plan-table .yes { color: var(--accent2); }
+  .plan-table .no { color: var(--muted); }
   .am-list { border-top: 1px solid var(--line); padding: 6px 0; }
   .am-item { display: flex; align-items: center; gap: 14px; width: 100%; text-align: left; background: transparent; border: 0; padding: 13px 18px; color: var(--ink); font: inherit; font-size: 15px; cursor: pointer; }
   .am-item:hover, .am-item:focus-visible { background: rgba(184, 134, 59, 0.14); outline: none; }
@@ -953,6 +964,7 @@
     acctName.className = "acct-name";
     acctName.textContent = firstNameOf(accountName());
     acctBtn.appendChild(acctName);
+    var topBadge = planBadge("top"); if (topBadge) acctBtn.appendChild(topBadge);
     acctBtn.onclick = function () { openAccountMenu(); };
     el.appendChild(acctBtn);
     if (showBack) {
@@ -1356,12 +1368,15 @@
     head.className = "am-head";
     head.appendChild(avatarNode("med"));
     var info = document.createElement("div");
+    var nmRow = document.createElement("div"); nmRow.className = "am-name-row";
     var nm = document.createElement("div"); nm.className = "am-name"; nm.id = "amName"; nm.textContent = accountName();
+    nmRow.appendChild(nm);
+    var menuBadge = planBadge("menu"); if (menuBadge) nmRow.appendChild(menuBadge);
     var ml = document.createElement("div"); ml.className = "am-mail"; ml.id = "amMail";
     ml.textContent = window.authToken ? (email || "Ingelogd") : "Anoniem profiel · alleen op dit apparaat";
     var prof = document.createElement("button"); prof.className = "am-link"; prof.id = "amProfile"; prof.textContent = "Mijn profiel";
     prof.onclick = function () { closeAccountMenu(); goto("account"); };
-    info.appendChild(nm); info.appendChild(ml); info.appendChild(prof);
+    info.appendChild(nmRow); info.appendChild(ml); info.appendChild(prof);
     head.appendChild(info);
     body.appendChild(head);
 
@@ -1373,10 +1388,13 @@
     amItem(list, "amTheme", currentTheme === "dark" ? "sun" : "moon", currentTheme === "dark" ? "Lichte weergave" : "Donkere weergave", function () { toggleTheme(); });
     amItem(list, "amExport", "download", "Mijn gegevens downloaden", function () { exportMyData(); });
     amItem(list, "amGuide", "help", "Hoe werkt Balanza", function () { goto("guide"); });
+    if (billingOn()) amItem(list, "amPlans", "sliders", "Abonnement vergelijken", function () { goto("plans"); });
     var sep = document.createElement("div"); sep.className = "am-sep"; list.appendChild(sep);
     amItem(list, "amReset", "refresh", "Reset app \u2014 begin opnieuw", function () { resetEverything(); }, "danger");
     if (window.authToken) amItem(list, "amLogout", "logout", "Uitloggen", function () { logout(); });
     body.appendChild(list);
+    refreshPlanBadges();
+    if (billingOn() && !billingInfo) refreshBilling().then(refreshPlanBadges);
     // Het menu hangt recht onder de avatar (ook met een notch of op een breed scherm); zonder meting geldt de standaardplek uit de opmaak.
     try {
       var btn = document.getElementById("accountBtn"), menu = document.getElementById("accountMenu");
@@ -1520,7 +1538,31 @@
   }
   function plusEl(tag, text, id, cls) { var e = document.createElement(tag); if (text != null) e.textContent = text; if (id) e.id = id; if (cls) e.className = cls; return e; }
   // Tekent de Plus-kaart opnieuw in zijn eigen vak (de kaart zelf staat al in Mijn profiel).
+  // Geeft "Gratis" of "Plus" terug voor het label bij de avatar en in het menu, of null als het (nog) niet te bepalen is.
+  function currentPlanLabel() {
+    if (!billingOn()) return null;
+    if (!billingInfo || !billingInfo.enabled) return null;
+    return billingInfo.plusActive ? "Plus" : "Gratis";
+  }
+  function planBadge(size) {
+    var label = currentPlanLabel();
+    if (!label) return null;
+    var b = document.createElement("span");
+    b.className = "plan-badge" + (label === "Plus" ? " plus" : "");
+    b.id = size === "menu" ? "planBadgeMenu" : "planBadgeTop";
+    b.textContent = label;
+    return b;
+  }
+  function refreshPlanBadges() {
+    // De topbar-badge komt vanzelf goed bij de volgende render() (renderTopbar leest dan de actuele status).
+    // Het accountmenu blijft na een verversing open staan, dus dat label werken we hier wel meteen bij.
+    var menu = document.getElementById("planBadgeMenu"), label = currentPlanLabel();
+    if (!menu) return;
+    if (!label) { menu.style.display = "none"; return; }
+    menu.style.display = ""; menu.textContent = label; menu.className = "plan-badge" + (label === "Plus" ? " plus" : "");
+  }
   function paintPlus() {
+    refreshPlanBadges();
     var card = document.getElementById("plusCard"), body = document.getElementById("plusBody");
     if (!card || !body) return;
     var info = billingInfo;
@@ -1529,6 +1571,9 @@
     body.innerHTML = "";
     var benefit = info.plusDishCap > 0 ? "tot " + info.plusDishCap + " nieuwe gerechten per maand" : "onbeperkt nieuwe gerechten";
     var line = function (t, id) { var d = plusEl("div", t, id, "acc-sub"); body.appendChild(d); return d; };
+    var cmp = plusEl("button", "Bekijk wat Gratis en Plus verschillen", "plusCompareLink", "am-link");
+    cmp.onclick = function () { goto("plans"); };
+    body.appendChild(cmp);
     if (!info.isAccount) {
       line("Balanza Plus is voor gebruikers met een account: " + benefit + (info.freeDishCap > 0 ? " in plaats van " + info.freeDishCap : "") + ". Maak eerst een account aan.", "plusAnonText");
       accButton(body, "plusUpgradeBtn", "userplus", "Account aanmaken", function () { upgradeState.error = null; goto("upgrade"); });
@@ -2953,7 +2998,7 @@
     main.appendChild(quotaHint);
     var quotaUpsell = document.createElement("button");
     quotaUpsell.className = "ghost-btn"; quotaUpsell.id = "quotaUpsell"; quotaUpsell.style.display = "none"; quotaUpsell.textContent = "Meer gerechten met Plus";
-    quotaUpsell.onclick = function () { goto("account"); };
+    quotaUpsell.onclick = function () { goto("plans"); };
     main.appendChild(quotaUpsell);
     goBtn.onclick = function () {
       if (!moduleOn("images")) { goto("weeks"); generateMeals(false); return; }   // foto's staan uit: niet vragen
@@ -3317,6 +3362,64 @@
     { title: "Bewaar je gegevens met een account", body: "Zonder account staan je gerechten en planning alleen op dit apparaat. Kies in het menu (je avatar rechtsboven) \u201cAccount aanmaken\u201d om ze te bewaren en op elk apparaat te gebruiken; wat je al hebt gaat mee. Onder Instellingen kun je ook je wachtwoord of e-mailadres wijzigen, je gegevens downloaden en het account verwijderen." },
     { title: "Begin opnieuw", body: "Via je avatar rechtsboven (het accountmenu) kies je \u201cReset app \u2014 begin opnieuw\u201d: dit wist al je opgeslagen gerechten, voorkeuren en planning in \u00e9\u00e9n keer, mocht je helemaal fris willen beginnen." }
   ];
+
+  function renderPlans() {
+    if (!billingOn()) { goto(window.authToken || !window.authRequired ? "account" : "weeks"); return; }
+    var app = document.getElementById("app");
+    app.innerHTML = "";
+    app.appendChild(renderTopbar("Abonnement vergelijken", true, function () { goto(window.authToken || !window.authRequired ? "account" : "weeks"); }));
+    var main = document.createElement("main");
+    if (billingInfo && !billingInfo.enabled) { goto(window.authToken || !window.authRequired ? "account" : "weeks"); return; }   // uitgezet terwijl je hier keek
+    var info = billingInfo;
+    var eyebrow = document.createElement("div"); eyebrow.className = "eyebrow"; eyebrow.textContent = "Gratis of Plus";
+    main.appendChild(eyebrow);
+    var intro = document.createElement("p"); intro.style.margin = "0"; intro.style.fontSize = "15px"; intro.style.lineHeight = "1.7"; intro.style.color = "var(--muted)";
+    var plusCap = info && info.plusDishCap != null ? info.plusDishCap : null, freeCap = info && info.freeDishCap != null ? info.freeDishCap : null;
+    intro.textContent = "Iedereen kan Balanza gratis gebruiken. Met Plus laat je meer nieuwe gerechten per maand maken door de AI. Je opgeslagen gerechten, planning, boodschappenlijst en delen blijven in beide gevallen hetzelfde.";
+    main.appendChild(intro);
+    var curLabel = currentPlanLabel();
+    var rows = [
+      ["Nieuwe gerechten per maand", freeCap != null ? (freeCap > 0 ? freeCap : "onbeperkt") : "\u2014", plusCap != null ? (plusCap > 0 ? plusCap : "onbeperkt") : "\u2014"],
+      ["Planning, boodschappenlijst en delen", true, true],
+      ["Prepdag en week automatisch invullen", true, true],
+      ["Gerechten met foto's", true, true],
+      ["Meldingen als je gerechten klaar zijn", true, true],
+      ["Prijs", "Gratis", info ? (fmtEur(info.plans.month.cents) + " / maand of " + fmtEur(info.plans.year.cents) + " / jaar") : "\u2014"]
+    ];
+    var table = document.createElement("table"); table.className = "plan-table";
+    var thead = document.createElement("thead");
+    var headRow = document.createElement("tr");
+    headRow.appendChild(document.createElement("th"));
+    var thFree = document.createElement("th"); thFree.className = "center"; thFree.textContent = "Gratis" + (curLabel === "Gratis" ? " (nu)" : "");
+    var thPlus = document.createElement("th"); thPlus.className = "center"; thPlus.textContent = "Plus" + (curLabel === "Plus" ? " (nu)" : "");
+    headRow.appendChild(thFree); headRow.appendChild(thPlus); thead.appendChild(headRow); table.appendChild(thead);
+    var tbody = document.createElement("tbody");
+    rows.forEach(function (r) {
+      var tr = document.createElement("tr");
+      var th = document.createElement("td"); th.textContent = r[0]; tr.appendChild(th);
+      [r[1], r[2]].forEach(function (v, i) {
+        var td = document.createElement("td"); td.className = "center" + (curLabel === (i === 0 ? "Gratis" : "Plus") ? " cur" : "");
+        if (v === true) { td.textContent = "\u2713"; td.classList.add("yes"); }
+        else if (v === false) { td.textContent = "\u2014"; td.classList.add("no"); }
+        else td.textContent = String(v);
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    var tableCard = document.createElement("div"); tableCard.className = "acc-card"; tableCard.id = "plansTable"; tableCard.appendChild(table);
+    main.appendChild(tableCard);
+    if (!info) {
+      var loading = document.createElement("div"); loading.className = "acc-sub"; loading.id = "plansLoading"; loading.textContent = "Even geduld\u2026";
+      main.appendChild(loading);
+      refreshBilling().then(function () { if (state.view === "plans") render(); });
+    } else if (curLabel !== "Plus") {
+      var goPlus = document.createElement("button"); goPlus.className = "primary-btn"; goPlus.id = "plansGoBtn"; goPlus.textContent = info.isAccount ? "Word Plus" : "Account aanmaken om Plus te nemen";
+      goPlus.onclick = function () { if (info.isAccount) goto("account"); else { upgradeState.error = null; goto("upgrade"); } };
+      main.appendChild(goPlus);
+    }
+    app.appendChild(main);
+  }
 
   function renderGuide() {
     var app = document.getElementById("app");
@@ -7015,6 +7118,7 @@
       if (state.view === "weeks") renderWeeks();
       else if (state.view === "library") renderLibrary();
       else if (state.view === "guide") renderGuide();
+      else if (state.view === "plans") renderPlans();
       else if (state.view === "wizard") renderWizard();
       else if (state.view === "prefs") renderPrefs();
       else if (state.view === "plan") renderPlan();
@@ -7150,7 +7254,7 @@
       configLoaded = true;
       if (window.authToken || !window.authRequired) { initPersistence(); recoverPendingJobs(); syncPush(); }
       render();
-      if (window.appBilling && (window.authToken || !window.authRequired)) handleBillingReturn();
+      if (window.appBilling && (window.authToken || !window.authRequired)) { handleBillingReturn(); refreshBilling().then(render); }
     });
   }
 
