@@ -6,6 +6,7 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const { AsyncLocalStorage } = require("async_hooks");
 const { MongoClient } = require("mongodb");
 
 // ---------- Minimal .env loader (no dependency) ----------
@@ -37,6 +38,13 @@ const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6";
 const ANTHROPIC_BASE_URL = String(process.env.ANTHROPIC_BASE_URL || "https://api.anthropic.com").replace(/\/+$/, "");   // alleen aanpassen voor een proxy of bij testen
 const DAILY_GENERATE_CAP = parseInt(process.env.DAILY_GENERATE_CAP || "300", 10);
 const PER_IP_HOURLY_CAP = parseInt(process.env.PER_IP_HOURLY_CAP || "20", 10);
+// Nieuwe gerechten per gebruiker per maand. 0 = onbeperkt (standaard, dus er verandert niets tot je dit instelt).
+const MONTHLY_DISH_CAP = parseInt(process.env.MONTHLY_DISH_CAP || "0", 10);
+// Prijs per miljoen tokens in USD (Anthropic rekent in dollars af). Standaard de prijs van Claude Sonnet 4.6; pas aan bij een ander model.
+const PRICE_IN_PER_M = Number(process.env.PRICE_IN_PER_M) >= 0 && process.env.PRICE_IN_PER_M ? Number(process.env.PRICE_IN_PER_M) : 3;
+const PRICE_OUT_PER_M = Number(process.env.PRICE_OUT_PER_M) >= 0 && process.env.PRICE_OUT_PER_M ? Number(process.env.PRICE_OUT_PER_M) : 15;
+const TIPS_PRICE_IN_PER_M = process.env.TIPS_PRICE_IN_PER_M ? Number(process.env.TIPS_PRICE_IN_PER_M) : PRICE_IN_PER_M;
+const TIPS_PRICE_OUT_PER_M = process.env.TIPS_PRICE_OUT_PER_M ? Number(process.env.TIPS_PRICE_OUT_PER_M) : PRICE_OUT_PER_M;
 // Tips voor de wachtcarrousel: eigen limieten, zodat ze de generatielimieten niet opeten.
 const TIPS_PER_IP_HOURLY = parseInt(process.env.TIPS_PER_IP_HOURLY || "40", 10);
 const DAILY_TIPS_CAP = parseInt(process.env.DAILY_TIPS_CAP || "500", 10);
@@ -151,6 +159,7 @@ var MODULE_DEFS = [
 var MAINTENANCE_OFF_MODULES = ["generate", "prices", "tips", "sharing", "bring", "registration"];
 var LIMIT_DEFS = [
   { key: "dailyGenerateCap", label: "Generaties per dag (totaal)", def: DAILY_GENERATE_CAP, min: 0, max: 100000 },
+  { key: "monthlyDishCap", label: "Nieuwe gerechten per gebruiker per maand (0 = onbeperkt)", def: MONTHLY_DISH_CAP, min: 0, max: 100000 },
   { key: "perIpHourlyCap", label: "Generaties per uur per IP-adres", def: PER_IP_HOURLY_CAP, min: 0, max: 10000 },
   { key: "dailyTipsCap", label: "Tip-verzoeken per dag (totaal)", def: DAILY_TIPS_CAP, min: 0, max: 100000 },
   { key: "tipsPerIpHourly", label: "Tip-verzoeken per uur per IP-adres", def: TIPS_PER_IP_HOURLY, min: 0, max: 10000 }
@@ -175,10 +184,13 @@ function normalizeSettings(raw) {
   });
   var m = raw.maintenance && typeof raw.maintenance === "object" ? raw.maintenance : {};
   var a = raw.announcement && typeof raw.announcement === "object" ? raw.announcement : {};
+  var b = raw.billing && typeof raw.billing === "object" ? raw.billing : {};
+  function intIn(v, min, max, def) { return typeof v === "number" && isFinite(v) && Math.floor(v) === v && v >= min && v <= max ? v : def; }
   return {
     authRequired: raw.authRequired === true,
     modules: modules,
     limits: limits,
+    billing: { enabled: b.enabled === true, plusMonthlyCents: intIn(b.plusMonthlyCents, 100, 99900, 399), plusYearlyCents: intIn(b.plusYearlyCents, 100, 999900, 3499), plusDishCap: intIn(b.plusDishCap, 0, 100000, 150), termsUrl: cleanTermsUrl(b.termsUrl) },
     maintenance: { enabled: m.enabled === true, message: cleanText(m.message, 300) },
     announcement: { enabled: a.enabled === true, message: cleanText(a.message, 300), level: a.level === "warning" ? "warning" : "info" }
   };
@@ -208,7 +220,7 @@ function getSettings() {
 function mergeSettings(cur, patch) {
   var next = JSON.parse(JSON.stringify(cur));
   if (typeof patch.authRequired === "boolean") next.authRequired = patch.authRequired;
-  ["modules", "limits", "maintenance", "announcement"].forEach(function (k) {
+  ["modules", "limits", "maintenance", "announcement", "billing"].forEach(function (k) {
     if (patch[k]) Object.keys(patch[k]).forEach(function (kk) { next[k][kk] = patch[k][kk]; });
   });
   return next;
@@ -251,6 +263,25 @@ function validateSettingsPatch(body) {
         return { error: def.label + " moet een geheel getal zijn tussen " + def.min + " en " + def.max + "." };
       }
       patch.limits[lk] = v; n++;
+    }
+  }
+  if (body.billing !== undefined) {
+    var bl = body.billing;
+    if (!bl || typeof bl !== "object" || Array.isArray(bl)) return { error: "billing moet een object zijn." };
+    patch.billing = {};
+    var BL = { plusMonthlyCents: [100, 99900, "De maandprijs"], plusYearlyCents: [100, 999900, "De jaarprijs"], plusDishCap: [0, 100000, "De Plus-limiet"] };
+    for (var bk of Object.keys(bl)) {
+      if (bk === "enabled") { if (typeof bl.enabled !== "boolean") return { error: "billing.enabled moet true of false zijn." }; patch.billing.enabled = bl.enabled; n++; }
+      else if (BL[bk]) {
+        var bv = bl[bk];
+        if (typeof bv !== "number" || !isFinite(bv) || Math.floor(bv) !== bv || bv < BL[bk][0] || bv > BL[bk][1]) return { error: BL[bk][2] + " moet een geheel getal zijn tussen " + BL[bk][0] + " en " + BL[bk][1] + (bk === "plusDishCap" ? " (0 = onbeperkt)." : " (in centen).") };
+        patch.billing[bk] = bv; n++;
+      } else if (bk === "termsUrl") {
+        if (typeof bl.termsUrl !== "string") return { error: "De link naar de voorwaarden moet tekst zijn." };
+        var tu = cleanTermsUrl(bl.termsUrl);
+        if (bl.termsUrl.trim() !== "" && !tu) return { error: "De link naar de voorwaarden moet met https:// beginnen." };
+        patch.billing.termsUrl = tu; n++;
+      } else return { error: "Onbekende betaalinstelling: " + bk + "." };
     }
   }
   if (body.maintenance !== undefined) {
@@ -940,6 +971,7 @@ function callAnthropicOnce(prompt, model, maxTokens) {
     }
     return apiRes.json();
   }).then(function (data) {
+    recordCallUsage(model, data);   // de tokens zijn verbruikt, ook als het antwoord daarna onbruikbaar blijkt
     var textBlock = (data.content || []).filter(function (b) { return b.type === "text"; })[0];
     if (!textBlock) throw new Error("Geen tekst in antwoord van model");
     try {
@@ -987,8 +1019,8 @@ function handleGenerate(req, res) {
   var ip = clientIp(req);
   var startTime = Date.now();
   var uidForLog = null;
-  function log(action, ok, status, error) {
-    logRequest({ ts: new Date().toISOString(), type: "generate", action: action, durationMs: Date.now() - startTime, ok: ok, status: status, error: error || undefined, ip: ip, uid: uidForLog || undefined });
+  function log(action, ok, status, error, meter) {
+    logRequest(Object.assign({ ts: new Date().toISOString(), type: "generate", action: action, durationMs: Date.now() - startTime, ok: ok, status: status, error: error || undefined, ip: ip, uid: uidForLog || undefined }, meter ? meterFields(meter.usage, meter.dishes) : {}));
   }
   if (!checkIpRateLimit(ip)) {
     log("onbekend", false, 429, "Rate limit (IP)");
@@ -1029,17 +1061,30 @@ function handleGenerate(req, res) {
           return sendJSON(res, 503, moduleOffBody("prices", settings));
         }
 
-        if (body && body.async === true) return startGenerateJob({ uid: uidForLog, body: body, action: action, host: req.headers.host, log: log, res: res });
-        return runGenerateAction(body).then(function (parsed) {
-          incrementUsageToday();
-          log(action, true, 200);
-          sendJSON(res, 200, { result: parsed });
-        }).catch(function (err) {
-          var status = err && err.isBadRequest ? 400 : 502;
-          var code = err && err.isBadRequest ? "bad_request" : "error";
-          var message = err && err.isBadRequest ? "Ongeldig verzoek." : "Genereren mislukt: " + err.message;
-          log(action, false, status, err.message);
-          sendJSON(res, status, { code: code, message: message });
+        var isAsync = !!(body && body.async === true);
+        return (DISH_ACTIONS[action] ? quotaState(uidForLog) : Promise.resolve(null)).then(function (q) {
+          if (quotaBlocked(q, isAsync ? runningJobCount(uidForLog) : 0)) {
+            log(action, false, 429, "Maandlimiet nieuwe gerechten bereikt (" + q.used + "/" + q.cap + ")");
+            return sendJSON(res, 429, quotaBody(q));
+          }
+          if (isAsync) return startGenerateJob({ uid: uidForLog, body: body, action: action, host: req.headers.host, log: log, res: res });
+          var usage = newUsage();
+          return usageCtx.run(usage, function () { return runGenerateAction(body); }).then(function (parsed) {
+            var dishes = dishesInResult(action, parsed);
+            incrementUsageToday();
+            return recordAccounting(uidForLog, action, usage, dishes, true).then(function () {   // eerst vastleggen, dan antwoorden: een direct volgend verzoek ziet dan de juiste stand
+              log(action, true, 200, undefined, { usage: usage, dishes: dishes });
+              sendJSON(res, 200, { result: parsed });
+            });
+          }).catch(function (err) {
+            var status = err && err.isBadRequest ? 400 : 502;
+            var code = err && err.isBadRequest ? "bad_request" : "error";
+            var message = err && err.isBadRequest ? "Ongeldig verzoek." : "Genereren mislukt: " + err.message;
+            return recordAccounting(uidForLog, action, usage, 0, false).then(function () {
+              log(action, false, status, err.message, { usage: usage, dishes: 0 });
+              sendJSON(res, status, { code: code, message: message });
+            });
+          });
         });
       }).catch(function () {
         log("onbekend", false, 400, "Ongeldige aanvraag");
@@ -1111,10 +1156,10 @@ function countWeeks(v) { return v && Array.isArray(v.list) ? v.list.length : (Ar
 // Wat er onder een anoniem ID staat (zonder iets te wijzigen).
 function readAnonData(anon) {
   return Promise.all(UPGRADE_SUBPATHS.map(function (s) { return dbGetDoc("data/users/" + anon + "/" + s); }).concat([
-    dbGetDoc("data/users/" + anon + "/meta"), dbGetDoc("adminMeta/" + anon), dbGetDoc("listsIndex/" + anon), dbGetDoc("push/" + anon)
+    dbGetDoc("data/users/" + anon + "/meta"), dbGetDoc("adminMeta/" + anon), dbGetDoc("listsIndex/" + anon), dbGetDoc("push/" + anon), dbGetDoc("quota/" + anon)
   ])).then(function (r) {
     var tokens = r[5].exists && r[5].value && Array.isArray(r[5].value.tokens) ? r[5].value.tokens : [];
-    return { prefs: r[0], dishes: r[1], plannedWeeks: r[2], meta: r[3], adminMeta: r[4], tokens: tokens, push: r[6] };
+    return { prefs: r[0], dishes: r[1], plannedWeeks: r[2], meta: r[3], adminMeta: r[4], tokens: tokens, push: r[6], quota: r[7] };
   });
 }
 function anonSummary(d) {
@@ -1127,6 +1172,7 @@ function copyAnonData(anon, uid, d, email, resume) {
   UPGRADE_SUBPATHS.forEach(function (s) { if (d[s].exists) writes.push(dbSetDoc("data/users/" + uid + "/" + s, d[s].value)); });
   if (d.adminMeta.exists) writes.push(dbSetDoc("adminMeta/" + uid, d.adminMeta.value));
   if (d.push && d.push.exists) writes.push(dbSetDoc("push/" + uid, d.push.value));
+  if (d.quota && d.quota.exists) writes.push(dbSetDoc("quota/" + uid, d.quota.value));
   var m = d.meta.exists && d.meta.value ? d.meta.value : {};
   // Bij een herhaalde aanvraag (bron al opgeruimd) laten we het bestaande "laatst gezien" met rust.
   if (d.meta.exists || !resume) writes.push(dbSetDoc("data/users/" + uid + "/meta", { lastIp: m.lastIp || null, lastSeenAt: m.lastSeenAt || new Date().toISOString(), email: email }));
@@ -1147,13 +1193,13 @@ function copyAnonData(anon, uid, d, email, resume) {
   return Promise.all(writes).then(function () { return listWork; });
 }
 function removeCopies(uid, tokens, anon) {
-  var paths = UPGRADE_SUBPATHS.map(function (s) { return "data/users/" + uid + "/" + s; }).concat(["data/users/" + uid + "/meta", "adminMeta/" + uid, "listsIndex/" + uid, "push/" + uid]);
+  var paths = UPGRADE_SUBPATHS.map(function (s) { return "data/users/" + uid + "/" + s; }).concat(["data/users/" + uid + "/meta", "adminMeta/" + uid, "listsIndex/" + uid, "push/" + uid, "quota/" + uid]);
   return Promise.all(paths.map(dbDeleteDoc).concat((tokens || []).map(function (t) {
     return dbGetDoc("lists/" + t).then(function (r) { return r.exists && r.value ? dbSetDoc("lists/" + t, Object.assign({}, r.value, { ownerUid: anon })) : null; });
   }))).catch(function () {});
 }
 function cleanupAnon(anon) {
-  var paths = UPGRADE_SUBPATHS.map(function (s) { return "data/users/" + anon + "/" + s; }).concat(["data/users/" + anon + "/meta", "adminMeta/" + anon, "listsIndex/" + anon, "push/" + anon]);
+  var paths = UPGRADE_SUBPATHS.map(function (s) { return "data/users/" + anon + "/" + s; }).concat(["data/users/" + anon + "/meta", "adminMeta/" + anon, "listsIndex/" + anon, "push/" + anon, "quota/" + anon]);
   return Promise.all(paths.map(dbDeleteDoc)).then(function () {
     return updateBlocked(function (b) { delete b.uids[anon]; delete b.invalidBefore[anon]; });
   }).then(function () { invalidateSummaries(); });
@@ -1370,6 +1416,399 @@ function handleAccountDelete(req, res) {
   });
 }
 
+// ---------- Verbruik: tokens, kosten en de maandlimiet ----------
+// Elke AI-aanroep telt de tokens (en dus de kosten) op in een teller die bij het verzoek hoort. Zo tellen ook de
+// herhaalpogingen mee (een gerecht dat de Balans-score mist wordt tot 3 keer gemaakt) en aanroepen die mislukten.
+var usageCtx = new AsyncLocalStorage();
+function newUsage() { return { calls: 0, inTok: 0, outTok: 0, costUsd: 0 }; }
+function recordCallUsage(model, data) {
+  var u = usageCtx.getStore();
+  if (!u) return;
+  var tin = data && data.usage && Number(data.usage.input_tokens) || 0, tout = data && data.usage && Number(data.usage.output_tokens) || 0;
+  var tips = model && model === TIPS_MODEL && TIPS_MODEL !== ANTHROPIC_MODEL;
+  u.calls++; u.inTok += tin; u.outTok += tout;
+  u.costUsd += tin / 1e6 * (tips ? TIPS_PRICE_IN_PER_M : PRICE_IN_PER_M) + tout / 1e6 * (tips ? TIPS_PRICE_OUT_PER_M : PRICE_OUT_PER_M);
+}
+function round6(n) { return Math.round(n * 1e6) / 1e6; }
+// Acties die nieuwe gerechten opleveren en dus van de maandlimiet afgaan.
+var DISH_ACTIONS = { generate: true, background: true, variation: true };
+function dishesInResult(action, parsed) {
+  if (!DISH_ACTIONS[action]) return 0;
+  if (action === "variation") return 1;
+  var arr = Array.isArray(parsed) ? parsed : (parsed && typeof parsed === "object" ? Object.keys(parsed).map(function (k) { return parsed[k]; }).filter(Array.isArray)[0] : null);
+  return arr ? arr.length : 0;
+}
+function meterFields(usage, dishes) {
+  if (!usage) return {};
+  var o = { tokensIn: usage.inTok, tokensOut: usage.outTok, aiCalls: usage.calls, costUsd: round6(usage.costUsd) };
+  if (dishes) o.dishes = dishes;
+  return o;
+}
+function monthKey() { return todayKey().slice(0, 7); }
+function nextMonthStart() { var d = new Date(); return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1)).toISOString().slice(0, 10); }
+function zeroQuota() { return { month: monthKey(), dishes: 0, calls: 0, tokensIn: 0, tokensOut: 0, costUsd: 0 }; }
+function getQuotaDoc(uid) {
+  return dbGetDoc("quota/" + uid).then(function (r) {
+    var v = r.exists && r.value && r.value.month === monthKey() ? r.value : null;
+    return v ? Object.assign(zeroQuota(), v) : zeroQuota();
+  });
+}
+var acctChain = Promise.resolve();   // schrijft één voor één, zodat gelijktijdige opdrachten elkaars teller niet overschrijven
+// Legt het verbruik van één verzoek vast: per gebruiker (voor de maandlimiet) en per dag en actie (voor de beheerconsole).
+function recordAccounting(uid, action, usage, dishes, ok) {
+  if (!usage || !usage.calls) return Promise.resolve();
+  acctChain = acctChain.then(function () {
+    var day = "tokenUsage/" + todayKey();
+    return Promise.all([uid ? getQuotaDoc(uid) : null, dbGetDoc(day)]).then(function (r) {
+      var writes = [];
+      if (uid) {
+        var q = r[0];
+        q.dishes += dishes || 0; q.calls += usage.calls; q.tokensIn += usage.inTok; q.tokensOut += usage.outTok; q.costUsd = round6(q.costUsd + usage.costUsd);
+        writes.push(dbSetDoc("quota/" + uid, q));
+      }
+      var d = r[1].exists && r[1].value && r[1].value.byAction ? r[1].value : { byAction: {} };
+      var a = d.byAction[action] = d.byAction[action] || { n: 0, fail: 0, dishes: 0, calls: 0, tokensIn: 0, tokensOut: 0, costUsd: 0 };
+      a.n++; if (!ok) a.fail++; a.dishes += dishes || 0; a.calls += usage.calls; a.tokensIn += usage.inTok; a.tokensOut += usage.outTok; a.costUsd = round6(a.costUsd + usage.costUsd);
+      writes.push(dbSetDoc(day, d));
+      return Promise.all(writes);
+    });
+  }).catch(function () {});
+  return acctChain;
+}
+// De eigen limiet van een gebruiker (beheer) gaat voor de algemene. Leeg = de algemene. 0 = onbeperkt.
+// Volgorde: eigen limiet (beheer) > Plus (als abonnementen aan staan en het Plus is) > de algemene limiet.
+function effectiveDishCap(uid) {
+  return Promise.all([dbGetDoc("adminMeta/" + uid), getSettings(), dbGetDoc("billing/" + uid)]).then(function (r) {
+    var own = r[0].exists && r[0].value && typeof r[0].value.dishCap === "number" ? r[0].value.dishCap : null;
+    var s = r[1], plus = billingLive(s) && plusActiveDoc(r[2].exists ? r[2].value : null, Date.now());
+    return { cap: own !== null ? own : plus ? s.billing.plusDishCap : s.limits.monthlyDishCap, own: own, plan: plus ? "plus" : "free" };
+  });
+}
+function quotaState(uid) {
+  return Promise.all([getQuotaDoc(uid), effectiveDishCap(uid)]).then(function (r) {
+    return { used: r[0].dishes, cap: r[1].cap, own: r[1].own, plan: r[1].plan, doc: r[0] };
+  }).catch(function () { return null; });   // opslag haperde: liever doorlaten dan iedereen blokkeren
+}
+function quotaBlocked(q, extraRunning) {
+  return !!q && q.cap > 0 && q.used + (extraRunning || 0) >= q.cap;
+}
+function quotaBody(q) {
+  return { code: "quota_exceeded", message: "Je hebt deze maand al " + q.used + " van je " + q.cap + " nieuwe gerechten gemaakt. Vanaf " + nextMonthStart().split("-").reverse().join("-") + " kun je weer nieuwe gerechten laten maken. Je opgeslagen gerechten, planning en boodschappenlijst blijven gewoon werken.", used: q.used, cap: q.cap, resetsOn: nextMonthStart() };
+}
+function handleUsageGet(req, res) {
+  return resolveUser(req).then(function (user) {
+    if (!user) return sendUnauthorized(res);
+    return quotaState(user.uid).then(function (q) {
+      q = q || { used: 0, cap: 0 };
+      sendJSON(res, 200, { plan: q.plan || "free", month: monthKey(), dishes: q.used, cap: q.cap, unlimited: !(q.cap > 0), remaining: q.cap > 0 ? Math.max(0, q.cap - q.used) : null, resetsOn: nextMonthStart() });
+    });
+  }).catch(function () { sendJSON(res, 500, { code: "error", message: "Verbruik ophalen mislukt." }); });
+}
+
+// ---------- Betalingen (Mollie): Balanza Plus ----------
+// Voorbereid en standaard UIT. Alles werkt pas als (1) MOLLIE_API_KEY en PUBLIC_BASE_URL in de omgeving staan en (2) de
+// beheerder abonnementen aanzet. Betalen gaat via een eerste betaling (iDEAL of kaart) die ook een machtiging voor de
+// vervolgbetalingen aanmaakt; daarna maakt Mollie het abonnement aan. Een webhook van Mollie bevat alleen een betaal-id zonder
+// handtekening: de enige juiste controle is de betaling zelf bij Mollie ophalen en alleen dát te geloven.
+var MOLLIE_API_KEY = process.env.MOLLIE_API_KEY || "";
+var MOLLIE_BASE_URL = String(process.env.MOLLIE_BASE_URL || "https://api.mollie.com").replace(/\/+$/, "");
+var MOLLIE_BASE_OVERRIDDEN = !!process.env.MOLLIE_BASE_URL;   // alleen voor tests
+var PUBLIC_BASE_URL = String(process.env.PUBLIC_BASE_URL || "").replace(/\/+$/, "");
+var BILLING_GRACE_MS = 5 * 24 * 60 * 60 * 1000;   // een incasso kan een paar dagen duren; zo valt een betaalde klant er niet tussenuit
+var UID_RE = /^u_[0-9a-f]{24}$/;
+var billingLimiter = makeHourlyLimiter(60), webhookLimiter = makeHourlyLimiter(600);
+var billingLocks = new Map();
+
+function cleanTermsUrl(v) {
+  var s = String(v == null ? "" : v).trim().slice(0, 300);
+  if (!s) return "";
+  try { var u = new URL(s); return u.protocol === "https:" && !u.username && !u.password ? u.toString() : ""; } catch (e) { return ""; }
+}
+function billingEnvInfo() {
+  var baseOk = /^https:\/\/[A-Za-z0-9.-]+(:\d+)?$/.test(PUBLIC_BASE_URL);
+  return { keyPresent: !!MOLLIE_API_KEY, mode: /^live_/.test(MOLLIE_API_KEY) ? "live" : /^test_/.test(MOLLIE_API_KEY) ? "test" : null, baseUrl: PUBLIC_BASE_URL || null, baseOk: baseOk, webhookUrl: baseOk ? PUBLIC_BASE_URL + "/api/billing/webhook" : null };
+}
+function billingReady() { var e = billingEnvInfo(); return e.keyPresent && e.baseOk; }
+function billingLive(s) { return !!(s && s.billing && s.billing.enabled) && billingReady(); }
+// Is dit een Plus-gebruiker? Een cadeau (beheer) of een lopend/afgelopen-maar-nog-betaald abonnement.
+function plusActiveDoc(doc, now) {
+  if (!doc) return false;
+  if (doc.grantUntil > now) return true;
+  return ["active", "canceled", "past_due"].indexOf(doc.status) > -1 && doc.currentPeriodEnd + BILLING_GRACE_MS > now;
+}
+function emptyBilling(uid) { return { uid: uid, status: "none", pendingPayments: [], seen: [], history: [] }; }
+function getBillingDoc(uid) {
+  return dbGetDoc("billing/" + uid).then(function (r) { return r.exists && r.value ? Object.assign(emptyBilling(uid), r.value) : emptyBilling(uid); });
+}
+// Per gebruiker één wijziging tegelijk (een webhook en een tik van de gebruiker kunnen tegelijk binnenkomen).
+function withBillingLock(uid, fn) {
+  var prev = billingLocks.get(uid) || Promise.resolve();
+  var next = prev.then(fn, fn);
+  var tail = next.then(function () {}, function () {});
+  billingLocks.set(uid, tail);
+  tail.then(function () { if (billingLocks.get(uid) === tail) billingLocks.delete(uid); });
+  return next;
+}
+function moneyStr(cents) { return (cents / 100).toFixed(2); }
+function addMonthsUTC(ms, n) {
+  var d = new Date(ms), day = d.getUTCDate();
+  d.setUTCDate(1); d.setUTCMonth(d.getUTCMonth() + n);
+  var last = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
+  d.setUTCDate(Math.min(day, last));
+  return d.getTime();
+}
+function isoDate(ms) { return new Date(ms).toISOString().slice(0, 10); }
+function intervalMonths(iv) { return iv === "year" ? 12 : 1; }
+function mollie(method, path, body) {
+  var ctrl = new AbortController(), t = setTimeout(function () { ctrl.abort(); }, 15000);
+  return fetch(MOLLIE_BASE_URL + "/v2" + path, {
+    method: method, signal: ctrl.signal, body: body ? JSON.stringify(body) : undefined,
+    headers: { "Authorization": "Bearer " + MOLLIE_API_KEY, "Content-Type": "application/json", "User-Agent": "Balanza" }
+  }).then(function (res) {
+    clearTimeout(t);
+    return res.text().then(function (txt) {
+      var j = null; try { j = txt ? JSON.parse(txt) : null; } catch (e) {}
+      if (!res.ok) { var err = new Error("Mollie " + res.status + ": " + ((j && (j.detail || j.title)) || txt.slice(0, 200))); err.status = res.status; throw err; }
+      return j;
+    });
+  }, function (e) { clearTimeout(t); throw e; });
+}
+function pushHistory(doc, entry) { doc.history = (doc.history || []).concat([Object.assign({ ts: new Date().toISOString() }, entry)]).slice(-20); }
+function createSubscription(doc, startDate) {
+  return mollie("POST", "/customers/" + doc.customerId + "/subscriptions", {
+    amount: { currency: "EUR", value: moneyStr(doc.priceCents) }, interval: doc.interval === "year" ? "12 months" : "1 month", startDate: startDate,
+    description: "Balanza Plus (" + (doc.interval === "year" ? "jaarlijks" : "maandelijks") + ")", webhookUrl: PUBLIC_BASE_URL + "/api/billing/webhook",
+    metadata: { uid: doc.uid }, mandateId: doc.mandateId || undefined
+  }).then(function (sub) { doc.subscriptionId = sub.id; delete doc.subscriptionError; }, function (e) { doc.subscriptionError = String(e.message).slice(0, 200); });
+}
+function cancelMollieSubscription(doc) {
+  if (!doc.subscriptionId || !doc.customerId) return Promise.resolve();
+  return mollie("DELETE", "/customers/" + doc.customerId + "/subscriptions/" + doc.subscriptionId).then(function () {}, function (e) { if (e.status === 404 || e.status === 422) return; throw e; });   // bestond al niet meer of was al opgezegd
+}
+// Verwerkt één betaling zoals Mollie die nú rapporteert (nooit wat de aanvrager beweert).
+// Van welke gebruiker is deze betaling? Via de Mollie-klant (die leggen wij zelf vast); vervolgbetalingen van een abonnement
+// hoeven geen eigen metadata mee te krijgen, dus daar rekenen we niet op. De metadata is alleen een terugval.
+function resolveBillingUid(p) {
+  if (!p || typeof p.id !== "string") return Promise.resolve(null);
+  var meta = p.metadata && typeof p.metadata.uid === "string" && UID_RE.test(p.metadata.uid) ? p.metadata.uid : null;
+  if (typeof p.customerId !== "string" || !/^cst_[A-Za-z0-9]{3,40}$/.test(p.customerId)) return Promise.resolve(null);
+  return dbGetDoc("billingCustomer/" + p.customerId).then(function (r) {
+    return r.exists && r.value && UID_RE.test(r.value.uid) ? r.value.uid : meta;
+  });
+}
+function processMolliePayment(p) {
+  return resolveBillingUid(p).then(function (uid) { return uid ? processForUser(uid, p) : undefined; });
+}
+function processForUser(uid, p) {
+  return withBillingLock(uid, function () {
+    return getBillingDoc(uid).then(function (doc) {
+      if (!doc.customerId || doc.customerId !== p.customerId) return;   // niet één van onze klanten
+      var value = p.amount && parseFloat(p.amount.value) || 0, cents = Math.round(value * 100);
+      var charged = p.amountChargedBack && parseFloat(p.amountChargedBack.value) > 0;
+      var refundedFull = value > 0 && p.amountRefunded && parseFloat(p.amountRefunded.value) >= value;
+      var evKey = p.id + ":" + p.status + (charged ? ":cb" : "") + (refundedFull ? ":rf" : "");
+      if (doc.seen.indexOf(evKey) > -1) return;   // dezelfde melding nog eens (Mollie herhaalt): niets dubbel doen
+      var step = Promise.resolve();
+      if (charged || refundedFull) {   // geld teruggehaald of volledig terugbetaald: toegang stopt en het abonnement ook
+        step = cancelMollieSubscription(doc).catch(function (e) { doc.subscriptionError = String(e.message).slice(0, 200); }).then(function () {
+          doc.status = "ended"; doc.currentPeriodEnd = Date.now(); doc.endReason = charged ? "chargeback" : "refund";   // een cadeau van de beheerder blijft staan
+          pushHistory(doc, { id: p.id, status: charged ? "chargeback" : "refund", cents: cents });
+        });
+      } else if (p.sequenceType === "first") {
+        var pend = doc.pendingPayments.filter(function (x) { return x.id === p.id; })[0];
+        if (!pend) return;   // een betaling die wij niet zelf hebben gestart
+        if (p.status === "paid") {
+          if (pend.cents !== cents) { pushHistory(doc, { id: p.id, status: "bedrag-klopt-niet", cents: cents }); }
+          else {
+            doc.pendingPayments = doc.pendingPayments.filter(function (x) { return x.id !== p.id; });
+            var now = Date.now(), base = doc.currentPeriodEnd > now ? doc.currentPeriodEnd : now, startDate = isoDate(addMonthsUTC(base, intervalMonths(pend.interval)));
+            doc.interval = pend.interval; doc.priceCents = pend.cents; doc.status = "active"; doc.startedAt = doc.startedAt || new Date().toISOString();
+            doc.currentPeriodEnd = Date.parse(startDate + "T00:00:00Z"); doc.mandateId = p.mandateId || doc.mandateId; delete doc.endReason;
+            pushHistory(doc, { id: p.id, status: "betaald", cents: cents });
+            step = createSubscription(doc, startDate);
+          }
+        } else if (["failed", "canceled", "expired"].indexOf(p.status) > -1) {
+          doc.pendingPayments = doc.pendingPayments.filter(function (x) { return x.id !== p.id; });
+          if (doc.status === "pending" && !doc.pendingPayments.length) doc.status = "none";
+          pushHistory(doc, { id: p.id, status: p.status, cents: cents });
+        } else return;   // nog open: wachten op de volgende melding
+      } else {   // een vervolgbetaling van het abonnement
+        if (!doc.subscriptionId || p.subscriptionId !== doc.subscriptionId) return;
+        if (p.status === "paid") {
+          doc.currentPeriodEnd = addMonthsUTC(doc.currentPeriodEnd || Date.now(), intervalMonths(doc.interval));
+          if (doc.status === "past_due") doc.status = "active";
+          pushHistory(doc, { id: p.id, status: "betaald", cents: cents });
+        } else if (["failed", "canceled", "expired"].indexOf(p.status) > -1) {
+          if (doc.status === "active") doc.status = "past_due";
+          pushHistory(doc, { id: p.id, status: p.status, cents: cents });
+        } else return;
+      }
+      return step.then(function () {
+        doc.seen = doc.seen.concat([evKey]).slice(-40);
+        return dbSetDoc("billing/" + uid, doc);
+      });
+    });
+  });
+}
+// Betaald maar het abonnement kon niet worden aangemaakt (Mollie even niet bereikbaar): opnieuw proberen.
+function healSubscription(uid) {
+  return withBillingLock(uid, function () {
+    return getBillingDoc(uid).then(function (doc) {
+      if (doc.status !== "active" || doc.subscriptionId || !doc.subscriptionError || !doc.customerId) return;
+      return createSubscription(doc, isoDate(doc.currentPeriodEnd)).then(function () { return dbSetDoc("billing/" + uid, doc); });
+    });
+  });
+}
+function refreshBilling(uid) {
+  return getBillingDoc(uid).then(function (doc) {
+    return Promise.all(doc.pendingPayments.slice(-3).map(function (x) {
+      return mollie("GET", "/payments/" + x.id).then(processMolliePayment).catch(function () {});
+    }));
+  }).then(function () { return healSubscription(uid); }).then(function () { return getBillingDoc(uid); });
+}
+function billingPublic(doc, s, user) {
+  var now = Date.now(), b = s.billing, active = plusActiveDoc(doc, now);
+  return {
+    enabled: true, isAccount: !!(user && user.email),
+    plans: { month: { cents: b.plusMonthlyCents }, year: { cents: b.plusYearlyCents } },
+    plusDishCap: b.plusDishCap, freeDishCap: s.limits.monthlyDishCap, termsUrl: b.termsUrl || null,
+    plusActive: active, subscription: doc.status, interval: doc.interval || null,
+    periodEnd: doc.currentPeriodEnd ? new Date(doc.currentPeriodEnd).toISOString() : null,
+    renews: doc.status === "active", cancelAtPeriodEnd: doc.status === "canceled", pastDue: doc.status === "past_due",
+    pending: doc.pendingPayments.length > 0, granted: doc.grantUntil > now, grantUntil: doc.grantUntil > now ? new Date(doc.grantUntil).toISOString() : null
+  };
+}
+// Gedeelde voorbereiding van de eindpunten voor gebruikers: begrenzing, aan/uit, sessie, account.
+function billingContext(req, res, needAccount) {
+  if (!billingLimiter(clientIp(req))) { sendJSON(res, 429, { code: "rate_limited", message: "Te veel verzoeken. Probeer het later opnieuw." }); return Promise.resolve(null); }
+  return getSettings().then(function (s) {
+    if (!billingLive(s)) { sendJSON(res, 404, { code: "billing_off", message: "Abonnementen zijn niet beschikbaar." }); return null; }
+    return resolveUser(req).then(function (user) {
+      if (!user) { sendUnauthorized(res); return null; }
+      if (needAccount && !user.email) { sendJSON(res, 403, { code: "account_required", message: "Maak eerst een account aan om Plus te nemen." }); return null; }
+      return { user: user, settings: s };
+    });
+  });
+}
+function handleBillingGet(req, res) {
+  if (!billingLimiter(clientIp(req))) return sendJSON(res, 429, { code: "rate_limited", message: "Te veel verzoeken. Probeer het later opnieuw." });
+  return getSettings().then(function (s) {
+    if (!billingLive(s)) return sendJSON(res, 200, { enabled: false });   // niets te zien voor gebruikers zolang het uit staat
+    return resolveUser(req).then(function (user) {
+      if (!user) return sendUnauthorized(res);
+      var step = user.email ? refreshBilling(user.uid) : Promise.resolve(emptyBilling(user.uid));
+      return step.then(function (doc) { sendJSON(res, 200, billingPublic(doc, s, user)); });
+    });
+  }).catch(function (err) { sendJSON(res, 500, { code: "error", message: "Abonnement ophalen mislukt." }); });
+}
+function handleBillingCheckout(req, res) {
+  return billingContext(req, res, true).then(function (ctx) {
+    if (!ctx) return;
+    return readBody(req).then(function (body) {
+      var interval = body && body.interval;
+      if (interval !== "month" && interval !== "year") return sendJSON(res, 400, { code: "bad_request", message: "Kies maandelijks of jaarlijks." });
+      if (!body || body.acceptTerms !== true) return sendJSON(res, 400, { code: "terms_required", message: "Ga akkoord met de voorwaarden om door te gaan." });
+      var uid = ctx.user.uid, b = ctx.settings.billing, cents = interval === "year" ? b.plusYearlyCents : b.plusMonthlyCents;
+      return withBillingLock(uid, function () {
+        return getBillingDoc(uid).then(function (doc) {
+          if (doc.status === "active" && plusActiveDoc(doc, Date.now())) { sendJSON(res, 409, { code: "already_active", message: "Je hebt al een actief abonnement." }); return; }
+          var cust = doc.customerId ? Promise.resolve(doc.customerId) : mollie("POST", "/customers", { email: ctx.user.email, metadata: { uid: uid } }).then(function (c) {
+            return dbSetDoc("billingCustomer/" + c.id, { uid: uid }).then(function () { return c.id; });   // zodat elke betaling van deze klant terug te vinden is
+          });
+          return cust.then(function (customerId) {
+            doc.customerId = customerId;
+            return mollie("POST", "/payments", {
+              amount: { currency: "EUR", value: moneyStr(cents) }, customerId: customerId, sequenceType: "first", locale: "nl_NL",
+              description: "Balanza Plus (" + (interval === "year" ? "jaarlijks" : "maandelijks") + ")",
+              redirectUrl: PUBLIC_BASE_URL + "/?billing=return", cancelUrl: PUBLIC_BASE_URL + "/?billing=cancel", webhookUrl: PUBLIC_BASE_URL + "/api/billing/webhook",
+              metadata: { uid: uid, kind: "first", interval: interval }
+            });
+          }).then(function (pay) {
+            var href = pay && pay._links && pay._links.checkout && pay._links.checkout.href;
+            var okHref = typeof href === "string" && (/^https:\/\/([A-Za-z0-9-]+\.)*mollie\.com\//.test(href) || (MOLLIE_BASE_OVERRIDDEN && /^https?:\/\//.test(href)));
+            if (!okHref || !pay.id) throw new Error("Mollie gaf geen bruikbare betaallink terug.");
+            doc.pendingPayments = doc.pendingPayments.slice(-4).concat([{ id: pay.id, interval: interval, cents: cents, at: new Date().toISOString() }]);
+            if (doc.status === "none" || doc.status === "ended") doc.status = "pending";
+            doc.consent = { at: new Date().toISOString(), interval: interval, cents: cents, termsUrl: b.termsUrl || null, ip: clientIp(req) };
+            pushHistory(doc, { id: pay.id, status: "gestart", cents: cents });
+            return dbSetDoc("billing/" + uid, doc).then(function () { sendJSON(res, 200, { checkoutUrl: href }); });
+          });
+        });
+      });
+    });
+  }).catch(function (err) {
+    sendJSON(res, 502, { code: "error", message: "Betalen starten mislukt: " + (err && err.message ? err.message : "onbekende fout") });
+  });
+}
+// Opzeggen: geen nieuwe incasso's meer; Plus blijft tot het einde van de betaalde periode.
+function cancelSubscriptionFor(uid) {
+  return withBillingLock(uid, function () {
+    return getBillingDoc(uid).then(function (doc) {
+      if (["active", "past_due"].indexOf(doc.status) === -1) return { doc: doc, changed: false };
+      return cancelMollieSubscription(doc).then(function () {
+        doc.status = "canceled"; doc.canceledAt = new Date().toISOString();
+        pushHistory(doc, { status: "opgezegd" });
+        return dbSetDoc("billing/" + uid, doc).then(function () { return { doc: doc, changed: true }; });
+      });
+    });
+  });
+}
+function handleBillingCancel(req, res) {
+  return billingContext(req, res, true).then(function (ctx) {
+    if (!ctx) return;
+    return cancelSubscriptionFor(ctx.user.uid).then(function (r) {
+      if (!r.changed) return sendJSON(res, 409, { code: "nothing_to_cancel", message: "Er is geen lopend abonnement om op te zeggen." });
+      sendJSON(res, 200, billingPublic(r.doc, ctx.settings, ctx.user));
+    });
+  }).catch(function (err) { sendJSON(res, 502, { code: "error", message: "Opzeggen mislukt: " + (err && err.message ? err.message : "onbekende fout") + ". Er is niets gewijzigd, probeer het later opnieuw." }); });
+}
+function readRawText(req) {
+  return new Promise(function (resolve, reject) {
+    var chunks = [], total = 0;
+    req.on("data", function (c) { total += c.length; if (total > 8192) { reject(new Error("body too large")); req.destroy(); return; } chunks.push(c); });
+    req.on("end", function () { resolve(Buffer.concat(chunks).toString("utf8")); });
+    req.on("error", reject);
+  });
+}
+// De webhook: Mollie stuurt id=tr_… . Altijd 200 behalve als wij het niet konden verwerken (dan probeert Mollie het opnieuw).
+function handleBillingWebhook(req, res) {
+  if (!webhookLimiter(clientIp(req))) return sendJSON(res, 429, { code: "rate_limited", message: "Te veel verzoeken." });
+  return readRawText(req).then(function (raw) {
+    var id = "";
+    try { id = /json/i.test(req.headers["content-type"] || "") ? String((JSON.parse(raw) || {}).id || "") : String(new URLSearchParams(raw).get("id") || ""); } catch (e) {}
+    if (!/^tr_[A-Za-z0-9]{4,40}$/.test(id) || !billingReady()) return sendJSON(res, 200, { ok: true });   // rommel of niet ingesteld: bevestigen, niets doen
+    return mollie("GET", "/payments/" + id).then(processMolliePayment).then(function () { sendJSON(res, 200, { ok: true }); }, function (e) {
+      if (e && e.status === 404) return sendJSON(res, 200, { ok: true });   // onbekend bij Mollie: niet opnieuw laten proberen
+      logEvent("billing", "webhook", false, 500, { error: String(e && e.message).slice(0, 200) });
+      sendJSON(res, 500, { code: "error", message: "Verwerken mislukt, probeer het opnieuw." });
+    });
+  }).catch(function () { sendJSON(res, 200, { ok: true }); });
+}
+// Een account verwijderen mag het abonnement niet laten doorlopen: eerst opzeggen, lukt dat niet dan niet verwijderen.
+function cancelBillingForDeletion(uid) {
+  return getBillingDoc(uid).then(function (doc) {
+    return cancelBillingForDeletionInner(doc).then(function () { return doc.customerId ? dbDeleteDoc("billingCustomer/" + doc.customerId) : undefined; });
+  });
+}
+function cancelBillingForDeletionInner(doc) {
+  return Promise.resolve(doc).then(function (doc) {
+    if (!doc.subscriptionId || ["canceled", "ended"].indexOf(doc.status) > -1) return;
+    if (!billingReady()) throw new Error("Het abonnement kon niet worden opgezegd omdat betalingen niet zijn ingesteld. Het account is niet verwijderd.");
+    return cancelMollieSubscription(doc).catch(function (e) {
+      throw new Error("Het abonnement kon niet worden opgezegd bij de betaalprovider (" + String(e.message).slice(0, 120) + "). Het account is niet verwijderd; probeer het later opnieuw.");
+    });
+  });
+}
+function adminBillingView(doc) {
+  var now = Date.now();
+  return {
+    status: doc.status, plusActive: plusActiveDoc(doc, now), interval: doc.interval || null, priceCents: doc.priceCents || null,
+    periodEnd: doc.currentPeriodEnd ? new Date(doc.currentPeriodEnd).toISOString() : null, grantUntil: doc.grantUntil > now ? new Date(doc.grantUntil).toISOString() : null,
+    customerId: doc.customerId || null, subscriptionId: doc.subscriptionId || null, subscriptionError: doc.subscriptionError || null, endReason: doc.endReason || null,
+    pending: doc.pendingPayments.length, history: (doc.history || []).slice(-10).reverse()
+  };
+}
+
 // ---------- Opdrachten op de achtergrond ----------
 // Genereren duurt soms minuten. Een telefoon pauzeert of sluit een pagina die niet meer op de voorgrond staat, en dan
 // ging het lopende verzoek (en het resultaat) verloren. Daarom start de app een "opdracht": de server werkt zelfstandig
@@ -1435,19 +1874,24 @@ function startGenerateJob(o) {
   }, JOB_MAX_RUN_MS);
   if (timer.unref) timer.unref();
   var payload = Object.assign({}, body); delete payload.async; delete payload.requestId;
-  var run;
-  try { run = runGenerateAction(payload); } catch (e) { run = Promise.reject(e); }
+  var run, usage = newUsage();
+  try { run = usageCtx.run(usage, function () { return runGenerateAction(payload); }); } catch (e) { run = Promise.reject(e); }
   run.then(function (parsed) {
     clearTimeout(timer);
+    var dishes = dishesInResult(action, parsed);
     incrementUsageToday();   // de AI-kosten zijn gemaakt, ook als het resultaat te laat komt
-    if (job.status !== "running") return;
-    o.log(action, true, 200);
-    finishJob(job, null, parsed);
+    return recordAccounting(uid, action, usage, dishes, true).then(function () {
+      if (job.status !== "running") return;
+      o.log(action, true, 200, undefined, { usage: usage, dishes: dishes });
+      finishJob(job, null, parsed);
+    });
   }, function (err) {
     clearTimeout(timer);
-    if (job.status !== "running") return;
-    o.log(action, false, err && err.isBadRequest ? 400 : 502, err && err.message);
-    finishJob(job, err);
+    return recordAccounting(uid, action, usage, 0, false).then(function () {
+      if (job.status !== "running") return;
+      o.log(action, false, err && err.isBadRequest ? 400 : 502, err && err.message, { usage: usage, dishes: 0 });
+      finishJob(job, err);
+    });
   });
 }
 function handleGenerateJobGet(req, res, id) {
@@ -1883,11 +2327,14 @@ function handleTips(req, res) {
     if (!ANTHROPIC_API_KEY) return sendJSON(res, 500, { code: "not_configured", message: "Server heeft nog geen ANTHROPIC_API_KEY ingesteld." });
     return readBody(req).then(function (body) {
       var prompt = buildTipsPrompt((body && body.params) || {});
-      return callAnthropicOnce(prompt, TIPS_MODEL, 2000).then(function (parsed) {
-        var tips = cleanTipList(parsed);
-        if (!tips.length) throw new Error("Geen bruikbare tips ontvangen");
-        sendJSON(res, 200, { result: tips });
-      });
+      var usage = newUsage();
+      return usageCtx.run(usage, function () { return callAnthropicOnce(prompt, TIPS_MODEL, 2000); }).then(function (parsed) {
+        return recordAccounting(user.uid, "tips", usage, 0, true).then(function () {
+          var tips = cleanTipList(parsed);
+          if (!tips.length) throw new Error("Geen bruikbare tips ontvangen");
+          sendJSON(res, 200, { result: tips });
+        });
+      }, function (e) { return recordAccounting(user.uid, "tips", usage, 0, false).then(function () { throw e; }); });
     });
   }).catch(function (err) {
     logRequest({ ts: new Date().toISOString(), type: "tips", action: "tips", durationMs: Date.now() - startTime, ok: false, status: 502, error: err.message, ip: ip });
@@ -3039,10 +3486,15 @@ function createResetLink(req, email) {
     return { token: token, link: "https://" + req.headers.host + "/?reset=" + token };
   });
 }
-function writeAdminNote(uid, note) {
-  var text = cleanNote(note, 500);
-  return text ? dbSetDoc("adminMeta/" + uid, { note: text }) : dbDeleteDoc("adminMeta/" + uid);
+function writeAdminMeta(uid, change) {
+  return dbGetDoc("adminMeta/" + uid).then(function (r) {
+    var meta = Object.assign({}, r.exists && r.value ? r.value : {}, change);
+    if (!meta.note) delete meta.note;
+    if (typeof meta.dishCap !== "number") delete meta.dishCap;
+    return Object.keys(meta).length ? dbSetDoc("adminMeta/" + uid, meta) : dbDeleteDoc("adminMeta/" + uid);
+  });
 }
+function writeAdminNote(uid, note) { return writeAdminMeta(uid, { note: cleanNote(note, 500) }); }
 function mergePrefs(uid, clean) {
   return dbGetDoc("data/users/" + uid + "/prefs").then(function (r) {
     var cur = r.exists && r.value && typeof r.value === "object" ? r.value : {};
@@ -3116,6 +3568,12 @@ function handleAdminUserUpdate(req, res, uid) {
       if (newPassword.length < 8 || newPassword.length > 200) throw HttpError(400, "bad_request", "Wachtwoord moet tussen 8 en 200 tekens zijn.");
     }
     if (body.note !== undefined && typeof body.note !== "string") throw HttpError(400, "bad_request", "De notitie moet tekst zijn.");
+    var newDishCap;   // undefined = niet wijzigen, null = eigen limiet weghalen (algemene geldt weer)
+    if (body.dishCap !== undefined) {
+      if (body.dishCap === null || body.dishCap === "") newDishCap = null;
+      else if (typeof body.dishCap === "number" && isFinite(body.dishCap) && Math.floor(body.dishCap) === body.dishCap && body.dishCap >= 0 && body.dishCap <= 100000) newDishCap = body.dishCap;
+      else throw HttpError(400, "bad_request", "De limiet moet een geheel getal van 0 tot 100000 zijn (0 = onbeperkt), of leeg voor de algemene limiet.");
+    }
 
     var step = Promise.resolve();
     if (newEmail || newPassword) {
@@ -3142,7 +3600,10 @@ function handleAdminUserUpdate(req, res, uid) {
     return step.then(function () {
       var jobs = [];
       if (Object.keys(pr.clean).length) { jobs.push(mergePrefs(uid, pr.clean)); Object.keys(pr.clean).forEach(function (k) { changes.push("voorkeur: " + k); }); }
-      if (body.note !== undefined && cleanNote(body.note, 500) !== user.note) { jobs.push(writeAdminNote(uid, body.note)); changes.push("notitie"); }
+      var metaChange = {};   // notitie en eigen limiet staan in hetzelfde document: één schrijfactie, anders overschrijven ze elkaar
+      if (body.note !== undefined && cleanNote(body.note, 500) !== user.note) { metaChange.note = cleanNote(body.note, 500); changes.push("notitie"); }
+      if (newDishCap !== undefined) { metaChange.dishCap = newDishCap; changes.push("eigen limiet nieuwe gerechten"); }
+      if (Object.keys(metaChange).length) jobs.push(writeAdminMeta(uid, metaChange));
       return Promise.all(jobs);
     }).then(function () {
       invalidateSummaries();
@@ -3173,10 +3634,13 @@ function handleAdminUserDetail(req, res, uid) {
   return needSummary(uid).then(function (user) {
     return Promise.all([
       dbGetDoc("data/users/" + uid + "/prefs"), dbGetDoc("data/users/" + uid + "/dishes"), dbGetDoc("data/users/" + uid + "/plannedWeeks"),
-      listsOfUser(uid), getRecentLogs(LOG_CAP), withLocation(user)
+      listsOfUser(uid), getRecentLogs(LOG_CAP), withLocation(user), quotaState(uid), getBillingDoc(uid)
     ]).then(function (r) {
       var logs = r[4].filter(function (l) { return l.uid === uid; }).slice(0, 50).map(cleanLogRow);
+      var q = r[6];
       sendJSON(res, 200, {
+        billing: adminBillingView(r[7]),
+        quota: q ? { plan: q.plan, month: q.doc.month, dishes: q.doc.dishes, calls: q.doc.calls, tokensIn: q.doc.tokensIn, tokensOut: q.doc.tokensOut, costUsd: q.doc.costUsd, cap: q.cap, own: q.own } : null,
         user: r[5],
         prefs: r[0].exists ? r[0].value : null,
         dishes: r[1].exists ? r[1].value : null,
@@ -3190,11 +3654,11 @@ function handleAdminUserDetail(req, res, uid) {
 
 function deleteUserEverywhere(user) {
   var uid = user.uid;
-  return dbGetDoc("listsIndex/" + uid).then(function (r) {
+  return cancelBillingForDeletion(uid).then(function () { return dbGetDoc("listsIndex/" + uid); }).then(function (r) {
     var tokens = r.exists && r.value && Array.isArray(r.value.tokens) ? r.value.tokens : [];
     return Promise.all(tokens.map(function (t) { return dbDeleteDoc("lists/" + t); }));
   }).then(function () {
-    var paths = ["data/users/" + uid + "/prefs", "data/users/" + uid + "/dishes", "data/users/" + uid + "/plannedWeeks", "data/users/" + uid + "/meta", "listsIndex/" + uid, "adminMeta/" + uid, "push/" + uid];
+    var paths = ["data/users/" + uid + "/prefs", "data/users/" + uid + "/dishes", "data/users/" + uid + "/plannedWeeks", "data/users/" + uid + "/meta", "listsIndex/" + uid, "adminMeta/" + uid, "push/" + uid, "quota/" + uid, "billing/" + uid];
     if (user.email) paths.push("auth/users/" + user.email);
     return Promise.all(paths.map(dbDeleteDoc));
   }).then(function () {
@@ -3211,6 +3675,36 @@ function handleAdminUserAction(req, res, uid, action) {
   return needSummary(uid).then(function (user) {
     return requireBody(req).then(function (body) {
       switch (action) {
+        case "billing-grant": {
+          var days = body.days;
+          if (typeof days !== "number" || !isFinite(days) || Math.floor(days) !== days || days < 1 || days > 3650) throw HttpError(400, "bad_request", "Vul een aantal dagen in tussen 1 en 3650.");
+          return withBillingLock(uid, function () {
+            return getBillingDoc(uid).then(function (doc) {
+              doc.grantUntil = Math.max(Date.now(), doc.grantUntil || 0) + days * DAY_MS;
+              pushHistory(doc, { status: "cadeau +" + days + " dagen" });
+              return dbSetDoc("billing/" + uid, doc).then(function () { return doc; });
+            });
+          }).then(function (doc) {
+            invalidateSummaries(); auditLog(req, "gebruiker.plus-geven", uid, { email: user.email, dagen: days, tot: new Date(doc.grantUntil).toISOString() });
+            sendJSON(res, 200, { billing: adminBillingView(doc) });
+          });
+        }
+        case "billing-revoke":
+          return withBillingLock(uid, function () {
+            return getBillingDoc(uid).then(function (doc) {
+              delete doc.grantUntil; pushHistory(doc, { status: "cadeau ingetrokken" });
+              return dbSetDoc("billing/" + uid, doc).then(function () { return doc; });
+            });
+          }).then(function (doc) {
+            invalidateSummaries(); auditLog(req, "gebruiker.plus-intrekken", uid, { email: user.email });
+            sendJSON(res, 200, { billing: adminBillingView(doc) });
+          });
+        case "billing-cancel":
+          return cancelSubscriptionFor(uid).then(function (r) {
+            if (!r.changed) throw HttpError(409, "conflict", "Deze gebruiker heeft geen lopend abonnement om op te zeggen.");
+            auditLog(req, "gebruiker.abonnement-opzeggen", uid, { email: user.email });
+            sendJSON(res, 200, { billing: adminBillingView(r.doc) });
+          });
         case "disable":
           return updateBlocked(function (b) { b.uids[uid] = { at: new Date().toISOString(), reason: cleanText(body.reason, 200) }; }).then(function () {
             invalidateSummaries(); auditLog(req, "gebruiker.blokkeren", uid, { email: user.email, reden: cleanText(body.reason, 200) || undefined });
@@ -3388,8 +3882,36 @@ function handleAdminAudit(req, res, url) {
 }
 
 // ---- statistieken en systeemstatus ----
+// Tokens en kosten uit de dagtellers: vandaag, deze maand, laatste 30 dagen, en wat een gerecht gemiddeld kost.
+function aiCostSummary(docs, days14) {
+  function zero() { return { n: 0, fail: 0, dishes: 0, calls: 0, tokensIn: 0, tokensOut: 0, costUsd: 0 }; }
+  function add(t, x) { Object.keys(t).forEach(function (k) { t[k] += x[k] || 0; }); }
+  var today = todayKey(), month = monthKey(), from30 = new Date(Date.now() - 29 * DAY_MS).toISOString().slice(0, 10);
+  var out = { today: zero(), month: zero(), last30: zero(), byAction30: {}, perDay: {}, perDish: null, callsPerRequest: {}, prices: { inPerM: PRICE_IN_PER_M, outPerM: PRICE_OUT_PER_M }, monthKey: month };
+  var dishCost = 0, dishCount = 0, gen = zero();
+  (docs || []).forEach(function (d) {
+    var day = d.path.slice("tokenUsage/".length), by = d.value && d.value.byAction || {};
+    Object.keys(by).forEach(function (a) {
+      if (day === today) add(out.today, by[a]);
+      if (day.slice(0, 7) === month) add(out.month, by[a]);
+      if (day >= from30) {
+        add(out.last30, by[a]);
+        out.byAction30[a] = out.byAction30[a] || zero(); add(out.byAction30[a], by[a]);
+        if (DISH_ACTIONS[a]) { dishCost += by[a].costUsd || 0; dishCount += by[a].dishes || 0; }
+      }
+      out.perDay[day] = round6((out.perDay[day] || 0) + (by[a].costUsd || 0));
+    });
+  });
+  ["generate", "background", "variation", "prep", "price", "tips"].forEach(function (a) {
+    var x = out.byAction30[a]; if (x && x.n) out.callsPerRequest[a] = Math.round(x.calls / x.n * 100) / 100;
+  });
+  out.perDish = dishCount ? round6(dishCost / dishCount) : null;
+  out.perDay = days14.map(function (d) { return { day: d, costUsd: out.perDay[d] || 0 }; });
+  [out.today, out.month, out.last30].forEach(function (t) { t.costUsd = round6(t.costUsd); });
+  return out;
+}
 function handleAdminStats(req, res) {
-  return Promise.all([loadUserSummaries(), getUsageToday(), getUsageHistory(14), getRecentLogs(LOG_CAP), dbListDocs("lists/"), getSettings()]).then(function (r) {
+  return Promise.all([loadUserSummaries(), getUsageToday(), getUsageHistory(14), getRecentLogs(LOG_CAP), dbListDocs("lists/"), getSettings(), dbListDocs("tokenUsage/")]).then(function (r) {
     var users = r[0], logs = r[3].map(cleanLogRow), now = Date.now();
     function within(ts, days) { var t = ts ? Date.parse(ts) : NaN; return isFinite(t) && now - t <= days * DAY_MS; }
     var accounts = users.filter(function (u) { return u.type === "account"; });
@@ -3413,6 +3935,7 @@ function handleAdminStats(req, res) {
         active24h: users.filter(function (u) { return within(u.lastSeenAt, 1); }).length, active7d: users.filter(function (u) { return within(u.lastSeenAt, 7); }).length, active30d: users.filter(function (u) { return within(u.lastSeenAt, 30); }).length
       },
       usage: { today: r[1], cap: liveLimits.dailyGenerateCap, history: r[2] },
+      ai: aiCostSummary(r[6], days),
       requests: {
         today: todays.length, errorsToday: todays.filter(function (l) { return !l.ok; }).length,
         errorRate: todays.length ? Math.round(todays.filter(function (l) { return !l.ok; }).length / todays.length * 1000) / 10 : 0,
@@ -3437,9 +3960,9 @@ var SERVER_STARTED_AT = new Date().toISOString();
 function handleAdminSystem(req, res) {
   var t0 = Date.now();
   return dbGetDoc("settings/app").then(function () { return { ok: true, ms: Date.now() - t0 }; }, function (e) { return { ok: false, ms: Date.now() - t0, error: e.message }; }).then(function (storage) {
-    return getVapidKeys().then(function (k) { return { storage: storage, push: { ok: true, source: k.source } }; }, function (e) { return { storage: storage, push: { ok: false, error: e.message } }; });
+    return Promise.all([getVapidKeys().then(function (k) { return { ok: true, source: k.source }; }, function (e) { return { ok: false, error: e.message }; }), getSettings()]).then(function (r) { return { storage: storage, push: r[0], settings: r[1] }; });
   }).then(function (both) {
-    var storage = both.storage, pushInfo = both.push;
+    var storage = both.storage, pushInfo = both.push, billingEnabled = both.settings.billing.enabled, benv = billingEnvInfo();
     var mem = process.memoryUsage();
     var checks = [
       { key: "storage", label: "Opslag", ok: storage.ok && mongoConnected, detail: (mongoConnected ? "MongoDB (blijvend)" : "Lokaal bestand: data gaat verloren bij een herstart of nieuwe deploy") + (storage.ok ? ", antwoordtijd " + storage.ms + " ms" : ", FOUT: " + storage.error) },
@@ -3448,6 +3971,7 @@ function handleAdminSystem(req, res) {
       { key: "sessionSecret", label: "Sessiegeheim (SESSION_SECRET)", ok: !!process.env.SESSION_SECRET, detail: process.env.SESSION_SECRET ? "vast ingesteld" : "niet ingesteld: iedereen wordt uitgelogd bij een herstart" },
       { key: "unsplash", label: "Foto's (UNSPLASH_ACCESS_KEY)", ok: !!UNSPLASH_ACCESS_KEY, optional: true, detail: UNSPLASH_ACCESS_KEY ? "ingesteld" : "niet ingesteld: gerechten krijgen geen foto" },
       { key: "webPush", label: "Meldingen (Web Push)", ok: pushInfo.ok && (pushInfo.source === "env" || mongoConnected), optional: true, detail: !pushInfo.ok ? "niet beschikbaar: " + pushInfo.error : pushInfo.source === "env" ? "sleutels uit de omgeving (VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY)" : mongoConnected ? "sleutels bewaard in de database" : "sleutels staan alleen in het lokale bestand en verdwijnen bij een herstart: stel VAPID_PUBLIC_KEY en VAPID_PRIVATE_KEY in" },
+      { key: "billing", label: "Betalingen (Mollie)", ok: benv.keyPresent && benv.baseOk, optional: !billingEnabled, detail: !benv.keyPresent ? "MOLLIE_API_KEY staat niet ingesteld" + (billingEnabled ? "" : " (abonnementen staan uit)") : !benv.baseOk ? "PUBLIC_BASE_URL ontbreekt of is ongeldig (verwacht https://jouw-adres, zonder slash); Mollie heeft dat nodig voor de webhook" : (benv.mode === "live" ? "LIVE-sleutel" : benv.mode === "test" ? "testsleutel: er wordt niet echt afgeschreven" : "sleutel met een onbekend formaat") + " · webhook: " + benv.webhookUrl + (billingEnabled ? " · abonnementen staan aan" : " · abonnementen staan uit") },
       { key: "resend", label: "E-mail (RESEND_API_KEY)", ok: !!RESEND_API_KEY, optional: true, detail: RESEND_API_KEY ? "ingesteld" : "niet ingesteld: geen wachtwoord-vergeten-mails of uitnodigingen per e-mail" }
     ];
     sendJSON(res, 200, {
@@ -3464,13 +3988,13 @@ function handleAdminSystem(req, res) {
 
 // ---- instellingen ----
 function settingsPayload(s) {
-  return { settings: s, effectiveModules: effectiveModules(s), moduleDefs: MODULE_DEFS, limitDefs: LIMIT_DEFS, maintenanceOffModules: MAINTENANCE_OFF_MODULES,
+  return { billingEnv: billingEnvInfo(), settings: s, effectiveModules: effectiveModules(s), moduleDefs: MODULE_DEFS, limitDefs: LIMIT_DEFS, maintenanceOffModules: MAINTENANCE_OFF_MODULES,
     prefOptions: { goals: Object.keys(GOAL_TARGETS), diets: TIP_DIETS, mealTypes: PREF_MEALTYPES } };
 }
 function diffSettings(cur, next) {
   var out = [];
   if (cur.authRequired !== next.authRequired) out.push({ sleutel: "authRequired", van: cur.authRequired, naar: next.authRequired });
-  ["modules", "limits", "maintenance", "announcement"].forEach(function (k) {
+  ["modules", "limits", "maintenance", "announcement", "billing"].forEach(function (k) {
     Object.keys(next[k]).forEach(function (kk) { if (cur[k][kk] !== next[k][kk]) out.push({ sleutel: k + "." + kk, van: cur[k][kk], naar: next[k][kk] }); });
   });
   return out;
@@ -3482,6 +4006,13 @@ function handleAdminSettingsSet(req, res) {
     return getSettings().then(function (cur) {
       var merged = mergeSettings(cur, v.patch);
       if (merged.announcement.enabled && !merged.announcement.message) throw HttpError(400, "bad_request", "Vul een tekst in voor de mededeling voordat je hem aanzet.");
+      if (merged.billing.enabled && !cur.billing.enabled) {   // alleen bij het aanzetten: wat er nog ontbreekt
+        var env = billingEnvInfo();
+        if (!env.keyPresent) throw HttpError(400, "bad_request", "Zet eerst MOLLIE_API_KEY in de omgeving (Render → Environment) voordat je abonnementen aanzet.");
+        if (!env.baseOk) throw HttpError(400, "bad_request", "Zet eerst PUBLIC_BASE_URL in de omgeving, bijvoorbeeld https://jouw-app.onrender.com (zonder slash aan het eind). Mollie stuurt betalingen daarheen en gebruikers keren daar naar terug.");
+        if (env.mode === "live" && !merged.billing.termsUrl) throw HttpError(400, "bad_request", "Vul eerst de link naar je algemene voorwaarden in: bij echte betalingen moeten klanten die kunnen lezen.");
+        if (merged.billing.plusDishCap > 0 && merged.limits.monthlyDishCap > 0 && merged.billing.plusDishCap <= merged.limits.monthlyDishCap) throw HttpError(400, "bad_request", "De Plus-limiet moet hoger zijn dan de algemene limiet (" + merged.limits.monthlyDishCap + "), anders heeft Plus geen voordeel.");
+      }
       return updateSettings(v.patch).then(function (next) {
         var diff = diffSettings(cur, next);
         if (diff.length) auditLog(req, "instellingen.wijzigen", null, { wijzigingen: diff });
@@ -3596,6 +4127,7 @@ function handleConfig(req, res) {
       authRequired: s.authRequired,
       bringImportEndpoint: BRING_IMPORT_ENDPOINT,
       modules: effectiveModules(s),
+      billing: billingLive(s),
       maintenance: s.maintenance.enabled ? { enabled: true, message: s.maintenance.message || "De app is tijdelijk in onderhoud." } : { enabled: false },
       announcement: s.announcement.enabled && s.announcement.message ? { enabled: true, message: s.announcement.message, level: s.announcement.level } : { enabled: false }
     });
@@ -3623,6 +4155,11 @@ var server = http.createServer(function (req, res) {
   if (req.method === "POST" && url.pathname === "/api/generate") return handleGenerate(req, res);
   var jobMatch = req.method === "GET" ? url.pathname.match(/^\/api\/generate\/job\/([a-f0-9]{32})$/) : null;
   if (jobMatch) return handleGenerateJobGet(req, res, jobMatch[1]);
+  if (req.method === "GET" && url.pathname === "/api/usage") return handleUsageGet(req, res);
+  if (req.method === "GET" && url.pathname === "/api/billing") return handleBillingGet(req, res);
+  if (req.method === "POST" && url.pathname === "/api/billing/checkout") return handleBillingCheckout(req, res);
+  if (req.method === "POST" && url.pathname === "/api/billing/cancel") return handleBillingCancel(req, res);
+  if (req.method === "POST" && url.pathname === "/api/billing/webhook") return handleBillingWebhook(req, res);
   if (req.method === "GET" && url.pathname === "/api/push/key") return handlePushKey(req, res);
   if (req.method === "POST" && url.pathname === "/api/push/subscribe") return handlePushSubscribe(req, res);
   if (req.method === "POST" && url.pathname === "/api/push/unsubscribe") return handlePushUnsubscribe(req, res);

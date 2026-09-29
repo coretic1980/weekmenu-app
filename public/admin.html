@@ -245,6 +245,10 @@
     if (s < 86400 * 14) return Math.round(s / 86400) + " dagen geleden";
     return fmtDate(iso);
   }
+  function fmtEur(cents) { return "\u20ac" + (Number(cents) / 100).toFixed(2).replace(".", ","); }
+  function eurToCents(raw) { var m = /^\s*(\d{1,4})(?:[.,](\d{1,2}))?\s*$/.exec(String(raw)); return m ? Number(m[1]) * 100 + Number(((m[2] || "") + "00").slice(0, 2)) : null; }
+  function fmtUsd(n) { n = Number(n) || 0; return "$" + (n === 0 ? "0,00" : n < 0.1 ? n.toFixed(4).replace(/0$/, "") : n < 10 ? n.toFixed(3) : n.toFixed(2)).replace(".", ","); }
+  function fmtTok(n) { n = Number(n) || 0; return n >= 1e6 ? (n / 1e6).toFixed(2).replace(".", ",") + " mln" : n >= 1000 ? (n / 1000).toFixed(1).replace(".", ",") + "k" : String(n); }
   function fmtMs(ms) { if (ms === undefined || ms === null) return "—"; return ms >= 1000 ? (ms / 1000).toFixed(1).replace(".", ",") + " s" : ms + " ms"; }
   function fmtUptime(sec) {
     var d = Math.floor(sec / 86400), hh = Math.floor((sec % 86400) / 3600), m = Math.floor((sec % 3600) / 60);
@@ -516,12 +520,28 @@
       stat("Fouten vandaag", rq.errorsToday, "van " + plural(rq.today, "verzoek", "verzoeken") + " (" + String(rq.errorRate).replace(".", ",") + "%)", rq.errorsToday && rq.errorRate >= 25 ? "bad" : rq.errorsToday ? "warn" : ""),
       stat("Reactietijd", fmtMs(rq.avgDurationMs), "gemiddeld · 95%: " + fmtMs(rq.p95DurationMs)),
       stat("Inloggen vandaag", st.auth.loginsToday, st.auth.failedLoginsToday + " mislukt · " + st.auth.registrationsToday + " nieuw", st.auth.failedLoginsToday >= 10 ? "warn" : ""),
-      stat("Gedeelde lijsten", st.lists.active, st.lists.total - st.lists.active ? (st.lists.total - st.lists.active) + " verlopen" : "geen verlopen")));
+      stat("Gedeelde lijsten", st.lists.active, st.lists.total - st.lists.active ? (st.lists.total - st.lists.active) + " verlopen" : "geen verlopen"),
+      stat("AI-kosten deze maand", fmtUsd(st.ai.month.costUsd), fmtUsd(st.ai.today.costUsd) + " vandaag · " + (st.ai.perDish != null ? fmtUsd(st.ai.perDish) + " per gerecht" : "nog geen gerechten"))));
 
     var chart1 = card("AI-aanvragen per dag", barChart(rq.perDay.map(function (d) { return { label: fmtDay(d.day), values: [d.total - d.errors, d.errors] }; }), [{ name: "gelukt", cls: "bar-ok" }, { name: "fout", cls: "bar-err" }]),
       legend([["gelukt", "var(--accent)"], ["fout", "var(--bad)"]]), st.logCapped ? h("div", { class: "hint", text: "Het logboek bewaart de laatste " + sys.info.logCap.toLocaleString("nl-NL") + " regels; oudere dagen kunnen onvolledig zijn." }) : null);
     var chart2 = card("Generaties per dag (telling tegen de daglimiet)", barChart(us.history.map(function (d) { return { label: fmtDay(d.day), values: [d.count] }; }), [{ name: "generaties", cls: "bar-ok" }]));
     view.appendChild(h("div", { class: "two" }, chart1, chart2));
+
+    var ai = st.ai;
+    function aiRow(label, t) { return h("tr", {}, h("td", { text: label }), h("td", { class: "num", text: String(t.calls) }), h("td", { class: "num", text: fmtTok(t.tokensIn) }), h("td", { class: "num", text: fmtTok(t.tokensOut) }), h("td", { class: "num", text: fmtUsd(t.costUsd) })); }
+    var aiActs = Object.keys(ai.byAction30).sort(function (a, b) { return ai.byAction30[b].costUsd - ai.byAction30[a].costUsd; });
+    var costCard = card("AI-kosten en tokens",
+      table([th("Periode"), th("AI-aanroepen"), th("Tokens in"), th("Tokens uit"), th("Kosten")], [aiRow("Vandaag", ai.today), aiRow("Deze maand", ai.month), aiRow("Laatste 30 dagen", ai.last30)]),
+      h("dl", { class: "kv", id: "costFacts", style: { marginTop: "12px" } },
+        h("dt", { text: "Kosten per gerecht (gemiddeld, 30 dagen)" }), h("dd", { text: ai.perDish != null ? fmtUsd(ai.perDish) : "nog geen gerechten gemaakt" }),
+        h("dt", { text: "AI-aanroepen per generatie" }), h("dd", { text: ai.callsPerRequest.generate ? String(ai.callsPerRequest.generate).replace(".", ",") + " (meer dan 1 door meerdere maaltijdmomenten en herhaalpogingen)" : "—" }),
+        h("dt", { text: "Prijs die is aangenomen" }), h("dd", { text: "$" + ai.prices.inPerM + " in en $" + ai.prices.outPerM + " uit per miljoen tokens" })),
+      aiActs.length ? table([th("Actie (30 dagen)"), th("Verzoeken"), th("Gerechten"), th("Kosten")], aiActs.map(function (a) { var t = ai.byAction30[a]; return h("tr", {}, h("td", { text: a }), h("td", { class: "num", text: String(t.n) }), h("td", { class: "num", text: t.dishes ? String(t.dishes) : "—" }), h("td", { class: "num", text: fmtUsd(t.costUsd) })); })) : null,
+      h("div", { class: "hint", text: "Berekend uit het aantal tokens dat Anthropic per aanroep meldt, tegen de prijs hierboven (pas aan met PRICE_IN_PER_M en PRICE_OUT_PER_M). Het is een schatting: de factuur van Anthropic is leidend." }));
+    costCard.id = "costCard";
+    view.appendChild(costCard);
+    view.appendChild(card("AI-kosten per dag", barChart(ai.perDay.map(function (d) { return { label: fmtDay(d.day), values: [d.costUsd] }; }), [{ name: "kosten in dollars", cls: "bar-ok" }])));
 
     var acts = Object.keys(rq.byAction).sort(function (a, b) { return rq.byAction[b] - rq.byAction[a]; });
     var actCard = card("Vandaag per actie", acts.length ? h("dl", { class: "kv" }, acts.map(function (a) { return [h("dt", { text: a }), h("dd", { text: String(rq.byAction[a]) })]; })) : h("div", { class: "muted", text: "Nog geen verzoeken vandaag." }));
@@ -754,6 +774,65 @@
       h("div", { class: "form-grid" }, isAcc ? field("E-mailadres", emailIn) : null, field("Naam", nameIn)),
       field("Notitie (alleen voor beheerders)", noteIn), saveAcc));
 
+    // ---- abonnement ----
+    var bl = d.billing;
+    if (bl && isAcc) {
+      var stLabel = { none: "geen abonnement", pending: "betaling in behandeling", active: "actief (verlengt)", canceled: "opgezegd (loopt af)", past_due: "laatste betaling mislukt", ended: "beëindigd" };
+      var daysIn = h("input", { type: "number", id: "uGrantDays", min: 1, max: 3650, step: 1, placeholder: "Aantal dagen, bijvoorbeeld 30" });
+      var grant = btn("Plus cadeau geven", "", "grantPlusBtn", function () {
+        var n = Number(daysIn.value.trim());
+        if (daysIn.value.trim() === "" || !isFinite(n) || Math.floor(n) !== n || n < 1 || n > 3650) return toast("Vul een aantal dagen in tussen 1 en 3650.", "bad");
+        run(api(base + "/billing-grant", { method: "POST", body: { days: n } }), "Plus is voor " + n + " dagen toegevoegd.", function () { reload(); });
+      });
+      var actions = [grant];
+      if (bl.grantUntil) actions.push(btn("Cadeau intrekken", "ghost", "revokePlusBtn", function () {
+        confirmDialog({ title: "Cadeau intrekken", message: "De gebruiker heeft daarna geen Plus meer via dit cadeau.", confirmLabel: "Intrekken" }).then(function (ok) { if (ok) run(api(base + "/billing-revoke", { method: "POST", body: {} }), "Cadeau ingetrokken.", function () { reload(); }); });
+      }));
+      if (bl.status === "active" || bl.status === "past_due") actions.push(btn("Abonnement opzeggen", "ghost", "adminCancelSubBtn", function () {
+        confirmDialog({ title: "Abonnement opzeggen", message: "Er wordt niet meer afgeschreven. De gebruiker houdt Plus tot het einde van de betaalde periode. Terugbetalen doe je zelf in het Mollie-dashboard.", confirmLabel: "Opzeggen" }).then(function (ok) { if (ok) run(api(base + "/billing-cancel", { method: "POST", body: {} }), "Abonnement opgezegd.", function () { reload(); }); });
+      }));
+      view.appendChild(card("Abonnement",
+        h("dl", { class: "kv", id: "billingFacts" },
+          h("dt", { text: "Plus" }), h("dd", { text: bl.plusActive ? "ja" : "nee" }),
+          h("dt", { text: "Status" }), h("dd", { text: stLabel[bl.status] || bl.status }),
+          bl.interval ? [h("dt", { text: "Abonnement" }), h("dd", { text: (bl.interval === "year" ? "jaarlijks " : "maandelijks ") + fmtEur(bl.priceCents) })] : null,
+          bl.periodEnd ? [h("dt", { text: "Betaald tot" }), h("dd", { text: fmtDate(bl.periodEnd) })] : null,
+          bl.grantUntil ? [h("dt", { text: "Cadeau tot" }), h("dd", { text: fmtDate(bl.grantUntil) })] : null,
+          bl.endReason ? [h("dt", { text: "Beëindigd door" }), h("dd", { text: bl.endReason === "chargeback" ? "terugboeking" : "terugbetaling" })] : null,
+          bl.customerId ? [h("dt", { text: "Mollie-klant" }), h("dd", { text: bl.customerId })] : null,
+          bl.subscriptionId ? [h("dt", { text: "Mollie-abonnement" }), h("dd", { text: bl.subscriptionId })] : null,
+          bl.subscriptionError ? [h("dt", { text: "Let op" }), h("dd", { class: "err", text: "Betaald, maar het abonnement kon nog niet worden aangemaakt: " + bl.subscriptionError + ". De app probeert het opnieuw zodra de gebruiker hem opent." })] : null),
+        bl.history.length ? table([th("Wanneer"), th("Wat"), th("Bedrag")], bl.history.map(function (x) { return h("tr", {}, h("td", { class: "nowrap", text: relTime(x.ts) }), h("td", { text: x.status + (x.id ? " (" + x.id + ")" : "") }), h("td", { class: "num", text: x.cents ? fmtEur(x.cents) : "\u2014" })); })) : null,
+        h("div", { style: { height: "12px" } }),
+        field("Plus cadeau geven (dagen)", daysIn, "Handig voor testers en de eerste gebruikers. Het telt op bij wat er nog over is en werkt alleen als abonnementen aan staan."),
+        h("div", { class: "row", id: "billingActions" }, actions)));
+    }
+
+    // ---- verbruik deze maand en eigen limiet ----
+    var qt = d.quota;
+    if (qt) {
+      var capIn = h("input", { type: "number", id: "uDishCap", min: "0", max: "100000", step: "1", placeholder: "Leeg = de algemene limiet (0 = onbeperkt)" });
+      capIn.value = qt.own === null ? "" : String(qt.own);
+      var saveCap = btn("Limiet opslaan", "", "saveDishCapBtn", function () {
+        var raw = capIn.value.trim();
+        if (raw !== "" && (!/^\d+$/.test(raw) || Number(raw) > 100000)) return toast("Vul een geheel getal van 0 tot 100000 in, of laat het leeg.", "bad");
+        var next = raw === "" ? null : Number(raw);
+        if (next === qt.own) return toast("Er is niets gewijzigd.");
+        run(api(base, { method: "POST", body: { dishCap: next } }), next === null ? "Eigen limiet weggehaald: de algemene limiet geldt weer." : "Eigen limiet opgeslagen.", function () { reload(); });
+      });
+      view.appendChild(card("Verbruik deze maand",
+        h("dl", { class: "kv", id: "quotaFacts" },
+          h("dt", { text: "Nieuwe gerechten" }), h("dd", { text: qt.cap > 0 ? qt.dishes + " van " + qt.cap : qt.dishes + " (onbeperkt)" }),
+          h("dt", { text: "Geldende limiet" }), h("dd", { text: (qt.cap > 0 ? qt.cap + " per maand" : "onbeperkt") + (qt.own !== null ? " · eigen limiet" : " · algemene limiet") }),
+          h("dt", { text: "AI-aanroepen" }), h("dd", { text: String(qt.calls) }),
+          h("dt", { text: "Tokens" }), h("dd", { text: fmtTok(qt.tokensIn) + " in · " + fmtTok(qt.tokensOut) + " uit" }),
+          h("dt", { text: "Kosten" }), h("dd", { text: fmtUsd(qt.costUsd) })),
+        h("div", { style: { height: "12px" } }),
+        field("Eigen limiet per maand voor deze gebruiker", capIn),
+        saveCap,
+        h("div", { class: "hint", text: "Geldt naast de algemene limiet onder Instellingen en gaat daarvoor. Bijvoorbeeld 0 voor een gebruiker die onbeperkt mag, of een hoger getal voor een betalende gebruiker." })));
+    }
+
     // ---- wachtwoord ----
     if (isAcc) {
       var newPw = h("input", { type: "text", id: "uNewPw", placeholder: "Nieuw wachtwoord (minstens 8 tekens)", autocomplete: "off" });
@@ -881,8 +960,8 @@
   // =====================================================================================
   // Activiteit (logboek)
   // =====================================================================================
-  var TYPE_LABELS = { generate: "AI", tips: "Tips", auth: "Account", push: "Melding" };
-  var LOG_ACTION_LABELS = { login: "Inloggen", register: "Registreren", upgrade: "Anoniem omgezet naar account", "password-change": "Wachtwoord gewijzigd (door gebruiker)", notify: "Pushmelding verstuurd", "email-change": "E-mailadres gewijzigd (door gebruiker)", "logout-others": "Op andere apparaten uitgelogd", "self-delete": "Account zelf verwijderd", export: "Gegevens gedownload", "reset-request": "Reset aangevraagd", "reset-done": "Wachtwoord gereset" };
+  var TYPE_LABELS = { generate: "AI", tips: "Tips", auth: "Account", push: "Melding", billing: "Betaling" };
+  var LOG_ACTION_LABELS = { login: "Inloggen", register: "Registreren", upgrade: "Anoniem omgezet naar account", "password-change": "Wachtwoord gewijzigd (door gebruiker)", notify: "Pushmelding verstuurd", webhook: "Betaalmelding (Mollie)", "email-change": "E-mailadres gewijzigd (door gebruiker)", "logout-others": "Op andere apparaten uitgelogd", "self-delete": "Account zelf verwijderd", export: "Gegevens gedownload", "reset-request": "Reset aangevraagd", "reset-done": "Wachtwoord gereset" };
   function logRow(l, compact) {
     var who = null;
     if (!compact) {
@@ -896,7 +975,7 @@
       h("td", {}, l.ok ? badge("OK" + (l.status && l.status !== 200 ? " " + l.status : ""), "good") : badge("Fout " + (l.status || ""), "bad")),
       h("td", { class: "nowrap", text: l.durationMs != null ? fmtMs(l.durationMs) : "—" }),
       compact ? null : who, compact ? null : h("td", { class: "mono", text: l.ip || "—" }),
-      h("td", { class: l.ok ? "" : "err", text: l.error || (l.type === "push" && l.sent != null ? l.sent + " van " + (l.sent + (l.failed || 0)) + (l.sent + (l.failed || 0) === 1 ? " toestel" : " toestellen") + " bereikt" : "") }));
+      h("td", { class: l.ok ? "" : "err", text: (l.error ? l.error + (l.tokensIn != null ? " (" + fmtUsd(l.costUsd) + " verbruikt)" : "") : l.tokensIn != null ? fmtTok(l.tokensIn) + " in · " + fmtTok(l.tokensOut) + " uit · " + fmtUsd(l.costUsd) + (l.dishes ? " · " + l.dishes + (l.dishes === 1 ? " gerecht" : " gerechten") : "") + (l.aiCalls > 1 ? " · " + l.aiCalls + " aanroepen" : "") : "") || (l.type === "push" && l.sent != null ? l.sent + " van " + (l.sent + (l.failed || 0)) + (l.sent + (l.failed || 0) === 1 ? " toestel" : " toestellen") + " bereikt" : "") }));
   }
 
   VIEWS.activiteit = function (view, route, ctx) {
@@ -1064,6 +1143,45 @@
     };
     view.appendChild(card("Limieten", h("div", { class: "hint", style: { marginTop: "-4px", marginBottom: "10px" }, text: "Beschermt je AI-tegoed. Standaardwaarden komen uit de omgevingsvariabelen van de server." }), h("div", { class: "form-grid" }, limRows), saveLim));
 
+    // abonnementen (Balanza Plus)
+    var env = cfg.billingEnv || {}, bs = s.billing;
+    var priceM = h("input", { type: "text", id: "billMonthly", inputmode: "decimal", "aria-label": "Maandprijs in euro" }); priceM.value = (bs.plusMonthlyCents / 100).toFixed(2).replace(".", ",");
+    var priceY = h("input", { type: "text", id: "billYearly", inputmode: "decimal", "aria-label": "Jaarprijs in euro" }); priceY.value = (bs.plusYearlyCents / 100).toFixed(2).replace(".", ",");
+    var plusCap = h("input", { type: "number", id: "billPlusCap", min: 0, max: 100000, step: 1, "aria-label": "Plus: nieuwe gerechten per maand" }); plusCap.value = String(bs.plusDishCap);
+    var terms = h("input", { type: "url", id: "billTerms", maxLength: 300, placeholder: "https://jouw-site.nl/voorwaarden", "aria-label": "Link naar de algemene voorwaarden" }); terms.value = bs.termsUrl || "";
+    var saveBill = h("button", { id: "saveBillingBtn", text: "Prijzen opslaan" });
+    saveBill.onclick = function () {
+      var m = eurToCents(priceM.value), y = eurToCents(priceY.value), cap = Number(plusCap.value.trim());
+      if (m === null || m < 100 || m > 99900) return toast("Vul een maandprijs in van \u20ac1,00 tot \u20ac999,00, bijvoorbeeld 3,99.", "bad");
+      if (y === null || y < 100 || y > 999900) return toast("Vul een jaarprijs in van \u20ac1,00 tot \u20ac9999,00, bijvoorbeeld 34,99.", "bad");
+      if (plusCap.value.trim() === "" || !isFinite(cap) || Math.floor(cap) !== cap || cap < 0 || cap > 100000) return toast("De Plus-limiet moet een geheel getal zijn van 0 tot 100000 (0 = onbeperkt).", "bad");
+      var patch = {};
+      if (m !== bs.plusMonthlyCents) patch.plusMonthlyCents = m;
+      if (y !== bs.plusYearlyCents) patch.plusYearlyCents = y;
+      if (cap !== bs.plusDishCap) patch.plusDishCap = cap;
+      if (terms.value.trim() !== (bs.termsUrl || "")) patch.termsUrl = terms.value.trim();
+      if (!Object.keys(patch).length) return toast("Er is niets gewijzigd.");
+      apply({ billing: patch }, "Opgeslagen.");
+    };
+    var envOk = env.keyPresent && env.baseOk;
+    var envLines = h("dl", { class: "kv", id: "billingEnv" },
+      h("dt", { text: "Mollie-sleutel" }), h("dd", { text: env.keyPresent ? (env.mode === "live" ? "LIVE-sleutel: er wordt echt afgeschreven" : env.mode === "test" ? "testsleutel: er wordt niet echt afgeschreven" : "ingesteld (onbekend formaat)") : "niet ingesteld: zet MOLLIE_API_KEY in de omgeving" }),
+      h("dt", { text: "Adres van de app" }), h("dd", { text: env.baseOk ? env.baseUrl : env.baseUrl ? env.baseUrl + " (ongeldig: verwacht https://\u2026 zonder slash)" : "niet ingesteld: zet PUBLIC_BASE_URL in de omgeving" }),
+      h("dt", { text: "Webhook voor Mollie" }), h("dd", { text: env.webhookUrl || "\u2014" }));
+    var billSw = switchBtn(bs.enabled, function (on) {
+      if (!on) return confirmDialog({ title: "Abonnementen uitzetten", confirmLabel: "Uitzetten", message: "Niemand kan nog Plus nemen en niemand krijgt de Plus-limiet meer. Bestaande abonnementen lopen bij Mollie gewoon door en betalingen worden nog verwerkt; zet je het weer aan, dan werkt alles weer." }).then(function (ok) { if (ok) apply({ billing: { enabled: false } }, "Abonnementen staan uit."); });
+      confirmDialog({ title: "Abonnementen aanzetten", confirmLabel: "Aanzetten", message: (env.mode === "live" ? "Je gebruikt een LIVE-sleutel: klanten kunnen vanaf nu echt betalen. Weet je zeker dat je voorwaarden, privacyverklaring en factuurafhandeling op orde zijn?" : "Je gebruikt een testsleutel: er wordt niet echt afgeschreven. Zo kun je alles uitproberen.") + " Gebruikers zien daarna in Mijn profiel een kaart om Plus te nemen." }).then(function (ok) { if (ok) apply({ billing: { enabled: true } }, "Abonnementen staan aan."); });
+    }, "Abonnementen (Balanza Plus)");
+    billSw.id = "billingSwitch";
+    view.appendChild(card("Abonnementen (Balanza Plus)",
+      h("div", { class: "hint", style: { marginTop: "-4px", marginBottom: "10px" }, text: "Voorbereid en standaard uit. Zolang het uit staat is er in de app niets van te zien en verandert er niets voor gebruikers. Plus geeft een hogere limiet voor nieuwe gerechten per maand." }),
+      h("div", { class: "module", style: { padding: "0 0 12px" } }, h("div", {}, h("div", { class: "name", text: bs.enabled ? "Staat aan" : "Staat uit" }), h("div", { class: "desc", text: envOk ? "Klaar voor gebruik." : "Nog niet klaar: zie hieronder wat er in de omgeving ontbreekt." })), billSw),
+      envLines,
+      h("div", { style: { height: "12px" } }),
+      h("div", { class: "form-grid" }, field("Maandprijs (\u20ac, incl. btw)", priceM), field("Jaarprijs (\u20ac, incl. btw)", priceY), field("Plus: nieuwe gerechten per maand", plusCap, "0 = onbeperkt. Moet hoger zijn dan de algemene limiet (" + s.limits.monthlyDishCap + ") om een voordeel te zijn." + (s.limits.monthlyDishCap === 0 ? " Nu is de algemene limiet 0 (onbeperkt): zet die eerst op een getal, anders heeft Plus geen voordeel." : "")), field("Link naar algemene voorwaarden", terms, "Verplicht bij een LIVE-sleutel. Klanten zien deze link bij het afsluiten en gaan er expliciet mee akkoord.")),
+      saveBill,
+      h("div", { class: "hint", text: "Geef Mollie geen andere webhook: de app geeft het webhookadres zelf mee bij elke betaling. Zet in je Mollie-profiel wel de betaalmethoden aan die herhaald afschrijven ondersteunen (iDEAL werkt via SEPA-incasso; schakel die dan ook in)." })));
+
     // onderhoud
     var mMsg = h("textarea", { id: "maintMsg", maxLength: 300, placeholder: "Bijvoorbeeld: We zijn zo terug! Er wordt onderhoud uitgevoerd." }); mMsg.value = s.maintenance.message;
     var offLabels = cfg.maintenanceOffModules.map(function (k) { return defs[k].label.toLowerCase(); }).join(", ");
@@ -1112,7 +1230,7 @@
     if (key === "authRequired") return "Inloggen verplicht";
     if (parts[0] === "modules") { var d = s.moduleDefs.filter(function (x) { return x.key === parts[1]; })[0]; return "Onderdeel: " + (d ? d.label : parts[1]); }
     if (parts[0] === "limits") { var l = s.limitDefs.filter(function (x) { return x.key === parts[1]; })[0]; return "Limiet: " + (l ? l.label : parts[1]); }
-    return ({ "maintenance.enabled": "Onderhoudsmodus", "maintenance.message": "Onderhoudsmelding", "announcement.enabled": "Mededeling tonen", "announcement.message": "Mededeling (tekst)", "announcement.level": "Mededeling (soort)" })[key] || key;
+    return ({ "billing.enabled": "Abonnementen aan", "billing.plusMonthlyCents": "Plus: maandprijs (centen)", "billing.plusYearlyCents": "Plus: jaarprijs (centen)", "billing.plusDishCap": "Plus: gerechten per maand", "billing.termsUrl": "Link naar voorwaarden", "maintenance.enabled": "Onderhoudsmodus", "maintenance.message": "Onderhoudsmelding", "announcement.enabled": "Mededeling tonen", "announcement.message": "Mededeling (tekst)", "announcement.level": "Mededeling (soort)" })[key] || key;
   }
   function settingValue(key, v) { return typeof v === "boolean" ? (v ? "aan" : "uit") : v === "" ? "(leeg)" : String(v); }
   function summarizeAudit(e) {

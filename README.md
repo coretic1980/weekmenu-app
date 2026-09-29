@@ -303,6 +303,126 @@ Tijdens het genereren toont het startscherm een carrousel met weetjes en tips
 - Op de kaart staat "Algemene informatie, geen medisch advies". Let op: tips die het model schrijft kunnen
   fouten bevatten; de kaart zegt niet dat ze door een model zijn geschreven.
 
+## Kosten, tokens en de maandlimiet
+
+Voordat je een prijs kiest wil je weten wat een gerecht je kost, en wie er veel gebruikt. Daarvoor legt de server
+van elke AI-aanroep het aantal tokens vast en rekent de kosten uit. Bovendien kun je het aantal **nieuwe gerechten
+per gebruiker per maand** begrenzen. Dat is de basis voor een gratis en een betaald niveau.
+
+**Wat er wordt vastgelegd.** Per verzoek: tokens in en uit, het aantal AI-aanroepen, de kosten in dollars en het aantal
+gerechten. Dat staat in het logboek (*Activiteit*, bijv. "2,0k in · 5,0k uit · $0,081 · 7 gerechten") en wordt opgeteld
+per gebruiker per maand en per dag per actie. Twee dingen zijn goed om te weten:
+
+- **Herhaalpogingen tellen mee.** Haalt een gerecht de Balans-score niet, dan wordt het tot 3 keer opnieuw gemaakt, en
+  elk maaltijdmoment is een eigen aanroep. Eén generatie kan dus 3 tot 12 aanroepen zijn. Het overzicht toont
+  "AI-aanroepen per generatie" zodat je dat ziet.
+- **Ook mislukte pogingen kosten iets.** Een antwoord dat niet te gebruiken was is wél betaald. Dat staat als fout in
+  het logboek mét de kosten, en telt mee bij de kosten per gerecht (maar niet bij de gerechten van de gebruiker).
+
+**In de beheerconsole.** *Overzicht* heeft een kaart "AI-kosten deze maand" en een kaart "AI-kosten en tokens": vandaag,
+deze maand, de laatste 30 dagen, de gemiddelde **kosten per gerecht**, de kosten per actie en een grafiek per dag.
+Bij elke gebruiker staat onder "Verbruik deze maand" wat hij verbruikte en kostte, zodat je ziet wie de zware
+gebruikers zijn.
+
+**De prijs.** De kosten worden berekend met `PRICE_IN_PER_M` en `PRICE_OUT_PER_M` (dollars per miljoen tokens). Standaard
+staat dat op de prijs van Claude Sonnet 4.6: **$3 en $15**. Gebruik je een ander model, pas ze dan aan. De tips kunnen een
+goedkoper model gebruiken (`ANTHROPIC_TIPS_MODEL`); geef dan de prijs op met `TIPS_PRICE_IN_PER_M` en
+`TIPS_PRICE_OUT_PER_M`. Het is een schatting uit de tokens die Anthropic per aanroep meldt: de factuur is leidend.
+
+**De maandlimiet.**
+
+| Wat | Hoe |
+|---|---|
+| Algemene limiet | Beheer → Instellingen → Limieten → "Nieuwe gerechten per gebruiker per maand", of `MONTHLY_DISH_CAP` in `.env`. **0 = onbeperkt en dat is de standaard**, dus er verandert niets tot je een getal invult. |
+| Eigen limiet | Bij een gebruiker: "Eigen limiet per maand voor deze gebruiker". Gaat voor de algemene. 0 = onbeperkt voor die gebruiker; leeg = de algemene geldt. Zo geef je bijvoorbeeld een betalende gebruiker meer. |
+| Wat telt mee | Nieuwe gerechten uit "Genereer gerechten" en "Vul week automatisch in", en een variatie op een gerecht (telt als 1). Prijzen, prepdag, tips, delen en alles met opgeslagen gerechten blijft altijd werken. |
+| Op de limiet | De app toont "Nog 3 van 10 nieuwe gerechten deze maand" bij het genereren en in Mijn profiel. Is het op, dan staat de knop uit en staat er vanaf welke datum het weer kan. De server weigert ook zelf (429, `quota_exceeded`). |
+| Nieuwe maand | De teller begint op de 1e van de maand weer op 0 (UTC, dus in Nederland rond 01:00 of 02:00 's nachts). |
+| Laatste generatie | Zit je onder de limiet, dan mag de generatie die je nu start helemaal af, ook al kom je daardoor erboven (bijv. 14 van 10). Zo krijg je nooit een half resultaat. Lopende opdrachten op de achtergrond tellen mee bij het beoordelen van de volgende. |
+| Omzetten naar een account | Het verbruik gaat mee. Je reset de teller dus niet door een account te maken. |
+
+**Bekende grenzen.** Een anoniem profiel is aan dit toestel gebonden: wie zijn browsergegevens wist begint opnieuw. De limiet
+per IP-adres per uur (`PER_IP_HOURLY_CAP`) en de daglimiet voor iedereen samen blijven daarom belangrijk. Een gebruiker die
+zijn account verwijdert en met een ander e-mailadres opnieuw begint, heeft weer een lege teller. Dit is bedoeld als
+kostenbeheersing en als basis voor een betaald niveau, niet als waterdichte beveiliging.
+
+## Betalingen en abonnementen (Balanza Plus)
+
+**Voorbereid en standaard uit.** Zolang je het niet aanzet is er in de app niets van te zien, verandert er niets voor
+gebruikers en doet de server niets met Mollie. Het idee: gratis heeft een beperkt aantal nieuwe gerechten per maand
+(zie "Kosten, tokens en de maandlimiet"), Plus heeft er meer. Alles wat geen AI kost blijft voor iedereen gratis.
+
+**Zo werkt het voor de gebruiker.** In *Mijn profiel* staat een kaart "Balanza Plus" met de prijzen (per maand of per jaar,
+incl. btw), een vinkje om akkoord te gaan met de voorwaarden en de knop "Word Plus". Die stuurt naar de betaalpagina van
+Mollie (iDEAL of kaart). Terug in de app wacht Balanza even tot de betaling bevestigd is en meldt "Welkom bij Plus!". Een
+abonnee ziet tot wanneer Plus loopt en kan met één knop opzeggen. Plus is alleen voor accounts, niet voor anonieme profielen.
+
+**Zo werkt het achter de schermen.**
+
+1. *Eerste betaling.* De server maakt een Mollie-klant en een betaling met `sequenceType: first`. Daarmee geeft de klant
+   toestemming voor vervolgbetalingen (bij iDEAL wordt dat een SEPA-machtiging).
+2. *Abonnement.* Is die betaling geslaagd, dan maakt de server bij Mollie een abonnement dat pas na de eerste periode begint,
+   want de eerste betaling was al de eerste maand of het eerste jaar.
+3. *Webhook.* Mollie meldt elke wijziging aan `/api/billing/webhook`. Zo'n melding bevat **alleen een betaal-id, zonder
+   handtekening**. Daarom haalt de server de betaling zelf bij Mollie op en gelooft alleen wat Mollie dan zegt. Een nagemaakte
+   melding kan dus nooit Plus geven. Elke betaling wordt bovendien gekoppeld aan de Mollie-klant die wij zelf hebben
+   aangemaakt, en het bedrag wordt gecontroleerd. Herhaalde meldingen doen niets dubbel.
+4. *Ook zonder webhook.* Komt de gebruiker terug op de app, dan haalt de app zelf de status van een lopende betaling op.
+
+| Situatie | Wat er gebeurt |
+|---|---|
+| Vervolgbetaling geslaagd | Plus loopt een periode langer. |
+| Vervolgbetaling mislukt | Status "past_due": Plus blijft tot het einde van de betaalde periode, de gebruiker ziet een melding en kan opnieuw afsluiten. De app probeert het niet zelf opnieuw. |
+| Opzeggen | Het abonnement wordt bij Mollie opgezegd. Plus blijft tot het einde van de betaalde periode. Lukt opzeggen bij Mollie niet, dan blijft alles zoals het was en krijgt de gebruiker een duidelijke fout, zodat hij weet dat hij nog betaalt. |
+| Terugboeking of volledige terugbetaling | Het abonnement wordt opgezegd en Plus stopt meteen. Een gedeeltelijke terugbetaling doet niets. |
+| Account verwijderen | **Eerst wordt het abonnement bij Mollie opgezegd.** Lukt dat niet, dan wordt het account niet verwijderd (anders blijft er geld worden afgeschreven). Geldt ook als jij als beheerder een gebruiker verwijdert. |
+| Betaald maar Mollie faalt bij het aanmaken van het abonnement | De klant heeft betaald en krijgt Plus. De fout wordt vastgelegd en het abonnement wordt alsnog aangemaakt zodra de gebruiker de app opent. |
+| Coulance | Plus loopt nog 5 dagen door na het einde van de periode: een incasso kan een paar dagen duren en een betalende klant mag er niet tussenuit vallen. |
+| Abonnementen uitzetten | Gebruikers zien niets meer en krijgen de Plus-limiet niet meer. Bestaande abonnementen lopen bij Mollie door en binnenkomende betalingen worden nog verwerkt. |
+
+**Instellen, stap voor stap.**
+
+1. Maak een Mollie-account. Een **testsleutel** (`test_…`) heb je direct; voor echte betalingen moet Mollie je bedrijf
+   eerst goedkeuren.
+2. Zet in je Mollie-profiel de betaalmethoden aan die herhaald afschrijven ondersteunen. Betalen met iDEAL werkt daarvoor via
+   een SEPA-machtiging, dus schakel **SEPA-incasso** ook in.
+3. Zet twee variabelen in de omgeving (`.env`, of bij Render onder Environment):
+   - `MOLLIE_API_KEY`: je sleutel. Begin met de testsleutel.
+   - `PUBLIC_BASE_URL`: het adres van je app, bijvoorbeeld `https://balanza-app.onrender.com`, **zonder slash aan het eind**.
+     Dit is bewust een vaste instelling en wordt niet uit het verzoek gehaald: anders kan iemand het adres waar klanten na
+     het betalen naartoe gaan of waar Mollie meldingen naartoe stuurt laten wijzen naar een andere site. Mollie kan geen
+     `localhost` bereiken, dus lokaal testen vraagt een tunnel.
+4. Beheer → **Instellingen → Abonnementen**: controleer de prijzen (standaard €3,99 per maand en €34,99 per jaar), de
+   Plus-limiet (standaard 150) en vul de link naar je voorwaarden in. Stel ook de algemene limiet in (Instellingen →
+   Limieten), anders heeft Plus geen voordeel. Dit wordt afgedwongen bij het aanzetten.
+5. Zet abonnementen aan. **Doorloop eerst zelf een betaling met de testsleutel**: kies Plus, betaal op de testpagina van
+   Mollie en kijk of "Welkom bij Plus!" verschijnt en Plus in Beheer bij de gebruiker staat.
+6. Pas als je klaar bent voor echt geld: vervang de testsleutel door de live-sleutel. Met een live-sleutel weigert de server
+   abonnementen aan te zetten zolang er geen link naar je voorwaarden is ingevuld.
+
+**Handig in Beheer.** Bij een gebruiker staat een kaart "Abonnement": status, tot wanneer betaald, Mollie-klant- en
+abonnementsnummer en de betalingshistorie. Daar kun je ook **Plus cadeau geven** voor een aantal dagen (handig voor testers
+en de eerste gebruikers; werkt alleen als abonnementen aan staan), een cadeau intrekken en een abonnement opzeggen. Alle
+acties staan in het auditlogboek. Onder *Systeem* staat de controle "Betalingen (Mollie)".
+
+**Wat er (nog) niet is.**
+
+- Geen **facturen of bevestigingsmail**. Mollie stuurt een betaalbevestiging alleen als je dat in je profiel aanzet; een
+  factuur met btw maak je zelf, of met je boekhoudpakket.
+- Geen **proefperiode** en geen kortingscodes. Een tester geef je met "Plus cadeau geven".
+- Geen **overstappen** tussen maand en jaar halverwege: zeg op en sluit opnieuw af.
+- Het e-mailadres bij Mollie wordt niet bijgewerkt als een gebruiker zijn e-mailadres wijzigt.
+- **Verlengingen zijn niet met echt geld getest.** In testmodus kun je een maand niet versnellen. De logica voor verlengen,
+  mislukken, opzeggen, terugboeken en verwijderen is getest tegen een nagebootste Mollie die zich gedraagt zoals hun
+  documentatie beschrijft, maar niet tegen de echte. Kijk daarom de eerste weken na livegang goed naar het scherm van de eerste
+  abonnees en naar Mollie's dashboard.
+
+**Voordat je echt geld vraagt (geen juridisch of fiscaal advies, laat het nalopen).** Algemene voorwaarden en een
+privacyverklaring die Mollie (betalingen) en Anthropic (AI) als verwerkers noemen. Consumentenregels voor online abonnementen:
+prijzen inclusief btw, duidelijk wat je afsluit, herroepingsrecht en makkelijk opzeggen (zie ACM ConsuWijzer voor de actuele
+regels). Btw-afdracht en onder welke onderneming de omzet valt: bespreek dat met je boekhouder. Het akkoord van de klant
+(tijdstip, bedrag, link naar de voorwaarden) wordt wel vastgelegd, maar de teksten zelf moet jij aanleveren.
+
 ## Genereren op de achtergrond en meldingen
 
 Gerechten maken duurt soms minuten. Ga je in die tijd naar een andere app of gaat je scherm op slot, dan

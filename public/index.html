@@ -426,7 +426,7 @@
     <div id="busyText" class="busybar-text"></div>
     <div class="busybar-notice">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="3"/><path d="M11 18h2"/></svg>
-      <span><strong>Blijf in de app tot dit klaar is.</strong> Sluit je de app of ga je naar een andere app, dan kan het proces stoppen. Door de app navigeren mag wel.</span>
+      <span><strong>Je kunt even naar een andere app.</strong> Kom je terug, dan pakt Balanza het weer op.</span>
     </div>
   </div>
   <div class="busybar-track"><div class="busybar-fill"></div></div>
@@ -1493,6 +1493,157 @@
     });
   }
 
+  // ---- Balanza Plus (abonnement) ----
+  // Alles hier gebeurt alleen als de server in /api/config meldt dat abonnementen aan staan. Anders is er niets van te zien.
+  var billingInfo = null;      // antwoord van /api/billing, of null zolang onbekend
+  var plusChoice = "month";    // gekozen abonnement bij het afsluiten
+  var plusBusy = false;
+  function billingOn() { return !!window.appBilling; }
+  function fmtEur(cents) { return "\u20ac" + (Number(cents) / 100).toFixed(2).replace(".", ","); }
+  function nlDate(iso) {
+    try { return new Date(iso).toLocaleDateString("nl-NL", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }); } catch (e) { return String(iso); }
+  }
+  function refreshBilling() {
+    if (!billingOn() || typeof fetch !== "function") return Promise.resolve(null);
+    return fetch("/api/billing", { headers: window.authHeaders ? window.authHeaders() : {} }).then(function (res) {
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      return res.json();
+    }).then(function (info) { billingInfo = info; return info; }).catch(function () { return null; });
+  }
+  function billingPost(path, body) {
+    return fetch(path, { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, window.authHeaders ? window.authHeaders() : {}), body: JSON.stringify(body || {}) }).then(function (res) {
+      return res.json().catch(function () { return {}; }).then(function (data) {
+        if (!res.ok) { var e = new Error(data.message || "Er ging iets mis. Probeer het later opnieuw."); e.code = data.code; e.status = res.status; throw e; }
+        return data;
+      });
+    });
+  }
+  function plusEl(tag, text, id, cls) { var e = document.createElement(tag); if (text != null) e.textContent = text; if (id) e.id = id; if (cls) e.className = cls; return e; }
+  // Tekent de Plus-kaart opnieuw in zijn eigen vak (de kaart zelf staat al in Mijn profiel).
+  function paintPlus() {
+    var card = document.getElementById("plusCard"), body = document.getElementById("plusBody");
+    if (!card || !body) return;
+    var info = billingInfo;
+    if (!billingOn() || !info || !info.enabled) { card.style.display = "none"; return; }
+    card.style.display = "";
+    body.innerHTML = "";
+    var benefit = info.plusDishCap > 0 ? "tot " + info.plusDishCap + " nieuwe gerechten per maand" : "onbeperkt nieuwe gerechten";
+    var line = function (t, id) { var d = plusEl("div", t, id, "acc-sub"); body.appendChild(d); return d; };
+    if (!info.isAccount) {
+      line("Balanza Plus is voor gebruikers met een account: " + benefit + (info.freeDishCap > 0 ? " in plaats van " + info.freeDishCap : "") + ". Maak eerst een account aan.", "plusAnonText");
+      accButton(body, "plusUpgradeBtn", "userplus", "Account aanmaken", function () { upgradeState.error = null; goto("upgrade"); });
+      return;
+    }
+    if (info.plusActive) {
+      var until = info.periodEnd ? nlDate(info.periodEnd) : "";
+      if (info.granted && !info.renews && !info.cancelAtPeriodEnd && !info.pastDue) line("Plus is aan jou cadeau gedaan, tot " + nlDate(info.grantUntil) + ": " + benefit + ".", "plusStatus");
+      else if (info.pastDue) line("De laatste betaling is niet gelukt. Je Plus loopt nog tot " + until + " (" + benefit + ").", "plusStatus");
+      else if (info.cancelAtPeriodEnd) line("Je Plus is opgezegd en loopt tot " + until + ", daarna wordt er niet meer afgeschreven (" + benefit + ").", "plusStatus");
+      else line("Plus is actief: " + benefit + ". " + (info.interval === "year" ? "Jaarlijks" : "Maandelijks") + " abonnement, verlengt op " + until + ".", "plusStatus");
+      if (info.renews || info.pastDue) {
+        accButton(body, "plusCancelBtn", "logout", "Abonnement opzeggen", function () {
+          askConfirm("Weet je zeker dat je wilt opzeggen? Je houdt Plus tot " + until + ". Daarna wordt er niet meer afgeschreven.", function () {
+            billingPost("/api/billing/cancel").then(function (i) { billingInfo = i; paintPlus(); showToast("Opgezegd. Je houdt Plus tot " + (i.periodEnd ? nlDate(i.periodEnd) : until) + "."); refreshQuota(); })
+              .catch(function (e) { showToast(friendlyNetError(e)); });
+          }, "Opzeggen", "Terug");
+        });
+      }
+      if (!info.cancelAtPeriodEnd && !info.pastDue) return;
+    }
+    if (!info.plusActive) line("Met Plus maak je " + benefit + (info.freeDishCap > 0 ? " in plaats van " + info.freeDishCap : "") + ". Je kunt maandelijks opzeggen.", "plusBenefit");
+    if (info.pending && !info.plusActive) {
+      line("Je betaling wordt nog verwerkt. Dat kan even duren.", "plusPending");
+      accButton(body, "plusRefreshBtn", "refresh", "Status verversen", function () { refreshBilling().then(function () { paintPlus(); refreshQuota(); }); });
+    }
+    var row = plusEl("div", null, "plusPlans", "chiprow");
+    [["month", "Per maand", fmtEur(info.plans.month.cents)], ["year", "Per jaar", fmtEur(info.plans.year.cents)]].forEach(function (p) {
+      var chip = plusEl("button", p[1] + " \u00b7 " + p[2], p[0] === "month" ? "plusMonthBtn" : "plusYearBtn", "chip" + (plusChoice === p[0] ? " selected" : ""));
+      chip.onclick = function () { plusChoice = p[0]; paintPlus(); };
+      row.appendChild(chip);
+    });
+    body.appendChild(row);
+    var perMonth = info.plans.year.cents / 12;
+    line("Alle prijzen zijn inclusief btw." + (plusChoice === "year" ? " Dat is " + fmtEur(perMonth) + " per maand." : ""), "plusPriceNote");
+    var box = document.createElement("input"); box.type = "checkbox"; box.id = "plusTerms";
+    var lab = document.createElement("label"); lab.className = "acc-sub"; lab.id = "plusTermsLabel"; lab.style.display = "flex"; lab.style.gap = "8px"; lab.style.alignItems = "flex-start";
+    var span = document.createElement("span");
+    span.appendChild(document.createTextNode("Ik ga akkoord met de "));
+    if (info.termsUrl) { var a = document.createElement("a"); a.href = info.termsUrl; a.target = "_blank"; a.rel = "noopener noreferrer"; a.textContent = "voorwaarden"; a.id = "plusTermsLink"; span.appendChild(a); } else span.appendChild(document.createTextNode("voorwaarden"));
+    span.appendChild(document.createTextNode(" en wil dat Plus direct start."));
+    lab.appendChild(box); lab.appendChild(span); body.appendChild(lab);
+    var buy = plusEl("button", "Word Plus \u00b7 " + fmtEur(plusChoice === "year" ? info.plans.year.cents : info.plans.month.cents), "plusBuyBtn", "primary-btn");
+    buy.disabled = true;
+    box.onchange = function () { buy.disabled = !box.checked || plusBusy; };
+    buy.onclick = function () {
+      if (!box.checked || plusBusy) return;
+      plusBusy = true; buy.disabled = true; buy.textContent = "Even geduld\u2026";
+      billingPost("/api/billing/checkout", { interval: plusChoice, acceptTerms: true }).then(function (r) {
+        window.location.href = r.checkoutUrl;   // naar de betaalpagina van Mollie
+      }).catch(function (e) {
+        plusBusy = false; showToast(friendlyNetError(e));
+        if (e && e.code === "already_active") refreshBilling().then(function () { paintPlus(); });
+        else paintPlus();
+      });
+    };
+    body.appendChild(buy);
+  }
+  // Terug van de betaalpagina (?billing=return of ?billing=cancel): laten zien wat er is gebeurd.
+  function handleBillingReturn() {
+    var q = ""; try { q = window.location.search || ""; } catch (e) {}
+    var m = /[?&]billing=(return|cancel)(?:&|$)/.exec(q);
+    if (!m) return;
+    try { window.history.replaceState(null, "", window.location.pathname); } catch (e) {}
+    goto("account");
+    if (m[1] === "cancel") { showToast("De betaling is afgebroken. Er is niets afgeschreven."); return; }
+    showToast("Bedankt! We verwerken je betaling\u2026");
+    var tries = 0;
+    (function poll() {
+      refreshBilling().then(function (info) {
+        tries++;
+        if (info && info.enabled && info.plusActive && info.subscription === "active") { paintPlus(); refreshQuota(); showToast("Welkom bij Plus!"); return; }
+        if (tries < (window.__billingPolls || 8)) return setTimeout(poll, window.__billingPollMs || 2000);
+        paintPlus();
+        showToast("Je betaling wordt nog verwerkt. Je Plus verschijnt zodra de bank het bevestigt.");
+      });
+    })();
+  }
+
+  // ---- Maandlimiet: hoeveel nieuwe gerechten je deze maand nog kunt laten maken ----
+  var quotaInfo = null;   // { dishes, cap, unlimited, remaining, resetsOn } van de server, of null zolang onbekend
+  function quotaBlocked() { return !!quotaInfo && !quotaInfo.unlimited && quotaInfo.remaining === 0; }
+  function nlDay(iso) {
+    try { return new Date(String(iso) + "T00:00:00Z").toLocaleDateString("nl-NL", { day: "numeric", month: "long", timeZone: "UTC" }); } catch (e) { return String(iso); }
+  }
+  function paintQuota() {
+    var q = quotaInfo;
+    if (!q) return;
+    var hint = document.getElementById("quotaHint");
+    if (hint) {
+      hint.style.display = q.unlimited ? "none" : "";
+      hint.textContent = q.remaining > 0
+        ? "Nog " + q.remaining + " van " + q.cap + " nieuwe gerechten deze maand."
+        : "Je hebt deze maand al je " + q.cap + " nieuwe gerechten gemaakt. Vanaf " + nlDay(q.resetsOn) + " kun je er weer nieuwe laten maken. Je opgeslagen gerechten en planning blijven gewoon werken.";
+    }
+    var pq = document.getElementById("profileQuota");
+    if (pq) pq.textContent = q.unlimited ? "" : "Nieuwe gerechten deze maand: " + q.dishes + " van " + q.cap;
+    var up = document.getElementById("quotaUpsell");
+    if (up) up.style.display = quotaBlocked() && billingInfo && billingInfo.enabled && !billingInfo.plusActive ? "" : "none";
+  }
+  // Haalt de stand op. Verandert daardoor of de generatieknop geblokkeerd moet zijn, dan wordt het scherm opnieuw getekend.
+  function refreshQuota() {
+    var before = quotaBlocked();
+    if (typeof fetch !== "function") return Promise.resolve();
+    return fetch("/api/usage", { headers: window.authHeaders ? window.authHeaders() : {} }).then(function (res) {
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      return res.json();
+    }).then(function (q) {
+      quotaInfo = q;
+      paintQuota();
+      if (quotaBlocked() && billingOn() && !billingInfo) refreshBilling().then(paintQuota);   // om te weten of we Plus kunnen aanbieden
+      if (before !== quotaBlocked() && state.view === "prefs" && !state.generating) render();
+    }).catch(function () {});
+  }
+
   // ---- Meldingen: een seintje als je gerechten klaar zijn terwijl je in een andere app zit ----
   var PUSH_FLAG_KEY = "weekmenu_push";
   var pushState = null;   // "on" | "off" | "denied" | "ios-install" | "unsupported" | null (nog onbekend)
@@ -1607,6 +1758,9 @@
     var stats = document.createElement("div");
     stats.className = "acc-stats"; stats.id = "profileStats"; stats.textContent = "";
     card.appendChild(stats);
+    var quotaLine = document.createElement("div");
+    quotaLine.className = "acc-stats"; quotaLine.id = "profileQuota"; quotaLine.textContent = "";
+    card.appendChild(quotaLine);
 
     var nameCard = accCard(main, "Hoe mogen we je noemen?");
     var nameInput = accInput(nameCard, "profileNameInput", "text", "Je naam", "given-name");
@@ -1628,9 +1782,14 @@
       cta.appendChild(txt);
       accButton(cta, "profileCreate", "userplus", "Account aanmaken", function () { upgradeState.error = null; goto("upgrade"); });
     }
+    var plusCard = accCard(main, "Balanza Plus");
+    plusCard.id = "plusCard"; plusCard.style.display = "none";
+    var plusBody = document.createElement("div"); plusBody.id = "plusBody"; plusCard.appendChild(plusBody);
     var more = accCard(main, null);
     accButton(more, "profileSettings", "gear", "Instellingen", function () { goto("settings"); });
     app.appendChild(main);
+    paintQuota(); refreshQuota();
+    if (billingOn()) { paintPlus(); refreshBilling().then(function () { if (state.view === "account") paintPlus(); }); }
 
     accountRequest("GET", "/api/account").then(function (info) {
       if (state.view !== "account") return;
@@ -2787,6 +2946,15 @@
       ? "Bezig met genereren… (" + formatEstimateRange(estSecs) + ")"
       : "Genereer gerechten (" + formatEstimateRange(estSecs) + ")";
     if (!moduleOn("generate")) { goBtn.disabled = true; goBtn.textContent = "Genereren staat tijdelijk uit"; }
+    else if (quotaBlocked() && !state.generating) { goBtn.disabled = true; goBtn.textContent = "Limiet voor deze maand bereikt"; }
+    goBtn.id = "generateBtn";
+    var quotaHint = document.createElement("div");
+    quotaHint.className = "acc-sub"; quotaHint.id = "quotaHint"; quotaHint.style.textAlign = "center"; quotaHint.style.display = "none";
+    main.appendChild(quotaHint);
+    var quotaUpsell = document.createElement("button");
+    quotaUpsell.className = "ghost-btn"; quotaUpsell.id = "quotaUpsell"; quotaUpsell.style.display = "none"; quotaUpsell.textContent = "Meer gerechten met Plus";
+    quotaUpsell.onclick = function () { goto("account"); };
+    main.appendChild(quotaUpsell);
     goBtn.onclick = function () {
       if (!moduleOn("images")) { goto("weeks"); generateMeals(false); return; }   // foto's staan uit: niet vragen
       var planned = plannedGenerationCount();
@@ -2802,6 +2970,7 @@
     main.appendChild(goBtn);
 
     app.appendChild(main);
+    paintQuota(); refreshQuota();   // pas nu: eerder hangt het scherm nog niet aan de pagina
   }
 
   var GOALS = ["Onderhoud", "Vetverlies (spierbehoud)", "Cutting", "Spieropbouw (lean bulk)", "Atleet (prestatiegericht)"];
@@ -3076,6 +3245,7 @@
           busyEnd();
           addToCacheLibrary(days);
           persistDishesToDb(days);
+          refreshQuota();
           state.generating = false;
           var successMsg = days.length + (days.length === 1 ? " gerecht is" : " gerechten zijn") +
             " gegenereerd en toegevoegd aan de lijst met opgeslagen gerechten.";
@@ -3088,6 +3258,7 @@
         stopGenTicker();
         busyEnd();
         var msg = (e && e.code === "not_granted") ? "Je hebt genereren niet toegestaan voor deze pagina." :
+                   (e && e.code === "quota_exceeded" && e.message) ? e.message :
                    (e && e.code === "rate_limited") ? "Even geduld, probeer over een moment opnieuw." :
                    "Genereren is niet gelukt. Probeer het nogmaals.";
         state.genError = msg;
@@ -3131,16 +3302,19 @@
 
   var GUIDE_STEPS = [
     { title: "Stel je voorkeuren in", body: "Ga naar \u201cGerechten ontwerpen\u201d en vul in wat voor jou relevant is: keukenstijl, smaakprofiel, culinair niveau, apparatuur, uitsluitingen, en optioneel je lichaamsprofiel (geslacht, lengte, gewicht, leeftijd, activiteitsniveau) en je doel (Onderhoud, Vetverlies, Cutting, Spieropbouw of Atleet)." },
-    { title: "Genereer gerechten", body: "Kies bij welk maaltijdmoment(en) het gaat (Ontbijt/Lunch/Diner/Snack) en hoeveel gerechten je per moment wilt, en tik op \u201cGenereer gerechten\u201d. Daarna kies je of er ook afbeeldingen bij worden gezocht (duurt iets langer). Elk gerecht krijgt een Balans-score: hoe dichter bij het streefpercentage van jouw doel, hoe hoger de score." },
+    { title: "Genereer gerechten", body: "Kies bij welk maaltijdmoment(en) het gaat (Ontbijt/Lunch/Diner/Snack) en hoeveel gerechten je per moment wilt, en tik op \u201cGenereer gerechten\u201d. Daarna kies je of er ook afbeeldingen bij worden gezocht (duurt iets langer). Elk gerecht krijgt een Balans-score: hoe dichter bij het streefpercentage van jouw doel, hoe hoger de score. Het genereren kan even duren; je hoeft niet in de app te blijven wachten. Geldt er een limiet voor het aantal nieuwe gerechten per maand, dan zie je hier hoeveel je er nog over hebt." },
+    { title: "Krijg een melding als het klaar is", body: "Ga je tijdens het genereren naar een andere app, dan werkt Balanza gewoon door en staan je gerechten klaar zodra je terugkomt. Wil je een seintje? Zet onder Instellingen \u2192 Meldingen de meldingen aan (of tik tijdens het genereren op \u201cStuur me een melding als het klaar is\u201d). Op een iPhone werkt dat als Balanza op je beginscherm staat: tik op Deel en kies \u201cZet op beginscherm\u201d." },
     { title: "Bekijk je bibliotheek", body: "Onder \u201cOpgeslagen gerechten\u201d vind je alles wat je ooit heb ontworpen of gegenereerd, gegroepeerd per maaltijdmoment. Filter op maaltijdmoment of doel, of verwijder gerechten die je niet meer wilt." },
     { title: "Plan een week", body: "Onder \u201cPlannen\u201d kies je de huidige week of een week in de toekomst. Elke dag heeft 6 momenten: Ontbijt, Snack na ontbijt, Lunch, Snack na lunch, Diner en Snack na diner. Tik een moment aan om er een gerecht aan toe te wijzen." },
     { title: "Stel het aantal personen in", body: "Bij een ingevuld moment kun je met + en \u2212 aangeven voor hoeveel personen je kookt. Dat aantal telt automatisch mee in de boodschappenlijst en de prepdag \u2014 handig als je bijvoorbeeld voor het avondeten met het hele gezin kookt." },
     { title: "Vul een week automatisch in", body: "Liever niet elk moment los kiezen? \u201cVul week automatisch in\u201d kijkt eerst wat je al hebt opgeslagen en vult daarmee aan; alleen het tekort wordt nieuw gegenereerd \u2014 dat scheelt tijd en onnodige aanroepen." },
     { title: "Bekijk je boodschappenlijst", body: "Vanuit een geplande week open je de boodschappenlijst \u2014 kies \u201cPer week (samengevoegd)\u201d om dezelfde ingredi\u00ebnten uit verschillende gerechten automatisch bij elkaar op te laten tellen en gegroepeerd per winkelcategorie te zien, of \u201cPer dag\u201d voor de ongecombineerde lijst." },
+    { title: "Deel je boodschappenlijst", body: "Op het boodschappenscherm opent \u201cDelen en exporteren\u201d een menu: deel een live lijst via WhatsApp waarop jullie samen afvinken, stuur of kopieer de lijst als tekst, importeer hem in Bring! of exporteer als PDF. Heb je iets al in huis? Tik bij het product op \u201cNiet nodig\u201d: het telt dan niet mee bij delen, de PDF, Bring! en de kostenschatting (\u201cSchat de kosten\u201d)." },
     { title: "Laat een prepdag samenstellen", body: "Bovenaan een ingeplande week kun je een prepdag laten samenstellen: een geconsolideerd plan om zondag in bulk voor te bereiden, gebaseerd op precies de gerechten die je die week hebt gepland." },
     { title: "Varieer een gerecht", body: "Op het receptdetailscherm kun je een gerecht laten aanpassen: Pittiger, Simpeler, Fine dining, of de koolhydraatbron laten wisselen \u2014 de macro's en balansscore worden automatisch herberekend." },
     { title: "Start het kookproces", body: "Vanuit een receptdetail start je de stap-voor-stap kookmodus, met een voortgangsbalk en een timer bij stappen die wachttijd hebben (koken, bakken, grillen, oven, sudderen)." },
     { title: "Exporteer als PDF", body: "Zowel een boodschappenlijst als een compleet weekmenu kun je exporteren als PDF, opgemaakt als een echt kookboek \u2014 met omslagpagina, inhoudsopgave en een gerecht dat nooit halverwege afbreekt over een pagina." },
+    { title: "Bewaar je gegevens met een account", body: "Zonder account staan je gerechten en planning alleen op dit apparaat. Kies in het menu (je avatar rechtsboven) \u201cAccount aanmaken\u201d om ze te bewaren en op elk apparaat te gebruiken; wat je al hebt gaat mee. Onder Instellingen kun je ook je wachtwoord of e-mailadres wijzigen, je gegevens downloaden en het account verwijderen." },
     { title: "Begin opnieuw", body: "Via je avatar rechtsboven (het accountmenu) kies je \u201cReset app \u2014 begin opnieuw\u201d: dit wist al je opgeslagen gerechten, voorkeuren en planning in \u00e9\u00e9n keer, mocht je helemaal fris willen beginnen." }
   ];
 
@@ -6186,7 +6360,7 @@
       }).catch(function (e) {
         state.variating = false;
         busyEnd();
-        state.variateError = (e && e.code === "rate_limited") ? "Even geduld, probeer over een moment opnieuw." : "Variatie maken is niet gelukt. Probeer het nogmaals.";
+        state.variateError = (e && e.code === "quota_exceeded" && e.message) ? e.message : (e && e.code === "rate_limited") ? "Even geduld, probeer over een moment opnieuw." : "Variatie maken is niet gelukt. Probeer het nogmaals.";
         render();
       });
     });
@@ -6385,7 +6559,7 @@
           console.error("Auto-fill week: genereren mislukt", e);
           pw.autoFilling = false;
           busyEnd();
-          pw.autoFillError = (e && e.code === "rate_limited") ? "Even geduld, probeer over een moment opnieuw." : "Automatisch invullen is niet gelukt. Probeer het nogmaals.";
+          pw.autoFillError = (e && e.code === "quota_exceeded" && e.message) ? e.message : (e && e.code === "rate_limited") ? "Even geduld, probeer over een moment opnieuw." : "Automatisch invullen is niet gelukt. Probeer het nogmaals.";
           render();
         });
       });
@@ -6948,6 +7122,7 @@
         return Promise.resolve(rec.withImages ? Promise.all(days.map(fetchImageForDish)) : null).then(function () {
           addToCacheLibrary(days);
           persistDishesToDb(days);
+          refreshQuota();
           showToast(days.length + (days.length === 1 ? " gerecht is" : " gerechten zijn") + " klaar en toegevoegd aan de lijst met opgeslagen gerechten.");
           render();
         });
@@ -6968,12 +7143,14 @@
     }).then(function (cfg) {
       window.authRequired = cfg.authRequired !== false;
       window.bringImportEndpoint = typeof cfg.bringImportEndpoint === "string" ? cfg.bringImportEndpoint : "";
+      window.appBilling = cfg.billing === true;
       applyRuntimeConfig(cfg);
       try { var pendingNotice = sessionStorage.getItem("weekmenu_notice"); if (pendingNotice) { sessionStorage.removeItem("weekmenu_notice"); setTimeout(function () { showToast(pendingNotice); }, 400); } } catch (e) {}
       lastConfigRefresh = Date.now();
       configLoaded = true;
       if (window.authToken || !window.authRequired) { initPersistence(); recoverPendingJobs(); syncPush(); }
       render();
+      if (window.appBilling && (window.authToken || !window.authRequired)) handleBillingReturn();
     });
   }
 
