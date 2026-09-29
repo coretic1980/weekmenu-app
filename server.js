@@ -667,6 +667,247 @@ function extractJson(text) {
   return JSON.parse(fixDutchDecimals(candidate));
 }
 
+// ---------- NEVO: macro's berekenen met het Nederlands Voedingsstoffenbestand (RIVM) ----------
+// In plaats van de AI de macro's te laten schatten, levert de AI per ingrediënt {tekst, gram, nevo} en
+// rekent Balanza kcal/eiwit/koolhydraten/vet zelf uit met de officiële NEVO-waarden (zie NOTICE.md).
+// Is de dekking onvolledig (een ingrediënt zonder goede NEVO-match), dan blijft de AI-schatting staan,
+// duidelijk gelabeld als schatting in plaats van als NEVO-berekening.
+var NEVO_DATASET = (function () {
+  try { return JSON.parse(fs.readFileSync(path.join(__dirname, "nevo", "nevo2025_macros.json"), "utf8")); }
+  catch (e) { return []; }   // ontbreekt het bestand, dan draait de app door op AI-schattingen (geen NEVO-badge)
+})();
+  // Balanza-aanvullingen staan apart in NEVO_ADDITIONS en zijn geen onderdeel van NEVO.
+  var NEVO_VERSION = "NEVO online versie 2025/9.0";
+  var NEVO_REFERENCE = "Gebaseerd op gegevens uit NEVO online versie 2025/9.0, RIVM, Bilthoven";
+  var NEVO_ADDITIONS = [
+    // [code, naam, kcal, eiwit, kh, vet] — Balanza-aanvulling (gemiddelde etiketwaarden), niet afkomstig uit NEVO
+    ["B1", "Eiwitpoeder wei- (Balanza-aanvulling)", 380, 78, 7, 6]
+  ];
+  var NEVO_STAPLE_CODES = [
+    1634, 1305, 1936, 1405, 1421, 1400, 1663, 1422, 1790, 1587, 1096, 820, 3322, 1590, 353, 3320, 83, 358, 5519, 5573,
+    2654, 328, 784, 639, 2300, 2996,
+    305, 5295, 5271, 2503, 301, 286, 294, 654, 1382, 513, 718, 1955, 3362, 3377, 1650, 1808, 2268, 299, 310,
+    5, 712, 4, 811, 1889, 5518, 3153, 1015, 1, 671, 213, 246, 2351, 5482, 2359, 2790, 1779, 2675, 220,
+    3049, 3184, 5176, 3185, 5174, 120, 971, 3207,
+    921, 14, 959, 50, 922, 884, 51, 19, 71, 63, 5459, 830, 60, 2739, 2346, 2736, 10, 562, 1892, 23, 57, 682, 3220, 689, 832, 141, 1524, 2293,
+    147, 151, 148, 161, 152, 692, 5369, 158, 1127,
+    601, 317, 3376, 198, 206, 199, 204, 5275, 838, 3447, 2806,
+    5470, 5471, 2178, 2290, 451, 824, 443, 5253, 1232, 871, 1528, 616
+  ];
+  // Kruiden, zout en water leveren verwaarloosbaar weinig energie en tellen niet mee voor de dekking.
+  var NEVO_NEGLIGIBLE = ["zout", "zeezout", "peper", "water", "ijsblokjes", "ijs", "kaneel", "oregano", "basilicum", "peterselie",
+    "koriander", "tijm", "rozemarijn", "dille", "bieslook", "munt", "paprikapoeder", "komijn", "kerriepoeder", "kurkuma",
+    "chilivlokken", "cayennepeper", "nootmuskaat", "laurier", "kruiden", "specerijen", "italiaanse kruiden", "knoflookpoeder",
+    "uienpoeder", "gemberpoeder", "chilipoeder", "vanille", "zoetstof", "citroenrasp", "limoenrasp", "bakpoeder"];
+
+  // Veelvoorkomende spreektaal → NEVO-code (alleen een verwijzing; de NEVO-waarden zelf blijven ongewijzigd).
+  var NEVO_ALIASES = {
+    "ei": 83, "eieren": 83, "ei kippen": 83, "kippenei": 83, "rijst": 5, "witte rijst": 5, "basmatirijst": 5, "jasmijnrijst": 5,
+    "zilvervliesrijst": 712, "aardappel": 1, "aardappelen": 1, "kruimige aardappelen": 1, "zalm": 1587, "zalmfilet": 1587,
+    "havermout": 213, "parmaham": 328, "serranoham": 328, "edamame": 971, "tomatensaus": 1524, "passata": 1524,
+    "amandelen": 198, "bosui": 63, "lente ui": 63, "ui": 63, "gerookte kipfilet": 2654, "gekookte kipfilet": 1392, "gebakken kipfilet": 1392, "rundvlees reepjes": 1663,
+    "biefstukreepjes": 1400, "pasta": 4, "spaghetti": 4, "penne": 4, "volkoren pasta": 811, "volkoren spaghetti": 811,
+    "volkorenbrood": 246, "volkoren brood": 246, "bruin brood": 246, "brood": 246, "kaas": 513, "geraspte kaas": 513,
+    "mozzarella": 1955, "feta": 3362, "kwark": 305, "griekse yoghurt": 5271, "yoghurt": 301, "melk": 286,
+    "olijfolie": 601, "olie": 317, "zonnebloemolie": 317, "sesamolie": 3376, "boter": 310, "roomboter": 310,
+    "kipdijfilet": 1305, "kippendij": 1305, "kipgehakt": 1305, "rundergehakt": 1405, "gehakt": 1405, "tonijn": 1590,
+    "garnalen": 3320, "kabeljauw": 820, "kabeljauwfilet": 820, "tofu": 5519, "skyr": 5295, "cottage cheese": 654,
+    "hummus": 3207, "pindakaas": 5275, "noten": 198, "wrap": 2359, "wraps": 2359, "volkoren wrap": 5482,
+    "komkommer": 2739, "gember": 832, "verse gember": 832, "sperziebonen": 50, "boontjes": 50, "kerstomaatjes": 2731, "cherrytomaatjes": 2731, "cherrytomaten": 2731, "kerstomaten": 2731, "tomaat": 60, "tomaten": 60, "misopasta": 871, "miso": 871,
+    "citroensap": 1127, "limoensap": 1127, "kokosmelk": 2290, "eiwitpoeder": "B1", "wei eiwitpoeder": "B1", "whey": "B1"
+  };
+
+  var nevoIndex = null;
+
+  function nevoNorm(s) {
+    return String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9%+<>\s]/g, " ").replace(/\s+/g, " ").trim();
+  }
+
+  function nevoLoad() {
+    if (nevoIndex) return nevoIndex;
+    var rows = (NEVO_DATASET || []).concat(NEVO_ADDITIONS);
+    var byCode = {};
+    var list = rows.map(function (r) {
+      var item = { code: String(r[0]), naam: r[1], kcal: r[2], eiwit: r[3], kh: r[4], vet: r[5],
+        norm: nevoNorm(r[1]), extra: String(r[0]).charAt(0) === "B" };
+      item.tokens = item.norm.split(" ").filter(Boolean);
+      byCode[item.code] = item;
+      return item;
+    });
+    var byNorm = {};
+    list.forEach(function (it) { if (!byNorm[it.norm]) byNorm[it.norm] = it; });
+    var staple = {};
+    NEVO_STAPLE_CODES.forEach(function (c) { staple[String(c)] = true; });
+    nevoIndex = { list: list, byCode: byCode, byNorm: byNorm, staple: staple };
+    return nevoIndex;
+  }
+
+  function nevoAvailable() { return nevoLoad().list.length > NEVO_ADDITIONS.length; }
+
+  // Hoe goed past een zoekwoord bij een NEVO-woord (0..1). Vangt samenstellingen op: "walnoten" ~ "noten wal".
+  function nevoTokenScore(q, t) {
+    if (q === t) return 1;
+    if (t.length >= 3 && q.length >= 3) {
+      var ratio = Math.min(q.length, t.length) / Math.max(q.length, t.length);
+      if (q.indexOf(t) === 0 || t.indexOf(q) === 0) return ratio >= 0.6 ? 0.85 : 0.5;
+      if (q.indexOf(t) > -1 || t.indexOf(q) > -1) return ratio >= 0.5 ? 0.7 : 0.45;
+    }
+    return 0;
+  }
+
+  var NEVO_STATE_WORDS = ["rauw", "gekookt", "bereid", "gebakken", "blik", "glas", "onbereid", "gedroogd", "diepvries"];
+
+  function nevoMatch(query) {
+    var idx = nevoLoad();
+    var q = nevoNorm(query);
+    if (!q) return null;
+    if (idx.byNorm[q]) return { item: idx.byNorm[q], score: 1 };
+    var qa = q.replace(/\b(verse|vers|gesneden|gehakte|geraspte|in blokjes|in reepjes|in plakjes|in linten|in partjes|in peul|uitgelekt|ongezouten|biologische|klein|kleine|grote|droog gewicht)\b/g, "").replace(/\s+/g, " ").trim();
+    if (NEVO_ALIASES[qa] !== undefined && idx.byCode[String(NEVO_ALIASES[qa])]) return { item: idx.byCode[String(NEVO_ALIASES[qa])], score: 0.95 };
+    if (qa && idx.byNorm[qa]) return { item: idx.byNorm[qa], score: 1 };
+    var qTokens = (qa || q).split(" ").filter(Boolean);
+    var best = null, bestScore = 0;
+    idx.list.forEach(function (it) {
+      var matched = 0, used = 0;
+      it.tokens.forEach(function (t) {
+        var b = 0;
+        qTokens.forEach(function (qt) { var s = nevoTokenScore(qt, t); if (s > b) b = s; });
+        matched += b;
+        if (b > 0) used++;
+      });
+      if (!used) return;
+      var qCovered = 0;
+      qTokens.forEach(function (qt) {
+        var b = 0;
+        it.tokens.forEach(function (t) { var s = nevoTokenScore(qt, t); if (s > b) b = s; });
+        qCovered += b;
+      });
+      var precision = matched / it.tokens.length;
+      var recall = qCovered / qTokens.length;
+      var score = precision * 0.45 + recall * 0.55;
+      // Zonder bereidingswijze in de zoekterm: voorkeur voor rauw/onbereid (hoeveelheden zijn rauw gewicht).
+      var qHasState = qTokens.some(function (x) { return NEVO_STATE_WORDS.indexOf(x) > -1; });
+      if (!qHasState && (it.tokens.indexOf("rauw") > -1 || it.tokens.indexOf("onbereid") > -1)) score += 0.03;
+      if (it.extra) score -= 0.02;
+      if (idx.staple[it.code]) score += 0.08;
+      if (score > bestScore || (score === bestScore && best && it.tokens.length < best.tokens.length)) {
+        best = it; bestScore = score;
+      }
+    });
+    return best && bestScore >= 0.62 ? { item: best, score: bestScore } : null;
+  }
+
+  function nevoIsNegligible(text) {
+    // Langere alternatieven eerst (bijv. "snufje" vóór "snuf"), anders knipt de regex een langer woord verkeerd af.
+    var n = nevoNorm(text).replace(/^[0-9.,/ ]+(gram|snufje|takjes|takje|handvol|handje|tenen|teen|gr|g|ml|tl|el|snuf|blaadjes)?\s*/, "");
+    if (!n) return true;
+    return NEVO_NEGLIGIBLE.some(function (w) { return n === w || n.indexOf(w + " ") === 0 || n === "verse " + w || n === "gedroogde " + w || n === w + " naar smaak"; }) ||
+      /(^| )(naar smaak|snufje)( |$)/.test(n) && !/[0-9]/.test(n);
+  }
+
+  // Normaliseert AI-ingrediënten naar {tekst, gram, nevo}. Accepteert objecten en oude tekstregels.
+  function nevoNormalizeIngredients(arr) {
+    if (!Array.isArray(arr)) return [];
+    return arr.map(function (x) {
+      if (x && typeof x === "object") {
+        var tekst = String(x.tekst || x.text || x.naam || "").trim();
+        var gram = Number(String(x.gram == null ? "" : x.gram).replace(",", "."));
+        return { tekst: tekst, gram: isFinite(gram) && gram > 0 ? gram : 0, nevo: String(x.nevo || "").trim() };
+      }
+      var t = String(x || "").trim();
+      var m = t.match(/^(\d+(?:[.,]\d+)?)\s*(g|gr|gram|ml)\b\.?\s*(.*)$/i);
+      if (m) return { tekst: t, gram: Number(m[1].replace(",", ".")), nevo: m[3].replace(/\(.*?\)/g, "").trim() };
+      var u = t.match(/^(\d+(?:[.,]\d+)?|1\/2)\s*(el|eetlepels?|tl|theelepels?|sneetjes?|sneden|snee|eieren|ei)\b\.?\s*(.*)$/i);
+      if (u) {
+        var qty = u[1] === "1/2" ? 0.5 : Number(u[1].replace(",", "."));
+        var unit = u[2].toLowerCase();
+        var per = /^el|^eetlepel/.test(unit) ? 15 : /^tl|^theelepel/.test(unit) ? 5 : /^snee|^sneden/.test(unit) ? 35 : 50;
+        var name = /^ei/.test(unit) ? "ei" : u[3].replace(/\(.*?\)/g, "").trim();
+        return { tekst: t, gram: qty * per, nevo: name };
+      }
+      return { tekst: t, gram: 0, nevo: "" };
+    }).filter(function (x) { return x.tekst; });
+  }
+
+  // Berekent macro's per portie uit NEVO. Geeft ook de dekking terug.
+  function nevoCalculate(items) {
+    var tot = { kcal: 0, eiwit: 0, kh: 0, vet: 0 };
+    var relevant = 0, covered = 0, missing = [], detail = [];
+    items.forEach(function (ing) {
+      var negligible = nevoIsNegligible(ing.tekst);
+      var m = ing.gram > 0 ? nevoMatch(ing.nevo || ing.tekst) : null;
+      if (!m && ing.gram > 0 && ing.nevo) m = nevoMatch(ing.tekst);
+      if (m && ing.gram > 0) {
+        var f = ing.gram / 100;
+        tot.kcal += m.item.kcal * f; tot.eiwit += m.item.eiwit * f; tot.kh += m.item.kh * f; tot.vet += m.item.vet * f;
+        detail.push({ tekst: ing.tekst, gram: ing.gram, code: m.item.code, naam: m.item.naam });
+        if (!negligible) { relevant++; covered++; }
+      } else {
+        detail.push({ tekst: ing.tekst, gram: ing.gram || 0, code: null, naam: null });
+        if (!negligible) { relevant++; missing.push(ing.tekst); }
+      }
+    });
+    return {
+      kcal: Math.round(tot.kcal), eiwitG: Math.round(tot.eiwit), khG: Math.round(tot.kh), vetG: Math.round(tot.vet),
+      relevant: relevant, covered: covered, missing: missing, detail: detail
+    };
+  }
+
+  // Past NEVO-berekening toe op een gerecht. Bij onvoldoende dekking blijft de AI-schatting staan, duidelijk gelabeld.
+  // Herberekent kcal/eiwit_g/kh_g/vet_g van een gerecht met NEVO, op basis van {tekst, gram, nevo} per ingrediënt
+  // (zoals de AI die nu aanlevert). Dekken alle relevante ingrediënten (zout/kruiden tellen niet mee) een
+  // NEVO-product, dan vervangen de NEVO-waarden de AI-schatting; anders blijft de AI-schatting staan, gelabeld.
+  // "ingredienten" wordt altijd de leesbare tekstregel, zodat de rest van de app niets van dit schema hoeft te weten.
+  function applyNevoToDish(dish, rawIngredients) {
+    var items = nevoNormalizeIngredients(rawIngredients);
+    dish.ingredienten = items.map(function (x) { return x.tekst; });
+    if (!nevoAvailable() || !items.length) { dish.macroBron = "schatting"; return dish; }
+    var calc = nevoCalculate(items);
+    dish.nevo = { versie: NEVO_VERSION, gedekt: calc.covered, totaal: calc.relevant, ontbreekt: calc.missing };
+    if (calc.kcal > 0 && calc.relevant > 0 && calc.covered === calc.relevant) {
+      dish.kcal = calc.kcal;
+      dish.kh_g = calc.khG; dish.eiwit_g = calc.eiwitG; dish.vet_g = calc.vetG;
+      dish.macroBron = "nevo";
+    } else {
+      dish.macroBron = "schatting";
+    }
+    return dish;
+  }
+
+  function nevoStapleText() {
+    var idx = nevoLoad();
+    return NEVO_STAPLE_CODES.map(function (c) { return idx.byCode[String(c)]; }).filter(Boolean).concat(
+      NEVO_ADDITIONS.map(function (a) { return idx.byCode[a[0]]; })
+    ).map(function (it) {
+      return it.naam.replace(" (Balanza-aanvulling)", "") + " | " + it.kcal + " kcal, " + it.eiwit + " E, " + it.kh + " KH, " + it.vet + " V";
+    }).join("\n");
+  }
+
+  // Gedeelde promptinstructie voor ingrediënten in grammen met NEVO-naam.
+  function nevoPromptText(forGeneration) {
+    if (!nevoAvailable()) return "";
+    return "\nVOEDINGSWAARDEN: Balanza rekent de macro's zelf uit met het Nederlands Voedingsstoffenbestand (NEVO). Daarom:\n" +
+      "- Geef ELK ingrediënt als object {\"tekst\": \"180 g kipfilet\", \"gram\": 180, \"nevo\": \"Kipfilet rauw\"}.\n" +
+      "- \"gram\" = gewicht per portie in gram (rauw/onbereid gewicht, vloeistoffen in ml = gram). Ook olie, boter, sauzen, dressings, " +
+      "kaas en noten krijgen altijd een concrete hoeveelheid (1 el olie = 10 g, 1 tl = 4 g). Zout, peper en gedroogde kruiden mogen gram 1.\n" +
+      "- \"tekst\" = de leesbare regel voor de gebruiker, mét hoeveelheid.\n" +
+      "- \"nevo\" = de NEVO-productnaam; kies bij voorkeur exact een naam uit de lijst hieronder, anders de best passende NEVO-achtige naam.\n" +
+      (forGeneration === false ? "" : "- Kies hoeveelheden zó dat de macro's, gerekend met deze waarden, het doel echt halen. Reken zelf na voordat je antwoordt. " +
+        "Vul kcal/kh_g/eiwit_g/vet_g in met die eigen berekening.\n") +
+      "NEVO 2025 per 100 g (naam | kcal, eiwit, koolhydraten, vet):\n" + nevoStapleText() + "\n";
+  }
+
+  var NEVO_INGREDIENT_SCHEMA = '[{"tekst": "180 g kipfilet", "gram": 180, "nevo": "Kipfilet rauw"}]';
+
+  // Groen zegel: getande rozet met vinkje. Kleuren via CSS-tokens, zodat licht en donker thema kloppen.
+  function nevoIngredientSchema() {
+    return nevoAvailable() ? NEVO_INGREDIENT_SCHEMA : '["ingredient 1", "ingredient 2"]';
+  }
+  function nevoIngredientTexts(arr) {
+    return nevoNormalizeIngredients(arr).map(function (x) { return x.tekst; });
+  }
+
 // ---------- Routes ----------
 
 // ---------- Prompt construction (server-side only) ----------
@@ -781,12 +1022,13 @@ function buildGeneratePrompt(p) {
     "Geef ALLEEN geldig JSON terug: een array van EXACT " + totalCount + " objecten (" + count +
     " per maaltijdmoment), exact dit schema, geen markdown-opmaak, geen uitleg erbuiten:\n" +
     '[{"name": "gerechtnaam", "mealType": "' + mealTypes[0] + '", "kcal": 600, "kh_g": 50, "eiwit_g": 48, "vet_g": 22, ' +
-    '"bereidingstijd_minuten": 30, "foto_zoekterm": "grilled salmon asparagus", "benodigdheden": "korte tekst met keukenapparatuur", "ingredienten": ["ingredient 1", "ingredient 2"], ' +
+    '"bereidingstijd_minuten": 30, "foto_zoekterm": "grilled salmon asparagus", "benodigdheden": "korte tekst met keukenapparatuur", "ingredienten": ' + nevoIngredientSchema() + ', ' +
     '"steps": [{"title": "korte staptitel", "content": "volledige instructie", "timer_seconds": 300}]}]\n' +
     '"mealType" moet exact één van deze waarden zijn: ' + mealTypes.join(", ") + ". " +
     "\"bereidingstijd_minuten\" is de totale realistische bereidingstijd (voorbereiding + kooktijd samen) in hele minuten. " +
     FOTO_TERM_LINE +
-    "timer_seconds alleen toevoegen bij stappen met wachttijd (koken, bakken, grillen, oven, sudderen); anders weglaten.";
+    "timer_seconds alleen toevoegen bij stappen met wachttijd (koken, bakken, grillen, oven, sudderen); anders weglaten." +
+    nevoPromptText();
 }
 
 function buildBackgroundGeneratePrompt(needed, p) {
@@ -807,12 +1049,13 @@ function buildBackgroundGeneratePrompt(needed, p) {
     "Geef ALLEEN geldig JSON terug: een array van EXACT " + totalCount + " objecten, exact dit schema, " +
     "geen markdown-opmaak, geen uitleg erbuiten:\n" +
     '[{"name": "gerechtnaam", "mealType": "' + types[0] + '", "kcal": 600, "kh_g": 50, "eiwit_g": 48, "vet_g": 22, ' +
-    '"bereidingstijd_minuten": 30, "foto_zoekterm": "grilled salmon asparagus", "benodigdheden": "korte tekst met keukenapparatuur", "ingredienten": ["ingredient 1", "ingredient 2"], ' +
+    '"bereidingstijd_minuten": 30, "foto_zoekterm": "grilled salmon asparagus", "benodigdheden": "korte tekst met keukenapparatuur", "ingredienten": ' + nevoIngredientSchema() + ', ' +
     '"steps": [{"title": "korte staptitel", "content": "volledige instructie", "timer_seconds": 300}]}]\n' +
     '"mealType" moet exact één van deze waarden zijn: ' + types.join(", ") + ". " +
     "\"bereidingstijd_minuten\" is de totale realistische bereidingstijd (voorbereiding + kooktijd samen) in hele minuten. " +
     FOTO_TERM_LINE +
-    "timer_seconds alleen toevoegen bij stappen met wachttijd; anders weglaten.";
+    "timer_seconds alleen toevoegen bij stappen met wachttijd; anders weglaten." +
+    nevoPromptText();
 }
 
 function buildVariationPromptServer(current, kind, p) {
@@ -823,11 +1066,12 @@ function buildVariationPromptServer(current, kind, p) {
     INGREDIENT_SPECIFICITY_LINE +
     "Geef ALLEEN geldig JSON terug, exact dit schema, geen markdown, geen uitleg erbuiten:\n" +
     '{"name": "gerechtnaam", "kcal": 600, "kh_g": 50, "eiwit_g": 48, "vet_g": 22, ' +
-    '"bereidingstijd_minuten": 30, "foto_zoekterm": "grilled salmon asparagus", "benodigdheden": "korte tekst met keukenapparatuur", "ingredienten": ["ingredient 1", "ingredient 2"], ' +
+    '"bereidingstijd_minuten": 30, "foto_zoekterm": "grilled salmon asparagus", "benodigdheden": "korte tekst met keukenapparatuur", "ingredienten": ' + nevoIngredientSchema() + ', ' +
     '"steps": [{"title": "korte staptitel", "content": "volledige instructie", "timer_seconds": 300}]}\n' +
     "\"bereidingstijd_minuten\" is de bijgewerkte, realistische totale bereidingstijd in hele minuten, passend bij de opdracht. " +
     "Werk ook \"foto_zoekterm\" bij als het hoofdingrediënt of het soort gerecht door de opdracht verandert. " + FOTO_TERM_LINE +
-    "timer_seconds alleen toevoegen bij stappen met wachttijd; anders weglaten.";
+    "timer_seconds alleen toevoegen bij stappen met wachttijd; anders weglaten." +
+    nevoPromptText();
 }
 
 function buildPrepPromptServer(dishes) {
@@ -850,6 +1094,18 @@ function buildPrepPromptServer(dishes) {
     '"steps": [{"title": "korte staptitel", "content": "volledige instructie", "timer_seconds": 300}]}\n' +
     "\"bereidingstijd_minuten\" is de totale realistische bereidingstijd (voorbereiding + kooktijd samen) in hele minuten. " +
     "timer_seconds alleen toevoegen bij stappen met wachttijd; anders weglaten.";
+}
+
+// Zet ingrediëntregels van BESTAANDE gerechten om naar het NEVO-schema, zonder het recept te veranderen.
+// De AI verzint geen nieuwe macro's; die worden na dit antwoord met NEVO uitgerekend (applyNevoToDish).
+function buildNevoRecalcPrompt(dishes) {
+  var data = dishes.map(function (d) { return { id: d.id, name: d.name, ingredienten: d.ingredienten }; });
+  return "Hieronder staan bestaande gerechten (per 1 persoon) met hun ingrediëntregels, in JSON:\n" + JSON.stringify(data) + "\n\n" +
+    "Opdracht: zet elke ingrediëntregel om naar een object {\"tekst\", \"gram\", \"nevo\"}. Verander NIETS aan het recept of de hoeveelheden. " +
+    "Staat er bij een regel geen hoeveelheid (bijv. \"olijfolie\" of \"melk\"), kies dan een realistische hoeveelheid voor 1 portie die past bij het gerecht " +
+    "en zet die hoeveelheid ook in \"tekst\" (bijv. \"10 g olijfolie\"). Stuks omrekenen naar gram (1 ei = 50 g, 1 snee brood = 35 g).\n" +
+    nevoPromptText(false) +
+    "Geef ALLEEN geldig JSON terug, geen markdown, geen uitleg: een array met per gerecht {\"id\": \"...\", \"ingredienten\": " + NEVO_INGREDIENT_SCHEMA + "}.";
 }
 
 function buildPriceEstimatePrompt(items) {
@@ -876,6 +1132,13 @@ function mergeDishArrays(results) {
 // total tokens/cost, but wall-clock time drops roughly N-fold for N
 // mealtypes since they're generated concurrently rather than one after
 // another. Falls back to a single request when there's only one mealtype.
+// Rekent de macro's van elk gerecht in het antwoord opnieuw uit met NEVO (indien mogelijk); "parsed" is één
+// gerecht (variatie) of een lijst (genereren/achtergrond). Ingrediënten worden altijd platte tekstregels.
+function applyNevoToParsed(parsed) {
+  var dishes = Array.isArray(parsed) ? parsed : [parsed];
+  dishes.forEach(function (d) { if (d && Array.isArray(d.ingredienten)) applyNevoToDish(d, d.ingredienten); });
+  return parsed;
+}
 function runGenerateAction(body) {
   var action = body && body.action;
   var params = (body && body.params) || {};
@@ -885,10 +1148,10 @@ function runGenerateAction(body) {
     if (mealTypes.length > 1) {
       return Promise.all(mealTypes.map(function (mt) {
         var subParams = Object.assign({}, params, { mealTypes: [mt] });
-        return generateWithBalansRetry(buildGeneratePrompt(subParams), params.goal);
+        return generateWithBalansRetry(buildGeneratePrompt(subParams), params.goal, applyNevoToParsed);
       })).then(mergeDishArrays);
     }
-    return generateWithBalansRetry(buildGeneratePrompt(params), params.goal);
+    return generateWithBalansRetry(buildGeneratePrompt(params), params.goal, applyNevoToParsed);
   }
 
   if (action === "background") {
@@ -898,14 +1161,14 @@ function runGenerateAction(body) {
       return Promise.all(types.map(function (mt) {
         var subNeeded = {};
         subNeeded[mt] = needed[mt];
-        return generateWithBalansRetry(buildBackgroundGeneratePrompt(subNeeded, params), params.goal);
+        return generateWithBalansRetry(buildBackgroundGeneratePrompt(subNeeded, params), params.goal, applyNevoToParsed);
       })).then(mergeDishArrays);
     }
-    return generateWithBalansRetry(buildBackgroundGeneratePrompt(needed, params), params.goal);
+    return generateWithBalansRetry(buildBackgroundGeneratePrompt(needed, params), params.goal, applyNevoToParsed);
   }
 
   if (action === "variation") {
-    return generateWithBalansRetry(buildVariationPromptServer(body.current || {}, body.kind, params), params.goal);
+    return generateWithBalansRetry(buildVariationPromptServer(body.current || {}, body.kind, params), params.goal, applyNevoToParsed);
   }
 
   if (action === "prep") {
@@ -914,6 +1177,18 @@ function runGenerateAction(body) {
 
   if (action === "price") {
     return generateWithBalansRetry(buildPriceEstimatePrompt(body.items || []), null);
+  }
+
+  if (action === "nevo-recalc") {
+    if (!nevoAvailable()) { var noNevoErr = new Error("NEVO-gegevens zijn niet beschikbaar op deze server."); noNevoErr.isBadRequest = true; return Promise.reject(noNevoErr); }
+    var dishesIn = Array.isArray(body.dishes) ? body.dishes : [];
+    dishesIn = dishesIn.filter(function (d) { return d && typeof d.id === "string" && d.id && Array.isArray(d.ingredienten); }).slice(0, 20);
+    if (!dishesIn.length) { var noDishErr = new Error("Geen geldige gerechten om te herberekenen."); noDishErr.isBadRequest = true; return Promise.reject(noDishErr); }
+    return generateWithBalansRetry(buildNevoRecalcPrompt(dishesIn), null, function (parsed) {
+      var arr = Array.isArray(parsed) ? parsed : [];
+      arr.forEach(function (d) { if (d && Array.isArray(d.ingredienten)) applyNevoToDish(d, d.ingredienten); });
+      return arr;
+    });
   }
 
   var badRequestErr = new Error("Ongeldig verzoek.");
@@ -989,8 +1264,10 @@ function callAnthropicOnce(prompt, model, maxTokens) {
 // Balans-score reaches BALANS_MIN_THRESHOLD, keeping the best-scoring attempt
 // seen so far. Only applies when a goal is known (dish-generating actions);
 // prep/price requests have no macros to score and skip this entirely.
-function generateWithBalansRetry(prompt, goal) {
-  if (!goal) return callAnthropicOnce(prompt);
+// "post" mag het antwoord aanpassen vóórdat het op de Balans-score wordt beoordeeld (bijv. de NEVO-herberekening
+// van de macro's): zo wordt er geretryd op de echte, uitgerekende macro's in plaats van de AI-schatting.
+function generateWithBalansRetry(prompt, goal, post) {
+  if (!goal) return callAnthropicOnce(prompt).then(function (parsed) { return post ? post(parsed) : parsed; });
 
   var bestParsed = null;
   var bestScore = -1;
@@ -999,6 +1276,7 @@ function generateWithBalansRetry(prompt, goal) {
   function tryOnce() {
     attempt++;
     return callAnthropicOnce(prompt).then(function (parsed) {
+      if (post) parsed = post(parsed);
       var score = minBalans(parsed, goal);
       if (score > bestScore) { bestScore = score; bestParsed = parsed; }
       if (score >= BALANS_MIN_THRESHOLD || attempt >= BALANS_MAX_ATTEMPTS) {
@@ -1079,7 +1357,7 @@ function handleGenerate(req, res) {
           }).catch(function (err) {
             var status = err && err.isBadRequest ? 400 : 502;
             var code = err && err.isBadRequest ? "bad_request" : "error";
-            var message = err && err.isBadRequest ? "Ongeldig verzoek." : "Genereren mislukt: " + err.message;
+            var message = err && err.isBadRequest ? (err.message || "Ongeldig verzoek.") : "Genereren mislukt: " + err.message;
             return recordAccounting(uidForLog, action, usage, 0, false).then(function () {
               log(action, false, status, err.message, { usage: usage, dishes: 0 });
               sendJSON(res, status, { code: code, message: message });
@@ -1844,7 +2122,7 @@ function loadJob(id) {
 }
 function jobFailure(err) {
   var bad = !!(err && err.isBadRequest);
-  return { status: bad ? 400 : 502, code: bad ? "bad_request" : "error", message: bad ? "Ongeldig verzoek." : "Genereren mislukt: " + (err && err.message ? err.message : "onbekende fout") };
+  return { status: bad ? 400 : 502, code: bad ? "bad_request" : "error", message: bad ? (err && err.message ? err.message : "Ongeldig verzoek.") : "Genereren mislukt: " + (err && err.message ? err.message : "onbekende fout") };
 }
 function finishJob(job, err, result) {
   if (job.status !== "running") return;

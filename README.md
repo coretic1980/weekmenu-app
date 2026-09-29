@@ -423,6 +423,38 @@ prijzen inclusief btw, duidelijk wat je afsluit, herroepingsrecht en makkelijk o
 regels). Btw-afdracht en onder welke onderneming de omzet valt: bespreek dat met je boekhouder. Het akkoord van de klant
 (tijdstip, bedrag, link naar de voorwaarden) wordt wel vastgelegd, maar de teksten zelf moet jij aanleveren.
 
+## Macro's berekend met NEVO
+
+Balanza rekent macro's niet alleen uit door de AI te laten schatten: waar mogelijk worden ze berekend met het
+**Nederlands Voedingsstoffenbestand (NEVO)** van het RIVM. De AI levert per ingrediënt een object
+`{"tekst": "180 g kipfilet", "gram": 180, "nevo": "Kipfilet rauw"}`; Balanza koppelt `nevo` aan een van de
+~2.328 NEVO-producten (`nevo/nevo2025_macros.json`) en rekent kcal, eiwit, koolhydraten en vet zelf uit.
+
+- **Volledige match** (alle relevante ingrediënten gekoppeld; zout, peper en kruiden tellen niet mee): het gerecht
+  krijgt `macroBron: "nevo"`, een groen label "NEVO-berekend" (in de app en de PDF) en een bronregel op het
+  receptscherm. Dit geldt voor genereren, automatisch aanvullen en variaties — en telt óók mee bij het bepalen of
+  een gerecht dicht genoeg bij het gekozen doel zit (de Balans-score wordt op de **echte, uitgerekende** macro's
+  beoordeeld, niet op wat de AI zelf beweerde).
+- **Onvolledige match** (een ingrediënt zonder goede NEVO-match): de AI-schatting blijft staan, duidelijk gelabeld
+  als `macroBron: "schatting"`, met welke ingrediënten niet zijn meegeteld.
+- **Bestaande gerechten** in "Opgeslagen gerechten" die nog een schatting zijn, kun je met één knop laten
+  herberekenen ("Herbereken macro's met NEVO"). Dat stuurt de bestaande ingrediëntregels (ongewijzigd) naar de AI
+  om ze naar het NEVO-schema om te zetten, waarna Balanza dezelfde berekening toepast. Dit telt niet mee voor de
+  maandelijkse limiet op nieuwe gerechten (er wordt niets nieuws gemaakt), maar de AI-kosten worden wel bijgehouden.
+
+**Bronvermelding en licentie.** Zie `NOTICE.md` en `nevo/NEVO-voorwaarden-2025.pdf`. De NEVO-gegevens zijn
+eigendom van het RIVM / de Staat der Nederlanden; het RIVM onderschrijft Balanza niet en berekende waarden zijn
+indicatief. Eigen toevoegingen die niet in NEVO zitten (bijv. eiwitpoeder) staan apart in `NEVO_ADDITIONS` in
+`server.js`, gemarkeerd als "Balanza-aanvulling".
+
+**Zonder de dataset.** Ontbreekt `nevo/nevo2025_macros.json` (bijv. per ongeluk niet meegedeployd), dan draait de
+app gewoon door op AI-schattingen: er verschijnt dan nergens een NEVO-label, en het herberekenen-eindpunt geeft een
+duidelijke melding dat NEVO niet beschikbaar is in plaats van de AI toch aan te roepen.
+
+**De dataset bijwerken.** Download een nieuwere NEVO-versie via https://nevo-online.rivm.nl/ (akkoord met de
+voorwaarden) en bouw er met `nevo/build_nevo_subset.py` een nieuwe `nevo2025_macros.json` van. Werk dan ook
+`NEVO_VERSION`/`NEVO_REFERENCE` in `server.js` en de tekst in `NOTICE.md` bij.
+
 ## Genereren op de achtergrond en meldingen
 
 Gerechten maken duurt soms minuten. Ga je in die tijd naar een andere app of gaat je scherm op slot, dan

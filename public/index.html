@@ -32,6 +32,7 @@
     --tag-kh-bg: #1C1912; --tag-kh-ink: #DCD7C6;
     --tag-eiwit-bg: #1A1712; --tag-eiwit-ink: #D6CFBC;
     --tag-vet-bg: #241A0C; --tag-vet-ink: #E8C583;
+    --nevo-bg: #113322; --nevo-ink: #7fd9a0;
     --dark-panel: #241C0E;
     --dark-panel-ink: #F3EEE2;
   }
@@ -49,6 +50,7 @@
     --tag-kh-bg: #E9E7DE; --tag-kh-ink: #10182B;
     --tag-eiwit-bg: #EDEAE1; --tag-eiwit-ink: #4A4438;
     --tag-vet-bg: #F3E6D0; --tag-vet-ink: #8A6220;
+    --nevo-bg: #D7F0E0; --nevo-ink: #1D6A3B;
     --dark-panel: #0A1120;
     --dark-panel-ink: #F7F2E7;
   }
@@ -110,6 +112,7 @@
   .tag.eiwit { background: var(--tag-eiwit-bg); color: var(--tag-eiwit-ink); }
   .tag.vet { background: var(--tag-vet-bg); color: var(--tag-vet-ink); }
   .tag.balans { background: var(--accent2); color: var(--accent2-ink); }
+  .tag.nevo { background: var(--nevo-bg); color: var(--nevo-ink); }
   .section-label { font-size: 11px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: var(--label); margin: 4px 0 4px; }
   .prepcard { background: var(--dark-panel); color: var(--dark-panel-ink); border-radius: 13px; padding: 26px; display: flex; flex-direction: column; gap: 10px; cursor: pointer; border: none; text-align: left; width: 100%; font-family: inherit; }
   .prepcard h2 { font-family: "Fraunces", serif; font-weight: 600; font-size: 24px; margin: 0; color: inherit; }
@@ -999,6 +1002,7 @@
       ["balans", "Balans " + day.balans + "%"]
     ]);
     if (day.mealType && !(opts && opts.hideMealType)) items.unshift(["neutral", day.mealType]);
+    if (day.macroBron === "nevo") items.push(["nevo", "NEVO-berekend"]);
     items.forEach(function (it) {
       var t = document.createElement("span");
       t.className = "tag " + it[0];
@@ -1006,6 +1010,19 @@
       wrap.appendChild(t);
     });
     return wrap;
+  }
+
+  // Korte bronregel onder een recept: hoe de macro's tot stand zijn gekomen.
+  function nevoCreditText(day) {
+    if (day.macroBron === "nevo") return "Macro's berekend met het Nederlands Voedingsstoffenbestand (NEVO), RIVM.";
+    return "Macro's zijn een schatting van de AI (nog niet berekend met NEVO).";
+  }
+  function nevoCreditLine(day) {
+    var el = document.createElement("div");
+    el.className = "acc-sub"; el.id = "nevoCredit";
+    el.style.marginTop = "-6px";
+    el.textContent = nevoCreditText(day);
+    return el;
   }
 
   // Controleert een door de AI geleverde lijst met tips en houdt alleen bruikbare items over.
@@ -3237,6 +3254,7 @@
         benodigdheden: String(d.benodigdheden || ""),
         ingredienten: Array.isArray(d.ingredienten) ? d.ingredienten.map(String) : [],
         steps: steps,
+        macroBron: d.macroBron === "nevo" ? "nevo" : "schatting", nevo: d.nevo || null,
         profile: currentProfileSnapshot()
       };
     });
@@ -3348,6 +3366,7 @@
   var GUIDE_STEPS = [
     { title: "Stel je voorkeuren in", body: "Ga naar \u201cGerechten ontwerpen\u201d en vul in wat voor jou relevant is: keukenstijl, smaakprofiel, culinair niveau, apparatuur, uitsluitingen, en optioneel je lichaamsprofiel (geslacht, lengte, gewicht, leeftijd, activiteitsniveau) en je doel (Onderhoud, Vetverlies, Cutting, Spieropbouw of Atleet)." },
     { title: "Genereer gerechten", body: "Kies bij welk maaltijdmoment(en) het gaat (Ontbijt/Lunch/Diner/Snack) en hoeveel gerechten je per moment wilt, en tik op \u201cGenereer gerechten\u201d. Daarna kies je of er ook afbeeldingen bij worden gezocht (duurt iets langer). Elk gerecht krijgt een Balans-score: hoe dichter bij het streefpercentage van jouw doel, hoe hoger de score. Het genereren kan even duren; je hoeft niet in de app te blijven wachten. Geldt er een limiet voor het aantal nieuwe gerechten per maand, dan zie je hier hoeveel je er nog over hebt." },
+    { title: "Macro's berekend met NEVO", body: "De macro's van je gerechten worden uitgerekend met het Nederlands Voedingsstoffenbestand (NEVO) van het RIVM, niet alleen geschat: een groen \u201cNEVO-berekend\u201d label (in de app en in de PDF) laat zien wanneer dat is gelukt. Lukt het matchen van een ingredi\u00ebnt een keer niet, dan blijft de AI-schatting zichtbaar en duidelijk gelabeld. In \u201cOpgeslagen gerechten\u201d kun je oudere gerechten met \u00e9\u00e9n tik laten herberekenen." },
     { title: "Krijg een melding als het klaar is", body: "Ga je tijdens het genereren naar een andere app, dan werkt Balanza gewoon door en staan je gerechten klaar zodra je terugkomt. Wil je een seintje? Zet onder Instellingen \u2192 Meldingen de meldingen aan (of tik tijdens het genereren op \u201cStuur me een melding als het klaar is\u201d). Op een iPhone werkt dat als Balanza op je beginscherm staat: tik op Deel en kies \u201cZet op beginscherm\u201d." },
     { title: "Bekijk je bibliotheek", body: "Onder \u201cOpgeslagen gerechten\u201d vind je alles wat je ooit heb ontworpen of gegenereerd, gegroepeerd per maaltijdmoment. Filter op maaltijdmoment of doel, of verwijder gerechten die je niet meer wilt." },
     { title: "Plan een week", body: "Onder \u201cPlannen\u201d kies je de huidige week of een week in de toekomst. Elke dag heeft 6 momenten: Ontbijt, Snack na ontbijt, Lunch, Snack na lunch, Diner en Snack na diner. Tik een moment aan om er een gerecht aan toe te wijzen." },
@@ -3429,8 +3448,15 @@
 
     var eyebrow = document.createElement("div");
     eyebrow.className = "eyebrow";
-    eyebrow.textContent = "In het kort";
+    eyebrow.id = "guideEyebrow";
+    eyebrow.textContent = "De Nederlandse mealprep-coach voor je fitnessdoel";
     main.appendChild(eyebrow);
+
+    var heroTitle = document.createElement("h2");
+    heroTitle.id = "guideHero";
+    heroTitle.style.margin = "2px 0 0";
+    heroTitle.textContent = "Ontwerp je gebalanceerde maaltijden";
+    main.appendChild(heroTitle);
 
     var intro = document.createElement("p");
     intro.style.margin = "0";
@@ -3532,6 +3558,18 @@
       clearAllBtn.textContent = "Wis alles";
       clearAllBtn.onclick = function () { clearAllStoredDishes(); };
       main.appendChild(clearAllBtn);
+
+      var nevoTodo = 0, nevoSeen = {};
+      WEEKS.forEach(function (w) { (w.days || []).forEach(function (d) { if (!d.prep && Array.isArray(d.ingredienten) && d.macroBron !== "nevo" && !nevoSeen[d.id]) { nevoSeen[d.id] = true; nevoTodo++; } }); });
+      if (nevoTodo > 0) {
+        var recalcBtn = document.createElement("button");
+        recalcBtn.className = "ghost-btn"; recalcBtn.id = "nevoRecalcBtn";
+        recalcBtn.disabled = !!state.nevoRecalc;
+        recalcBtn.textContent = state.nevoRecalc ? "Macro's worden herberekend\u2026" :
+          "Herbereken macro's met NEVO (" + nevoTodo + (nevoTodo === 1 ? " gerecht)" : " gerechten)");
+        recalcBtn.onclick = function () { recalcLibraryWithNevo(); };
+        main.appendChild(recalcBtn);
+      }
     }
 
     if (!shownTotal) {
@@ -6147,6 +6185,7 @@
         bx = drawBadge(bx, y, "Eiwit " + day.eiwit + "%" + (day.eiwitG !== undefined ? " (" + day.eiwitG + "g)" : ""), EIWIT_BG, EIWIT_INK);
         bx = drawBadge(bx, y, "Vet " + day.vet + "%" + (day.vetG !== undefined ? " (" + day.vetG + "g)" : ""), VET_BG, VET_INK);
         bx = drawBadge(bx, y, "Balans " + day.balans + "%", ORANGE, ORANGE_INK);
+        if (day.macroBron === "nevo") bx = drawBadge(bx, y, "NEVO-berekend", [228, 244, 233], [29, 106, 59]);
       }
       y += 16 + 12;
 
@@ -6314,6 +6353,7 @@
     main.appendChild(h2);
 
     main.appendChild(macroTags(day));
+    if (!day.prep) main.appendChild(nevoCreditLine(day));
 
     var servingsForView = state.dayServings || 1;
     if (servingsForView > 1) {
@@ -6455,6 +6495,7 @@
           if (s.timer_seconds) st.timer = Number(s.timer_seconds);
           return st;
         }) : day.steps;
+        day.macroBron = d.macroBron === "nevo" ? "nevo" : "schatting"; day.nevo = d.nevo || null;
         day.profile = currentProfileSnapshot();
         state.variating = false;
         busyEnd();
@@ -6750,7 +6791,8 @@
       imageUrl: day.imageUrl !== undefined ? day.imageUrl : null,
       imageCredit: day.imageCredit || null,
       imageV: day.imageV || 0,
-      fotoZoekterm: day.fotoZoekterm || ""
+      fotoZoekterm: day.fotoZoekterm || "",
+      macroBron: day.macroBron === "nevo" ? "nevo" : "schatting", nevo: day.nevo || null
     };
   }
 
@@ -6821,6 +6863,31 @@
     }).catch(function () {});
   }
 
+  // Vervangt (in plaats van toe te voegen) de opgeslagen versie van elk gerecht in "updatedDays" op basis van id.
+  // Gebruikt na het herberekenen van macro's met NEVO, zodat de nieuwe waarden ook na een herlaad bewaard blijven.
+  function updateStoredDishesInDb(updatedDays) {
+    if (!dbCap || !userCap || !updatedDays || !updatedDays.length) return;
+    var byId = {}; updatedDays.forEach(function (d) { byId[d.id] = d; });
+    userCap.id().then(function (uid) {
+      if (!uid) return;
+      var ref = dbCap.doc("data/users/" + uid + "/dishes");
+      ref.get().then(function (snap) {
+        if (!snap.exists) return;
+        var current = deepClone(snap.data() || {});
+        var changed = false;
+        PLAN_MEALS.forEach(function (m) {
+          if (!Array.isArray(current[m])) return;
+          current[m] = current[m].map(function (d) {
+            if (!byId[d.id]) return d;
+            changed = true;
+            return dishToPlainObject(byId[d.id]);
+          });
+        });
+        if (changed) ref.set(current).catch(function () {});
+      }).catch(function () {});
+    }).catch(function () {});
+  }
+
   function deleteDishFromDb(dishId) {
     if (!dbCap || !userCap) return;
     userCap.id().then(function (uid) {
@@ -6849,6 +6916,71 @@
       PLAN_MEALS.forEach(function (m) { empty[m] = []; });
       dbCap.doc("data/users/" + uid + "/dishes").set(empty).catch(function () {});
     }).catch(function () {});
+  }
+
+  // Herberekent de macro's van alle opgeslagen gerechten die nog geen NEVO-berekening hebben, in groepjes van 10.
+  function recalcLibraryWithNevo() {
+    if (state.nevoRecalc) return;
+    var todo = [], seen = {};
+    WEEKS.forEach(function (w) {
+      (w.days || []).forEach(function (d) {
+        if (d.prep || !Array.isArray(d.ingredienten) || d.macroBron === "nevo" || seen[d.id]) return;
+        seen[d.id] = true;
+        todo.push(d);
+      });
+    });
+    if (!todo.length) { showToast("Alle gerechten zijn al met NEVO berekend."); return; }
+    state.nevoRecalc = true;
+    busyStart("Macro's worden herberekend met NEVO\u2026");
+    render();
+
+    function applyResult(d, r) {
+      var kcal = r ? Number(r.kcal) || 0 : 0;
+      if (r && r.macroBron === "nevo" && kcal > 0) {
+        var khG = Number(r.kh_g) || 0, eiwitG = Number(r.eiwit_g) || 0, vetG = Number(r.vet_g) || 0;
+        d.kcal = kcal; d.khG = khG; d.eiwitG = eiwitG; d.vetG = vetG;
+        d.kh = Math.round((khG * 4 / kcal) * 100);
+        d.eiwit = Math.round((eiwitG * 4 / kcal) * 100);
+        d.vet = Math.round((vetG * 9 / kcal) * 100);
+        d.balans = computeBalance(d.kh, d.eiwit, d.vet);
+        d.macroBron = "nevo";
+        d.nevo = r.nevo || null;
+      }
+      if (r && Array.isArray(r.ingredienten) && r.ingredienten.length) d.ingredienten = r.ingredienten.map(String);
+    }
+    function finish() {
+      plannedWeeks.forEach(function (pw) {
+        Object.keys(pw.slots || {}).forEach(function (k) {
+          var s = pw.slots[k];
+          var f = s && s.dayId ? findDayAnywhere(s.dayId) : null;
+          if (f && f.day) s.balans = f.day.balans;
+        });
+      });
+      savePlannedWeeks();
+      updateStoredDishesInDb(todo);
+      var ok = todo.filter(function (d) { return d.macroBron === "nevo"; }).length;
+      state.nevoRecalc = false;
+      busyEnd();
+      showToast(ok + " van " + todo.length + (todo.length === 1 ? " gerecht" : " gerechten") + " herberekend met NEVO.");
+      render();
+    }
+
+    claude.use("sample").then(function (sample) {
+      if (!sample) { state.nevoRecalc = false; busyEnd(); showToast("Herberekenen is in deze weergave niet beschikbaar."); render(); return; }
+      var batches = [];
+      for (var i = 0; i < todo.length; i += 10) batches.push(todo.slice(i, i + 10));
+      var chain = Promise.resolve();
+      batches.forEach(function (batch) {
+        chain = chain.then(function () {
+          return sample.json({ action: "nevo-recalc", dishes: batch.map(function (d) { return { id: d.id, ingredienten: d.ingredienten }; }) }, { modelTier: "default" }).then(function (res) {
+            var list = extractDishArray(res) || [];
+            var byId = {}; list.forEach(function (r) { if (r && r.id) byId[String(r.id)] = r; });
+            batch.forEach(function (d) { applyResult(d, byId[d.id]); });
+          }).catch(function () {});   // een mislukte groep: die gerechten blijven een schatting, de rest gaat door
+        });
+      });
+      chain.then(finish, finish);
+    });
   }
 
   function deleteOneStoredDish(item) {
@@ -6914,6 +7046,7 @@
         benodigdheden: String(d.benodigdheden || ""),
         ingredienten: Array.isArray(d.ingredienten) ? d.ingredienten.map(String) : [],
         steps: steps,
+        macroBron: d.macroBron === "nevo" ? "nevo" : "schatting", nevo: d.nevo || null,
         profile: currentProfileSnapshot()
       };
     });
