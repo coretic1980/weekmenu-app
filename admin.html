@@ -108,6 +108,8 @@
   .switch.on { background: var(--good); border-color: var(--good); } .switch.on::after { left: 22px; background: #fff; }
   .switch:disabled { opacity: .5; }
   .module { display: flex; gap: 14px; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--line); }
+  .module-right { display: flex; gap: 10px; align-items: center; flex-shrink: 0; }
+  .plan-scope { font-size: 13px; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
   .module:last-child { border-bottom: none; }
   .module .name { font-weight: 600; } .module .desc { color: var(--muted); font-size: 13px; margin-top: 2px; }
   .kv { display: grid; grid-template-columns: max-content 1fr; gap: 6px 18px; }
@@ -1114,11 +1116,20 @@
       }, "Inloggen verplicht"))));
 
     // onderdelen
+    var gateable = cfg.planGateableModules || [];
     var modRows = cfg.moduleDefs.map(function (d) {
       var on = s.modules[d.key], byMaintenance = s.maintenance.enabled && cfg.maintenanceOffModules.indexOf(d.key) > -1;
       var sw = switchBtn(on, function (next) { apply({ modules: (function () { var o = {}; o[d.key] = next; return o; })() }, d.label + (next ? " staat aan." : " staat uit.")); }, d.label);
       sw.id = "mod-" + d.key;
-      return h("div", { class: "module", id: "row-" + d.key }, h("div", {}, h("div", { class: "name" }, d.label + " ", badge(d.enforced === "server" ? "server" : "alleen in de app"), byMaintenance ? " " : null, byMaintenance ? badge("uit door onderhoudsmodus", "warn") : null), h("div", { class: "desc", text: d.desc })), sw);
+      var right = [sw];
+      if (gateable.indexOf(d.key) > -1) {
+        var planSel = select([["all", "Iedereen"], ["plus", "Alleen Plus"]], s.planOnly && s.planOnly[d.key] ? "plus" : "all", function (v) {
+          apply({ planOnly: (function () { var o = {}; o[d.key] = v === "plus"; return o; })() }, d.label + (v === "plus" ? " is nu alleen voor Plus." : " is weer voor iedereen."));
+        }, d.label + ": voor wie");
+        planSel.id = "plan-" + d.key; planSel.className = "plan-scope";
+        right = [planSel, sw];
+      }
+      return h("div", { class: "module", id: "row-" + d.key }, h("div", {}, h("div", { class: "name" }, d.label + " ", badge(d.enforced === "server" ? "server" : "alleen in de app"), byMaintenance ? " " : null, byMaintenance ? badge("uit door onderhoudsmodus", "warn") : null), h("div", { class: "desc", text: d.desc })), h("div", { class: "module-right" }, right));
     });
     view.appendChild(card("Onderdelen aan of uit", h("div", { class: "hint", style: { marginTop: "-4px", marginBottom: "4px" }, text: "Uitgezette onderdelen verdwijnen uit de app en de server weigert ze. Gebruikers zien een duidelijke melding." }), modRows));
 
@@ -1230,9 +1241,10 @@
     if (key === "authRequired") return "Inloggen verplicht";
     if (parts[0] === "modules") { var d = s.moduleDefs.filter(function (x) { return x.key === parts[1]; })[0]; return "Onderdeel: " + (d ? d.label : parts[1]); }
     if (parts[0] === "limits") { var l = s.limitDefs.filter(function (x) { return x.key === parts[1]; })[0]; return "Limiet: " + (l ? l.label : parts[1]); }
+    if (parts[0] === "planOnly") { var pd = s.moduleDefs.filter(function (x) { return x.key === parts[1]; })[0]; return "Voor wie: " + (pd ? pd.label : parts[1]); }
     return ({ "billing.enabled": "Abonnementen aan", "billing.plusMonthlyCents": "Plus: maandprijs (centen)", "billing.plusYearlyCents": "Plus: jaarprijs (centen)", "billing.plusDishCap": "Plus: gerechten per maand", "billing.termsUrl": "Link naar voorwaarden", "maintenance.enabled": "Onderhoudsmodus", "maintenance.message": "Onderhoudsmelding", "announcement.enabled": "Mededeling tonen", "announcement.message": "Mededeling (tekst)", "announcement.level": "Mededeling (soort)" })[key] || key;
   }
-  function settingValue(key, v) { return typeof v === "boolean" ? (v ? "aan" : "uit") : v === "" ? "(leeg)" : String(v); }
+  function settingValue(key, v) { return key.indexOf("planOnly.") === 0 ? (v ? "alleen Plus" : "iedereen") : typeof v === "boolean" ? (v ? "aan" : "uit") : v === "" ? "(leeg)" : String(v); }
   function summarizeAudit(e) {
     var d = e.detail; if (!d) return "";
     if (e.action === "instellingen.wijzigen" && Array.isArray(d.wijzigingen)) return d.wijzigingen.map(function (x) { return settingLabel(x.sleutel) + ": " + settingValue(x.sleutel, x.van) + " → " + settingValue(x.sleutel, x.naar); }).join(" · ");

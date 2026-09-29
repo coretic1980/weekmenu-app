@@ -186,9 +186,12 @@ function normalizeSettings(raw) {
   var a = raw.announcement && typeof raw.announcement === "object" ? raw.announcement : {};
   var b = raw.billing && typeof raw.billing === "object" ? raw.billing : {};
   function intIn(v, min, max, def) { return typeof v === "number" && isFinite(v) && Math.floor(v) === v && v >= min && v <= max ? v : def; }
+  var planOnly = {};
+  PLAN_GATEABLE_MODULES.forEach(function (k) { planOnly[k] = !!(raw.planOnly && raw.planOnly[k] === true); });
   return {
     authRequired: raw.authRequired === true,
     modules: modules,
+    planOnly: planOnly,
     limits: limits,
     billing: { enabled: b.enabled === true, plusMonthlyCents: intIn(b.plusMonthlyCents, 100, 99900, 399), plusYearlyCents: intIn(b.plusYearlyCents, 100, 999900, 3499), plusDishCap: intIn(b.plusDishCap, 0, 100000, 150), termsUrl: cleanTermsUrl(b.termsUrl) },
     maintenance: { enabled: m.enabled === true, message: cleanText(m.message, 300) },
@@ -220,7 +223,7 @@ function getSettings() {
 function mergeSettings(cur, patch) {
   var next = JSON.parse(JSON.stringify(cur));
   if (typeof patch.authRequired === "boolean") next.authRequired = patch.authRequired;
-  ["modules", "limits", "maintenance", "announcement", "billing"].forEach(function (k) {
+  ["modules", "planOnly", "limits", "maintenance", "announcement", "billing"].forEach(function (k) {
     if (patch[k]) Object.keys(patch[k]).forEach(function (kk) { next[k][kk] = patch[k][kk]; });
   });
   return next;
@@ -263,6 +266,15 @@ function validateSettingsPatch(body) {
         return { error: def.label + " moet een geheel getal zijn tussen " + def.min + " en " + def.max + "." };
       }
       patch.limits[lk] = v; n++;
+    }
+  }
+  if (body.planOnly !== undefined) {
+    if (!body.planOnly || typeof body.planOnly !== "object" || Array.isArray(body.planOnly)) return { error: "planOnly moet een object zijn." };
+    patch.planOnly = {};
+    for (var pk of Object.keys(body.planOnly)) {
+      if (PLAN_GATEABLE_MODULES.indexOf(pk) === -1) return { error: "Dit onderdeel kan niet per abonnement worden ingesteld: " + pk + "." };
+      if (typeof body.planOnly[pk] !== "boolean") return { error: "planOnly." + pk + " moet true (alleen Plus) of false (iedereen) zijn." };
+      patch.planOnly[pk] = body.planOnly[pk]; n++;
     }
   }
   if (body.billing !== undefined) {
@@ -1338,8 +1350,13 @@ function handleGenerate(req, res) {
           log(action, false, 503, "Module uitgeschakeld: prices");
           return sendJSON(res, 503, moduleOffBody("prices", settings));
         }
+        return (action === "price" ? getUserPlan(uidForLog, settings) : Promise.resolve(null)).then(function (plan) {
+          if (action === "price" && planBlocksModule(settings, "prices", plan)) {
+            log(action, false, 503, "Kostenschatting is alleen voor Plus");
+            return sendJSON(res, 503, moduleOffBody("prices", settings));
+          }
 
-        var isAsync = !!(body && body.async === true);
+          var isAsync = !!(body && body.async === true);
         return (DISH_ACTIONS[action] ? quotaState(uidForLog) : Promise.resolve(null)).then(function (q) {
           if (quotaBlocked(q, isAsync ? runningJobCount(uidForLog) : 0)) {
             log(action, false, 429, "Maandlimiet nieuwe gerechten bereikt (" + q.used + "/" + q.cap + ")");
@@ -1363,6 +1380,7 @@ function handleGenerate(req, res) {
               sendJSON(res, status, { code: code, message: message });
             });
           });
+        });
         });
       }).catch(function () {
         log("onbekend", false, 400, "Ongeldige aanvraag");
@@ -1755,12 +1773,28 @@ function recordAccounting(uid, action, usage, dishes, ok) {
 }
 // De eigen limiet van een gebruiker (beheer) gaat voor de algemene. Leeg = de algemene. 0 = onbeperkt.
 // Volgorde: eigen limiet (beheer) > Plus (als abonnementen aan staan en het Plus is) > de algemene limiet.
+// Het abonnement van een gebruiker, nu: "plus" of "free". Voor anonieme profielen (geen account) altijd "free",
+// want Plus is alleen voor accounts. Wordt zowel voor de maandlimiet als voor het per-module vrijgeven gebruikt.
+function getUserPlan(uid, settings) {
+  if (!uid) return Promise.resolve("free");
+  return dbGetDoc("billing/" + uid).then(function (r) {
+    return billingLive(settings) && plusActiveDoc(r.exists ? r.value : null, Date.now()) ? "plus" : "free";
+  }, function () { return "free"; });
+}
 function effectiveDishCap(uid) {
-  return Promise.all([dbGetDoc("adminMeta/" + uid), getSettings(), dbGetDoc("billing/" + uid)]).then(function (r) {
+  return Promise.all([dbGetDoc("adminMeta/" + uid), getSettings()]).then(function (r) {
     var own = r[0].exists && r[0].value && typeof r[0].value.dishCap === "number" ? r[0].value.dishCap : null;
-    var s = r[1], plus = billingLive(s) && plusActiveDoc(r[2].exists ? r[2].value : null, Date.now());
-    return { cap: own !== null ? own : plus ? s.billing.plusDishCap : s.limits.monthlyDishCap, own: own, plan: plus ? "plus" : "free" };
+    var s = r[1];
+    return getUserPlan(uid, s).then(function (plan) {
+      return { cap: own !== null ? own : plan === "plus" ? s.billing.plusDishCap : s.limits.monthlyDishCap, own: own, plan: plan };
+    });
   });
+}
+// Onderdelen die je (naast algeheel aan/uit) ook per abonnement kunt vrijgeven: "iedereen" of "alleen Plus".
+var PLAN_GATEABLE_MODULES = ["prices", "bring", "sharing", "pdf", "images"];
+// True als dit onderdeel voor deze gebruiker geblokkeerd is omdat het alleen voor Plus is vrijgegeven.
+function planBlocksModule(s, key, plan) {
+  return PLAN_GATEABLE_MODULES.indexOf(key) > -1 && !!(s.planOnly && s.planOnly[key]) && plan !== "plus";
 }
 function quotaState(uid) {
   return Promise.all([getQuotaDoc(uid), effectiveDishCap(uid)]).then(function (r) {
@@ -2827,7 +2861,16 @@ function handleImage(req, res, query) {
   if (!UNSPLASH_ACCESS_KEY) {
     return sendJSON(res, 200, { url: null, credit: null, final: true });
   }
+  // Geen harde 401 hier (anders dan bij de foto-proxy): een oudere, gecachte pagina die nog geen
+  // identiteit meestuurt, moet gewoon een foto blijven krijgen. Zonder identiteit geldt "free".
+  return getSettings().then(function (s) {
+    return resolveUser(req).then(function (user) { return getUserPlan(user && user.uid, s); }, function () { return "free"; }).then(function (plan) {
+      if (planBlocksModule(s, "images", plan)) return sendJSON(res, 200, { url: null, credit: null, final: true });
+      return continueImage();
+    });
+  });
 
+  function continueImage() {
   var term = aiTerm ? cleanSearchTerm(aiTerm) : translateDutchDishName(name);
   if (!term) return sendJSON(res, 200, { url: null, credit: null, final: true });
 
@@ -2849,6 +2892,7 @@ function handleImage(req, res, query) {
   }).catch(function () {
     sendJSON(res, 200, { url: null, credit: null, final: false });
   });
+  }
 }
 
 // ---------- Foto-proxy (voor de PDF-export) ----------
@@ -2892,15 +2936,18 @@ function handlePhoto(req, res, query) {
 
   resolveUser(req).then(function (user) {
     if (!user) return sendUnauthorized(res);
-    return fetchPhotoBytes(larger.toString()).catch(function () {
-      return fetchPhotoBytes(original); // grotere variant niet beschikbaar: val terug op het origineel
-    }).then(function (photo) {
-      res.writeHead(200, {
-        "Content-Type": photo.type,
-        "Content-Length": photo.buffer.length,
-        "Cache-Control": "private, max-age=86400"
+    return getSettings().then(function (s) { return getUserPlan(user.uid, s).then(function (plan) { return { s: s, plan: plan }; }); }).then(function (r) {
+      if (planBlocksModule(r.s, "images", r.plan)) return sendJSON(res, 503, moduleOffBody("images", r.s));
+      return fetchPhotoBytes(larger.toString()).catch(function () {
+        return fetchPhotoBytes(original); // grotere variant niet beschikbaar: val terug op het origineel
+      }).then(function (photo) {
+        res.writeHead(200, {
+          "Content-Type": photo.type,
+          "Content-Length": photo.buffer.length,
+          "Cache-Control": "private, max-age=86400"
+        });
+        res.end(photo.buffer);
       });
-      res.end(photo.buffer);
     });
   }).catch(function () {
     sendJSON(res, 502, { message: "Foto niet beschikbaar." });
@@ -3170,12 +3217,16 @@ function handleListCreate(req, res) {
         if (!listCreateAllowed(ip)) {
           return sendJSON(res, 429, { code: "rate_limited", message: "Je hebt net al veel lijsten gedeeld. Probeer het over een tijdje opnieuw." });
         }
-        var token = crypto.randomBytes(16).toString("base64url");
-        var doc = { title: title, ownerUid: user.uid, createdAt: now, updatedAt: now, expiresAt: now + LIST_TTL_MS, rev: 1,
-          items: items, state: cleanListState(body.state, items) };
-        return dbSetDoc("lists/" + token, doc).then(function () {
-          return addToOwnerIndex(user.uid, token);
-        }).then(function () { reply(token, doc); });
+        return getSettings().then(function (s) { return getUserPlan(user.uid, s).then(function (plan) { return { s: s, plan: plan }; }); }).then(function (r) {
+          // Alleen het delen van een NIEUWE lijst kan aan Plus gebonden zijn; een lijst die al bestond blijft altijd werken.
+          if (planBlocksModule(r.s, "sharing", r.plan)) return sendJSON(res, 503, moduleOffBody("sharing", r.s));
+          var token = crypto.randomBytes(16).toString("base64url");
+          var doc = { title: title, ownerUid: user.uid, createdAt: now, updatedAt: now, expiresAt: now + LIST_TTL_MS, rev: 1,
+            items: items, state: cleanListState(body.state, items) };
+          return dbSetDoc("lists/" + token, doc).then(function () {
+            return addToOwnerIndex(user.uid, token);
+          }).then(function () { reply(token, doc); });
+        });
       });
     });
   }).catch(function () {
@@ -3295,8 +3346,19 @@ function handleListBring(req, res, token, asJson, query) {
     if (!doc) {
       res.writeHead(404, Object.assign({ "Content-Type": "text/plain; charset=utf-8" }, headers));
       res.end("Deze lijst bestaat niet meer of is verlopen.");
-      return;
+      return null;
     }
+    // Bring! zelf haalt dit op (geen ingelogde sessie); het abonnement van de EIGENAAR van de lijst is bepalend,
+    // steeds opnieuw opgevraagd (geen "bevroren" stand van het moment dat de lijst werd gedeeld).
+    return getSettings().then(function (s) { return getUserPlan(doc.ownerUid, s).then(function (plan) { return { s: s, plan: plan }; }); }).then(function (r) {
+      if (planBlocksModule(r.s, "bring", r.plan)) {
+        res.writeHead(503, Object.assign({ "Content-Type": "text/plain; charset=utf-8" }, headers));
+        res.end(moduleOffBody("bring", r.s).message);
+        return;
+      }
+      return continueBring();
+    });
+    function continueBring() {
     var host = req.headers["x-forwarded-host"] || req.headers.host || "localhost";
     var proto = String(req.headers["x-forwarded-proto"] || (/^localhost|^127\./.test(host) ? "http" : "https")).split(",")[0].trim();
     var origin = proto + "://" + host;
@@ -3331,6 +3393,7 @@ function handleListBring(req, res, token, asJson, query) {
       "  <ul>\n" + lis + "\n  </ul>\n</div>\n</body>\n</html>\n";
     res.writeHead(200, Object.assign({ "Content-Type": "text/html; charset=utf-8" }, headers));
     res.end(html);
+    }
   }).catch(function () {
     res.writeHead(500, { "Content-Type": "text/plain" });
     res.end("Lijst ophalen mislukt.");
@@ -4268,12 +4331,13 @@ function handleAdminSystem(req, res) {
 // ---- instellingen ----
 function settingsPayload(s) {
   return { billingEnv: billingEnvInfo(), settings: s, effectiveModules: effectiveModules(s), moduleDefs: MODULE_DEFS, limitDefs: LIMIT_DEFS, maintenanceOffModules: MAINTENANCE_OFF_MODULES,
+    planGateableModules: PLAN_GATEABLE_MODULES,
     prefOptions: { goals: Object.keys(GOAL_TARGETS), diets: TIP_DIETS, mealTypes: PREF_MEALTYPES } };
 }
 function diffSettings(cur, next) {
   var out = [];
   if (cur.authRequired !== next.authRequired) out.push({ sleutel: "authRequired", van: cur.authRequired, naar: next.authRequired });
-  ["modules", "limits", "maintenance", "announcement", "billing"].forEach(function (k) {
+  ["modules", "planOnly", "limits", "maintenance", "announcement", "billing"].forEach(function (k) {
     Object.keys(next[k]).forEach(function (kk) { if (cur[k][kk] !== next[k][kk]) out.push({ sleutel: k + "." + kk, van: cur[k][kk], naar: next[k][kk] }); });
   });
   return out;
@@ -4406,6 +4470,7 @@ function handleConfig(req, res) {
       authRequired: s.authRequired,
       bringImportEndpoint: BRING_IMPORT_ENDPOINT,
       modules: effectiveModules(s),
+      planOnly: s.planOnly,
       billing: billingLive(s),
       maintenance: s.maintenance.enabled ? { enabled: true, message: s.maintenance.message || "De app is tijdelijk in onderhoud." } : { enabled: false },
       announcement: s.announcement.enabled && s.announcement.message ? { enabled: true, message: s.announcement.message, level: s.announcement.level } : { enabled: false }

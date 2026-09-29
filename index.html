@@ -3216,7 +3216,7 @@
   }
 
   function fetchImageForDish(day) {
-    return fetch(imageRequestUrl(day)).then(function (res) {
+    return fetch(imageRequestUrl(day), { headers: window.authHeaders ? window.authHeaders() : {} }).then(function (res) {
       return res.ok ? res.json() : { url: null, credit: null, final: false };
     }).then(function (data) {
       applyImageResult(day, data);
@@ -7289,7 +7289,13 @@
   // ---------- Onderdelen die de beheerder aan of uit kan zetten, en mededelingen ----------
   // De server dwingt de meeste onderdelen zelf af; hier verbergen we de bijbehorende knoppen, zodat niemand
   // op iets klikt dat toch niet werkt. Onbekend (config niet geladen) telt als 'aan'.
-  function moduleOn(key) { return !window.appModules || window.appModules[key] !== false; }
+  // Onderdelen die alleen voor Plus zijn vrijgegeven blijven verborgen tot we zeker weten dat het om een Plus-
+  // abonnee gaat; zo verschijnt een knop niet even voordat hij weer verdwijnt zodra de stand binnenkomt.
+  function moduleOn(key) {
+    if (window.appModules && window.appModules[key] === false) return false;
+    if (window.appPlanOnly && window.appPlanOnly[key] && !(billingInfo && billingInfo.plusActive)) return false;
+    return true;
+  }
 
   function noticeDismissKey(text) {
     var h = 0;
@@ -7325,8 +7331,10 @@
   }
   function applyRuntimeConfig(cfg) {
     window.appModules = cfg && cfg.modules && typeof cfg.modules === "object" ? cfg.modules : null;
+    window.appPlanOnly = cfg && cfg.planOnly && typeof cfg.planOnly === "object" ? cfg.planOnly : null;
     window.appNotice = { maintenance: cfg ? cfg.maintenance || null : null, announcement: cfg ? cfg.announcement || null : null };
     updateNoticeBar();
+    if (state.view) render();   // een module kan zojuist voor dit abonnement vrij- of afgesloten zijn
   }
   // Komt iemand terug naar de app, dan halen we de mededeling en de schakelaars opnieuw op (hooguit elke minuut).
   var lastConfigRefresh = Date.now();

@@ -455,6 +455,28 @@ duidelijke melding dat NEVO niet beschikbaar is in plaats van de AI toch aan te 
 voorwaarden) en bouw er met `nevo/build_nevo_subset.py` een nieuwe `nevo2025_macros.json` van. Werk dan ook
 `NEVO_VERSION`/`NEVO_REFERENCE` in `server.js` en de tekst in `NOTICE.md` bij.
 
+## Onderdelen per abonnement vrijgeven (Plus)
+
+Naast helemaal aan of uit voor iedereen, kun je vijf onderdelen ook specifiek aan **Plus** koppelen: Kostenschatting,
+Bring!-import, Boodschappenlijst delen, PDF-export en Gerechtfoto's. Beheer → Instellingen → Onderdelen toont bij
+deze vijf een extra keuzelijst naast de aan/uit-schakelaar: "Iedereen" of "Alleen Plus".
+
+- **Twee lagen.** Het algehele aan/uit blijft de basis: staat een onderdeel wereldwijd uit, dan blijft het uit voor
+  iedereen, ook voor Plus. "Alleen Plus" is een tweede laag die alleen iets doet zolang het onderdeel wereldwijd
+  aan staat.
+- **Zonder abonnementen aan:** "Alleen Plus" betekent dan "voor niemand", want zonder abonnementen kan niemand Plus
+  hebben. Zet dus eerst abonnementen aan (zie "Betalingen en abonnementen") voordat je dit gebruikt.
+- **Wie is bepalend, en wanneer.** Bij Kostenschatting en het delen van een **nieuwe** boodschappenlijst is dat de
+  gebruiker die het verzoek doet. Een lijst die al bestond blijft altijd gewoon werken, ook als delen daarna op
+  "Alleen Plus" wordt gezet. Bij Bring!-import (dat door Bring's eigen server wordt opgehaald, niet door de
+  gebruiker zelf) is de **eigenaar** van de lijst bepalend, en dat wordt elke keer opnieuw gecheckt: zegt iemand
+  zijn Plus op, dan stopt Bring!-import voor zijn lijsten meteen; wordt iemand Plus, dan werkt het meteen.
+- **Foto's** kennen twee plekken: het ophalen van een foto bij een gerecht, en de foto-proxy die de PDF-export
+  gebruikt. Beide zijn gekoppeld aan dezelfde instelling. Een oudere, gecachte pagina die nog geen identiteit
+  meestuurt wordt behandeld als gratis, niet geweigerd.
+- **PDF-export** heeft geen eigen server-eindpunt (het draait volledig in de browser), dus die instelling werkt
+  uitsluitend door de exportknop wel of niet te tonen.
+
 ## Genereren op de achtergrond en meldingen
 
 Gerechten maken duurt soms minuten. Ga je in die tijd naar een andere app of gaat je scherm op slot, dan
