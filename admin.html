@@ -1,0 +1,1312 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Balanza — Beheer</title>
+<style>
+  :root {
+    --bg: #0A0805; --surface: #17130C; --surface2: #1F1A10; --ink: #F3EEE2; --muted: #A89A80;
+    --line: #2E2517; --accent: #C6A15B; --accent-ink: #14110C; --good: #7FB77E; --bad: #E08787; --warn: #E3B35C;
+    --shadow: 0 10px 40px rgba(0,0,0,.5);
+  }
+  @media (prefers-color-scheme: light) {
+    :root { --bg: #F7F2E7; --surface: #FFFDF8; --surface2: #F1EBDD; --ink: #10182B; --muted: #6B6152; --line: #E1D8C4;
+      --accent: #8E6A1F; --accent-ink: #FFFDF8; --good: #2F7A3A; --bad: #B23A3A; --warn: #A56A00; --shadow: 0 10px 40px rgba(0,0,0,.18); }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; font-family: "Public Sans", -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--ink); min-height: 100vh; font-size: 14px; line-height: 1.45; }
+  h1, h2, h3 { font-family: "Fraunces", Georgia, serif; margin: 0; letter-spacing: .01em; }
+  h1 { font-size: 20px; } h2 { font-size: 17px; } h3 { font-size: 14px; font-family: inherit; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; }
+  a { color: var(--accent); }
+  .muted { color: var(--muted); }
+  .small { font-size: 12px; }
+  .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; }
+  .right { text-align: right; }
+  .hidden { display: none !important; }
+
+  header.top { position: sticky; top: 0; z-index: 20; background: var(--bg); border-bottom: 1px solid var(--line); }
+  .top-row { max-width: 1240px; margin: 0 auto; padding: 12px 20px; display: flex; align-items: center; gap: 14px; justify-content: space-between; }
+  .brand { display: flex; align-items: baseline; gap: 10px; }
+  nav.tabs { max-width: 1240px; margin: 0 auto; padding: 0 12px; display: flex; gap: 2px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  nav.tabs button { background: transparent; color: var(--muted); border: none; border-bottom: 2px solid transparent; padding: 10px 14px; font-size: 14px; cursor: pointer; white-space: nowrap; border-radius: 0; font-weight: 500; }
+  nav.tabs button:hover { color: var(--ink); }
+  nav.tabs button.active { color: var(--ink); border-bottom-color: var(--accent); }
+  main { max-width: 1240px; margin: 0 auto; padding: 22px 20px 60px; }
+  .page-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; margin-bottom: 14px; }
+  .card > h3:first-child, .card > .card-head:first-child { margin-top: 0; }
+  .card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+  .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); margin-bottom: 14px; }
+  .stat { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+  .stat .num { font-family: "Fraunces", Georgia, serif; font-size: 27px; line-height: 1.15; margin: 2px 0; }
+  .stat .label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+  .stat .sub { font-size: 12px; color: var(--muted); }
+  .stat.warn .num { color: var(--warn); } .stat.bad .num { color: var(--bad); }
+  .two { display: grid; gap: 14px; grid-template-columns: 1fr 1fr; }
+  @media (max-width: 860px) { .two { grid-template-columns: 1fr; } }
+  .bar { height: 7px; background: var(--surface2); border-radius: 4px; overflow: hidden; margin-top: 8px; }
+  .bar > div { height: 100%; background: var(--accent); }
+  .bar.warn > div { background: var(--warn); } .bar.bad > div { background: var(--bad); }
+
+  button, .btn { font: inherit; padding: 9px 15px; border-radius: 8px; border: 1px solid transparent; background: var(--accent); color: var(--accent-ink); font-weight: 600; cursor: pointer; font-size: 13px; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  button.ghost { background: transparent; border-color: var(--line); color: var(--ink); font-weight: 500; }
+  button.ghost:hover:not(:disabled) { border-color: var(--muted); }
+  button.danger { background: transparent; border-color: var(--bad); color: var(--bad); }
+  button.danger.solid { background: var(--bad); color: #fff; }
+  button.small { padding: 5px 10px; font-size: 12px; }
+  button.link { background: none; border: none; color: var(--accent); padding: 0; font-weight: 500; text-decoration: underline; }
+  input, select, textarea { font: inherit; padding: 9px 11px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); width: 100%; }
+  input:focus, select:focus, textarea:focus, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  input[type=checkbox] { width: auto; }
+  textarea { min-height: 72px; resize: vertical; }
+  label.field { display: block; margin-bottom: 12px; }
+  label.field > span { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .form-grid { display: grid; gap: 0 14px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+  .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+  .toolbar > * { width: auto; }
+  .toolbar input[type=search], .toolbar input.grow { flex: 1 1 220px; min-width: 180px; }
+  .toolbar select { flex: 0 1 auto; }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .row.between { justify-content: space-between; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip { border: 1px solid var(--line); border-radius: 999px; padding: 3px 11px; font-size: 12px; background: transparent; color: var(--ink); font-weight: 500; cursor: pointer; }
+  .chip.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  .badge { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+  .badge.good { color: var(--good); border-color: var(--good); } .badge.bad { color: var(--bad); border-color: var(--bad); }
+  .badge.warn { color: var(--warn); border-color: var(--warn); } .badge.accent { color: var(--accent); border-color: var(--accent); }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); margin-right: 6px; }
+  .dot.good { background: var(--good); } .dot.bad { background: var(--bad); } .dot.warn { background: var(--warn); }
+
+  .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { padding: 9px 12px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 600; background: var(--surface); white-space: nowrap; }
+  th button { background: none; border: none; color: inherit; font: inherit; text-transform: inherit; letter-spacing: inherit; padding: 0; cursor: pointer; font-weight: 600; }
+  tr:last-child td { border-bottom: none; }
+  tbody tr.clickable { cursor: pointer; } tbody tr.clickable:hover { background: var(--surface2); }
+  tr.off td { opacity: .6; }
+  td.nowrap, th.nowrap { white-space: nowrap; }
+  td .sub { display: block; color: var(--muted); font-size: 12px; }
+  td.err { color: var(--bad); max-width: 320px; word-break: break-word; }
+  .pager { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+  .empty { text-align: center; color: var(--muted); padding: 34px 10px; }
+  .errorbox { background: rgba(224,135,135,.12); border: 1px solid var(--bad); color: var(--bad); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; }
+  .notebox { background: var(--surface2); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; }
+  .notebox.warn { border-color: var(--warn); }
+  .bulkbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 10px 12px; background: var(--surface2); border: 1px solid var(--accent); border-radius: 10px; margin-bottom: 12px; }
+  pre { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px; overflow: auto; max-height: 320px; font-size: 12px; margin: 8px 0 0; white-space: pre-wrap; word-break: break-word; }
+  details summary { cursor: pointer; color: var(--muted); }
+
+  .switch { position: relative; width: 44px; height: 24px; padding: 0; border-radius: 999px; background: var(--line); border: 1px solid var(--line); flex: none; }
+  .switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: var(--ink); transition: left .15s; }
+  .switch.on { background: var(--good); border-color: var(--good); } .switch.on::after { left: 22px; background: #fff; }
+  .switch:disabled { opacity: .5; }
+  .module { display: flex; gap: 14px; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--line); }
+  .module:last-child { border-bottom: none; }
+  .module .name { font-weight: 600; } .module .desc { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  .kv { display: grid; grid-template-columns: max-content 1fr; gap: 6px 18px; }
+  .kv dt { color: var(--muted); } .kv dd { margin: 0; word-break: break-word; }
+
+  .chart { width: 100%; height: auto; display: block; }
+  .chart text { fill: var(--muted); font-size: 10px; }
+  .chart .bar-ok { fill: var(--accent); } .chart .bar-err { fill: var(--bad); } .chart .axis { stroke: var(--line); }
+  .legend { display: flex; gap: 14px; font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; }
+
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 50; display: flex; align-items: flex-start; justify-content: center; padding: 6vh 14px; overflow-y: auto; }
+  .modal { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); width: 100%; max-width: 560px; padding: 20px; }
+  .modal.wide { max-width: 760px; }
+  .modal h2 { margin-bottom: 12px; }
+  .modal .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; flex-wrap: wrap; }
+  .secret { display: flex; gap: 8px; align-items: center; background: var(--bg); border: 1px dashed var(--accent); border-radius: 8px; padding: 10px 12px; margin: 6px 0 4px; }
+  .secret code { flex: 1; word-break: break-all; font-size: 14px; }
+  #toastRoot { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); z-index: 80; display: flex; flex-direction: column; gap: 8px; align-items: center; width: calc(100% - 28px); max-width: 460px; pointer-events: none; }
+  .toast { background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 10px; box-shadow: var(--shadow); font-size: 13px; pointer-events: auto; }
+  .toast.bad { background: var(--bad); color: #fff; }
+  .login-wrap { max-width: 380px; margin: 0 auto; padding: 90px 20px; }
+  .spin { text-align: center; color: var(--muted); padding: 30px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<div id="modalRoot"></div>
+<div id="toastRoot"></div>
+<script>
+(function () {
+  "use strict";
+
+  // =====================================================================================
+  // Basis: een kleine DOM-bouwer (nooit innerHTML met gegevens: alles gaat als tekst), API, hulpjes
+  // =====================================================================================
+  var TOKEN_KEY = "balanza_admin_token";
+  var token = null;
+  try { token = sessionStorage.getItem(TOKEN_KEY); } catch (e) {}
+
+  function add(el, c) {
+    if (c === null || c === undefined || c === false) return;
+    if (Array.isArray(c)) { c.forEach(function (x) { add(el, x); }); return; }
+    if (typeof c === "string" || typeof c === "number") { el.appendChild(document.createTextNode(String(c))); return; }
+    el.appendChild(c);
+  }
+  function h(tag, props) {
+    var el = document.createElement(tag);
+    props = props || {};
+    Object.keys(props).forEach(function (k) {
+      var v = props[k];
+      if (v === undefined || v === null || v === false) return;
+      if (k === "class") el.className = v;
+      else if (k === "text") el.textContent = v;
+      else if (k === "style") Object.keys(v).forEach(function (s) { el.style[s] = v[s]; });
+      else if (k.indexOf("aria-") === 0) el.setAttribute(k, v);
+      else el[k] = v;
+    });
+    for (var i = 2; i < arguments.length; i++) add(el, arguments[i]);
+    return el;
+  }
+  function svg(tag, attrs) {
+    var el = document.createElementNS("http://www.w3.org/2000/svg", tag);
+    Object.keys(attrs || {}).forEach(function (k) { el.setAttribute(k, attrs[k]); });
+    for (var i = 2; i < arguments.length; i++) add(el, arguments[i]);
+    return el;
+  }
+  function clear(el) { el.innerHTML = ""; return el; }
+  function byId(id) { return document.getElementById(id); }
+
+  function api(path, opts) {
+    opts = opts || {};
+    var headers = {};
+    if (token) headers["Authorization"] = "Bearer " + token;
+    if (opts.body !== undefined) headers["Content-Type"] = "application/json";
+    return fetch(path, { method: opts.method || "GET", headers: headers, body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined }).then(function (res) {
+      return res.json().catch(function () { return {}; }).then(function (data) {
+        if (res.status === 401 && path !== "/api/admin/login") {
+          signOutLocal("Je sessie is verlopen. Log opnieuw in.");
+          var e401 = new Error("Sessie verlopen."); e401.status = 401; e401.silent = true; throw e401;
+        }
+        if (!res.ok) { var e = new Error((data && data.message) || ("Fout " + res.status)); e.status = res.status; e.data = data; throw e; }
+        return data;
+      });
+    });
+  }
+  function qs(obj) {
+    var parts = [];
+    Object.keys(obj).forEach(function (k) {
+      var v = obj[k];
+      if (v === "" || v === null || v === undefined || v === false) return;
+      parts.push(encodeURIComponent(k) + "=" + encodeURIComponent(v));
+    });
+    return parts.length ? "?" + parts.join("&") : "";
+  }
+  // Bestanden ophalen met de beheerderssessie (een gewone link kan die niet meesturen).
+  function downloadFile(path, fallbackName) {
+    return fetch(path, { headers: token ? { Authorization: "Bearer " + token } : {} }).then(function (res) {
+      if (res.status === 401) { signOutLocal("Je sessie is verlopen. Log opnieuw in."); throw new Error("Sessie verlopen."); }
+      if (!res.ok) throw new Error("Downloaden mislukt (" + res.status + ").");
+      var cd = res.headers.get("content-disposition") || "";
+      var m = cd.match(/filename="([^"]+)"/);
+      return res.blob().then(function (blob) { return { blob: blob, name: m ? m[1] : fallbackName }; });
+    }).then(function (f) {
+      var url = URL.createObjectURL(f.blob);
+      var a = h("a", { href: url, download: f.name });
+      document.body.appendChild(a); a.click();
+      if (a.parentNode && a.parentNode.removeChild) a.parentNode.removeChild(a);
+      setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+    });
+  }
+  function copyText(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(text).then(function () { toast("Gekopieerd."); }, function () { toast("Kopiëren lukte niet.", "bad"); });
+    return Promise.resolve(toast("Kopiëren wordt niet ondersteund in deze browser.", "bad"));
+  }
+  function debounce(fn, ms) { var t = null; return function () { var a = arguments; clearTimeout(t); t = setTimeout(function () { fn.apply(null, a); }, ms); }; }
+
+  // ---- opmaak van tijd en getallen ----
+  function fmtDate(iso) {
+    if (!iso) return "—";
+    var d = new Date(iso); if (isNaN(d.getTime())) return "—";
+    return d.toLocaleString("nl-NL", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  }
+  function fmtDay(iso) {
+    var d = new Date(iso); if (isNaN(d.getTime())) return "—";
+    return d.toLocaleDateString("nl-NL", { day: "numeric", month: "short" });
+  }
+  function relTime(iso) {
+    if (!iso) return "nooit";
+    var t = Date.parse(iso); if (isNaN(t)) return "—";
+    var s = Math.round((Date.now() - t) / 1000);
+    if (s < 45) return "zojuist";
+    if (s < 3600) return Math.round(s / 60) + " min geleden";
+    if (s < 86400) return Math.round(s / 3600) + " uur geleden";
+    if (s < 86400 * 14) return Math.round(s / 86400) + " dagen geleden";
+    return fmtDate(iso);
+  }
+  function fmtEur(cents) { return "\u20ac" + (Number(cents) / 100).toFixed(2).replace(".", ","); }
+  function eurToCents(raw) { var m = /^\s*(\d{1,4})(?:[.,](\d{1,2}))?\s*$/.exec(String(raw)); return m ? Number(m[1]) * 100 + Number(((m[2] || "") + "00").slice(0, 2)) : null; }
+  function fmtUsd(n) { n = Number(n) || 0; return "$" + (n === 0 ? "0,00" : n < 0.1 ? n.toFixed(4).replace(/0$/, "") : n < 10 ? n.toFixed(3) : n.toFixed(2)).replace(".", ","); }
+  function fmtTok(n) { n = Number(n) || 0; return n >= 1e6 ? (n / 1e6).toFixed(2).replace(".", ",") + " mln" : n >= 1000 ? (n / 1000).toFixed(1).replace(".", ",") + "k" : String(n); }
+  function fmtMs(ms) { if (ms === undefined || ms === null) return "—"; return ms >= 1000 ? (ms / 1000).toFixed(1).replace(".", ",") + " s" : ms + " ms"; }
+  function fmtUptime(sec) {
+    var d = Math.floor(sec / 86400), hh = Math.floor((sec % 86400) / 3600), m = Math.floor((sec % 3600) / 60);
+    return (d ? d + " d " : "") + (hh || d ? hh + " u " : "") + m + " min";
+  }
+  function plural(n, one, many) { return n + " " + (n === 1 ? one : many); }
+  function shortUid(uid) { return uid ? (uid.length > 14 ? uid.slice(0, 8) + "…" + uid.slice(-4) : uid) : "—"; }
+
+  // =====================================================================================
+  // Herbruikbare onderdelen
+  // =====================================================================================
+  function card(title) {
+    var el = h("div", { class: "card" });
+    if (title) el.appendChild(h("div", { class: "card-head" }, h("h3", { text: title })));
+    for (var i = 1; i < arguments.length; i++) add(el, arguments[i]);
+    return el;
+  }
+  function badge(text, kind) { return h("span", { class: "badge" + (kind ? " " + kind : ""), text: text }); }
+  function field(label, input, hint) { return h("label", { class: "field" }, h("span", { text: label }), input, hint ? h("div", { class: "hint", text: hint }) : null); }
+  function errorBox(msg) { return h("div", { class: "errorbox", role: "alert", text: msg }); }
+  function spinner(text) { return h("div", { class: "spin", text: text || "Laden…" }); }
+  function empty(text) { return h("div", { class: "empty", text: text }); }
+  function select(options, value, onchange, label) {
+    var el = h("select", { "aria-label": label });
+    options.forEach(function (o) {
+      var opt = h("option", { value: o[0], text: o[1] });
+      if (String(o[0]) === String(value)) opt.selected = true;
+      el.appendChild(opt);
+    });
+    el.value = value;
+    el.onchange = function () { onchange(el.value); };
+    return el;
+  }
+  function switchBtn(on, onchange, label, disabled) {
+    var btn = h("button", { class: "switch" + (on ? " on" : ""), type: "button", role: "switch", "aria-checked": on ? "true" : "false", "aria-label": label, disabled: !!disabled });
+    btn.onclick = function () { onchange(!on); };
+    return btn;
+  }
+  function pager(pg, goto, label) {
+    var info = h("span", { class: "muted", text: pg.total === 0 ? "Geen resultaten" : plural(pg.total, label[0], label[1]) + " · pagina " + pg.page + " van " + pg.pages });
+    var prev = h("button", { class: "ghost small", text: "‹ Vorige", disabled: pg.page <= 1 }), next = h("button", { class: "ghost small", text: "Volgende ›", disabled: pg.page >= pg.pages });
+    prev.onclick = function () { goto(pg.page - 1); }; next.onclick = function () { goto(pg.page + 1); };
+    var first = h("button", { class: "ghost small", text: "«", disabled: pg.page <= 1, "aria-label": "Eerste pagina" }), last = h("button", { class: "ghost small", text: "»", disabled: pg.page >= pg.pages, "aria-label": "Laatste pagina" });
+    first.onclick = function () { goto(1); }; last.onclick = function () { goto(pg.pages); };
+    return h("div", { class: "pager" }, info, h("div", { class: "row" }, first, prev, next, last));
+  }
+  function table(headers, rows, opts) {
+    opts = opts || {};
+    var thead = h("thead", {}, h("tr", {}, headers.map(function (x) { return x; })));
+    var tbody = h("tbody", {}, rows);
+    return h("div", { class: "table-wrap" }, h("table", {}, thead, tbody));
+  }
+  function th(label, cls) { return h("th", { class: cls || "", text: label }); }
+
+  // ---- meldingen en dialogen ----
+  function toast(msg, kind) {
+    var root = byId("toastRoot");
+    var t = h("div", { class: "toast" + (kind ? " " + kind : ""), role: "status", text: msg });
+    root.appendChild(t);
+    setTimeout(function () { if (t.parentNode && t.parentNode.removeChild) t.parentNode.removeChild(t); else t.style.display = "none"; }, kind === "bad" ? 6000 : 3200);
+  }
+  var closeModalFn = null;
+  function closeModal() { clear(byId("modalRoot")); closeModalFn = null; }
+  function openModal(title, bodyNodes, actionNodes, wide) {
+    closeModal();
+    var box = h("div", { class: "modal" + (wide ? " wide" : ""), role: "dialog", "aria-modal": "true", "aria-label": title }, h("h2", { text: title }), bodyNodes, actionNodes && actionNodes.length ? h("div", { class: "actions" }, actionNodes) : null);
+    var overlay = h("div", { class: "overlay" }, box);
+    overlay.onclick = function (e) { if (e && e.target === overlay) closeModal(); };
+    byId("modalRoot").appendChild(overlay);
+    closeModalFn = closeModal;
+    return closeModal;
+  }
+  // Bevestigen; met 'typeToConfirm' moet je eerst een woord of adres exact intypen (voor onomkeerbare acties).
+  function confirmDialog(o) {
+    return new Promise(function (resolve) {
+      var input = o.typeToConfirm ? h("input", { type: "text", id: "confirmInput", placeholder: o.typeToConfirm, autocomplete: "off", "aria-label": "Typ ter bevestiging" }) : null;
+      var ok = h("button", { class: o.danger ? "danger solid" : "", text: o.confirmLabel || "Bevestigen", id: "confirmOk", disabled: !!o.typeToConfirm });
+      var cancel = h("button", { class: "ghost", text: "Annuleren", id: "confirmCancel" });
+      if (input) input.oninput = function () { ok.disabled = input.value !== o.typeToConfirm; };
+      ok.onclick = function () { closeModal(); resolve(input ? input.value : true); };
+      cancel.onclick = function () { closeModal(); resolve(false); };
+      openModal(o.title, [h("p", { text: o.message, style: { marginTop: "0" } }), input ? field("Typ “" + o.typeToConfirm + "” om te bevestigen", input) : null], [cancel, ok]);
+    });
+  }
+  // Toont een geheim (wachtwoord, link) één keer, met kopieerknop.
+  function secretRow(value, id) {
+    var btn = h("button", { class: "ghost small", text: "Kopieer" });
+    btn.onclick = function () { copyText(value); };
+    return h("div", { class: "secret" }, h("code", { id: id, text: value }), btn);
+  }
+
+  // ---- staafgrafiek (SVG); reeksen worden gestapeld ----
+  function barChart(rows, series, labelEvery) {
+    var W = 640, H = 170, pl = 30, pb = 22, pt = 8, pr = 6;
+    var max = 1;
+    rows.forEach(function (r) { max = Math.max(max, r.values.reduce(function (a, b) { return a + b; }, 0)); });
+    var top = max <= 4 ? max : Math.ceil(max / 4) * 4;
+    var bw = (W - pl - pr) / rows.length;
+    var root = svg("svg", { viewBox: "0 0 " + W + " " + H, class: "chart", role: "img", "aria-label": "Staafgrafiek" });
+    [0, 0.5, 1].forEach(function (f) {
+      var y = pt + (H - pt - pb) * (1 - f);
+      root.appendChild(svg("line", { x1: pl, x2: W - pr, y1: y, y2: y, class: "axis" }));
+      root.appendChild(svg("text", { x: pl - 4, y: y + 3, "text-anchor": "end" }, String(Math.round(top * f))));
+    });
+    rows.forEach(function (r, i) {
+      var y = H - pb, x = pl + i * bw + bw * 0.15, w = bw * 0.7;
+      r.values.forEach(function (v, si) {
+        if (!v) return;
+        var ht = (H - pt - pb) * v / top;
+        y -= ht;
+        var rect = svg("rect", { x: x, y: y, width: w, height: ht, class: series[si].cls, rx: 2 });
+        rect.appendChild(svg("title", {}, r.label + ": " + v + " " + series[si].name));
+        root.appendChild(rect);
+      });
+      if (i % (labelEvery || 2) === 0 || i === rows.length - 1) root.appendChild(svg("text", { x: x + w / 2, y: H - 6, "text-anchor": "middle" }, r.label));
+    });
+    return root;
+  }
+  function legend(items) { return h("div", { class: "legend" }, items.map(function (it) { return h("span", {}, h("i", { style: { background: it[1] } }), it[0]); })); }
+
+  // =====================================================================================
+  // Toestand, navigatie en het grote geheel
+  // =====================================================================================
+  var TABS = [["overzicht", "Overzicht"], ["gebruikers", "Gebruikers"], ["activiteit", "Activiteit"], ["lijsten", "Gedeelde lijsten"], ["instellingen", "Instellingen"], ["audit", "Auditlog"], ["systeem", "Systeem"]];
+  var meta = { settings: null };   // instellingen incl. beschrijvingen van modules en keuzelijsten (één keer opgehaald)
+  var viewSeq = 0;                 // verouderde antwoorden negeren als je alweer ergens anders bent
+  var refreshTimer = null;
+  var U = { q: "", type: "", status: "", goal: "", diet: "", active: "", created: "", sort: "lastSeen", dir: "", page: 1, pageSize: 25, sel: {} };
+  var L = { q: "", type: "", status: "", action: "", uid: "", ip: "", from: "", to: "", minMs: "", page: 1, pageSize: 50, auto: false };
+  var A = { q: "", action: "", from: "", to: "", page: 1, pageSize: 50 };
+  var S = { q: "", status: "", page: 1, pageSize: 25 };
+
+  function signOutLocal(message) {
+    token = null; try { sessionStorage.removeItem(TOKEN_KEY); } catch (e) {}
+    clearInterval(refreshTimer); refreshTimer = null; closeModal();
+    showLogin(message);
+  }
+  function navigate(hash) {
+    if (window.location.hash === hash) render(); else window.location.hash = hash;
+  }
+  function currentRoute() {
+    var parts = String(window.location.hash || "").replace(/^#\/?/, "").split("/");
+    var tab = parts[0] || "overzicht";
+    if (!TABS.some(function (t) { return t[0] === tab; })) tab = "overzicht";
+    return { tab: tab, id: parts[1] ? decodeURIComponent(parts[1]) : null };
+  }
+
+  function showLogin(message) {
+    var root = clear(byId("root"));
+    var pw = h("input", { type: "password", id: "pwInput", placeholder: "Wachtwoord", autocomplete: "current-password", "aria-label": "Beheerderswachtwoord" });
+    var err = h("div", { id: "loginError", class: "errorbox hidden", role: "alert" });
+    var btn = h("button", { id: "loginBtn", text: "Inloggen", style: { width: "100%" } });
+    function submit() {
+      btn.disabled = true; err.classList.add("hidden");
+      api("/api/admin/login", { method: "POST", body: { password: pw.value } }).then(function (d) {
+        token = d.token; try { sessionStorage.setItem(TOKEN_KEY, token); } catch (e) {}
+        boot();
+      }).catch(function (e) {
+        btn.disabled = false; err.textContent = e.message; err.classList.remove("hidden"); err.style.display = "block"; pw.value = "";
+      });
+    }
+    btn.onclick = submit;
+    pw.onkeydown = function (e) { if (e && e.key === "Enter") submit(); };
+    root.appendChild(h("div", { class: "login-wrap" }, card(null, h("h1", { text: "Balanza — Beheer", style: { marginBottom: "16px" } }),
+      message ? h("div", { class: "notebox", text: message }) : null, err, h("div", { style: { marginBottom: "10px" } }, pw), btn)));
+    pw.focus && pw.focus();
+  }
+
+  function boot() {
+    if (!token) return showLogin();
+    api("/api/admin/settings").then(function (s) { meta.settings = s; renderShell(); render(); startRefresh(); })
+      .catch(function (e) { if (!e.silent) showLogin(e.message); });
+  }
+  function renderShell() {
+    var root = clear(byId("root"));
+    var status = h("span", { id: "statusPill", class: "badge" });
+    var logout = h("button", { class: "ghost", id: "logoutBtn", text: "Uitloggen" });
+    logout.onclick = function () { api("/api/admin/logout", { method: "POST", body: {} }).catch(function () {}).then(function () { signOutLocal(); }); };
+    var nav = h("nav", { class: "tabs", role: "tablist", id: "tabs" });
+    TABS.forEach(function (t) {
+      var b = h("button", { text: t[1], id: "tab-" + t[0], role: "tab" });
+      b.onclick = function () { navigate("#/" + t[0]); };
+      nav.appendChild(b);
+    });
+    root.appendChild(h("header", { class: "top" }, h("div", { class: "top-row" }, h("div", { class: "brand" }, h("h1", { text: "Balanza" }), h("span", { class: "muted", text: "Beheer" })), h("div", { class: "row" }, status, logout)), nav));
+    root.appendChild(h("main", { id: "view" }));
+    updateStatusPill();
+  }
+  function updateStatusPill() {
+    var pill = byId("statusPill"); if (!pill || !meta.settings) return;
+    var s = meta.settings.settings;
+    if (s.maintenance.enabled) { pill.textContent = "Onderhoudsmodus"; pill.className = "badge warn"; }
+    else { pill.textContent = s.authRequired ? "Inloggen verplicht" : "Inloggen niet verplicht"; pill.className = "badge"; }
+  }
+  function startRefresh() {
+    clearInterval(refreshTimer);
+    refreshTimer = setInterval(function () {
+      var r = currentRoute();
+      if (typeof document.hidden !== "undefined" && document.hidden) return;
+      if (byId("modalRoot").innerHTML) return;   // niet ververs terwijl er een venster open staat
+      if (r.tab === "overzicht") render(true);
+      if (r.tab === "activiteit" && L.auto && reloadHook) reloadHook();
+    }, 30000);
+  }
+  function render(silent) {
+    if (!token) return showLogin();
+    var r = currentRoute();
+    TABS.forEach(function (t) {
+      var b = byId("tab-" + t[0]); if (!b) return;
+      b.className = t[0] === r.tab ? "active" : "";
+      b.setAttribute("aria-selected", t[0] === r.tab ? "true" : "false");
+    });
+    var view = byId("view"); if (!view) return;
+    var my = ++viewSeq;
+    reloadHook = null;
+    var target = h("div");
+    var ctx = { alive: function () { return my === viewSeq; } };
+    var done = VIEWS[r.tab](target, r, ctx);
+    Promise.resolve(done).then(function () {
+      if (!ctx.alive()) return;
+      clear(view); view.appendChild(target);
+    });
+    if (!silent) { clear(view); view.appendChild(spinner()); }
+  }
+  var VIEWS = {};
+  var reloadHook = null;   // een scherm met zoekvelden ververst alleen zijn resultaten (zo blijft je invoer en cursor staan)
+
+  // =====================================================================================
+  // Overzicht
+  // =====================================================================================
+  function stat(label, num, sub, kind, extra) {
+    return h("div", { class: "stat" + (kind ? " " + kind : "") }, h("div", { class: "label", text: label }), h("div", { class: "num", text: String(num) }), sub ? h("div", { class: "sub", text: sub }) : null, extra);
+  }
+  function setSettings(patch) {
+    return api("/api/admin/settings", { method: "POST", body: patch }).then(function (s) { meta.settings = s; updateStatusPill(); return s; });
+  }
+
+  VIEWS.overzicht = function (view, route, ctx) {
+    return Promise.all([api("/api/admin/stats"), api("/api/admin/settings"), api("/api/admin/system")]).then(function (r) {
+      meta.settings = r[1]; updateStatusPill();
+      if (ctx.alive()) drawOverview(view, r[0], r[1], r[2]);
+    }).catch(function (e) { if (!e.silent) view.appendChild(errorBox("Kon het overzicht niet laden: " + e.message)); });
+  };
+  function drawOverview(view, st, cfg, sys) {
+    var s = cfg.settings;
+    var refresh = h("button", { class: "ghost small", text: "Ververs", id: "refreshBtn" });
+    refresh.onclick = function () { render(); };
+    view.appendChild(h("div", { class: "page-head" }, h("h2", { text: "Overzicht" }), h("div", { class: "row" }, h("span", { class: "muted small", text: "Bijgewerkt " + relTime(st.generatedAt) }), refresh)));
+
+    if (s.maintenance.enabled) {
+      var off = h("button", { class: "small", text: "Onderhoudsmodus uitzetten", id: "maintenanceOffBtn" });
+      off.onclick = function () { setSettings({ maintenance: { enabled: false } }).then(function () { toast("Onderhoudsmodus staat uit."); render(); }).catch(function (e) { toast(e.message, "bad"); }); };
+      view.appendChild(h("div", { class: "notebox warn row between", id: "maintenanceBanner" }, h("span", { text: "De onderhoudsmodus staat aan: genereren, delen en registreren zijn voor gebruikers uitgeschakeld." }), off));
+    }
+    var problems = sys.checks.filter(function (c) { return !c.ok && !c.optional; });
+    if (problems.length) {
+      view.appendChild(h("div", { class: "notebox warn", id: "healthWarnings" }, h("strong", { text: plural(problems.length, "aandachtspunt", "aandachtspunten") + ": " }),
+        problems.map(function (p, i) { return h("span", {}, i ? " · " : "", p.label + " — " + p.detail); }), " ", (function () { var b = h("button", { class: "link", text: "Naar Systeem" }); b.onclick = function () { navigate("#/systeem"); }; return b; })()));
+    }
+
+    var u = st.users, rq = st.requests, us = st.usage;
+    var pct = us.cap > 0 ? Math.min(100, Math.round(us.today / us.cap * 100)) : 100;
+    var usageBar = h("div", { class: "bar" + (pct >= 100 ? " bad" : pct >= 80 ? " warn" : "") }, h("div", { style: { width: pct + "%" } }));
+    view.appendChild(h("div", { class: "grid", id: "statGrid" },
+      stat("Gebruikers", u.total, plural(u.accounts, "account", "accounts") + " · " + u.anon + " anoniem" + (u.disabled ? " · " + u.disabled + " geblokkeerd" : "")),
+      stat("Actief", u.active24h, "24 uur · " + u.active7d + " in 7 dagen · " + u.active30d + " in 30 dagen"),
+      stat("Nieuwe accounts", u.new7d, "7 dagen · " + u.new30d + " in 30 dagen"),
+      stat("Generaties vandaag", us.today + " / " + us.cap, us.cap === 0 ? "Genereren staat op limiet 0" : pct + "% van de daglimiet", pct >= 100 ? "bad" : pct >= 80 ? "warn" : "", us.cap ? usageBar : null),
+      stat("Fouten vandaag", rq.errorsToday, "van " + plural(rq.today, "verzoek", "verzoeken") + " (" + String(rq.errorRate).replace(".", ",") + "%)", rq.errorsToday && rq.errorRate >= 25 ? "bad" : rq.errorsToday ? "warn" : ""),
+      stat("Reactietijd", fmtMs(rq.avgDurationMs), "gemiddeld · 95%: " + fmtMs(rq.p95DurationMs)),
+      stat("Inloggen vandaag", st.auth.loginsToday, st.auth.failedLoginsToday + " mislukt · " + st.auth.registrationsToday + " nieuw", st.auth.failedLoginsToday >= 10 ? "warn" : ""),
+      stat("Gedeelde lijsten", st.lists.active, st.lists.total - st.lists.active ? (st.lists.total - st.lists.active) + " verlopen" : "geen verlopen"),
+      stat("AI-kosten deze maand", fmtUsd(st.ai.month.costUsd), fmtUsd(st.ai.today.costUsd) + " vandaag · " + (st.ai.perDish != null ? fmtUsd(st.ai.perDish) + " per gerecht" : "nog geen gerechten"))));
+
+    var chart1 = card("AI-aanvragen per dag", barChart(rq.perDay.map(function (d) { return { label: fmtDay(d.day), values: [d.total - d.errors, d.errors] }; }), [{ name: "gelukt", cls: "bar-ok" }, { name: "fout", cls: "bar-err" }]),
+      legend([["gelukt", "var(--accent)"], ["fout", "var(--bad)"]]), st.logCapped ? h("div", { class: "hint", text: "Het logboek bewaart de laatste " + sys.info.logCap.toLocaleString("nl-NL") + " regels; oudere dagen kunnen onvolledig zijn." }) : null);
+    var chart2 = card("Generaties per dag (telling tegen de daglimiet)", barChart(us.history.map(function (d) { return { label: fmtDay(d.day), values: [d.count] }; }), [{ name: "generaties", cls: "bar-ok" }]));
+    view.appendChild(h("div", { class: "two" }, chart1, chart2));
+
+    var ai = st.ai;
+    function aiRow(label, t) { return h("tr", {}, h("td", { text: label }), h("td", { class: "num", text: String(t.calls) }), h("td", { class: "num", text: fmtTok(t.tokensIn) }), h("td", { class: "num", text: fmtTok(t.tokensOut) }), h("td", { class: "num", text: fmtUsd(t.costUsd) })); }
+    var aiActs = Object.keys(ai.byAction30).sort(function (a, b) { return ai.byAction30[b].costUsd - ai.byAction30[a].costUsd; });
+    var costCard = card("AI-kosten en tokens",
+      table([th("Periode"), th("AI-aanroepen"), th("Tokens in"), th("Tokens uit"), th("Kosten")], [aiRow("Vandaag", ai.today), aiRow("Deze maand", ai.month), aiRow("Laatste 30 dagen", ai.last30)]),
+      h("dl", { class: "kv", id: "costFacts", style: { marginTop: "12px" } },
+        h("dt", { text: "Kosten per gerecht (gemiddeld, 30 dagen)" }), h("dd", { text: ai.perDish != null ? fmtUsd(ai.perDish) : "nog geen gerechten gemaakt" }),
+        h("dt", { text: "AI-aanroepen per generatie" }), h("dd", { text: ai.callsPerRequest.generate ? String(ai.callsPerRequest.generate).replace(".", ",") + " (meer dan 1 door meerdere maaltijdmomenten en herhaalpogingen)" : "—" }),
+        h("dt", { text: "Prijs die is aangenomen" }), h("dd", { text: "$" + ai.prices.inPerM + " in en $" + ai.prices.outPerM + " uit per miljoen tokens" })),
+      aiActs.length ? table([th("Actie (30 dagen)"), th("Verzoeken"), th("Gerechten"), th("Kosten")], aiActs.map(function (a) { var t = ai.byAction30[a]; return h("tr", {}, h("td", { text: a }), h("td", { class: "num", text: String(t.n) }), h("td", { class: "num", text: t.dishes ? String(t.dishes) : "—" }), h("td", { class: "num", text: fmtUsd(t.costUsd) })); })) : null,
+      h("div", { class: "hint", text: "Berekend uit het aantal tokens dat Anthropic per aanroep meldt, tegen de prijs hierboven (pas aan met PRICE_IN_PER_M en PRICE_OUT_PER_M). Het is een schatting: de factuur van Anthropic is leidend." }));
+    costCard.id = "costCard";
+    view.appendChild(costCard);
+    view.appendChild(card("AI-kosten per dag", barChart(ai.perDay.map(function (d) { return { label: fmtDay(d.day), values: [d.costUsd] }; }), [{ name: "kosten in dollars", cls: "bar-ok" }])));
+
+    var acts = Object.keys(rq.byAction).sort(function (a, b) { return rq.byAction[b] - rq.byAction[a]; });
+    var actCard = card("Vandaag per actie", acts.length ? h("dl", { class: "kv" }, acts.map(function (a) { return [h("dt", { text: a }), h("dd", { text: String(rq.byAction[a]) })]; })) : h("div", { class: "muted", text: "Nog geen verzoeken vandaag." }));
+    var errRows = rq.recentErrors.map(function (l) {
+      return h("tr", {}, h("td", { class: "nowrap", text: relTime(l.ts) }), h("td", { text: l.action || "—" }), h("td", { class: "err", text: l.error || ("status " + l.status) }));
+    });
+    var allErr = h("button", { class: "link", text: "Alle fouten in de activiteit" });
+    allErr.onclick = function () { L.status = "error"; L.type = ""; L.action = ""; L.page = 1; navigate("#/activiteit"); };
+    var errCard = card("Laatste fouten", errRows.length ? table([th("Wanneer"), th("Actie"), th("Melding")], errRows) : h("div", { class: "muted", text: "Geen fouten. Mooi." }), errRows.length ? h("div", { style: { marginTop: "8px" } }, allErr) : null);
+    view.appendChild(h("div", { class: "two" }, actCard, errCard));
+
+    var mgo = h("button", { class: "link", text: "Beheer onderdelen" });
+    mgo.onclick = function () { navigate("#/instellingen"); };
+    view.appendChild(card("Onderdelen", h("div", { class: "chips", id: "moduleChips" }, cfg.moduleDefs.map(function (d) {
+      var on = cfg.effectiveModules[d.key];
+      return h("span", { class: "badge " + (on ? "good" : "bad"), text: (on ? "● " : "○ ") + d.label });
+    })), h("div", { style: { marginTop: "10px" } }, mgo)));
+  }
+
+  // =====================================================================================
+  // Gebruikers: overzicht
+  // =====================================================================================
+  function goalOptions() { return [["", "Alle doelen"]].concat(meta.settings.prefOptions.goals.map(function (g) { return [g, g]; })); }
+  function dietOptions() { return [["", "Alle diëten"]].concat(meta.settings.prefOptions.diets.map(function (g) { return [g, g]; })); }
+  var SORTS = [["lastSeen", "Laatst actief"], ["created", "Aangemaakt"], ["lastLogin", "Laatste login"], ["name", "Naam"], ["email", "E-mail"], ["dishes", "Aantal gerechten"], ["weeks", "Aantal weken"], ["logins", "Aantal logins"]];
+
+  VIEWS.gebruikers = function (view, route, ctx) { return route.id ? userDetail(view, route.id, ctx) : usersList(view, ctx); };
+
+  function usersList(view, ctx) {
+    var seq = 0;
+    var results = h("div", { id: "userResults" }), counts = h("div", { class: "chips", id: "userCounts" }), bulk = h("div", { id: "bulkSlot" });
+    var search = h("input", { type: "search", id: "userSearch", class: "grow", placeholder: "Zoek op naam, e-mail, uid, notitie of IP…", value: U.q, "aria-label": "Zoeken in gebruikers" });
+    search.oninput = debounce(function () { U.q = search.value; U.page = 1; load(); }, 300);
+    function sel(id, options, key, label) {
+      var el = select(options, U[key], function (v) { U[key] = v; U.page = 1; load(); }, label); el.id = id; return el;
+    }
+    var typeSel = sel("fType", [["", "Alle soorten"], ["account", "Accounts"], ["anon", "Anoniem"]], "type", "Soort");
+    var statusSel = sel("fStatus", [["", "Alle statussen"], ["active", "Actief"], ["disabled", "Geblokkeerd"]], "status", "Status");
+    var goalSel = sel("fGoal", goalOptions(), "goal", "Doel"), dietSel = sel("fDiet", dietOptions(), "diet", "Dieet");
+    var activeSel = sel("fActive", [["", "Altijd"], ["24h", "Actief afgelopen 24 uur"], ["7d", "Actief afgelopen 7 dagen"], ["30d", "Actief afgelopen 30 dagen"], ["inactive30", "Niet actief in 30 dagen"]], "active", "Laatst actief");
+    var createdSel = sel("fCreated", [["", "Elke aanmaakdatum"], ["7d", "Nieuw in 7 dagen"], ["30d", "Nieuw in 30 dagen"]], "created", "Aangemaakt");
+    var sortSel = sel("fSort", SORTS, "sort", "Sorteren op");
+    var dirBtn = h("button", { class: "ghost", id: "fDir", title: "Sorteervolgorde omdraaien" });
+    function dirLabel() { var asc = (U.dir || (U.sort === "name" || U.sort === "email" ? "asc" : "desc")) === "asc"; dirBtn.textContent = asc ? "↑ Oplopend" : "↓ Aflopend"; }
+    dirBtn.onclick = function () { var asc = (U.dir || (U.sort === "name" || U.sort === "email" ? "asc" : "desc")) === "asc"; U.dir = asc ? "desc" : "asc"; U.page = 1; dirLabel(); load(); };
+    sortSel.onchange = function () { U.sort = sortSel.value; U.dir = ""; U.page = 1; dirLabel(); load(); };
+    dirLabel();
+    var clearBtn = h("button", { class: "ghost", id: "fClear", text: "Filters wissen" });
+    clearBtn.onclick = function () { U.q = ""; U.type = ""; U.status = ""; U.goal = ""; U.diet = ""; U.active = ""; U.created = ""; U.sort = "lastSeen"; U.dir = ""; U.page = 1; render(); };
+    var newBtn = h("button", { id: "newUserBtn", text: "+ Nieuwe gebruiker" });
+    newBtn.onclick = function () { createUserModal(function () { load(); }); };
+
+    view.appendChild(h("div", { class: "page-head" }, h("h2", { text: "Gebruikers" }), newBtn));
+    view.appendChild(h("div", { class: "toolbar" }, search, typeSel, statusSel, goalSel, dietSel));
+    view.appendChild(h("div", { class: "toolbar" }, activeSel, createdSel, sortSel, dirBtn, clearBtn));
+    view.appendChild(counts); view.appendChild(h("div", { style: { height: "10px" } })); view.appendChild(bulk); view.appendChild(results);
+
+    function selected() { return Object.keys(U.sel); }
+    function drawCounts(c) {
+      clear(counts);
+      [["Alle", c.all, "", ""], ["Accounts", c.accounts, "account", ""], ["Anoniem", c.anon, "anon", ""], ["Geblokkeerd", c.disabled, "", "disabled"]].forEach(function (x) {
+        var on = x[2] ? U.type === x[2] && !U.status : x[3] ? U.status === x[3] && !U.type : !U.type && !U.status;
+        var b = h("button", { class: "chip" + (on ? " on" : ""), text: x[0] + " (" + x[1] + ")" });
+        b.onclick = function () { U.type = x[2]; U.status = x[3]; U.page = 1; typeSel.value = U.type; statusSel.value = U.status; load(); };
+        counts.appendChild(b);
+      });
+    }
+    function drawBulk() {
+      clear(bulk);
+      var n = selected().length; if (!n) return;
+      function mk(label, action, cls) { var b = h("button", { class: (cls || "ghost") + " small", text: label, id: "bulk-" + action }); b.onclick = function () { runBulk(action); }; return b; }
+      var none = h("button", { class: "link", text: "Selectie wissen", id: "bulkClear" });
+      none.onclick = function () { U.sel = {}; load(); };
+      bulk.appendChild(h("div", { class: "bulkbar", id: "bulkBar" }, h("strong", { text: plural(n, "gebruiker", "gebruikers") + " geselecteerd" }), mk("Blokkeren", "disable"), mk("Deblokkeren", "enable"), mk("Overal uitloggen", "logout"), mk("Verwijderen", "delete", "danger"), none));
+    }
+    function runBulk(action) {
+      var uids = selected(), n = uids.length;
+      var labels = { disable: "blokkeren", enable: "deblokkeren", logout: "overal uitloggen", delete: "verwijderen" };
+      confirmDialog({ title: plural(n, "gebruiker", "gebruikers") + " " + labels[action], danger: action === "delete" || action === "disable", confirmLabel: labels[action][0].toUpperCase() + labels[action].slice(1),
+        message: action === "delete" ? "Account, gegevens en gedeelde lijsten van deze gebruikers worden definitief gewist. Dit kan niet ongedaan worden gemaakt." : action === "disable" ? "Deze gebruikers kunnen niet meer inloggen en hun lopende sessies stoppen." : action === "logout" ? "Alle lopende sessies van deze gebruikers stoppen; ze kunnen daarna gewoon opnieuw inloggen." : "Deze gebruikers kunnen weer inloggen.",
+        typeToConfirm: action === "delete" ? "VERWIJDEREN" : null }).then(function (ok) {
+        if (!ok) return;
+        api("/api/admin/users/bulk", { method: "POST", body: { uids: uids, action: action, confirm: action === "delete" ? "VERWIJDEREN" : undefined } }).then(function (r) {
+          toast(plural(r.done, "gebruiker", "gebruikers") + " " + { disable: "geblokkeerd", enable: "gedeblokkeerd", logout: "uitgelogd", delete: "verwijderd" }[action] + (r.missing.length ? " (" + r.missing.length + " niet gevonden)" : "") + ".");
+          U.sel = {}; load();
+        }).catch(function (e) { toast(e.message, "bad"); });
+      });
+    }
+    function sortHead(label, key) {
+      var b = h("button", { text: label + (U.sort === key ? ((U.dir || (key === "name" || key === "email" ? "asc" : "desc")) === "asc" ? " ↑" : " ↓") : "") });
+      b.onclick = function () { if (U.sort === key) U.dir = (U.dir || (key === "name" || key === "email" ? "asc" : "desc")) === "asc" ? "desc" : "asc"; else { U.sort = key; U.dir = ""; } sortSel.value = U.sort; dirLabel(); U.page = 1; load(); };
+      return h("th", {}, b);
+    }
+    function draw(d) {
+      drawCounts(d.counts); drawBulk(); clear(results);
+      if (!d.users.length) { results.appendChild(empty(d.counts.all ? "Geen gebruikers gevonden met deze filters." : "Er zijn nog geen gebruikers.")); return; }
+      var all = h("input", { type: "checkbox", id: "selAll", "aria-label": "Alles op deze pagina selecteren" });
+      all.checked = d.users.every(function (u) { return U.sel[u.uid]; });
+      all.onclick = function () { d.users.forEach(function (u) { if (all.checked) U.sel[u.uid] = true; else delete U.sel[u.uid]; }); load(); };
+      var rows = d.users.map(function (u) {
+        var cb = h("input", { type: "checkbox", class: "selRow", "aria-label": "Selecteer " + (u.email || u.uid) }); cb.checked = !!U.sel[u.uid];
+        cb.onclick = function (e) { if (e && e.stopPropagation) e.stopPropagation(); if (cb.checked) U.sel[u.uid] = true; else delete U.sel[u.uid]; drawBulk(); all.checked = d.users.every(function (x) { return U.sel[x.uid]; }); };
+        var tr = h("tr", { class: "clickable userRow" + (u.disabled ? " off" : "") },
+          h("td", {}, cb),
+          h("td", {}, h("strong", { text: u.name || (u.email ? u.email.split("@")[0] : "Anoniem") }), h("span", { class: "sub", text: u.email || shortUid(u.uid) })),
+          h("td", {}, badge(u.type === "account" ? "Account" : "Anoniem", u.type === "account" ? "accent" : ""), u.createdBy === "admin" ? " " : null, u.createdBy === "admin" ? badge("door beheerder") : null, u.upgradedFrom ? " " : null, u.upgradedFrom ? badge("eerst anoniem") : null),
+          h("td", { text: u.goal || "—" }),
+          h("td", { class: "nowrap", text: u.dishCount + " gerechten" }, h("span", { class: "sub", text: plural(u.plannedWeekCount, "week", "weken") })),
+          h("td", { class: "nowrap", text: relTime(u.lastSeenAt) }, u.location ? h("span", { class: "sub", text: [u.location.city, u.location.country].filter(Boolean).join(", ") }) : null),
+          h("td", { class: "nowrap", text: u.createdAt ? fmtDate(u.createdAt).replace(/, \d\d:\d\d$/, "") : "—" }),
+          h("td", {}, u.disabled ? badge("Geblokkeerd", "bad") : badge("Actief", "good")));
+        tr.onclick = function () { navigate("#/gebruikers/" + encodeURIComponent(u.uid)); };
+        return tr;
+      });
+      results.appendChild(table([h("th", {}, all), sortHead("Gebruiker", "name"), th("Soort"), th("Doel"), sortHead("Gerechten", "dishes"), sortHead("Laatst actief", "lastSeen"), sortHead("Aangemaakt", "created"), th("Status")], rows));
+      results.appendChild(pager(d, function (p) { U.page = p; load(); }, ["gebruiker", "gebruikers"]));
+    }
+    function load() {
+      var my = ++seq;
+      return api("/api/admin/users" + qs({ q: U.q, type: U.type, status: U.status, goal: U.goal, diet: U.diet, active: U.active, created: U.created, sort: U.sort, dir: U.dir, page: U.page, pageSize: U.pageSize })).then(function (d) {
+        if (my !== seq || !ctx.alive()) return;
+        if (d.page !== U.page) U.page = d.page;
+        draw(d);
+      }).catch(function (e) { if (!e.silent && my === seq) { clear(results); results.appendChild(errorBox("Kon gebruikers niet laden: " + e.message)); } });
+    }
+    reloadHook = load;
+    return load();
+  }
+
+  // ---- gebruiker aanmaken ----
+  function createUserModal(onDone) {
+    var opts = meta.settings.prefOptions;
+    var email = h("input", { type: "email", id: "cuEmail", placeholder: "naam@voorbeeld.nl", autocomplete: "off" });
+    var pw = h("input", { type: "text", id: "cuPassword", placeholder: "Leeg laten om er een te laten maken", autocomplete: "off" });
+    var name = h("input", { type: "text", id: "cuName", maxLength: 40 });
+    var goal = select([["", "(niet ingesteld)"]].concat(opts.goals.map(function (g) { return [g, g]; })), "", function () {}, "Doel"); goal.id = "cuGoal";
+    var diet = select([["", "(niet ingesteld)"]].concat(opts.diets.map(function (g) { return [g, g]; })), "", function () {}, "Dieet"); diet.id = "cuDiet";
+    var note = h("textarea", { id: "cuNote", maxLength: 500, placeholder: "Alleen zichtbaar voor beheerders" });
+    var invite = h("input", { type: "checkbox", id: "cuInvite" });
+    var err = h("div", { id: "cuError", class: "errorbox hidden", role: "alert" });
+    var create = h("button", { id: "cuSubmit", text: "Account aanmaken" }), cancel = h("button", { class: "ghost", text: "Annuleren" });
+    cancel.onclick = closeModal;
+    create.onclick = function () {
+      err.classList.add("hidden"); create.disabled = true;
+      var prefs = {}; if (goal.value) prefs.goal = goal.value; if (diet.value) prefs.dietStyle = diet.value;
+      var body = { email: email.value, name: name.value || undefined, note: note.value || undefined, prefs: Object.keys(prefs).length ? prefs : undefined, sendResetLink: invite.checked || undefined };
+      if (pw.value) body.password = pw.value;
+      api("/api/admin/users", { method: "POST", body: body }).then(function (r) {
+        showCreated(r); onDone && onDone();
+      }).catch(function (e) { create.disabled = false; if (e.silent) return; err.textContent = e.message; err.classList.remove("hidden"); err.style.display = "block"; });
+    };
+    openModal("Nieuwe gebruiker", [err,
+      field("E-mailadres", email), field("Wachtwoord", pw, "Minstens 8 tekens. Laat je het leeg, dan maken we een sterk wachtwoord dat je één keer te zien krijgt."),
+      h("div", { class: "form-grid" }, field("Naam", name), field("Doel", goal), field("Dieet", diet)),
+      field("Notitie", note),
+      h("label", { class: "row", style: { marginBottom: "4px" } }, invite, h("span", { text: "Stuur ook een e-mail met een link waarmee de gebruiker zelf een wachtwoord kiest" })),
+      h("div", { class: "hint", text: "Werkt alleen als e-mail (RESEND_API_KEY) is ingesteld; anders krijg je de link om zelf door te geven." })], [cancel, create]);
+    email.focus && email.focus();
+  }
+  function showCreated(r) {
+    var u = r.user;
+    var open = h("button", { text: "Naar de gebruiker" }); open.onclick = function () { closeModal(); navigate("#/gebruikers/" + encodeURIComponent(u.uid)); };
+    var close = h("button", { class: "ghost", text: "Sluiten" }); close.onclick = closeModal;
+    openModal("Account aangemaakt", [
+      h("p", { style: { marginTop: "0" } }, h("strong", { text: u.email }), " is aangemaakt."),
+      r.password ? [h("div", { class: "muted small", text: "Wachtwoord — noteer het nu, het wordt niet nog eens getoond:" }), secretRow(r.password, "createdPassword")] : null,
+      r.resetLink ? [h("div", { class: "muted small", style: { marginTop: "10px" }, text: r.emailSent ? "Er is een e-mail verstuurd met deze link (1 uur geldig):" : "De e-mail kon niet worden verstuurd" + (r.emailError ? " (" + r.emailError + ")" : "") + ". Geef deze link (1 uur geldig) zelf door:" }), secretRow(r.resetLink, "createdLink")] : null], [close, open]);
+  }
+
+  // =====================================================================================
+  // Gebruikers: één gebruiker
+  // =====================================================================================
+  function userDetail(view, uid, ctx) {
+    var back = h("button", { class: "ghost small", id: "backBtn", text: "‹ Alle gebruikers" });
+    back.onclick = function () { navigate("#/gebruikers"); };
+    return api("/api/admin/users/" + encodeURIComponent(uid)).then(function (d) {
+      if (ctx.alive()) drawUser(view, d, back);
+    }).catch(function (e) {
+      if (e.silent) return;
+      view.appendChild(h("div", { class: "page-head" }, back));
+      view.appendChild(errorBox(e.status === 404 ? "Deze gebruiker bestaat niet (meer)." : "Kon de gebruiker niet laden: " + e.message));
+    });
+  }
+
+  function drawUser(view, d, back) {
+    var u = d.user, opts = meta.settings.prefOptions, isAcc = u.type === "account";
+    var base = "/api/admin/users/" + encodeURIComponent(u.uid);
+    function reload() { render(true); }
+    function run(promise, okMsg, after) {
+      return promise.then(function (r) { if (okMsg) toast(okMsg); if (after) after(r); else reload(); return r; }).catch(function (e) { if (!e.silent) toast(e.message, "bad"); });
+    }
+    function btn(label, cls, id, fn) { var b = h("button", { class: cls || "", text: label, id: id }); b.onclick = fn; return b; }
+
+    view.appendChild(h("div", { class: "page-head" },
+      h("div", { class: "row" }, back, h("h2", { id: "userTitle", text: u.name || u.email || "Anoniem" })),
+      h("div", { class: "row" }, badge(isAcc ? "Account" : "Anoniem", "accent"), u.createdBy === "admin" ? badge("door beheerder aangemaakt") : null, u.upgradedFrom ? badge("eerst anoniem") : null, u.disabled ? badge("Geblokkeerd", "bad") : badge("Actief", "good"))));
+    if (u.disabled) view.appendChild(h("div", { class: "notebox warn", id: "blockedNote" }, "Geblokkeerd sinds " + fmtDate(u.disabledAt) + (u.disabledReason ? " — reden: " + u.disabledReason : "") + ". Deze gebruiker kan niet inloggen of de app gebruiken."));
+
+    // ---- account ----
+    var emailIn = isAcc ? h("input", { type: "email", id: "uEmail", value: u.email || "", autocomplete: "off" }) : null;
+    var nameIn = h("input", { type: "text", id: "uName", maxLength: 40 }); nameIn.value = u.name || "";
+    var noteIn = h("textarea", { id: "uNote", maxLength: 500 }); noteIn.value = u.note || "";
+    var idBtn = h("button", { class: "link", text: u.uid, title: "Kopieer uid", id: "uUid" }); idBtn.onclick = function () { copyText(u.uid); };
+    var where = u.location ? [u.location.city, u.location.country].filter(Boolean).join(", ") : "";
+    var kv = h("dl", { class: "kv" },
+      h("dt", { text: "Gebruikers-ID" }), h("dd", { class: "mono" }, idBtn),
+      h("dt", { text: "Soort" }), h("dd", { text: isAcc ? "Account (e-mail en wachtwoord)" : "Anoniem (alleen dit apparaat)" }),
+      isAcc ? [h("dt", { text: "Aangemaakt" }), h("dd", { text: fmtDate(u.createdAt) + (u.createdBy === "admin" ? " — door beheerder" : u.upgradedFrom ? " — zelf omgezet van een anoniem profiel" : u.createdBy === "self" ? " — zelf geregistreerd" : "") }),
+        u.upgradedFrom ? [h("dt", { text: "Eerder anoniem als" }), h("dd", { class: "mono", text: u.upgradedFrom })] : null,
+        h("dt", { text: "Laatste login" }), h("dd", { text: u.lastLoginAt ? fmtDate(u.lastLoginAt) + " (" + relTime(u.lastLoginAt) + ")" : "nooit" }),
+        h("dt", { text: "Aantal logins" }), h("dd", { text: String(u.loginCount) })] : null,
+      h("dt", { text: "Laatst actief" }), h("dd", { text: u.lastSeenAt ? fmtDate(u.lastSeenAt) + " (" + relTime(u.lastSeenAt) + ")" : "nooit" }),
+      h("dt", { text: "Laatste IP-adres" }), h("dd", { text: (u.lastIp || "—") + (where ? " · " + where : "") }));
+    var saveAcc = btn("Opslaan", "", "saveAccountBtn", function () {
+      var patch = {};
+      if (emailIn && emailIn.value.trim().toLowerCase() !== (u.email || "")) patch.email = emailIn.value;
+      if (nameIn.value.trim() !== (u.name || "")) patch.name = nameIn.value;
+      if (noteIn.value.trim() !== (u.note || "")) patch.note = noteIn.value;
+      if (!Object.keys(patch).length) return toast("Er is niets gewijzigd.");
+      function go() {
+        run(api(base, { method: "POST", body: patch }), null, function (r) {
+          toast((r.changes.length ? "Opgeslagen: " + r.changes.join(", ") + "." : "Niets gewijzigd.") + (r.sessionsSignedOut ? " De gebruiker is overal uitgelogd." : ""));
+          reload();
+        });
+      }
+      if (patch.email) confirmDialog({ title: "E-mailadres wijzigen", message: "De gebruiker wordt overal uitgelogd en logt daarna in met het nieuwe adres. Zijn gegevens blijven bewaard.", confirmLabel: "Wijzigen" }).then(function (ok) { if (ok) go(); });
+      else go();
+    });
+    view.appendChild(card("Account", kv, h("div", { style: { height: "12px" } }),
+      h("div", { class: "form-grid" }, isAcc ? field("E-mailadres", emailIn) : null, field("Naam", nameIn)),
+      field("Notitie (alleen voor beheerders)", noteIn), saveAcc));
+
+    // ---- abonnement ----
+    var bl = d.billing;
+    if (bl && isAcc) {
+      var stLabel = { none: "geen abonnement", pending: "betaling in behandeling", active: "actief (verlengt)", canceled: "opgezegd (loopt af)", past_due: "laatste betaling mislukt", ended: "beëindigd" };
+      var daysIn = h("input", { type: "number", id: "uGrantDays", min: 1, max: 3650, step: 1, placeholder: "Aantal dagen, bijvoorbeeld 30" });
+      var grant = btn("Plus cadeau geven", "", "grantPlusBtn", function () {
+        var n = Number(daysIn.value.trim());
+        if (daysIn.value.trim() === "" || !isFinite(n) || Math.floor(n) !== n || n < 1 || n > 3650) return toast("Vul een aantal dagen in tussen 1 en 3650.", "bad");
+        run(api(base + "/billing-grant", { method: "POST", body: { days: n } }), "Plus is voor " + n + " dagen toegevoegd.", function () { reload(); });
+      });
+      var actions = [grant];
+      if (bl.grantUntil) actions.push(btn("Cadeau intrekken", "ghost", "revokePlusBtn", function () {
+        confirmDialog({ title: "Cadeau intrekken", message: "De gebruiker heeft daarna geen Plus meer via dit cadeau.", confirmLabel: "Intrekken" }).then(function (ok) { if (ok) run(api(base + "/billing-revoke", { method: "POST", body: {} }), "Cadeau ingetrokken.", function () { reload(); }); });
+      }));
+      if (bl.status === "active" || bl.status === "past_due") actions.push(btn("Abonnement opzeggen", "ghost", "adminCancelSubBtn", function () {
+        confirmDialog({ title: "Abonnement opzeggen", message: "Er wordt niet meer afgeschreven. De gebruiker houdt Plus tot het einde van de betaalde periode. Terugbetalen doe je zelf in het Mollie-dashboard.", confirmLabel: "Opzeggen" }).then(function (ok) { if (ok) run(api(base + "/billing-cancel", { method: "POST", body: {} }), "Abonnement opgezegd.", function () { reload(); }); });
+      }));
+      view.appendChild(card("Abonnement",
+        h("dl", { class: "kv", id: "billingFacts" },
+          h("dt", { text: "Plus" }), h("dd", { text: bl.plusActive ? "ja" : "nee" }),
+          h("dt", { text: "Status" }), h("dd", { text: stLabel[bl.status] || bl.status }),
+          bl.interval ? [h("dt", { text: "Abonnement" }), h("dd", { text: (bl.interval === "year" ? "jaarlijks " : "maandelijks ") + fmtEur(bl.priceCents) })] : null,
+          bl.periodEnd ? [h("dt", { text: "Betaald tot" }), h("dd", { text: fmtDate(bl.periodEnd) })] : null,
+          bl.grantUntil ? [h("dt", { text: "Cadeau tot" }), h("dd", { text: fmtDate(bl.grantUntil) })] : null,
+          bl.endReason ? [h("dt", { text: "Beëindigd door" }), h("dd", { text: bl.endReason === "chargeback" ? "terugboeking" : "terugbetaling" })] : null,
+          bl.customerId ? [h("dt", { text: "Mollie-klant" }), h("dd", { text: bl.customerId })] : null,
+          bl.subscriptionId ? [h("dt", { text: "Mollie-abonnement" }), h("dd", { text: bl.subscriptionId })] : null,
+          bl.subscriptionError ? [h("dt", { text: "Let op" }), h("dd", { class: "err", text: "Betaald, maar het abonnement kon nog niet worden aangemaakt: " + bl.subscriptionError + ". De app probeert het opnieuw zodra de gebruiker hem opent." })] : null),
+        bl.history.length ? table([th("Wanneer"), th("Wat"), th("Bedrag")], bl.history.map(function (x) { return h("tr", {}, h("td", { class: "nowrap", text: relTime(x.ts) }), h("td", { text: x.status + (x.id ? " (" + x.id + ")" : "") }), h("td", { class: "num", text: x.cents ? fmtEur(x.cents) : "\u2014" })); })) : null,
+        h("div", { style: { height: "12px" } }),
+        field("Plus cadeau geven (dagen)", daysIn, "Handig voor testers en de eerste gebruikers. Het telt op bij wat er nog over is en werkt alleen als abonnementen aan staan."),
+        h("div", { class: "row", id: "billingActions" }, actions)));
+    }
+
+    // ---- verbruik deze maand en eigen limiet ----
+    var qt = d.quota;
+    if (qt) {
+      var capIn = h("input", { type: "number", id: "uDishCap", min: "0", max: "100000", step: "1", placeholder: "Leeg = de algemene limiet (0 = onbeperkt)" });
+      capIn.value = qt.own === null ? "" : String(qt.own);
+      var saveCap = btn("Limiet opslaan", "", "saveDishCapBtn", function () {
+        var raw = capIn.value.trim();
+        if (raw !== "" && (!/^\d+$/.test(raw) || Number(raw) > 100000)) return toast("Vul een geheel getal van 0 tot 100000 in, of laat het leeg.", "bad");
+        var next = raw === "" ? null : Number(raw);
+        if (next === qt.own) return toast("Er is niets gewijzigd.");
+        run(api(base, { method: "POST", body: { dishCap: next } }), next === null ? "Eigen limiet weggehaald: de algemene limiet geldt weer." : "Eigen limiet opgeslagen.", function () { reload(); });
+      });
+      view.appendChild(card("Verbruik deze maand",
+        h("dl", { class: "kv", id: "quotaFacts" },
+          h("dt", { text: "Nieuwe gerechten" }), h("dd", { text: qt.cap > 0 ? qt.dishes + " van " + qt.cap : qt.dishes + " (onbeperkt)" }),
+          h("dt", { text: "Geldende limiet" }), h("dd", { text: (qt.cap > 0 ? qt.cap + " per maand" : "onbeperkt") + (qt.own !== null ? " · eigen limiet" : " · algemene limiet") }),
+          h("dt", { text: "AI-aanroepen" }), h("dd", { text: String(qt.calls) }),
+          h("dt", { text: "Tokens" }), h("dd", { text: fmtTok(qt.tokensIn) + " in · " + fmtTok(qt.tokensOut) + " uit" }),
+          h("dt", { text: "Kosten" }), h("dd", { text: fmtUsd(qt.costUsd) })),
+        h("div", { style: { height: "12px" } }),
+        field("Eigen limiet per maand voor deze gebruiker", capIn),
+        saveCap,
+        h("div", { class: "hint", text: "Geldt naast de algemene limiet onder Instellingen en gaat daarvoor. Bijvoorbeeld 0 voor een gebruiker die onbeperkt mag, of een hoger getal voor een betalende gebruiker." })));
+    }
+
+    // ---- wachtwoord ----
+    if (isAcc) {
+      var newPw = h("input", { type: "text", id: "uNewPw", placeholder: "Nieuw wachtwoord (minstens 8 tekens)", autocomplete: "off" });
+      var setPw = btn("Wachtwoord instellen", "", "setPasswordBtn", function () {
+        if (newPw.value.length < 8) return toast("Een wachtwoord heeft minstens 8 tekens.", "bad");
+        run(api(base, { method: "POST", body: { newPassword: newPw.value } }), "Wachtwoord gewijzigd; de gebruiker is overal uitgelogd.");
+      });
+      var genPw = btn("Nieuw wachtwoord laten maken", "ghost", "genPasswordBtn", function () {
+        confirmDialog({ title: "Nieuw wachtwoord maken", message: "Het huidige wachtwoord werkt daarna niet meer en de gebruiker wordt overal uitgelogd.", confirmLabel: "Maak wachtwoord" }).then(function (ok) {
+          if (!ok) return;
+          api(base + "/reset-password", { method: "POST", body: {} }).then(function (r) {
+            var close = h("button", { text: "Klaar" }); close.onclick = closeModal;
+            openModal("Nieuw wachtwoord", [h("p", { style: { marginTop: "0" }, text: "Geef dit wachtwoord aan de gebruiker. Het wordt niet nog eens getoond." }), secretRow(r.password, "generatedPassword")], [close]);
+          }).catch(function (e) { if (!e.silent) toast(e.message, "bad"); });
+        });
+      });
+      var mail = h("input", { type: "checkbox", id: "uMailLink" });
+      var linkBtn = btn("Resetlink maken", "ghost", "resetLinkBtn", function () {
+        api(base + "/reset-link", { method: "POST", body: { send: mail.checked } }).then(function (r) {
+          var close = h("button", { text: "Klaar" }); close.onclick = closeModal;
+          var status = mail.checked ? (r.emailSent ? "De link is ook per e-mail verstuurd." : "Mailen lukte niet" + (r.emailError ? " (" + r.emailError + ")" : "") + "; geef de link zelf door.") : "De gebruiker kiest hiermee zelf een nieuw wachtwoord.";
+          openModal("Resetlink", [h("p", { style: { marginTop: "0" }, text: status + " De link is " + r.expiresInMinutes + " minuten geldig en werkt één keer." }), secretRow(r.link, "resetLinkValue")], [close]);
+        }).catch(function (e) { if (!e.silent) toast(e.message, "bad"); });
+      });
+      view.appendChild(card("Wachtwoord", h("div", { class: "row" }, h("div", { style: { flex: "1 1 260px" } }, newPw), setPw),
+        h("div", { class: "row", style: { marginTop: "12px" } }, genPw, linkBtn, h("label", { class: "row small" }, mail, h("span", { text: "resetlink ook mailen" }))),
+        h("div", { class: "hint", text: "Je kunt een wachtwoord nooit terugzien; alleen vervangen. Het instellen of laten maken van een wachtwoord logt de gebruiker overal uit." })));
+    }
+
+    // ---- voorkeuren ----
+    var P = d.prefs || {}, ctl = {};
+    function txt(key, label, max, type) {
+      var el = h("input", { type: type || "text", id: "p_" + key, maxLength: max }); el.value = P[key] == null ? "" : String(P[key]);
+      var orig = el.value; ctl[key] = { changed: function () { return el.value.trim() !== orig; }, value: function () { return el.value.trim(); } };
+      return field(label, el);
+    }
+    function sel(key, label, choices) {
+      var cur = P[key] == null ? "" : String(P[key]);
+      var list = [["", "(niet ingesteld)"]].concat(choices.map(function (c) { return [c, c]; }));
+      if (cur && choices.indexOf(cur) === -1) list.push([cur, cur + " (afwijkend)"]);
+      var el = select(list, cur, function () {}, label); el.id = "p_" + key;
+      ctl[key] = { changed: function () { return el.value !== cur; }, value: function () { return el.value; } };
+      return field(label, el);
+    }
+    function lst(key, label) {
+      var el = h("input", { type: "text", id: "p_" + key }); el.value = Array.isArray(P[key]) ? P[key].join(", ") : "";
+      var orig = el.value;
+      ctl[key] = { changed: function () { return el.value.trim() !== orig.trim(); }, value: function () { return el.value.split(",").map(function (x) { return x.trim(); }).filter(Boolean); } };
+      return field(label, el, "Gescheiden door komma’s");
+    }
+    var mealBoxes = opts.mealTypes.map(function (m) {
+      var cb = h("input", { type: "checkbox", id: "p_meal_" + m }); cb.checked = Array.isArray(P.mealTypes) ? P.mealTypes.indexOf(m) > -1 : true; cb._orig = cb.checked;
+      return { m: m, cb: cb, node: h("label", { class: "row small" }, cb, h("span", { text: m })) };
+    });
+    ctl.mealTypes = { changed: function () { return mealBoxes.some(function (x) { return x.cb.checked !== x.cb._orig; }); }, value: function () { return mealBoxes.filter(function (x) { return x.cb.checked; }).map(function (x) { return x.m; }); } };
+    var savePrefs = btn("Voorkeuren opslaan", "", "savePrefsBtn", function () {
+      var patch = {};
+      Object.keys(ctl).forEach(function (k) { if (ctl[k].changed()) patch[k] = ctl[k].value(); });
+      if (patch.count !== undefined) patch.count = patch.count === "" ? "" : Number(patch.count);
+      if (!Object.keys(patch).length) return toast("Er is niets gewijzigd.");
+      run(api(base, { method: "POST", body: { prefs: patch } }), null, function (r) { toast("Voorkeuren opgeslagen (" + r.changes.length + " " + (r.changes.length === 1 ? "veld" : "velden") + "). De gebruiker ziet dit bij de volgende keer openen."); reload(); });
+    });
+    view.appendChild(card("Voorkeuren en profiel",
+      h("div", { class: "form-grid" }, txt("name", "Naam", 40), sel("goal", "Doel", opts.goals), sel("dietStyle", "Dieet", opts.diets), txt("level", "Kookniveau", 40), txt("activityLevel", "Activiteitsniveau", 40), txt("gender", "Geslacht", 20),
+        txt("age", "Leeftijd", 3, "number"), txt("heightCm", "Lengte (cm)", 3, "number"), txt("weightKg", "Gewicht (kg)", 5, "number"), txt("count", "Gerechten per keer (1–14)", 2, "number")),
+      txt("exclude", "Wil niet eten (uitsluiten)", 300), h("div", { class: "form-grid" }, lst("cuisines", "Keukens"), lst("flavors", "Smaken"), lst("equipment", "Keukenapparatuur")),
+      h("div", { class: "muted small", text: "Maaltijdsoorten" }), h("div", { class: "row", style: { margin: "6px 0 14px" } }, mealBoxes.map(function (x) { return x.node; })), savePrefs,
+      h("div", { class: "hint", text: d.prefs ? "Alleen gewijzigde velden worden opgeslagen; de rest blijft zoals de gebruiker het had." : "Deze gebruiker heeft nog geen voorkeuren opgeslagen; alles wat je invult wordt nieuw." })));
+
+    // ---- toegang en acties ----
+    var reason = h("input", { type: "text", id: "blockReason", placeholder: "Reden (alleen voor jou)", maxLength: 200 });
+    var actions = [];
+    if (u.disabled) actions.push(btn("Deblokkeren", "", "enableBtn", function () { run(api(base + "/enable", { method: "POST", body: {} }), "Gebruiker gedeblokkeerd."); }));
+    else actions.push(h("div", { class: "row" }, h("div", { style: { flex: "1 1 220px" } }, reason), btn("Blokkeren", "danger", "disableBtn", function () {
+      run(api(base + "/disable", { method: "POST", body: { reason: reason.value } }), "Gebruiker geblokkeerd.");
+    })));
+    var clearWhat = select([["dishes", "Gerechten"], ["plannedWeeks", "Weekplanning"], ["prefs", "Voorkeuren"], ["all", "Alles hierboven"]], "dishes", function () {}, "Wat wissen"); clearWhat.id = "clearWhat";
+    view.appendChild(card("Toegang en acties",
+      h("div", { class: "muted small", text: u.disabled ? "Een geblokkeerde gebruiker kan niet inloggen en zijn sessies werken niet meer." : "Blokkeren stopt inloggen en alle lopende sessies; de gegevens blijven bewaard." }), h("div", { style: { height: "8px" } }), actions,
+      h("hr", { style: { border: "none", borderTop: "1px solid var(--line)", margin: "16px 0" } }),
+      h("div", { class: "row" },
+        btn("Overal uitloggen", "ghost", "userLogoutBtn", function () { run(api(base + "/logout", { method: "POST", body: {} }), "Alle sessies van deze gebruiker zijn beëindigd.", function () {}); }),
+        btn("Gegevens exporteren (JSON)", "ghost", "exportBtn", function () { downloadFile(base + "/export", "balanza-" + u.uid + ".json").then(function () { toast("Export gedownload."); }).catch(function (e) { if (!e.silent) toast(e.message, "bad"); }); })),
+      h("hr", { style: { border: "none", borderTop: "1px solid var(--line)", margin: "16px 0" } }),
+      h("div", { class: "row" }, h("span", { class: "muted", text: "Gegevens wissen:" }), clearWhat, btn("Wissen", "danger", "clearBtn", function () {
+        var what = clearWhat.value;
+        confirmDialog({ title: "Gegevens wissen", danger: true, confirmLabel: "Wissen", message: what === "all" ? "Gerechten, weekplanning én voorkeuren van deze gebruiker worden gewist. Het account blijft bestaan." : "Dit onderdeel van de gegevens van deze gebruiker wordt gewist. Het account blijft bestaan." }).then(function (ok) {
+          if (ok) run(api(base + "/clear-data", { method: "POST", body: { what: what } }), "Gegevens gewist.");
+        });
+      })),
+      h("hr", { style: { border: "none", borderTop: "1px solid var(--line)", margin: "16px 0" } }),
+      btn("Gebruiker verwijderen…", "danger", "deleteBtn", function () {
+        var expected = u.email || u.uid;
+        confirmDialog({ title: "Gebruiker verwijderen", danger: true, confirmLabel: "Definitief verwijderen", typeToConfirm: expected,
+          message: "Het account, alle gegevens (gerechten, planning, voorkeuren) en alle gedeelde lijsten van deze gebruiker worden gewist. Dit kan niet ongedaan worden gemaakt. Overweeg eerst te exporteren of te blokkeren." }).then(function (typed) {
+          if (!typed) return;
+          run(api(base + "/delete", { method: "POST", body: { confirm: typed } }), "Gebruiker verwijderd.", function () { navigate("#/gebruikers"); });
+        });
+      })));
+
+    // ---- gegevens ----
+    var dishes = d.dishes && typeof d.dishes === "object" ? d.dishes : {};
+    var mealRows = Object.keys(dishes).filter(function (k) { return Array.isArray(dishes[k]); }).map(function (k) { return h("tr", {}, h("td", { text: k }), h("td", { text: String(dishes[k].length) })); });
+    var weeks = d.plannedWeeks && Array.isArray(d.plannedWeeks.list) ? d.plannedWeeks.list : (Array.isArray(d.plannedWeeks) ? d.plannedWeeks : []);
+    function jsonBlock(title, value) { return h("details", { style: { marginTop: "10px" } }, h("summary", { text: title }), h("pre", { text: JSON.stringify(value, null, 2) })); }
+    view.appendChild(card("Gegevens van de gebruiker", mealRows.length ? table([th("Maaltijdsoort"), th("Opgeslagen gerechten")], mealRows) : h("div", { class: "muted", text: "Nog geen opgeslagen gerechten." }),
+      h("div", { class: "muted", style: { marginTop: "10px" }, text: plural(weeks.length, "ingeplande week", "ingeplande weken") + "." }),
+      d.prefs ? jsonBlock("Ruwe voorkeuren (JSON)", d.prefs) : null, d.dishes ? jsonBlock("Ruwe gerechten (JSON)", d.dishes) : null));
+
+    // ---- gedeelde lijsten ----
+    var listRows = d.lists.map(function (l) {
+      var tr = h("tr", { class: "clickable" }, h("td", { text: l.title }), h("td", { text: String(l.itemCount) }), h("td", { class: "nowrap", text: relTime(l.updatedAt) }), h("td", {}, l.expired ? badge("Verlopen", "warn") : badge("Actief", "good")));
+      tr.onclick = function () { openListDetail(l.token, reload); };
+      return tr;
+    });
+    view.appendChild(card("Gedeelde lijsten", listRows.length ? table([th("Titel"), th("Producten"), th("Bijgewerkt"), th("Status")], listRows) : h("div", { class: "muted", text: "Deze gebruiker deelt geen lijsten." })));
+
+    // ---- recente activiteit ----
+    var allLogs = h("button", { class: "link", text: "Alles in het logboek", id: "userAllLogs" });
+    allLogs.onclick = function () { L.uid = u.uid; L.q = ""; L.type = ""; L.status = ""; L.action = ""; L.page = 1; navigate("#/activiteit"); };
+    var logRows = d.logs.slice(0, 12).map(function (l) { return logRow(l, true); });
+    view.appendChild(card("Recente activiteit", logRows.length ? table([th("Wanneer"), th("Soort"), th("Actie"), th("Uitkomst"), th("Duur"), th("Melding")], logRows) : h("div", { class: "muted", text: "Nog geen activiteit in het logboek." }), logRows.length ? h("div", { style: { marginTop: "8px" } }, allLogs) : null));
+  }
+
+  // =====================================================================================
+  // Activiteit (logboek)
+  // =====================================================================================
+  var TYPE_LABELS = { generate: "AI", tips: "Tips", auth: "Account", push: "Melding", billing: "Betaling" };
+  var LOG_ACTION_LABELS = { login: "Inloggen", register: "Registreren", upgrade: "Anoniem omgezet naar account", "password-change": "Wachtwoord gewijzigd (door gebruiker)", notify: "Pushmelding verstuurd", webhook: "Betaalmelding (Mollie)", "email-change": "E-mailadres gewijzigd (door gebruiker)", "logout-others": "Op andere apparaten uitgelogd", "self-delete": "Account zelf verwijderd", export: "Gegevens gedownload", "reset-request": "Reset aangevraagd", "reset-done": "Wachtwoord gereset" };
+  function logRow(l, compact) {
+    var who = null;
+    if (!compact) {
+      if (l.uid) { var b = h("button", { class: "link mono", text: shortUid(l.uid), title: l.uid }); b.onclick = function (e) { if (e && e.stopPropagation) e.stopPropagation(); navigate("#/gebruikers/" + encodeURIComponent(l.uid)); }; who = h("td", {}, b, l.email ? h("span", { class: "sub", text: l.email }) : null); }
+      else who = h("td", { text: l.email || "—" });
+    }
+    return h("tr", { class: "logRow" + (l.ok ? "" : " failed") },
+      h("td", { class: "nowrap", title: l.ts, text: compact ? relTime(l.ts) : fmtDate(l.ts) }),
+      h("td", {}, badge(TYPE_LABELS[l.type] || l.type)),
+      h("td", { text: LOG_ACTION_LABELS[l.action] || l.action || "—" }),
+      h("td", {}, l.ok ? badge("OK" + (l.status && l.status !== 200 ? " " + l.status : ""), "good") : badge("Fout " + (l.status || ""), "bad")),
+      h("td", { class: "nowrap", text: l.durationMs != null ? fmtMs(l.durationMs) : "—" }),
+      compact ? null : who, compact ? null : h("td", { class: "mono", text: l.ip || "—" }),
+      h("td", { class: l.ok ? "" : "err", text: (l.error ? l.error + (l.tokensIn != null ? " (" + fmtUsd(l.costUsd) + " verbruikt)" : "") : l.tokensIn != null ? fmtTok(l.tokensIn) + " in · " + fmtTok(l.tokensOut) + " uit · " + fmtUsd(l.costUsd) + (l.dishes ? " · " + l.dishes + (l.dishes === 1 ? " gerecht" : " gerechten") : "") + (l.aiCalls > 1 ? " · " + l.aiCalls + " aanroepen" : "") : "") || (l.type === "push" && l.sent != null ? l.sent + " van " + (l.sent + (l.failed || 0)) + (l.sent + (l.failed || 0) === 1 ? " toestel" : " toestellen") + " bereikt" : "") }));
+  }
+
+  VIEWS.activiteit = function (view, route, ctx) {
+    var seq = 0, facets = { types: {}, actions: {} };
+    var results = h("div", { id: "logResults" }), actionSlot = h("span", { id: "fActionSlot" });
+    function bind(id, key, ph, cls, type) {
+      var el = h("input", { type: type || "text", id: id, placeholder: ph, class: cls || "", "aria-label": ph }); el.value = L[key] == null ? "" : L[key];
+      el.oninput = debounce(function () { L[key] = el.value.trim(); L.page = 1; load(); }, 350); return el;
+    }
+    var q = bind("lQ", "q", "Zoek in actie, melding, IP, gebruiker…", "grow", "search");
+    var typeSel = select([["", "Alle soorten"], ["generate", "AI (genereren)"], ["tips", "Tips"], ["auth", "Account (inloggen)"], ["push", "Meldingen (push)"]], L.type, function (v) { L.type = v; L.page = 1; load(); }, "Soort"); typeSel.id = "lType";
+    var statusSel = select([["", "Alle uitkomsten"], ["ok", "Gelukt"], ["error", "Fouten"]], L.status, function (v) { L.status = v; L.page = 1; load(); }, "Uitkomst"); statusSel.id = "lStatus";
+    var uidIn = bind("lUid", "uid", "Gebruikers-ID", "", "text"), ipIn = bind("lIp", "ip", "IP-adres", "", "text");
+    var fromIn = h("input", { type: "date", id: "lFrom", "aria-label": "Vanaf datum" }); fromIn.value = L.from; fromIn.onchange = function () { L.from = fromIn.value; L.page = 1; load(); };
+    var toIn = h("input", { type: "date", id: "lTo", "aria-label": "Tot en met datum" }); toIn.value = L.to; toIn.onchange = function () { L.to = toIn.value; L.page = 1; load(); };
+    var minIn = bind("lMin", "minMs", "Min. duur (ms)", "", "number");
+    var auto = h("input", { type: "checkbox", id: "lAuto" }); auto.checked = !!L.auto; auto.onchange = function () { L.auto = auto.checked; };
+    var csv = h("button", { class: "ghost", id: "lCsv", text: "Exporteer CSV" });
+    csv.onclick = function () { downloadFile("/api/admin/logs" + qs(filters(true)), "balanza-logboek.csv").then(function () { toast("Logboek gedownload."); }).catch(function (e) { if (!e.silent) toast(e.message, "bad"); }); };
+    var clr = h("button", { class: "ghost", id: "lClear", text: "Filters wissen" });
+    clr.onclick = function () { L.q = ""; L.type = ""; L.status = ""; L.action = ""; L.uid = ""; L.ip = ""; L.from = ""; L.to = ""; L.minMs = ""; L.page = 1; render(); };
+    function filters(forCsv) { var f = { q: L.q, type: L.type, status: L.status, action: L.action, uid: L.uid, ip: L.ip, from: L.from, to: L.to, minMs: L.minMs }; if (forCsv) f.format = "csv"; else { f.page = L.page; f.pageSize = L.pageSize; } return f; }
+    function drawActionSelect() {
+      var opts = [["", "Alle acties"]].concat(Object.keys(facets.actions).sort().map(function (a) { return [a, (LOG_ACTION_LABELS[a] || a) + " (" + facets.actions[a] + ")"]; }));
+      if (L.action && !facets.actions[L.action]) opts.push([L.action, L.action]);
+      var s = select(opts, L.action, function (v) { L.action = v; L.page = 1; load(); }, "Actie"); s.id = "lAction";
+      clear(actionSlot).appendChild(s);
+    }
+    drawActionSelect();
+    view.appendChild(h("div", { class: "page-head" }, h("h2", { text: "Activiteit" }), h("div", { class: "row" }, h("label", { class: "row small" }, auto, h("span", { text: "Automatisch verversen (30 s)" })), csv)));
+    view.appendChild(h("div", { class: "toolbar" }, q, typeSel, statusSel, actionSlot));
+    view.appendChild(h("div", { class: "toolbar" }, uidIn, ipIn, h("span", { class: "muted small", text: "van" }), fromIn, h("span", { class: "muted small", text: "tot en met" }), toIn, minIn, clr));
+    view.appendChild(results);
+    function load() {
+      var my = ++seq;
+      return api("/api/admin/logs" + qs(filters(false))).then(function (d) {
+        if (my !== seq || !ctx.alive()) return;
+        facets = d.facets; if (d.page !== L.page) L.page = d.page; drawActionSelect(); clear(results);
+        if (!d.logs.length) { results.appendChild(empty("Geen activiteit gevonden met deze filters.")); return; }
+        results.appendChild(table([th("Wanneer"), th("Soort"), th("Actie"), th("Uitkomst"), th("Duur"), th("Gebruiker"), th("IP"), th("Melding")], d.logs.map(function (l) { return logRow(l, false); })));
+        results.appendChild(pager(d, function (p) { L.page = p; load(); }, ["regel", "regels"]));
+        if (d.capped) results.appendChild(h("div", { class: "hint", text: "Het logboek bewaart de laatste 5.000 regels; oudere activiteit wordt vanzelf opgeruimd." }));
+      }).catch(function (e) { if (!e.silent && my === seq) { clear(results); results.appendChild(errorBox("Kon het logboek niet laden: " + e.message)); } });
+    }
+    reloadHook = load;
+    return load();
+  };
+
+  // =====================================================================================
+  // Gedeelde lijsten
+  // =====================================================================================
+  function openListDetail(token, after) {
+    api("/api/admin/lists/" + token).then(function (d) {
+      var l = d.list, link = window.location.origin + "/l/" + token;
+      var stateBadge = function (s) { return s === "basket" ? badge("In mandje", "good") : s === "skip" ? badge("Niet nodig", "warn") : badge("Nog nodig"); };
+      var rows = d.items.map(function (i) { return h("tr", {}, h("td", { text: i.text }), h("td", { class: "muted", text: i.cat || "" }), h("td", {}, stateBadge(i.state))); });
+      var close = h("button", { class: "ghost", text: "Sluiten" }); close.onclick = closeModal;
+      var del = h("button", { class: "danger", id: "listDeleteBtn", text: "Delen stoppen (verwijderen)" });
+      del.onclick = function () {
+        confirmDialog({ title: "Gedeelde lijst verwijderen", danger: true, confirmLabel: "Verwijderen", message: "De link werkt daarna niet meer, ook niet voor wie de lijst nu open heeft. De eigenaar houdt zijn eigen boodschappenlijst in de app." }).then(function (ok) {
+          if (!ok) return;
+          api("/api/admin/lists/" + token + "/delete", { method: "POST", body: {} }).then(function () { toast("Lijst verwijderd."); closeModal(); if (after) after(); }).catch(function (e) { if (!e.silent) toast(e.message, "bad"); });
+        });
+      };
+      var owner = l.ownerUid ? (function () { var b = h("button", { class: "link", text: shortUid(l.ownerUid) }); b.onclick = function () { closeModal(); navigate("#/gebruikers/" + encodeURIComponent(l.ownerUid)); }; return b; })() : "—";
+      openModal(l.title, [
+        h("dl", { class: "kv", style: { marginBottom: "12px" } }, h("dt", { text: "Eigenaar" }), h("dd", {}, owner), h("dt", { text: "Aangemaakt" }), h("dd", { text: fmtDate(l.createdAt) }), h("dt", { text: "Bijgewerkt" }), h("dd", { text: fmtDate(l.updatedAt) }),
+          h("dt", { text: "Verloopt" }), h("dd", { text: fmtDate(l.expiresAt) + (l.expired ? " (verlopen)" : "") }), h("dt", { text: "Voortgang" }), h("dd", { text: l.basket + " in mandje · " + l.skip + " niet nodig · " + l.itemCount + " producten" })),
+        secretRow(link, "listLink"),
+        rows.length ? table([th("Product"), th("Categorie"), th("Stand")], rows) : h("div", { class: "muted", text: "Deze lijst is leeg." })], [del, close], true);
+    }).catch(function (e) { if (!e.silent) toast(e.message, "bad"); });
+  }
+
+  VIEWS.lijsten = function (view, route, ctx) {
+    var seq = 0, expiredCount = 0;
+    var results = h("div", { id: "listResults" });
+    var q = h("input", { type: "search", id: "sQ", class: "grow", placeholder: "Zoek op titel, eigenaar of code…", "aria-label": "Zoeken in lijsten" }); q.value = S.q;
+    q.oninput = debounce(function () { S.q = q.value.trim(); S.page = 1; load(); }, 300);
+    var statusSel = select([["", "Alle lijsten"], ["active", "Actief"], ["expired", "Verlopen"]], S.status, function (v) { S.status = v; S.page = 1; load(); }, "Status"); statusSel.id = "sStatus";
+    var cleanup = h("button", { class: "ghost", id: "cleanupBtn", text: "Verlopen lijsten opruimen" });
+    cleanup.onclick = function () {
+      confirmDialog({ title: "Verlopen lijsten opruimen", confirmLabel: "Opruimen", message: "Alle verlopen gedeelde lijsten worden verwijderd. Ze zijn al onbereikbaar voor gebruikers." }).then(function (ok) {
+        if (!ok) return;
+        api("/api/admin/lists/cleanup", { method: "POST", body: {} }).then(function (r) { toast(plural(r.removed, "lijst", "lijsten") + " opgeruimd."); load(); }).catch(function (e) { if (!e.silent) toast(e.message, "bad"); });
+      });
+    };
+    view.appendChild(h("div", { class: "page-head" }, h("h2", { text: "Gedeelde lijsten" }), cleanup));
+    view.appendChild(h("div", { class: "toolbar" }, q, statusSel));
+    view.appendChild(results);
+    function load() {
+      var my = ++seq;
+      return api("/api/admin/lists" + qs({ q: S.q, status: S.status, page: S.page, pageSize: S.pageSize })).then(function (d) {
+        if (my !== seq || !ctx.alive()) return;
+        if (d.page !== S.page) S.page = d.page;
+        expiredCount = d.expiredCount; cleanup.disabled = !expiredCount; cleanup.textContent = "Verlopen lijsten opruimen" + (expiredCount ? " (" + expiredCount + ")" : "");
+        clear(results);
+        if (!d.lists.length) { results.appendChild(empty(S.q || S.status ? "Geen lijsten gevonden met deze filters." : "Er zijn geen gedeelde lijsten.")); return; }
+        results.appendChild(table([th("Titel"), th("Eigenaar"), th("Producten"), th("Bijgewerkt"), th("Verloopt"), th("Status")], d.lists.map(function (l) {
+          var tr = h("tr", { class: "clickable listRow" + (l.expired ? " off" : "") }, h("td", {}, h("strong", { text: l.title })),
+            h("td", { text: l.ownerName || l.ownerEmail || shortUid(l.ownerUid) }, l.ownerName && l.ownerEmail ? h("span", { class: "sub", text: l.ownerEmail }) : null),
+            h("td", { text: l.itemCount + " producten" }, h("span", { class: "sub", text: l.basket + " in mandje · " + l.skip + " niet nodig" })),
+            h("td", { class: "nowrap", text: relTime(l.updatedAt) }), h("td", { class: "nowrap", text: fmtDate(l.expiresAt).replace(/, \d\d:\d\d$/, "") }), h("td", {}, l.expired ? badge("Verlopen", "warn") : badge("Actief", "good")));
+          tr.onclick = function () { openListDetail(l.token, load); };
+          return tr;
+        })));
+        results.appendChild(pager(d, function (p) { S.page = p; load(); }, ["lijst", "lijsten"]));
+      }).catch(function (e) { if (!e.silent && my === seq) { clear(results); results.appendChild(errorBox("Kon de lijsten niet laden: " + e.message)); } });
+    }
+    reloadHook = load;
+    return load();
+  };
+
+  // =====================================================================================
+  // Instellingen: toegang, onderdelen, limieten, onderhoud, mededeling
+  // =====================================================================================
+  VIEWS.instellingen = function (view, route, ctx) {
+    return api("/api/admin/settings").then(function (cfg) {
+      meta.settings = cfg; updateStatusPill();
+      if (ctx.alive()) drawSettings(view, cfg);
+    }).catch(function (e) { if (!e.silent) view.appendChild(errorBox("Kon de instellingen niet laden: " + e.message)); });
+  };
+  function drawSettings(view, cfg) {
+    var s = cfg.settings, defs = {};
+    cfg.moduleDefs.forEach(function (d) { defs[d.key] = d; });
+    function apply(patch, okMsg) {
+      return setSettings(patch).then(function () { toast(okMsg || "Opgeslagen."); render(true); }).catch(function (e) { if (!e.silent) toast(e.message, "bad"); render(true); });
+    }
+    view.appendChild(h("div", { class: "page-head" }, h("h2", { text: "Instellingen" }), h("span", { class: "muted small", text: "Wijzigingen gelden direct, zonder herstart." })));
+
+    // toegang
+    view.appendChild(card("Toegang", h("div", { class: "module", style: { padding: "0" } },
+      h("div", {}, h("div", { class: "name", text: "Inloggen verplicht" }), h("div", { class: "desc", text: s.authRequired ? "Alleen mensen met een account kunnen de app gebruiken." : "Iedereen kan de app gebruiken zonder account (anoniem, alleen op dat apparaat). Wie wil kan een account maken." })),
+      switchBtn(s.authRequired, function (on) {
+        if (!on) return apply({ authRequired: false }, "Inloggen is niet meer verplicht.");
+        confirmDialog({ title: "Inloggen verplicht maken", confirmLabel: "Verplicht maken", message: "Anonieme gebruikers hebben daarna geen toegang meer en zien het inlogscherm. Hun gegevens blijven bewaard, maar zonder account kunnen ze er niet meer bij." }).then(function (ok) { if (ok) apply({ authRequired: true }, "Inloggen is nu verplicht."); });
+      }, "Inloggen verplicht"))));
+
+    // onderdelen
+    var modRows = cfg.moduleDefs.map(function (d) {
+      var on = s.modules[d.key], byMaintenance = s.maintenance.enabled && cfg.maintenanceOffModules.indexOf(d.key) > -1;
+      var sw = switchBtn(on, function (next) { apply({ modules: (function () { var o = {}; o[d.key] = next; return o; })() }, d.label + (next ? " staat aan." : " staat uit.")); }, d.label);
+      sw.id = "mod-" + d.key;
+      return h("div", { class: "module", id: "row-" + d.key }, h("div", {}, h("div", { class: "name" }, d.label + " ", badge(d.enforced === "server" ? "server" : "alleen in de app"), byMaintenance ? " " : null, byMaintenance ? badge("uit door onderhoudsmodus", "warn") : null), h("div", { class: "desc", text: d.desc })), sw);
+    });
+    view.appendChild(card("Onderdelen aan of uit", h("div", { class: "hint", style: { marginTop: "-4px", marginBottom: "4px" }, text: "Uitgezette onderdelen verdwijnen uit de app en de server weigert ze. Gebruikers zien een duidelijke melding." }), modRows));
+
+    // limieten
+    var limIn = {};
+    var limRows = cfg.limitDefs.map(function (d) {
+      var el = h("input", { type: "number", id: "lim-" + d.key, min: d.min, max: d.max, step: 1, "aria-label": d.label }); el.value = String(s.limits[d.key]); limIn[d.key] = el;
+      var reset = h("button", { class: "link", text: "standaard (" + d.def + ")" }); reset.onclick = function () { el.value = String(d.def); };
+      return field(d.label, el, [d.min + " t/m " + d.max.toLocaleString("nl-NL") + ". Zet op 0 om het helemaal te blokkeren. ", reset]);
+    });
+    var saveLim = h("button", { id: "saveLimitsBtn", text: "Limieten opslaan" });
+    saveLim.onclick = function () {
+      var patch = {}, bad = null;
+      cfg.limitDefs.forEach(function (d) {
+        var raw = limIn[d.key].value.trim(), n = Number(raw);
+        if (raw === "" || !isFinite(n) || Math.floor(n) !== n || n < d.min || n > d.max) bad = d.label + " moet een geheel getal zijn tussen " + d.min + " en " + d.max + ".";
+        else if (n !== s.limits[d.key]) patch.limits = Object.assign(patch.limits || {}, (function () { var o = {}; o[d.key] = n; return o; })());
+      });
+      if (bad) return toast(bad, "bad");
+      if (!patch.limits) return toast("Er is niets gewijzigd.");
+      apply(patch, "Limieten opgeslagen.");
+    };
+    view.appendChild(card("Limieten", h("div", { class: "hint", style: { marginTop: "-4px", marginBottom: "10px" }, text: "Beschermt je AI-tegoed. Standaardwaarden komen uit de omgevingsvariabelen van de server." }), h("div", { class: "form-grid" }, limRows), saveLim));
+
+    // abonnementen (Balanza Plus)
+    var env = cfg.billingEnv || {}, bs = s.billing;
+    var priceM = h("input", { type: "text", id: "billMonthly", inputmode: "decimal", "aria-label": "Maandprijs in euro" }); priceM.value = (bs.plusMonthlyCents / 100).toFixed(2).replace(".", ",");
+    var priceY = h("input", { type: "text", id: "billYearly", inputmode: "decimal", "aria-label": "Jaarprijs in euro" }); priceY.value = (bs.plusYearlyCents / 100).toFixed(2).replace(".", ",");
+    var plusCap = h("input", { type: "number", id: "billPlusCap", min: 0, max: 100000, step: 1, "aria-label": "Plus: nieuwe gerechten per maand" }); plusCap.value = String(bs.plusDishCap);
+    var terms = h("input", { type: "url", id: "billTerms", maxLength: 300, placeholder: "https://jouw-site.nl/voorwaarden", "aria-label": "Link naar de algemene voorwaarden" }); terms.value = bs.termsUrl || "";
+    var saveBill = h("button", { id: "saveBillingBtn", text: "Prijzen opslaan" });
+    saveBill.onclick = function () {
+      var m = eurToCents(priceM.value), y = eurToCents(priceY.value), cap = Number(plusCap.value.trim());
+      if (m === null || m < 100 || m > 99900) return toast("Vul een maandprijs in van \u20ac1,00 tot \u20ac999,00, bijvoorbeeld 3,99.", "bad");
+      if (y === null || y < 100 || y > 999900) return toast("Vul een jaarprijs in van \u20ac1,00 tot \u20ac9999,00, bijvoorbeeld 34,99.", "bad");
+      if (plusCap.value.trim() === "" || !isFinite(cap) || Math.floor(cap) !== cap || cap < 0 || cap > 100000) return toast("De Plus-limiet moet een geheel getal zijn van 0 tot 100000 (0 = onbeperkt).", "bad");
+      var patch = {};
+      if (m !== bs.plusMonthlyCents) patch.plusMonthlyCents = m;
+      if (y !== bs.plusYearlyCents) patch.plusYearlyCents = y;
+      if (cap !== bs.plusDishCap) patch.plusDishCap = cap;
+      if (terms.value.trim() !== (bs.termsUrl || "")) patch.termsUrl = terms.value.trim();
+      if (!Object.keys(patch).length) return toast("Er is niets gewijzigd.");
+      apply({ billing: patch }, "Opgeslagen.");
+    };
+    var envOk = env.keyPresent && env.baseOk;
+    var envLines = h("dl", { class: "kv", id: "billingEnv" },
+      h("dt", { text: "Mollie-sleutel" }), h("dd", { text: env.keyPresent ? (env.mode === "live" ? "LIVE-sleutel: er wordt echt afgeschreven" : env.mode === "test" ? "testsleutel: er wordt niet echt afgeschreven" : "ingesteld (onbekend formaat)") : "niet ingesteld: zet MOLLIE_API_KEY in de omgeving" }),
+      h("dt", { text: "Adres van de app" }), h("dd", { text: env.baseOk ? env.baseUrl : env.baseUrl ? env.baseUrl + " (ongeldig: verwacht https://\u2026 zonder slash)" : "niet ingesteld: zet PUBLIC_BASE_URL in de omgeving" }),
+      h("dt", { text: "Webhook voor Mollie" }), h("dd", { text: env.webhookUrl || "\u2014" }));
+    var billSw = switchBtn(bs.enabled, function (on) {
+      if (!on) return confirmDialog({ title: "Abonnementen uitzetten", confirmLabel: "Uitzetten", message: "Niemand kan nog Plus nemen en niemand krijgt de Plus-limiet meer. Bestaande abonnementen lopen bij Mollie gewoon door en betalingen worden nog verwerkt; zet je het weer aan, dan werkt alles weer." }).then(function (ok) { if (ok) apply({ billing: { enabled: false } }, "Abonnementen staan uit."); });
+      confirmDialog({ title: "Abonnementen aanzetten", confirmLabel: "Aanzetten", message: (env.mode === "live" ? "Je gebruikt een LIVE-sleutel: klanten kunnen vanaf nu echt betalen. Weet je zeker dat je voorwaarden, privacyverklaring en factuurafhandeling op orde zijn?" : "Je gebruikt een testsleutel: er wordt niet echt afgeschreven. Zo kun je alles uitproberen.") + " Gebruikers zien daarna in Mijn profiel een kaart om Plus te nemen." }).then(function (ok) { if (ok) apply({ billing: { enabled: true } }, "Abonnementen staan aan."); });
+    }, "Abonnementen (Balanza Plus)");
+    billSw.id = "billingSwitch";
+    view.appendChild(card("Abonnementen (Balanza Plus)",
+      h("div", { class: "hint", style: { marginTop: "-4px", marginBottom: "10px" }, text: "Voorbereid en standaard uit. Zolang het uit staat is er in de app niets van te zien en verandert er niets voor gebruikers. Plus geeft een hogere limiet voor nieuwe gerechten per maand." }),
+      h("div", { class: "module", style: { padding: "0 0 12px" } }, h("div", {}, h("div", { class: "name", text: bs.enabled ? "Staat aan" : "Staat uit" }), h("div", { class: "desc", text: envOk ? "Klaar voor gebruik." : "Nog niet klaar: zie hieronder wat er in de omgeving ontbreekt." })), billSw),
+      envLines,
+      h("div", { style: { height: "12px" } }),
+      h("div", { class: "form-grid" }, field("Maandprijs (\u20ac, incl. btw)", priceM), field("Jaarprijs (\u20ac, incl. btw)", priceY), field("Plus: nieuwe gerechten per maand", plusCap, "0 = onbeperkt. Moet hoger zijn dan de algemene limiet (" + s.limits.monthlyDishCap + ") om een voordeel te zijn." + (s.limits.monthlyDishCap === 0 ? " Nu is de algemene limiet 0 (onbeperkt): zet die eerst op een getal, anders heeft Plus geen voordeel." : "")), field("Link naar algemene voorwaarden", terms, "Verplicht bij een LIVE-sleutel. Klanten zien deze link bij het afsluiten en gaan er expliciet mee akkoord.")),
+      saveBill,
+      h("div", { class: "hint", text: "Geef Mollie geen andere webhook: de app geeft het webhookadres zelf mee bij elke betaling. Zet in je Mollie-profiel wel de betaalmethoden aan die herhaald afschrijven ondersteunen (iDEAL werkt via SEPA-incasso; schakel die dan ook in)." })));
+
+    // onderhoud
+    var mMsg = h("textarea", { id: "maintMsg", maxLength: 300, placeholder: "Bijvoorbeeld: We zijn zo terug! Er wordt onderhoud uitgevoerd." }); mMsg.value = s.maintenance.message;
+    var offLabels = cfg.maintenanceOffModules.map(function (k) { return defs[k].label.toLowerCase(); }).join(", ");
+    var mSave = h("button", { class: "ghost", id: "saveMaintMsgBtn", text: "Melding opslaan" });
+    mSave.onclick = function () { apply({ maintenance: { message: mMsg.value } }, "Melding opgeslagen."); };
+    view.appendChild(card("Onderhoudsmodus", h("div", { class: "module", style: { padding: "0 0 12px" } },
+      h("div", {}, h("div", { class: "name", text: s.maintenance.enabled ? "Staat aan" : "Staat uit" }), h("div", { class: "desc", text: "Zet tijdelijk uit: " + offLabels + ". Foto’s, PDF en wachtwoord-reset blijven werken. Gebruikers zien bovenin de app jouw melding." })),
+      switchBtn(s.maintenance.enabled, function (on) {
+        if (!on) return apply({ maintenance: { enabled: false } }, "Onderhoudsmodus staat uit.");
+        confirmDialog({ title: "Onderhoudsmodus aanzetten", confirmLabel: "Aanzetten", message: "Genereren, kostenschatting, tips, delen, Bring! en registreren gaan uit voor alle gebruikers, tot je dit weer uitzet." }).then(function (ok) { if (ok) apply({ maintenance: { enabled: true, message: mMsg.value } }, "Onderhoudsmodus staat aan."); });
+      }, "Onderhoudsmodus")), field("Melding voor gebruikers", mMsg, "Laat je dit leeg, dan staat er: “De app is tijdelijk in onderhoud.”"), mSave));
+
+    // mededeling
+    var aMsg = h("textarea", { id: "annMsg", maxLength: 300, placeholder: "Bijvoorbeeld: Vanavond om 22:00 even onderhoud." }); aMsg.value = s.announcement.message;
+    var aLevel = select([["info", "Informatie"], ["warning", "Waarschuwing"]], s.announcement.level, function () {}, "Soort mededeling"); aLevel.id = "annLevel";
+    var preview = h("div", { class: "notebox" + (s.announcement.level === "warning" ? " warn" : ""), id: "annPreview" });
+    function paintPreview() { preview.textContent = aMsg.value ? aMsg.value : "(voorbeeld van je mededeling)"; preview.className = "notebox" + (aLevel.value === "warning" ? " warn" : ""); }
+    aMsg.oninput = paintPreview; aLevel.onchange = paintPreview; paintPreview();
+    var aSave = h("button", { id: "saveAnnBtn", text: "Mededeling opslaan" });
+    aSave.onclick = function () {
+      if (s.announcement.enabled && !aMsg.value.trim()) return toast("Vul een tekst in, of zet de mededeling uit.", "bad");
+      apply({ announcement: { message: aMsg.value, level: aLevel.value } }, "Mededeling opgeslagen.");
+    };
+    view.appendChild(card("Mededeling aan alle gebruikers", h("div", { class: "module", style: { padding: "0 0 12px" } },
+      h("div", {}, h("div", { class: "name", text: s.announcement.enabled ? "Wordt getoond" : "Wordt niet getoond" }), h("div", { class: "desc", text: "Een balk bovenin de app. Gebruikers kunnen hem wegklikken (per bericht, tot ze de app sluiten)." })),
+      switchBtn(s.announcement.enabled, function (on) {
+        if (on && !aMsg.value.trim()) return toast("Schrijf eerst een tekst en sla die op.", "bad");
+        apply({ announcement: { enabled: on, message: aMsg.value, level: aLevel.value } }, on ? "Mededeling wordt getoond." : "Mededeling staat uit.");
+      }, "Mededeling tonen")), field("Tekst", aMsg), field("Soort", aLevel), h("div", { class: "muted small", text: "Zo ziet het eruit:" }), preview, aSave));
+
+    view.appendChild(h("div", { class: "hint", text: "Het beheerderswachtwoord wijzig je in Render (omgevingsvariabele ADMIN_PASSWORD); daarna word je hier uitgelogd." }));
+  }
+
+  // =====================================================================================
+  // Auditlog: wie deed wat
+  // =====================================================================================
+  var AUDIT_LABELS = {
+    "admin.login": "Beheerder ingelogd", "admin.login-mislukt": "Mislukte beheerder-login", "gebruiker.aanmaken": "Gebruiker aangemaakt", "gebruiker.wijzigen": "Gebruiker gewijzigd",
+    "gebruiker.blokkeren": "Gebruiker geblokkeerd", "gebruiker.deblokkeren": "Gebruiker gedeblokkeerd", "gebruiker.uitloggen": "Gebruiker uitgelogd", "gebruiker.wachtwoord-resetten": "Wachtwoord gereset",
+    "gebruiker.resetlink": "Resetlink gemaakt", "gebruiker.gegevens-wissen": "Gegevens gewist", "gebruiker.verwijderen": "Gebruiker verwijderd", "gebruiker.exporteren": "Gegevens geëxporteerd",
+    "gebruikers.bulk-disable": "Meerdere gebruikers geblokkeerd", "gebruikers.bulk-enable": "Meerdere gebruikers gedeblokkeerd", "gebruikers.bulk-logout": "Meerdere gebruikers uitgelogd", "gebruikers.bulk-delete": "Meerdere gebruikers verwijderd",
+    "instellingen.wijzigen": "Instellingen gewijzigd", "lijst.verwijderen": "Gedeelde lijst verwijderd", "lijsten.opruimen": "Verlopen lijsten opgeruimd", "logboek.exporteren": "Logboek geëxporteerd"
+  };
+  function settingLabel(key) {
+    var s = meta.settings, parts = key.split(".");
+    if (key === "authRequired") return "Inloggen verplicht";
+    if (parts[0] === "modules") { var d = s.moduleDefs.filter(function (x) { return x.key === parts[1]; })[0]; return "Onderdeel: " + (d ? d.label : parts[1]); }
+    if (parts[0] === "limits") { var l = s.limitDefs.filter(function (x) { return x.key === parts[1]; })[0]; return "Limiet: " + (l ? l.label : parts[1]); }
+    return ({ "billing.enabled": "Abonnementen aan", "billing.plusMonthlyCents": "Plus: maandprijs (centen)", "billing.plusYearlyCents": "Plus: jaarprijs (centen)", "billing.plusDishCap": "Plus: gerechten per maand", "billing.termsUrl": "Link naar voorwaarden", "maintenance.enabled": "Onderhoudsmodus", "maintenance.message": "Onderhoudsmelding", "announcement.enabled": "Mededeling tonen", "announcement.message": "Mededeling (tekst)", "announcement.level": "Mededeling (soort)" })[key] || key;
+  }
+  function settingValue(key, v) { return typeof v === "boolean" ? (v ? "aan" : "uit") : v === "" ? "(leeg)" : String(v); }
+  function summarizeAudit(e) {
+    var d = e.detail; if (!d) return "";
+    if (e.action === "instellingen.wijzigen" && Array.isArray(d.wijzigingen)) return d.wijzigingen.map(function (x) { return settingLabel(x.sleutel) + ": " + settingValue(x.sleutel, x.van) + " → " + settingValue(x.sleutel, x.naar); }).join(" · ");
+    return Object.keys(d).filter(function (k) { return d[k] !== undefined && d[k] !== null; }).map(function (k) {
+      var v = d[k]; return k + ": " + (Array.isArray(v) ? v.join(", ") : typeof v === "object" ? JSON.stringify(v) : typeof v === "boolean" ? (v ? "ja" : "nee") : v);
+    }).join(" · ");
+  }
+  VIEWS.audit = function (view, route, ctx) {
+    var seq = 0, facets = {};
+    var results = h("div", { id: "auditResults" }), actionSlot = h("span", { id: "aActionSlot" });
+    var q = h("input", { type: "search", id: "aQ", class: "grow", placeholder: "Zoek in doel, details of IP…", "aria-label": "Zoeken in het auditlog" }); q.value = A.q;
+    q.oninput = debounce(function () { A.q = q.value.trim(); A.page = 1; load(); }, 350);
+    var fromIn = h("input", { type: "date", id: "aFrom", "aria-label": "Vanaf datum" }); fromIn.value = A.from; fromIn.onchange = function () { A.from = fromIn.value; A.page = 1; load(); };
+    var toIn = h("input", { type: "date", id: "aTo", "aria-label": "Tot en met datum" }); toIn.value = A.to; toIn.onchange = function () { A.to = toIn.value; A.page = 1; load(); };
+    function drawActionSelect() {
+      var opts = [["", "Alle acties"]].concat(Object.keys(facets).sort().map(function (a) { return [a, (AUDIT_LABELS[a] || a) + " (" + facets[a] + ")"]; }));
+      if (A.action && !facets[A.action]) opts.push([A.action, A.action]);
+      var s = select(opts, A.action, function (v) { A.action = v; A.page = 1; load(); }, "Actie"); s.id = "aAction";
+      clear(actionSlot).appendChild(s);
+    }
+    drawActionSelect();
+    view.appendChild(h("div", { class: "page-head" }, h("h2", { text: "Auditlog" }), h("span", { class: "muted small", text: "Elke beheerhandeling, met tijd en IP-adres. Wachtwoorden staan hier nooit in." })));
+    view.appendChild(h("div", { class: "toolbar" }, q, actionSlot, h("span", { class: "muted small", text: "van" }), fromIn, h("span", { class: "muted small", text: "tot en met" }), toIn));
+    view.appendChild(results);
+    function load() {
+      var my = ++seq;
+      return api("/api/admin/audit" + qs({ q: A.q, action: A.action, from: A.from, to: A.to, page: A.page, pageSize: A.pageSize })).then(function (d) {
+        if (my !== seq || !ctx.alive()) return;
+        facets = d.facets.actions; if (d.page !== A.page) A.page = d.page; drawActionSelect(); clear(results);
+        if (!d.entries.length) { results.appendChild(empty("Geen regels gevonden.")); return; }
+        results.appendChild(table([th("Wanneer"), th("Actie"), th("Doel"), th("Details"), th("IP")], d.entries.map(function (e) {
+          var target = null;
+          if (e.target && /^(u_[0-9a-f]+|anon_[a-z0-9]+)$/.test(e.target)) { target = h("button", { class: "link mono", text: shortUid(e.target), title: e.target }); target.onclick = function () { navigate("#/gebruikers/" + encodeURIComponent(e.target)); }; }
+          else if (e.target) target = h("span", { class: "mono", text: shortUid(e.target), title: e.target });
+          return h("tr", { class: "auditRow" }, h("td", { class: "nowrap", title: e.ts, text: fmtDate(e.ts) }), h("td", {}, h("strong", { text: AUDIT_LABELS[e.action] || e.action })), h("td", {}, target || "—"), h("td", { text: summarizeAudit(e) }), h("td", { class: "mono", text: e.ip || "—" }));
+        })));
+        results.appendChild(pager(d, function (p) { A.page = p; load(); }, ["regel", "regels"]));
+      }).catch(function (e) { if (!e.silent && my === seq) { clear(results); results.appendChild(errorBox("Kon het auditlog niet laden: " + e.message)); } });
+    }
+    reloadHook = load;
+    return load();
+  };
+
+  // =====================================================================================
+  // Systeem
+  // =====================================================================================
+  VIEWS.systeem = function (view, route, ctx) {
+    return api("/api/admin/system").then(function (sys) {
+      if (!ctx.alive()) return;
+      var again = h("button", { class: "ghost small", id: "recheckBtn", text: "Opnieuw controleren" }); again.onclick = function () { render(); };
+      view.appendChild(h("div", { class: "page-head" }, h("h2", { text: "Systeem" }), again));
+      view.appendChild(card("Controles", sys.checks.map(function (c) {
+        var kind = c.ok ? "good" : c.optional ? "" : "bad";
+        return h("div", { class: "module checkRow", id: "check-" + c.key }, h("div", {}, h("div", { class: "name" }, h("span", { class: "dot " + kind }), c.label, c.optional ? " " : null, c.optional ? badge("optioneel") : null), h("div", { class: "desc", text: c.detail })), badge(c.ok ? "in orde" : c.optional ? "niet ingesteld" : "aandacht nodig", kind));
+      })));
+      var i = sys.info;
+      view.appendChild(h("div", { class: "two" },
+        card("Server", h("dl", { class: "kv" }, h("dt", { text: "Node-versie" }), h("dd", { text: i.node }), h("dt", { text: "Gestart" }), h("dd", { text: fmtDate(i.startedAt) }), h("dt", { text: "Draait al" }), h("dd", { text: fmtUptime(i.uptimeSec) }),
+          h("dt", { text: "Servertijd" }), h("dd", { text: fmtDate(i.serverTime) }), h("dt", { text: "Geheugen" }), h("dd", { text: i.memoryMb + " MB" }), h("dt", { text: "Opslag" }), h("dd", { text: i.storage === "mongodb" ? "MongoDB" : "Lokaal bestand" }))),
+        card("AI en koppelingen", h("dl", { class: "kv" }, h("dt", { text: "Model (gerechten)" }), h("dd", { text: i.model }), h("dt", { text: "Model (tips)" }), h("dd", { text: i.tipsModel }), h("dt", { text: "Bring!-eindpunt" }), h("dd", { class: "mono", text: i.bringEndpoint }),
+          h("dt", { text: "Logboek bewaart" }), h("dd", { text: i.logCap.toLocaleString("nl-NL") + " regels" }), h("dt", { text: "Auditlog bewaart" }), h("dd", { text: i.auditCap.toLocaleString("nl-NL") + " regels" })))));
+      var lim = sys.limits;
+      view.appendChild(card("Geldende limieten", h("dl", { class: "kv" }, h("dt", { text: "Generaties per dag" }), h("dd", { text: String(lim.dailyGenerateCap) }), h("dt", { text: "Generaties per uur per IP" }), h("dd", { text: String(lim.perIpHourlyCap) }),
+        h("dt", { text: "Tip-verzoeken per dag" }), h("dd", { text: String(lim.dailyTipsCap) }), h("dt", { text: "Tip-verzoeken per uur per IP" }), h("dd", { text: String(lim.tipsPerIpHourly) })), h("div", { class: "hint", text: "Aanpassen kan onder Instellingen." })));
+    }).catch(function (e) { if (!e.silent) view.appendChild(errorBox("Kon de systeemstatus niet laden: " + e.message)); });
+  };
+
+  // =====================================================================================
+  // Starten
+  // =====================================================================================
+  window.onhashchange = function () { render(); };
+  document.onkeydown = function (e) { if (e && e.key === "Escape" && closeModalFn) closeModal(); };
+  if (token) boot(); else showLogin();
+})();
+</script>
+</body>
+</html>
