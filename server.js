@@ -990,6 +990,13 @@ function dietStyleInstructionText(dietStyle) {
   return "- Voedingsstijl: " + dietStyle + " (" + (notes[dietStyle] || "") + ")\n";
 }
 
+// Een harde, doorlopende voorkeur (zoals voedingsstijl): geldt bij genereren, aanvullen én variëren.
+function familyModeInstructionText(familyMode) {
+  if (!familyMode) return "";
+  return "- Kindvriendelijk (gezinsmodus): mild van smaak (niet te pittig of scherp), herkenbare in plaats van " +
+    "exotische ingrediënten, geen hele vis met graten, en een presentatie die aanspreekt voor zowel kinderen " +
+    "als volwassenen aan dezelfde tafel.\n";
+}
 function buildBodyProfileLine(p) {
   if (!p.gender && !p.heightCm && !p.weightKg && !p.age) return "";
   var bits = [];
@@ -1023,7 +1030,8 @@ function buildGeneratePrompt(p) {
     "- Keukenstijl: " + cuisineTxt + "\n" +
     "- Smaakprofiel: " + flavorTxt + "\n" +
     "- Culinair niveau: " + (p.level || "Home-style") + "\n" +
-    dietStyleInstructionText(p.dietStyle) +
+dietStyleInstructionText(p.dietStyle) +
+    familyModeInstructionText(p.familyMode) +
     "- Beschikbare apparatuur: " + equipTxt + "\n" +
     "- Uitgesloten ingrediënten: " + excludeTxt + "\n" +
     buildBodyProfileLine(p) +
@@ -1054,6 +1062,7 @@ function buildBackgroundGeneratePrompt(needed, p) {
     "gerechten (per 1 persoon), verdeeld als: " + countTxt + ". Precies deze aantallen per maaltijdmoment.\n" +
     "- Keukenstijl: " + cuisineTxt + "\n- Smaakprofiel: " + flavorTxt + "\n- Culinair niveau: " + (p.level || "Home-style") + "\n" +
     dietStyleInstructionText(p.dietStyle) +
+    familyModeInstructionText(p.familyMode) +
     "- Beschikbare apparatuur: " + equipTxt + "\n" +
     buildBodyProfileLine(p) +
     goalInstructionText(p.goal) + "\n" +
@@ -1075,6 +1084,7 @@ function buildVariationPromptServer(current, kind, p) {
     "Opdracht: " + (VARIATION_INSTRUCTIONS[kind] || "") + "\n" +
     "Streef naar een macroverdeling passend bij het doel \"" + p.goal + "\": " + (GOAL_DESCRIPTIONS[p.goal] || "") + "\n" +
     (p.dietStyle ? dietStyleInstructionText(p.dietStyle) : "") +
+    familyModeInstructionText(p.familyMode) +
     INGREDIENT_SPECIFICITY_LINE +
     "Geef ALLEEN geldig JSON terug, exact dit schema, geen markdown, geen uitleg erbuiten:\n" +
     '{"name": "gerechtnaam", "kcal": 600, "kh_g": 50, "eiwit_g": 48, "vet_g": 22, ' +
@@ -2579,6 +2589,7 @@ function buildTipsPrompt(p) {
   p = p || {};
   var goal = TIP_GOALS.indexOf(p.goal) > -1 ? p.goal : "Onderhoud";
   var diet = TIP_DIETS.indexOf(p.dietStyle) > -1 ? p.dietStyle : "";
+  var family = p.familyMode === true;
   var avoid = (Array.isArray(p.avoid) ? p.avoid : []).slice(0, 30)
     .map(function (s) { return String(s).replace(/[\r\n"]+/g, " ").trim().slice(0, 90); })
     .filter(Boolean);
@@ -2587,8 +2598,8 @@ function buildTipsPrompt(p) {
     "maaltijden ontwerpt op basis van macro's. De lezer wacht even op het genereren van gerechten en wil zich vermaken en iets leren.\n\n" +
     "Schrijf 8 NIEUWE items in het Nederlands. Verdeel ze over deze onderwerpen: " + topics.join(", ") + ". " +
     "Maak van hooguit 1 item een tip over Balanza zelf.\n" +
-    "Context van de lezer: doel \"" + goal + "\"" + (diet ? ", voedingsstijl \"" + diet + "\"" : "") + ". " +
-    "Laat minstens twee items aansluiten op dat doel" + (diet ? " of die voedingsstijl" : "") + ".\n\n" +
+    "Context van de lezer: doel \"" + goal + "\"" + (diet ? ", voedingsstijl \"" + diet + "\"" : "") + (family ? ", kookt in gezinsmodus (kindvriendelijk)" : "") + ". " +
+    "Laat minstens twee items aansluiten op dat doel" + (diet ? " of die voedingsstijl" : "") + (family ? " of gezinsmodus" : "") + ".\n\n" +
     "Regels:\n" +
     "- Maximaal 190 tekens per item, één of twee korte zinnen, geen opsomming, geen emoji's, spreek de lezer aan met \"je\".\n" +
     "- Alleen algemeen erkende voedings- en kookkennis. Geen medische adviezen, geen beloftes over resultaten (zoals \"val zo af\"), " +

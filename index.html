@@ -879,6 +879,7 @@
     flavors: [],
     level: "Home-style",
     dietStyle: "",
+    familyMode: false,
     equipment: EQUIPMENT.slice(),
     exclude: "",
     count: 7,
@@ -1151,7 +1152,7 @@
   function requestTips() {
     return claude.use("sample").then(function (sample) {
       if (!sample) throw new Error("niet beschikbaar");
-      return sample.json({ action: "tips", params: { goal: prefs.goal, dietStyle: prefs.dietStyle, avoid: recentTipTexts() } }, { modelTier: "default" });
+      return sample.json({ action: "tips", params: { goal: prefs.goal, dietStyle: prefs.dietStyle, familyMode: prefs.familyMode, avoid: recentTipTexts() } }, { modelTier: "default" });
     });
   }
 
@@ -2570,6 +2571,7 @@
       prefs.flavors = [];
       prefs.level = "Home-style";
       prefs.dietStyle = "";
+      prefs.familyMode = false;
       prefs.equipment = EQUIPMENT.slice();
       prefs.exclude = "";
       prefs.count = 7;
@@ -2710,6 +2712,17 @@
       chipGroupMulti(CUISINES, prefs.cuisines);
       labelEl("Culinair niveau");
       chipGroupSingle(LEVELS.map(function (l) { return [l, l]; }), prefs.level, function (l) { prefs.level = l; });
+      labelEl("Kindvriendelijk", "Mildere smaken en herkenbare ingrediënten voor het hele gezin — mag je overslaan");
+      var wFamilySeg = document.createElement("div");
+      wFamilySeg.className = "segrow";
+      [[false, "Uit"], [true, "Aan"]].forEach(function (pair) {
+        var chip = document.createElement("button");
+        chip.className = "chip" + (!!prefs.familyMode === pair[0] ? " selected" : "");
+        chip.textContent = pair[1];
+        chip.onclick = function () { prefs.familyMode = pair[0]; render(); };
+        wFamilySeg.appendChild(chip);
+      });
+      main.appendChild(wFamilySeg);
     } else if (state.wizardStep === 4) {
       heading("Lichaamsprofiel", "Optioneel \u2014 helpt om de porties nauwkeuriger af te stemmen. Mag je leeg laten.");
       var bioRow = document.createElement("div");
@@ -2859,6 +2872,18 @@
       dietSeg.appendChild(chip);
     });
     main.appendChild(dietSeg);
+
+    labelEl("Kindvriendelijk", "Mildere smaken en herkenbare ingrediënten voor het hele gezin");
+    var familySeg = document.createElement("div");
+    familySeg.className = "segrow";
+    [[false, "Uit"], [true, "Aan"]].forEach(function (pair) {
+      var chip = document.createElement("button");
+      chip.className = "chip" + (!!prefs.familyMode === pair[0] ? " selected" : "");
+      chip.textContent = pair[1];
+      chip.onclick = function () { prefs.familyMode = pair[0]; render(); };
+      familySeg.appendChild(chip);
+    });
+    main.appendChild(familySeg);
 
     labelEl("Smaakprofiel");
     chipGroup(FLAVORS, prefs.flavors);
@@ -3285,7 +3310,7 @@
       }
       var genParams = {
         mealTypes: prefs.mealTypes, count: prefs.count, cuisines: prefs.cuisines, flavors: prefs.flavors,
-        level: prefs.level, dietStyle: prefs.dietStyle, equipment: prefs.equipment, exclude: prefs.exclude,
+        level: prefs.level, dietStyle: prefs.dietStyle, familyMode: prefs.familyMode, equipment: prefs.equipment, exclude: prefs.exclude,
         goal: prefs.goal, gender: prefs.gender, heightCm: prefs.heightCm, weightKg: prefs.weightKg,
         age: prefs.age, activityLevel: prefs.activityLevel
       };
@@ -3364,7 +3389,7 @@
   }
 
   var GUIDE_STEPS = [
-    { title: "Stel je voorkeuren in", body: "Ga naar \u201cGerechten ontwerpen\u201d en vul in wat voor jou relevant is: keukenstijl, smaakprofiel, culinair niveau, apparatuur, uitsluitingen, en optioneel je lichaamsprofiel (geslacht, lengte, gewicht, leeftijd, activiteitsniveau) en je doel (Onderhoud, Vetverlies, Cutting, Spieropbouw of Atleet)." },
+    { title: "Stel je voorkeuren in", body: "Ga naar \u201cGerechten ontwerpen\u201d en vul in wat voor jou relevant is: keukenstijl, smaakprofiel, culinair niveau, kindvriendelijk (gezinsmodus), apparatuur, uitsluitingen, en optioneel je lichaamsprofiel (geslacht, lengte, gewicht, leeftijd, activiteitsniveau) en je doel (Onderhoud, Vetverlies, Cutting, Spieropbouw of Atleet)." },
     { title: "Genereer gerechten", body: "Kies bij welk maaltijdmoment(en) het gaat (Ontbijt/Lunch/Diner/Snack) en hoeveel gerechten je per moment wilt, en tik op \u201cGenereer gerechten\u201d. Daarna kies je of er ook afbeeldingen bij worden gezocht (duurt iets langer). Elk gerecht krijgt een Balans-score: hoe dichter bij het streefpercentage van jouw doel, hoe hoger de score. Het genereren kan even duren; je hoeft niet in de app te blijven wachten. Geldt er een limiet voor het aantal nieuwe gerechten per maand, dan zie je hier hoeveel je er nog over hebt." },
     { title: "Macro's berekend met NEVO", body: "De macro's van je gerechten worden uitgerekend met het Nederlands Voedingsstoffenbestand (NEVO) van het RIVM, niet alleen geschat: een groen \u201cNEVO-berekend\u201d label (in de app en in de PDF) laat zien wanneer dat is gelukt. Lukt het matchen van een ingredi\u00ebnt een keer niet, dan blijft de AI-schatting zichtbaar en duidelijk gelabeld. In \u201cOpgeslagen gerechten\u201d kun je oudere gerechten met \u00e9\u00e9n tik laten herberekenen." },
     { title: "Krijg een melding als het klaar is", body: "Ga je tijdens het genereren naar een andere app, dan werkt Balanza gewoon door en staan je gerechten klaar zodra je terugkomt. Wil je een seintje? Zet onder Instellingen \u2192 Meldingen de meldingen aan (of tik tijdens het genereren op \u201cStuur me een melding als het klaar is\u201d). Op een iPhone werkt dat als Balanza op je beginscherm staat: tik op Deel en kies \u201cZet op beginscherm\u201d." },
@@ -6468,7 +6493,7 @@
         benodigdheden: day.benodigdheden,
         steps: day.steps.map(function (s) { return s.title + ": " + s.content; })
       };
-      sample.json({ action: "variation", current: variationCurrent, kind: kind, params: { goal: prefs.goal, dietStyle: prefs.dietStyle } }, { modelTier: "default" }).then(function (d) {
+      sample.json({ action: "variation", current: variationCurrent, kind: kind, params: { goal: prefs.goal, dietStyle: prefs.dietStyle, familyMode: prefs.familyMode } }, { modelTier: "default" }).then(function (d) {
         var kcal = Number(d.kcal) || 0;
         var khG = Number(d.kh_g) || 0;
         var eiwitG = Number(d.eiwit_g) || 0;
@@ -6671,7 +6696,7 @@
           return;
         }
         var bgParams = {
-          cuisines: prefs.cuisines, flavors: prefs.flavors, level: prefs.level, dietStyle: prefs.dietStyle,
+          cuisines: prefs.cuisines, flavors: prefs.flavors, level: prefs.level, dietStyle: prefs.dietStyle, familyMode: prefs.familyMode,
           equipment: prefs.equipment, goal: prefs.goal, gender: prefs.gender, heightCm: prefs.heightCm,
           weightKg: prefs.weightKg, age: prefs.age, activityLevel: prefs.activityLevel
         };
@@ -6732,6 +6757,7 @@
         flavors: prefs.flavors,
         level: prefs.level,
         dietStyle: prefs.dietStyle,
+        familyMode: !!prefs.familyMode,
         equipment: prefs.equipment,
         exclude: prefs.exclude,
         count: prefs.count,
@@ -7059,7 +7085,7 @@
       if (!sample) return;
       busyStart("Gerechten worden aangevuld op de achtergrond…");
       var bgParams2 = {
-        cuisines: prefs.cuisines, flavors: prefs.flavors, level: prefs.level, dietStyle: prefs.dietStyle,
+        cuisines: prefs.cuisines, flavors: prefs.flavors, level: prefs.level, dietStyle: prefs.dietStyle, familyMode: prefs.familyMode,
         equipment: prefs.equipment, goal: prefs.goal, gender: prefs.gender, heightCm: prefs.heightCm,
         weightKg: prefs.weightKg, age: prefs.age, activityLevel: prefs.activityLevel
       };
@@ -7092,7 +7118,7 @@
               return;
             }
             var pdata = psnap.data() || {};
-            ["name", "bringListLink", "cuisines", "flavors", "level", "dietStyle", "equipment", "exclude", "count", "mealTypes", "gender", "heightCm", "weightKg", "age", "activityLevel", "goal"].forEach(function (k) {
+            ["name", "bringListLink", "cuisines", "flavors", "level", "dietStyle", "familyMode", "equipment", "exclude", "count", "mealTypes", "gender", "heightCm", "weightKg", "age", "activityLevel", "goal"].forEach(function (k) {
               if (pdata[k] !== undefined) prefs[k] = deepClone(pdata[k]);
             });
             render();
