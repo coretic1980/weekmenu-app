@@ -493,6 +493,8 @@
   .pick-list { display: flex; flex-direction: column; gap: 8px; }
   .pick-row .dishname { -webkit-line-clamp: 2; }
   .pick-sub { font-size: 12px; color: var(--muted); }
+  .dish-made { font-size: 12.5px; color: var(--muted); margin-top: -4px; }
+  .chiprow .pick-sort { flex: 0 1 auto; }
   .pick-row.is-current { border-color: var(--accent2); box-shadow: 0 0 0 2px var(--accent2), var(--card-shadow); }
   .pick-empty { font-size: 14px; color: var(--muted); padding: 18px 2px; }
   .archive-toggle { appearance: none; border: none; background: none; color: var(--ink); font-family: inherit; cursor: pointer;
@@ -1147,6 +1149,46 @@
   var plannedWeeks = [];
   var libraryFilter = "Alle";
   var libraryGoalFilter = "Alle";
+  var libraryPeriodFilter = "alle";
+
+  // Aanmaakdatum van een gerecht: createdAt als die er is, anders de tijdstempel in het id (bijv. "gen1727…_0").
+  function dishCreatedAt(day) {
+    if (!day) return null;
+    if (day.createdAt) { var c = new Date(day.createdAt); if (!isNaN(c.getTime())) return c; }
+    var m = String(day.id || "").match(/(\d{13})/);
+    if (!m) return null;
+    var d = new Date(Number(m[1]));
+    return isNaN(d.getTime()) || d.getFullYear() < 2020 ? null : d;
+  }
+  function formatDishDate(day) {
+    var d = dishCreatedAt(day);
+    if (!d) return "";
+    var now = new Date();
+    return d.getDate() + " " + MONTHS_SHORT[d.getMonth()] + (d.getFullYear() !== now.getFullYear() ? " " + d.getFullYear() : "");
+  }
+  var DISH_PERIODS = [["alle", "Alle data"], ["7", "Laatste week"], ["30", "Laatste maand"], ["ouder", "Ouder"]];
+  function matchesDishPeriod(day, period) {
+    if (!period || period === "alle") return true;
+    var d = dishCreatedAt(day);
+    if (!d) return period === "ouder";
+    var days = (Date.now() - d.getTime()) / 86400000;
+    if (period === "ouder") return days > 30;
+    return days <= Number(period);
+  }
+  function periodSelect(id, value, onChange) {
+    var sel = document.createElement("select");
+    sel.className = "selectinput pick-sort";
+    sel.id = id;
+    sel.setAttribute("aria-label", "Periode");
+    DISH_PERIODS.forEach(function (o) {
+      var op = document.createElement("option");
+      op.value = o[0]; op.textContent = o[1];
+      if (value === o[0]) op.selected = true;
+      sel.appendChild(op);
+    });
+    sel.onchange = function () { onChange(sel.value); };
+    return sel;
+  }
   var shoppingViewMode = "week";
   var priceCache = {};
   var shoppingPriceLoading = false;
@@ -4035,10 +4077,14 @@
     var shownTypes = libraryFilter === "Alle" ? PLAN_MEALS : [libraryFilter];
 
     function matchesGoalFilter(item) {
+      if (!matchesDishPeriod(item.day, libraryPeriodFilter)) return false;
       return libraryGoalFilter === "Alle" || (item.day.profile && item.day.profile.goal === libraryGoalFilter);
     }
     function filteredItems(m) {
-      return byType[m].filter(matchesGoalFilter);
+      return byType[m].filter(matchesGoalFilter).sort(function (x, y) {
+        var a = dishCreatedAt(x.day), b = dishCreatedAt(y.day);
+        return (b ? b.getTime() : 0) - (a ? a.getTime() : 0);
+      });
     }
     var shownTotal = shownTypes.reduce(function (sum, m) { return sum + filteredItems(m).length; }, 0);
 
@@ -4063,6 +4109,11 @@
       goalFilterRow.appendChild(chip);
     });
     main.appendChild(goalFilterRow);
+
+    var periodRow = document.createElement("div");
+    periodRow.className = "chiprow";
+    periodRow.appendChild(periodSelect("libPeriod", libraryPeriodFilter, function (v) { libraryPeriodFilter = v; render(); }));
+    main.appendChild(periodRow);
 
     var eyebrow = document.createElement("div");
     eyebrow.className = "eyebrow";
@@ -4125,6 +4176,13 @@
         var h2 = document.createElement("h2");
         h2.textContent = item.day.name;
         card.appendChild(h2);
+        var madeTxt = formatDishDate(item.day);
+        if (madeTxt) {
+          var made = document.createElement("div");
+          made.className = "dish-made";
+          made.textContent = "Gegenereerd op " + madeTxt;
+          card.appendChild(made);
+        }
         card.appendChild(macroTags(item.day, { hideMealType: true }));
         card.onclick = function () { goto("day", { weekId: item.week.id, dayId: item.day.id, dayServings: null, dayBackView: "library", dayBackWeekId: null, dayBackDayName: null }); };
         row.appendChild(card);
@@ -4802,7 +4860,7 @@
       });
     });
     var current = pw.slots[key];
-    var pf = state.pickFilter || (state.pickFilter = { q: "", nevo: false, highBal: false, sort: "nieuw" });
+    var pf = state.pickFilter || (state.pickFilter = { q: "", nevo: false, highBal: false, sort: "nieuw", period: "alle" });
 
     if (!pool.length) {
       var none = document.createElement("div");
@@ -4853,6 +4911,7 @@
     });
     sortSel.onchange = function () { pf.sort = sortSel.value; render(); };
     chipRow.appendChild(sortSel);
+    chipRow.appendChild(periodSelect("pickPeriod", pf.period || "alle", function (v) { pf.period = v; render(); }));
     filters.appendChild(chipRow);
     main.appendChild(filters);
 
@@ -4863,13 +4922,14 @@
     list.className = "pick-list";
     main.appendChild(list);
 
-    function ts(it) { var m2 = String(it.day.id || "").match(/(\d{12,14})/); return m2 ? Number(m2[1]) : 0; }
+    function ts(it) { var dt = dishCreatedAt(it.day); return dt ? dt.getTime() : 0; }
     function drawList() {
       var q = pf.q.trim().toLowerCase();
       var items = pool.filter(function (it) {
         var d = it.day;
         if (pf.nevo && d.macroBron !== "nevo") return false;
         if (pf.highBal && !(d.balans >= 80)) return false;
+        if (!matchesDishPeriod(d, pf.period)) return false;
         if (q) {
           var hay = (d.name + " " + (Array.isArray(d.ingredienten) ? d.ingredienten.join(" ") : "")).toLowerCase();
           if (hay.indexOf(q) === -1) return false;
@@ -4921,6 +4981,8 @@
         var sub = document.createElement("div");
         sub.className = "pick-sub";
         var bits = [];
+        var made = formatDishDate(d);
+        if (made) bits.push(made);
         if (d.eiwitG) bits.push(d.eiwitG + " g eiwit");
         if (d.macroBron === "nevo") bits.push("NEVO");
         if (isCur) bits.push("nu ingepland");
