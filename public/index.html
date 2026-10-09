@@ -3473,6 +3473,8 @@
       main.appendChild(wNameInp);
       labelEl("Voor welke maaltijdmomenten wil je gerechten?", "Bepaalt voor welke maaltijden we straks gerechten voorstellen. Meerdere mogelijk.");
       chipGroupMulti(PLAN_MEALS, prefs.mealTypes);
+      labelEl("Hoeveel gerechten per maaltijdmoment?", "Zoveel verschillende gerechten maken we per gekozen moment als je op Genereren tikt.");
+      chipGroupSingle([1, 2, 3, 4, 5, 6, 7].map(function (n) { return [n, String(n)]; }), prefs.count, function (n) { prefs.count = n; });
     } else if (state.wizardStep === 1) {
       heading("Wat is je doel?", "Dit bepaalt de macroverdeling (koolhydraten/eiwit/vet) waar elk gerecht naar streeft \u2014 de basis van de Balans-score. De winst: gerechten die echt bij je doel passen, niet alleen lekker maar ook macrotechnisch kloppend.");
       var goalPairs = Object.keys(GOAL_DESCRIPTIONS).map(function (g) { return [g, g]; });
