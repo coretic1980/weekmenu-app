@@ -990,6 +990,67 @@ function dietStyleInstructionText(dietStyle) {
   return "- Voedingsstijl: " + dietStyle + " (" + (notes[dietStyle] || "") + ")\n";
 }
 
+// ===== Voedingsstijl als harde eis =====
+var DIET_FORBIDDEN_TEXT = {
+  "Vegetarisch": "geen vlees, gevogelte, vis, schaal- of schelpdieren, en ook geen producten daarvan (zoals spek, ham, chorizo, worst, ansjovis, " +
+    "vis- of kippenbouillon, vissaus, gelatine)",
+  "Veganistisch": "geen vlees, gevogelte, vis, schaal- of schelpdieren, zuivel (melk, kaas, boter, room, yoghurt, kwark, skyr), eieren, honing, " +
+    "gelatine, wei-eiwit of andere dierlijke producten; plantaardige varianten (sojamelk, havermelk, kokosmelk, tofu, tempeh) zijn wel goed"
+};
+function dietHardRuleText(dietStyle) {
+  var forbidden = DIET_FORBIDDEN_TEXT[dietStyle];
+  if (!forbidden) return "";
+  return "HARDE EIS \u2014 VOEDINGSSTIJL " + dietStyle.toUpperCase() + ": elk gerecht is volledig " + dietStyle.toLowerCase() + ": " + forbidden + ". " +
+    "Deze eis gaat boven keukenstijl, smaak, apparatuur en doel. Bij klassieke gerechten met vlees of vis (bijv. paella, wokgerechten, stoofpot) " +
+    "maak je de " + dietStyle.toLowerCase() + "e variant, met eiwitbronnen als peulvruchten, tofu, tempeh" + (dietStyle === "Vegetarisch" ? ", eieren of kaas" : "") +
+    ". Controleer vóór je antwoordt elk ingrediënt hierop.\n";
+}
+var MEAT_FISH_RE = /\b(kip\w*|kippe\w*|kalkoen\w*|eend\w*|rund\w*|biefstuk\w*|ossenhaas|entrecote|gehakt\w*|varken\w*|spek\w*|bacon|ham|hammen|parmaham|serranoham|chorizo|salami|pancetta|prosciutto|\w*worst\w*|lams?\w*vlees|lamsrack|lamskotelet\w*|kalfs?\w*|hert\w*|konijn\w*|\w*vlees\w*|vis|vissen|visfilet\w*|vissaus|visbouillon|zalm\w*|tonijn\w*|kabeljauw\w*|pangasius|tilapia|makreel\w*|haring\w*|sardine\w*|sardientje\w*|ansjovis\w*|garnaal|garnalen\w*|gamba\w*|scampi|mossel\w*|inktvis\w*|octopus|calamaris?|kreeft\w*|krab\w*|oester\w*|sint-jakobsschelp\w*|schelpdier\w*|schaaldier\w*|zeevruchten|gelatine|kippenbouillon|runderbouillon)\b/i;
+var ANIMAL_RE = /\b(kaas\w*|\w*kaas|melk|volle melk|halfvolle melk|magere melk|karnemelk|boter|roomboter|room|slagroom|kookroom|zure room|cr[eè]me fra[iî]che|yoghurt\w*|kwark\w*|skyr|ei|eieren|eidooier\w*|eiwitten|honing|ghee|mozzarella|feta|parmezaan\w*|ricotta|mascarpone|cottage cheese|h[uü]ttenk[aä]se|wei|wei-eiwit\w*|whey|gelatine)\b/i;
+var PLANT_DAIRY_RE = /\b(kokos|haver|soja|amandel|rijst|cashew|erwten|noten|plantaardige?|vegan|vegetarische)[\s-]*(melk|room|yoghurt|boter|kaas|drink|kwark|ei)\w*\b|\b(pindakaas|pindaboter|notenboter|amandelboter|cashewboter|kokosmelk|kokosroom|sojamelk|havermelk|amandelmelk|sojayoghurt|kokosyoghurt|veganistische \w+|vegan \w+)\b/gi;
+function dishDietViolations(d, dietStyle) {
+  if (!d || !DIET_FORBIDDEN_TEXT[dietStyle]) return [];
+  var parts = [String(d.name || "")];
+  (Array.isArray(d.ingredienten) ? d.ingredienten : []).forEach(function (x) {
+    if (x && typeof x === "object") parts.push(String(x.tekst || "") + " " + String(x.nevo || ""));
+    else parts.push(String(x || ""));
+  });
+  var hits = [];
+  parts.forEach(function (t) {
+    var txt = t.toLowerCase();
+    if (/\b(vegetarisch\w*|veganistisch\w*|vegan|plantaardig\w*|vleesvervanger\w*|vegaburger|vega\s?\w*)\b/.test(txt) && !/\b(ansjovis|zalm|tonijn)\b/.test(txt)) return;   // expliciet plantaardige vervanger
+    var m = txt.match(MEAT_FISH_RE);
+    if (m) { hits.push(m[0]); return; }
+    if (dietStyle === "Veganistisch") {
+      var cleaned = txt.replace(PLANT_DAIRY_RE, " ");
+      var a = cleaned.match(ANIMAL_RE);
+      if (a) hits.push(a[0]);
+    }
+  });
+  return hits;
+}
+function dietViolationCount(parsed, dietStyle) {
+  if (!DIET_FORBIDDEN_TEXT[dietStyle]) return 0;
+  var dishes = Array.isArray(parsed) ? parsed : [parsed];
+  return dishes.reduce(function (n, d) { return n + (dishDietViolations(d, dietStyle).length ? 1 : 0); }, 0);
+}
+// Voorbeelden en de NEVO-lijst in de prompt mogen geen vlees/vis voorzeggen bij een vegetarische of veganistische stijl.
+function adaptPromptToDiet(prompt, dietStyle) {
+  if (!DIET_FORBIDDEN_TEXT[dietStyle]) return prompt;
+  var out = prompt
+    .split('"180 g kipfilet", "gram": 180, "nevo": "Kipfilet rauw"').join('"150 g kikkererwten", "gram": 150, "nevo": "Kikkererwten blik/glas"')
+    .split("grilled salmon asparagus").join(dietStyle === "Veganistisch" ? "tofu vegetable bowl" : "vegetable paella");
+  var lines = out.split("\n");
+  out = lines.filter(function (ln) {
+    if (ln.indexOf(" | ") === -1 || !/kcal/.test(ln)) return true;   // alleen regels uit de NEVO-lijst filteren
+    var name = ln.split(" | ")[0].toLowerCase();
+    if (MEAT_FISH_RE.test(name)) return false;
+    if (dietStyle === "Veganistisch" && ANIMAL_RE.test(name.replace(PLANT_DAIRY_RE, " "))) return false;
+    return true;
+  }).join("\n");
+  return out;
+}
+
 // Een harde, doorlopende voorkeur (zoals voedingsstijl): geldt bij genereren, aanvullen én variëren.
 function familyModeInstructionText(familyMode) {
   if (!familyMode) return "";
@@ -1025,6 +1086,7 @@ function buildGeneratePrompt(p) {
       count + " per moment.";
   return "Je bent een voedingskundige chef-kok. Genereer in totaal " + totalCount + " macro-gebalanceerde " +
     "gerechten (per 1 persoon) die voldoen aan:\n" +
+    dietHardRuleText(p.dietStyle) +
     "- Maaltijdmomenten: " + mealGuideTxt + "\n" +
     mealInstruction + "\n" +
     "- Keukenstijl: " + cuisineTxt + "\n" +
@@ -1032,7 +1094,7 @@ function buildGeneratePrompt(p) {
     "- Culinair niveau: " + (p.level || "Home-style") + "\n" +
 dietStyleInstructionText(p.dietStyle) +
     familyModeInstructionText(p.familyMode) +
-    "- Beschikbare apparatuur: " + equipTxt + "\n" +
+    "- Beschikbare apparatuur (mag je gebruiken, niet elk gerecht hoeft alles te gebruiken): " + equipTxt + "\n" +
     "- Uitgesloten ingrediënten: " + excludeTxt + "\n" +
     buildBodyProfileLine(p) +
     goalInstructionText(p.goal) +
@@ -1060,10 +1122,11 @@ function buildBackgroundGeneratePrompt(needed, p) {
   var countTxt = types.map(function (m) { return needed[m] + "x " + m + " (" + mealtypeGuideText(m, p.goal) + ")"; }).join(", ");
   return "Je bent een voedingskundige chef-kok. Genereer in totaal " + totalCount + " macro-gebalanceerde " +
     "gerechten (per 1 persoon), verdeeld als: " + countTxt + ". Precies deze aantallen per maaltijdmoment.\n" +
+    dietHardRuleText(p.dietStyle) +
     "- Keukenstijl: " + cuisineTxt + "\n- Smaakprofiel: " + flavorTxt + "\n- Culinair niveau: " + (p.level || "Home-style") + "\n" +
     dietStyleInstructionText(p.dietStyle) +
     familyModeInstructionText(p.familyMode) +
-    "- Beschikbare apparatuur: " + equipTxt + "\n" +
+    "- Beschikbare apparatuur (mag je gebruiken, niet elk gerecht hoeft alles te gebruiken): " + equipTxt + "\n" +
     buildBodyProfileLine(p) +
     goalInstructionText(p.goal) + "\n" +
     INGREDIENT_SPECIFICITY_LINE +
@@ -1082,6 +1145,7 @@ function buildBackgroundGeneratePrompt(needed, p) {
 function buildVariationPromptServer(current, kind, p) {
   return "Hier is een bestaand gerecht in JSON: " + JSON.stringify(current) + "\n\n" +
     "Opdracht: " + (VARIATION_INSTRUCTIONS[kind] || "") + "\n" +
+    dietHardRuleText(p.dietStyle) +
     "Streef naar een macroverdeling passend bij het doel \"" + p.goal + "\": " + (GOAL_DESCRIPTIONS[p.goal] || "") + "\n" +
     (p.dietStyle ? dietStyleInstructionText(p.dietStyle) : "") +
     familyModeInstructionText(p.familyMode) +
@@ -1170,10 +1234,10 @@ function runGenerateAction(body) {
     if (mealTypes.length > 1) {
       return Promise.all(mealTypes.map(function (mt) {
         var subParams = Object.assign({}, params, { mealTypes: [mt] });
-        return generateWithBalansRetry(buildGeneratePrompt(subParams), params.goal, applyNevoToParsed);
+        return generateWithBalansRetry(buildGeneratePrompt(subParams), params.goal, applyNevoToParsed, params.dietStyle);
       })).then(mergeDishArrays);
     }
-    return generateWithBalansRetry(buildGeneratePrompt(params), params.goal, applyNevoToParsed);
+    return generateWithBalansRetry(buildGeneratePrompt(params), params.goal, applyNevoToParsed, params.dietStyle);
   }
 
   if (action === "background") {
@@ -1183,14 +1247,14 @@ function runGenerateAction(body) {
       return Promise.all(types.map(function (mt) {
         var subNeeded = {};
         subNeeded[mt] = needed[mt];
-        return generateWithBalansRetry(buildBackgroundGeneratePrompt(subNeeded, params), params.goal, applyNevoToParsed);
+        return generateWithBalansRetry(buildBackgroundGeneratePrompt(subNeeded, params), params.goal, applyNevoToParsed, params.dietStyle);
       })).then(mergeDishArrays);
     }
-    return generateWithBalansRetry(buildBackgroundGeneratePrompt(needed, params), params.goal, applyNevoToParsed);
+    return generateWithBalansRetry(buildBackgroundGeneratePrompt(needed, params), params.goal, applyNevoToParsed, params.dietStyle);
   }
 
   if (action === "variation") {
-    return generateWithBalansRetry(buildVariationPromptServer(body.current || {}, body.kind, params), params.goal, applyNevoToParsed);
+    return generateWithBalansRetry(buildVariationPromptServer(body.current || {}, body.kind, params), params.goal, applyNevoToParsed, params.dietStyle);
   }
 
   if (action === "prep") {
@@ -1288,27 +1352,44 @@ function callAnthropicOnce(prompt, model, maxTokens) {
 // prep/price requests have no macros to score and skip this entirely.
 // "post" mag het antwoord aanpassen vóórdat het op de Balans-score wordt beoordeeld (bijv. de NEVO-herberekening
 // van de macro's): zo wordt er geretryd op de echte, uitgerekende macro's in plaats van de AI-schatting.
-function generateWithBalansRetry(prompt, goal, post) {
-  if (!goal) return callAnthropicOnce(prompt).then(function (parsed) { return post ? post(parsed) : parsed; });
+function generateWithBalansRetry(prompt, goal, post, dietStyle) {
+  prompt = adaptPromptToDiet(prompt, dietStyle);
+  if (!goal && !DIET_FORBIDDEN_TEXT[dietStyle]) return callAnthropicOnce(prompt).then(function (parsed) { return post ? post(parsed) : parsed; });
 
   var bestParsed = null;
-  var bestScore = -1;
+  var bestScore = -Infinity;
   var attempt = 0;
+  var currentPrompt = prompt;
 
   function tryOnce() {
     attempt++;
-    return callAnthropicOnce(prompt).then(function (parsed) {
+    return callAnthropicOnce(currentPrompt).then(function (parsed) {
       if (post) parsed = post(parsed);
-      var score = minBalans(parsed, goal);
+      var violations = dietViolationCount(parsed, dietStyle);
+      // Overtreding van de voedingsstijl weegt zwaarder dan elke balans-score.
+      var score = (goal ? minBalans(parsed, goal) : 100) - violations * 1000;
       if (score > bestScore) { bestScore = score; bestParsed = parsed; }
-      if (score >= BALANS_MIN_THRESHOLD || attempt >= BALANS_MAX_ATTEMPTS) {
-        return bestParsed;
+      if ((violations === 0 && (!goal || score >= BALANS_MIN_THRESHOLD)) || attempt >= BALANS_MAX_ATTEMPTS) {
+        return finalizeDiet(bestParsed, dietStyle);
+      }
+      if (violations) {
+        var found = [];
+        (Array.isArray(parsed) ? parsed : [parsed]).forEach(function (d) { dishDietViolations(d, dietStyle).forEach(function (h) { if (found.indexOf(h) === -1) found.push(h); }); });
+        currentPrompt = prompt + "\nLET OP: een vorige poging bevatte ingrediënten die niet " + dietStyle.toLowerCase() + " zijn (" +
+          found.slice(0, 8).join(", ") + "). Dat is niet toegestaan; maak alle gerechten volledig " + dietStyle.toLowerCase() + ".";
       }
       return tryOnce();
     });
   }
 
   return tryOnce();
+}
+// Blijft er na alle pogingen toch iets niet-passends over, dan laten we die gerechten weg (als er iets overblijft).
+function finalizeDiet(parsed, dietStyle) {
+  if (!DIET_FORBIDDEN_TEXT[dietStyle] || !Array.isArray(parsed)) return parsed;
+  var ok = parsed.filter(function (d) { return !dishDietViolations(d, dietStyle).length; });
+  if (ok.length && ok.length < parsed.length) console.warn("Voedingsstijl " + dietStyle + ": " + (parsed.length - ok.length) + " gerecht(en) weggelaten na herhaalde overtreding.");
+  return ok.length ? ok : parsed;
 }
 
 function logEvent(type, action, ok, status, extra) {
