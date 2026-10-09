@@ -19,7 +19,7 @@
     box-sizing: border-box;
     padding-top: env(safe-area-inset-top, 0px);
     padding-bottom: env(safe-area-inset-bottom, 0px);
-    --bg: #0A0805;
+    --bg: #0C0906;
     --surface: #17130C;
     --ink: #F3EEE2;
     --muted: #A89A80;
@@ -35,24 +35,34 @@
     --nevo-bg: #113322; --nevo-ink: #7fd9a0;
     --dark-panel: #241C0E;
     --dark-panel-ink: #F3EEE2;
+    --tabbar-bg: rgba(246, 240, 227, 0.96); --tab-raised: #EADFC6;
+    --tab-ink: #1A140C; --tab-muted: #8A7A60; --tab-active: #1A140C;
+    --card: #F6F0E3; --card-shadow: 0 12px 28px rgba(0, 0, 0, 0.38);
+    --glow1: rgba(232, 160, 60, 0.50); --glow2: rgba(190, 90, 45, 0.30); --lines: rgba(224, 174, 85, 0.22);
+    --topbar-bg: rgba(12, 9, 6, 0.72);
   }
   :root[data-theme="light"] {
-    --bg: #F7F2E7;
+    --bg: #F3EBDB;
     --surface: #FFFDF8;
-    --ink: #10182B;
+    --ink: #1A140C;
     --muted: #6B6152;
     --label: #8C8270;
     --line: #E7DFCC;
-    --accent: #0A0805;
-    --accent-ink: #F7F2E7;
+    --accent: #1A140C;
+    --accent-ink: #F6F0E3;
     --accent2: #B8863B;
     --accent2-ink: #2A1C00;
-    --tag-kh-bg: #E9E7DE; --tag-kh-ink: #10182B;
+    --tag-kh-bg: #E9E7DE; --tag-kh-ink: #1A140C;
     --tag-eiwit-bg: #EDEAE1; --tag-eiwit-ink: #4A4438;
     --tag-vet-bg: #F3E6D0; --tag-vet-ink: #8A6220;
     --nevo-bg: #D7F0E0; --nevo-ink: #1D6A3B;
-    --dark-panel: #0A1120;
-    --dark-panel-ink: #F7F2E7;
+    --dark-panel: #1A140C;
+    --dark-panel-ink: #F6F0E3;
+    --tabbar-bg: rgba(26, 20, 12, 0.95); --tab-raised: rgba(246, 240, 227, 0.14);
+    --tab-ink: #F6F0E3; --tab-muted: #A8977A; --tab-active: #E0AE55;
+    --card: #FFFFFF; --card-shadow: 0 10px 24px rgba(90, 60, 20, 0.12);
+    --glow1: rgba(240, 175, 85, 0.50); --glow2: rgba(230, 130, 80, 0.26); --lines: rgba(184, 134, 59, 0.20);
+    --topbar-bg: rgba(243, 235, 219, 0.78);
   }
   html, body { height: 100%; }
   html { scroll-padding-top: env(safe-area-inset-top, 0px); }
@@ -72,7 +82,8 @@
   header.topbar {
     position: sticky; top: 0;
     padding: calc(16px + env(safe-area-inset-top, 0px)) 20px 16px;
-    background: var(--bg);
+    background: var(--topbar-bg);
+    backdrop-filter: blur(16px) saturate(1.2); -webkit-backdrop-filter: blur(16px) saturate(1.2);
     display: flex; align-items: center; gap: 12px;
     border-bottom: 1px solid var(--line);
     z-index: 5;
@@ -262,6 +273,18 @@
     opacity: 0; pointer-events: none; transition: opacity 0.15s ease; z-index: 100;
   }
   .confirm-overlay.active { opacity: 1; pointer-events: auto; }
+  .autofill-box { max-width: 400px; display: flex; flex-direction: column; gap: 14px; }
+  .autofill-title { font-family: "Fraunces", serif; font-weight: 600; font-size: 20px; margin: 0; }
+  .autofill-sub { font-size: 13.5px; line-height: 1.55; color: var(--muted); margin: -6px 0 0; }
+  .autofill-meals { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .autofill-meals .chip { width: 100%; display: flex; align-items: center; justify-content: center; gap: 7px; }
+  .autofill-meals .chip .ck { width: 16px; height: 16px; border-radius: 5px; border: 1.5px solid currentColor; display: inline-flex;
+    align-items: center; justify-content: center; font-size: 11px; line-height: 1; opacity: 0.55; }
+  .autofill-meals .chip.selected .ck { opacity: 1; }
+  .autofill-actions { display: flex; flex-direction: column; gap: 8px; }
+  .autofill-actions .primary-btn:disabled, .autofill-meals .chip:disabled, .autofill-actions .ghost-btn:disabled { opacity: 0.45; cursor: not-allowed; filter: none; }
+  .autofill-cancel { appearance: none; background: none; border: none; color: var(--muted); font-family: inherit; font-size: 13.5px;
+    text-decoration: underline; cursor: pointer; padding: 4px; }
   .confirm-box {
     background: var(--surface); border-radius: 13px; padding: 26px; max-width: 360px; width: 100%;
     box-shadow: 0 12px 36px rgba(16, 12, 4, 0.25);
@@ -430,11 +453,117 @@
   .weekrow-head h2 { font-family: "Fraunces", serif; font-weight: 600; font-size: 24px; margin: 0; }
   .weekrow-head .sub { color: var(--muted); font-size: 14px; }
   .weekrow-head:hover h2 { color: var(--accent2); }
+  /* Tabbalk onderin: alleen op smalle schermen */
+  .tabbar { display: none; }
+  @media (max-width: 700px) {
+    body.has-tabbar .tabbar {
+      display: grid; grid-template-columns: repeat(5, 1fr); position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+      padding: 6px 4px calc(8px + env(safe-area-inset-bottom, 0px)); background: var(--tabbar-bg); border-top: 1px solid var(--line);
+      backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    }
+    body.has-tabbar main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
+    body.has-tabbar.busy-active main { padding-bottom: calc(220px + env(safe-area-inset-bottom, 0px)); }
+    body.has-tabbar .busybar { bottom: calc(64px + env(safe-area-inset-bottom, 0px)); }
+    body.has-tabbar.tab-root .topbar .backbtn[aria-label="Terug"] { display: none; }
+    body.has-tabbar .home-nav-tiles { display: none; }
+    body.has-tabbar .topbar .backbtn[aria-label="Naar startscherm"] { display: none; }
+  }
+  .tab {
+    appearance: none; border: none; background: none; color: var(--muted); font-family: "Public Sans", sans-serif;
+    font-size: 10.5px; font-weight: 600; display: flex; flex-direction: column; align-items: center; gap: 3px;
+    padding: 4px 0; cursor: pointer; border-radius: 10px; -webkit-tap-highlight-color: transparent;
+  }
+  .tab .tab-ic { position: relative; width: 54px; height: 30px; border-radius: 999px; display: flex; align-items: center; justify-content: center; transition: background 0.18s ease; }
+  .tab svg { width: 23px; height: 23px; }
+  .tab[aria-current="page"] { color: var(--ink); }
+  .tab[aria-current="page"] .tab-ic { background: var(--tab-raised); color: var(--accent2); }
+  .tab:focus-visible { outline: 2px solid var(--accent2); outline-offset: 1px; }
+  .tab-badge {
+    position: absolute; top: -3px; right: 8px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 999px;
+    background: var(--accent2); color: var(--accent2-ink); font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center;
+    font-variant-numeric: tabular-nums;
+  }
+  @media (prefers-reduced-motion: reduce) { .tab .tab-ic { transition: none; } }
+
+  /* ===== Uitstraling "Gouden balans" ===== */
+  #bgfx { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden;
+    background: radial-gradient(70% 38% at 90% -2%, var(--glow1), transparent 70%),
+                radial-gradient(55% 30% at 4% 10%, var(--glow2), transparent 72%), var(--bg); }
+  #bgfx::after { content: ""; position: absolute; inset: 0; opacity: 0.28; mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.9'/%3E%3C/svg%3E"); }
+  #bgfx svg { position: absolute; left: 50%; top: -330px; width: 900px; height: 900px; transform: translateX(-50%);
+    -webkit-mask-image: linear-gradient(180deg, #000 34%, transparent 62%); mask-image: linear-gradient(180deg, #000 34%, transparent 62%); }
+  #bgfx circle { fill: none; stroke: var(--lines); stroke-width: 1.2; }
+
+  /* Ivoren kaarten: lokaal een licht palet, ook in het donkere thema */
+  .card, .tile, .weekrow, .plan-slot, .plan-edit-btn, .gencard, .confirm-box, .busybar-card, .today-card, .meal-row {
+    --surface: #FFFDF8; --bg: #EFE7D6; --ink: #1A140C; --muted: #7A6B55; --label: #8C7C62; --line: rgba(26, 20, 12, 0.12);
+    --accent: #1A140C; --accent-ink: #F6F0E3; --accent2: #A87A30; --accent2-ink: #2A1C00;
+    --tag-kh-bg: #ECE6D8; --tag-kh-ink: #1A140C; --tag-eiwit-bg: #EFEAE0; --tag-eiwit-ink: #4A4438; --tag-vet-bg: #F3E6D0; --tag-vet-ink: #8A6220;
+    --nevo-bg: #E1F1E6; --nevo-ink: #1D6A3B; --nevo-line: #A7D8B7; --nevo-seal: #2E9A5C;
+    background: var(--card); color: var(--ink); border-color: transparent; box-shadow: var(--card-shadow);
+  }
+  .card, .tile, .weekrow { border-radius: 18px; }
+  .plan-slot, .plan-edit-btn { border-radius: 14px; }
+  .gencard { border: 1px dashed rgba(26, 20, 12, 0.18); }
+  .card:hover, .tile:hover, .plan-slot:hover, .plan-edit-btn:hover { border-color: var(--accent2); }
+  .primary-btn { border-radius: 13px; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18); }
+  .chip { border-radius: 999px; }
+
+  /* Kop van het beginscherm */
+  .brandmark { width: 36px; height: 36px; border-radius: 11px; flex: none; display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(145deg, #E0AE55, #8E6524); color: #1A140C; box-shadow: inset 0 1px 0 rgba(255,255,255,0.35); }
+  :root[data-theme="light"] .brandmark { background: linear-gradient(145deg, #2A2014, #1A140C); color: #E0AE55; }
+  .hello { font-family: "Fraunces", serif; font-weight: 700; font-size: 30px; line-height: 1.12; letter-spacing: -0.01em; margin: 2px 0 0; text-wrap: balance; }
+  .hello .name { color: var(--accent2); }
+  .hello-sub { font-size: 13.5px; color: var(--muted); margin-top: -12px; }
+
+  /* Kaart Vandaag */
+  .today-card { border-radius: 18px; padding: 18px; display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 18px; align-items: center; }
+  .today-ring { width: 96px; height: 96px; }
+  .today-ring .num { font-family: "Fraunces", serif; font-weight: 700; font-size: 20px; fill: var(--ink); }
+  .today-ring .lbl { font-size: 9.5px; font-weight: 600; fill: var(--muted); }
+  .today-macros { display: flex; flex-direction: column; gap: 9px; min-width: 0; }
+  .mrow { display: grid; grid-template-columns: 74px minmax(0, 1fr) 62px; gap: 10px; align-items: center; font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .mrow b { color: var(--ink); font-weight: 700; text-align: right; }
+  .mrow b small { color: var(--muted); font-weight: 500; }
+  .mbar { height: 6px; border-radius: 999px; background: rgba(26, 20, 12, 0.09); overflow: hidden; }
+  .mbar span { display: block; height: 100%; border-radius: 999px; }
+  .today-note { grid-column: 1 / -1; font-size: 12px; color: var(--muted); margin-top: -6px; }
+  .today-empty { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 12px; }
+  .today-empty p { margin: 0; font-size: 14px; color: var(--muted); }
+  @media (max-width: 380px) { .today-card { grid-template-columns: minmax(0, 1fr); justify-items: center; } .today-macros { width: 100%; } }
+
+  /* Maaltijden van vandaag */
+  .meal-list { display: flex; flex-direction: column; gap: 10px; }
+  .meal-row { appearance: none; border: 1px solid transparent; width: 100%; border-radius: 16px; padding: 12px 14px; cursor: pointer; text-align: left;
+    font-family: inherit; display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; gap: 12px; align-items: center; }
+  .meal-row:hover { border-color: var(--accent2); }
+  .meal-thumb { width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; color: #1A140C; }
+  .meal-row b { display: block; font-family: "Fraunces", serif; font-weight: 600; font-size: 15.5px; line-height: 1.25; }
+  .meal-row small { display: block; font-size: 12px; color: var(--muted); margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .meal-row .tag.nevo { padding: 3px 8px 3px 5px; font-size: 11px; gap: 4px; display: inline-flex; align-items: center; }
+  .meal-row .tag.nevo svg { width: 13px; height: 13px; }
+
+  /* Zwevende tabbalk */
+  @media (max-width: 700px) {
+    body.has-tabbar .tabbar {
+      left: 10px; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); padding: 7px 4px;
+      border-radius: 24px; border: none; box-shadow: 0 12px 30px rgba(0, 0, 0, 0.30);
+    }
+    body.has-tabbar main { padding-bottom: calc(110px + env(safe-area-inset-bottom, 0px)); }
+    body.has-tabbar .busybar { bottom: calc(82px + env(safe-area-inset-bottom, 0px)); }
+  }
+  .tabbar { --ink: var(--tab-ink); --muted: var(--tab-muted); --accent2: var(--tab-active); }
+  .tab-badge { background: #D4A24A; color: #1A140C; }
 </style>
 </head>
 <body>
 <div id="noticeBar" class="notice-bar" role="status" style="display:none;"></div>
+<div id="bgfx" aria-hidden="true"><svg viewBox="0 0 900 900"><circle cx="450" cy="450" r="26"/><circle cx="450" cy="450" r="52"/><circle cx="450" cy="450" r="78"/><circle cx="450" cy="450" r="104"/><circle cx="450" cy="450" r="130"/><circle cx="450" cy="450" r="156"/><circle cx="450" cy="450" r="182"/><circle cx="450" cy="450" r="208"/><circle cx="450" cy="450" r="234"/><circle cx="450" cy="450" r="260"/><circle cx="450" cy="450" r="286"/><circle cx="450" cy="450" r="312"/><circle cx="450" cy="450" r="338"/><circle cx="450" cy="450" r="364"/><circle cx="450" cy="450" r="390"/><circle cx="450" cy="450" r="416"/><circle cx="450" cy="450" r="442"/></svg></div>
 <div id="app"></div>
+<nav id="tabbar" class="tabbar" aria-label="Hoofdmenu"></nav>
 <div id="busyBar" class="busybar" aria-hidden="true">
   <div class="busybar-card" role="status">
     <div id="busyText" class="busybar-text"></div>
@@ -477,6 +606,29 @@
     <div class="confirm-actions">
       <button id="bringCancelBtn" class="ghost-btn">Annuleren</button>
       <button id="bringSaveBtn" class="primary-btn">Opslaan</button>
+    </div>
+  </div>
+</div>
+<div id="autofillOverlay" class="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="autofillTitle">
+  <div class="confirm-box autofill-box">
+    <h2 id="autofillTitle" class="autofill-title">Week automatisch invullen</h2>
+    <p class="autofill-sub">Voor welke maaltijdmomenten wil je de week laten invullen? Momenten die je al zelf hebt ingepland blijven staan.</p>
+    <div id="autofillMeals" class="autofill-meals"></div>
+    <div class="autofill-actions">
+      <button id="autofillGenBtn" class="primary-btn">Vul in en vul recepten aan</button>
+      <button id="autofillSavedBtn" class="ghost-btn">Alleen opgeslagen gerechten</button>
+      <button id="autofillCancelBtn" class="autofill-cancel">Annuleren</button>
+    </div>
+  </div>
+</div>
+<div id="clearDayOverlay" class="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="clearDayTitle">
+  <div class="confirm-box autofill-box">
+    <h2 id="clearDayTitle" class="autofill-title">Maaltijden wissen</h2>
+    <p id="clearDaySub" class="autofill-sub">Welke maaltijdmomenten wil je wissen?</p>
+    <div id="clearDayMeals" class="autofill-meals"></div>
+    <div class="autofill-actions">
+      <button id="clearDayOkBtn" class="primary-btn">Wis geselecteerde momenten</button>
+      <button id="clearDayCancelBtn" class="autofill-cancel">Annuleren</button>
     </div>
   </div>
 </div>
@@ -763,6 +915,106 @@
       if (fn) fn();
     };
   })();
+
+  // Dialoog: kies maaltijdmomenten voor "Vul week automatisch in".
+  var AUTOFILL_MEAL_OPTIONS = [["Ontbijt", "Ontbijt"], ["Lunch", "Lunch"], ["Diner", "Diner"], ["Snack", "Snacks"]];
+  function loadAutofillMeals() {
+    try {
+      var v = JSON.parse(localStorage.getItem("balanza_autofill_meals") || "null");
+      if (Array.isArray(v) && v.length) return v.filter(function (m) { return PLAN_MEALS.indexOf(m) > -1; });
+    } catch (e) {}
+    return PLAN_MEALS.slice();
+  }
+  function openAutofillDialog(pw) {
+    var overlay = document.getElementById("autofillOverlay");
+    var wrap = document.getElementById("autofillMeals");
+    var genBtn = document.getElementById("autofillGenBtn");
+    var savedBtn = document.getElementById("autofillSavedBtn");
+    var cancelBtn = document.getElementById("autofillCancelBtn");
+    if (!overlay || !wrap) return;
+    var chosen = loadAutofillMeals();
+    function sync() {
+      wrap.innerHTML = "";
+      AUTOFILL_MEAL_OPTIONS.forEach(function (opt) {
+        var on = chosen.indexOf(opt[0]) > -1;
+        var b = document.createElement("button");
+        b.type = "button";
+        b.className = "chip" + (on ? " selected" : "");
+        b.setAttribute("aria-pressed", on ? "true" : "false");
+        b.innerHTML = '<span class="ck">' + (on ? "\u2713" : "") + "</span>";
+        b.appendChild(document.createTextNode(opt[1]));
+        b.onclick = function () {
+          if (on) chosen = chosen.filter(function (m) { return m !== opt[0]; });
+          else chosen.push(opt[0]);
+          sync();
+        };
+        wrap.appendChild(b);
+      });
+      genBtn.disabled = savedBtn.disabled = !chosen.length;
+    }
+    function close() { overlay.classList.remove("active"); }
+    function go(onlyExisting) {
+      if (!chosen.length) return;
+      var meals = PLAN_MEALS.filter(function (m) { return chosen.indexOf(m) > -1; });
+      try { localStorage.setItem("balanza_autofill_meals", JSON.stringify(meals)); } catch (e) {}
+      close();
+      generateAutoWeek(pw, onlyExisting, meals);
+    }
+    genBtn.onclick = function () { go(false); };
+    savedBtn.onclick = function () { go(true); };
+    cancelBtn.onclick = close;
+    overlay.onclick = function (e) { if (e.target === overlay) close(); };
+    sync();
+    overlay.classList.add("active");
+  }
+
+  // Dialoog: kies welke maaltijdmomenten van een dag gewist worden.
+  function openClearDayDialog(pw, d) {
+    var overlay = document.getElementById("clearDayOverlay");
+    var wrap = document.getElementById("clearDayMeals");
+    var okBtn = document.getElementById("clearDayOkBtn");
+    var cancelBtn = document.getElementById("clearDayCancelBtn");
+    var sub = document.getElementById("clearDaySub");
+    if (!overlay || !wrap) return;
+    function slotsOf(m) { return PLAN_SLOTS.filter(function (slot) { return SLOT_TO_MEALTYPE[slot] === m && pw.slots[d + "|" + slot]; }); }
+    var filled = PLAN_MEALS.filter(function (m) { return slotsOf(m).length > 0; });
+    var chosen = filled.slice();
+    sub.textContent = "Welke maaltijdmomenten van " + d + " wil je wissen?";
+    function sync() {
+      wrap.innerHTML = "";
+      AUTOFILL_MEAL_OPTIONS.forEach(function (opt) {
+        var has = filled.indexOf(opt[0]) > -1;
+        var on = chosen.indexOf(opt[0]) > -1;
+        var b = document.createElement("button");
+        b.type = "button";
+        b.className = "chip" + (on ? " selected" : "");
+        b.disabled = !has;
+        if (!has) { b.style.opacity = "0.4"; b.style.cursor = "not-allowed"; b.title = "Niets ingepland"; }
+        b.setAttribute("aria-pressed", on ? "true" : "false");
+        b.innerHTML = '<span class="ck">' + (on ? "\u2713" : "") + "</span>";
+        b.appendChild(document.createTextNode(opt[1]));
+        b.onclick = function () {
+          if (on) chosen = chosen.filter(function (m) { return m !== opt[0]; });
+          else chosen.push(opt[0]);
+          sync();
+        };
+        wrap.appendChild(b);
+      });
+      okBtn.disabled = !chosen.length;
+    }
+    function close() { overlay.classList.remove("active"); }
+    okBtn.onclick = function () {
+      if (!chosen.length) return;
+      chosen.forEach(function (m) { slotsOf(m).forEach(function (slot) { delete pw.slots[d + "|" + slot]; }); });
+      close();
+      savePlannedWeeks();
+      render();
+    };
+    cancelBtn.onclick = close;
+    overlay.onclick = function (e) { if (e.target === overlay) close(); };
+    sync();
+    overlay.classList.add("active");
+  }
 
   var currentTheme = (function () {
     try { return localStorage.getItem("weekmenu_theme") || "dark"; } catch (e) { return "dark"; }
@@ -2440,10 +2692,161 @@
     setTimeout(once, 1500);
   }
 
+  var GOAL_KCAL_MULTIPLIER = typeof GOAL_KCAL_MULTIPLIER !== "undefined" ? GOAL_KCAL_MULTIPLIER : {
+    "Onderhoud": 1, "Vetverlies (spierbehoud)": 0.85, "Cutting": 0.65, "Spieropbouw (lean bulk)": 1.15, "Atleet (prestatiegericht)": 1.1
+  };
+  function nevoSealSvg() {
+    return '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="currentColor" opacity="0.9"/>' +
+      '<path d="M7.5 12.3l3 3 6-6.2" fill="none" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  }
+
+  // Geschatte dagbehoefte (Mifflin-St Jeor × activiteit × doel). Null als het profiel onvolledig is.
+  function dailyKcalTarget() {
+    var w = Number(prefs.weightKg), h = Number(prefs.heightCm), a = Number(prefs.age);
+    if (!w || !h || !a) return null;
+    var base = 10 * w + 6.25 * h - 5 * a + (prefs.gender === "Man" ? 5 : prefs.gender === "Vrouw" ? -161 : -78);
+    var act = { "Zittend": 1.2, "Licht actief": 1.375, "Gemiddeld actief": 1.55, "Zeer actief": 1.725 }[prefs.activityLevel] || 1.375;
+    return Math.round(base * act * (GOAL_KCAL_MULTIPLIER[prefs.goal] || 1) / 10) * 10;
+  }
+
+  var MEAL_THUMBS = {
+    "Ontbijt": ["ONT", "linear-gradient(145deg,#E7C27A,#B8863B)"],
+    "Lunch": ["LUN", "linear-gradient(145deg,#9FD3B0,#3E8E5E)"],
+    "Diner": ["DIN", "linear-gradient(145deg,#E9A27C,#A85B3A)"],
+    "Snack": ["SNK", "linear-gradient(145deg,#D9C8F0,#8D74B8)"]
+  };
+
+  function renderHomeToday(main) {
+    var now = new Date();
+    var hour = now.getHours();
+    var greetWord = hour < 6 ? "Goedenacht" : hour < 12 ? "Goedemorgen" : hour < 18 ? "Goedemiddag" : "Goedenavond";
+    var name = String(prefs.name || "").trim();
+    var hello = document.createElement("div");
+    hello.className = "hello";
+    hello.appendChild(document.createTextNode(greetWord + (name ? ", " : "")));
+    if (name) { var nm = document.createElement("span"); nm.className = "name"; nm.textContent = name; hello.appendChild(nm); }
+    main.appendChild(hello);
+
+    var dayIdx = (now.getDay() + 6) % 7;
+    var dayName = PLAN_DAYS[dayIdx];
+    var sub = document.createElement("div");
+    sub.className = "hello-sub";
+    sub.textContent = dayName + " " + now.getDate() + " " + MONTHS_SHORT[now.getMonth()];
+    main.appendChild(sub);
+
+    var key = isoDateKey(getMonday(now));
+    var pw = plannedWeeks.filter(function (w) { return w.weekStart === key; })[0];
+    var agg = pw ? aggregateDayMacros(pw, dayName) : null;
+
+    var card = document.createElement("div");
+    card.className = "today-card";
+    if (!agg) {
+      var empty = document.createElement("div");
+      empty.className = "today-empty";
+      var p = document.createElement("p");
+      p.textContent = "Voor vandaag staat nog niets gepland. Plan je dag, dan zie je hier je calorieën en macro's.";
+      var btn = document.createElement("button");
+      btn.className = "primary-btn";
+      btn.textContent = "Plan vandaag";
+      btn.onclick = function () {
+        if (!hasAnyDishes()) {
+          askConfirm("Let op: er zijn nog geen recepten beschikbaar. Navigeer naar gerechten ontwerpen.", function () { goto("prefs"); }, "Ok", "Nee");
+          return;
+        }
+        var w = pw || addOrOpenPlannedWeek(getMonday(new Date()));
+        goto("planday", { planWeekId: w.id, planDayName: dayName, tab: "plannen" });
+      };
+      empty.appendChild(p);
+      empty.appendChild(btn);
+      card.appendChild(empty);
+      main.appendChild(card);
+      return;
+    }
+
+    var target = dailyKcalTarget();
+    var t = goalTarget();
+    var r = 40, c = 2 * Math.PI * r;
+    var frac = target ? Math.min(1, agg.kcal / target) : 1;
+    card.innerHTML = '<svg class="today-ring" viewBox="0 0 96 96" role="img" aria-label="' + agg.kcal + ' kcal gepland' + (target ? ' van ' + target : '') + '">' +
+      '<circle cx="48" cy="48" r="' + r + '" fill="none" stroke="rgba(26,20,12,0.09)" stroke-width="8"/>' +
+      '<circle cx="48" cy="48" r="' + r + '" fill="none" stroke="#C9973F" stroke-width="8" stroke-linecap="round" stroke-dasharray="' +
+      (c * frac).toFixed(1) + ' ' + c.toFixed(1) + '" transform="rotate(-90 48 48)"/>' +
+      '<text class="num" x="48" y="50" text-anchor="middle">' + agg.kcal + '</text>' +
+      '<text class="lbl" x="48" y="64" text-anchor="middle">' + (target ? '/ ' + target + ' kcal' : 'kcal gepland') + '</text></svg>';
+    var macros = document.createElement("div");
+    macros.className = "today-macros";
+    function goal(pct, per) { return target ? Math.round(target * pct / 100 / per) : null; }
+    [["Eiwit", agg.eiwitG, goal(t.eiwit, 4), "#C9973F"], ["Koolh.", agg.khG, goal(t.kh, 4), "#8C6428"], ["Vet", agg.vetG, goal(t.vet, 9), "#2E9A5C"]].forEach(function (m) {
+      var row = document.createElement("div");
+      row.className = "mrow";
+      var pctW = m[2] ? Math.min(100, Math.round(m[1] / m[2] * 100)) : Math.min(100, Math.round(m[1] / Math.max(agg.eiwitG, agg.khG, agg.vetG, 1) * 100));
+      row.innerHTML = '<span>' + m[0] + '</span><div class="mbar"><span style="width:' + pctW + '%;background:' + m[3] + '"></span></div>' +
+        '<b>' + m[1] + (m[2] ? '<small> / ' + m[2] + '</small>' : ' g') + '</b>';
+      macros.appendChild(row);
+    });
+    card.appendChild(macros);
+    var note = document.createElement("div");
+    note.className = "today-note";
+    note.textContent = target ? "Gepland voor vandaag, in gram. Je dagdoel is een schatting op basis van je profiel en doel."
+      : "Gepland voor vandaag. Vul lengte, gewicht en leeftijd in bij Ontwerpen om je dagdoel te zien.";
+    card.appendChild(note);
+    main.appendChild(card);
+
+    var lab = document.createElement("div");
+    lab.className = "eyebrow";
+    lab.textContent = "Vandaag";
+    main.appendChild(lab);
+    var list = document.createElement("div");
+    list.className = "meal-list";
+    PLAN_SLOTS.forEach(function (slot) {
+      var assigned = pw.slots[dayName + "|" + slot];
+      if (!assigned) return;
+      var res = resolveAssignedDish(assigned);
+      if (!res) return;
+      var dish = res.day;
+      var th = MEAL_THUMBS[SLOT_TO_MEALTYPE[slot]] || MEAL_THUMBS["Snack"];
+      var row = document.createElement("button");
+      row.type = "button";
+      row.className = "meal-row";
+      var thumb = document.createElement("span");
+      thumb.className = "meal-thumb";
+      thumb.style.background = th[1];
+      thumb.textContent = th[0];
+      var txt = document.createElement("span");
+      var b = document.createElement("b");
+      b.textContent = dish.name;
+      var sm = document.createElement("small");
+      sm.textContent = slot + " · " + dish.kcal + " kcal" + (dish.eiwitG ? " · " + dish.eiwitG + " g eiwit" : "");
+      txt.appendChild(b);
+      txt.appendChild(sm);
+      row.appendChild(thumb);
+      row.appendChild(txt);
+      if (dish.macroBron === "nevo") {
+        var nb = document.createElement("span");
+        nb.className = "tag nevo";
+        nb.innerHTML = nevoSealSvg() + "<span>NEVO</span>";
+        row.appendChild(nb);
+      } else {
+        row.appendChild(document.createElement("span"));
+      }
+      row.onclick = function () {
+        goto("day", { weekId: assigned.weekId, dayId: assigned.dayId, dayServings: assigned.servings || 1, dayBackView: "weeks", dayBackWeekId: null, dayBackDayName: null });
+      };
+      list.appendChild(row);
+    });
+    main.appendChild(list);
+  }
+
   function renderWeeks() {
     var app = document.getElementById("app");
     app.innerHTML = "";
-    app.appendChild(renderTopbar("Ontwerp je gebalanceerde maaltijden", false));
+    var homeBar = renderTopbar("Balanza", false);
+    var mark = document.createElement("span");
+    mark.className = "brandmark";
+    mark.setAttribute("aria-hidden", "true");
+    mark.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v16M7 20h10M5 8h14"/><path d="M5 8l-3 6a3 3 0 0 0 6 0zM19 8l-3 6a3 3 0 0 0 6 0z"/></svg>';
+    homeBar.insertBefore(mark, homeBar.firstChild);
+    app.appendChild(homeBar);
     var main = document.createElement("main");
 
     if (state.generating) {
@@ -2491,35 +2894,10 @@
       stopFactCarousel();
     }
 
-    var logoWrap = document.createElement("div");
-    logoWrap.style.display = "flex";
-    logoWrap.style.justifyContent = "center";
-    logoWrap.style.padding = "4px 0 2px";
-    logoWrap.innerHTML =
-      '<svg width="46" height="46" viewBox="0 0 512 512" fill="none" stroke="var(--accent2)" stroke-width="11" stroke-linecap="round">' +
-      '<line x1="256" y1="134" x2="256" y2="350"/><line x1="186" y1="376" x2="256" y2="350"/>' +
-      '<line x1="326" y1="376" x2="256" y2="350"/><line x1="186" y1="376" x2="326" y2="376"/>' +
-      '<line x1="126" y1="120" x2="386" y2="120"/>' +
-      '<line x1="126" y1="120" x2="126" y2="220" stroke-width="7"/><line x1="386" y1="120" x2="386" y2="220" stroke-width="7"/>' +
-      '<circle cx="256" cy="120" r="14" fill="var(--accent2)" stroke="none"/>' +
-      '<circle cx="126" cy="220" r="34" fill="none" stroke-width="8"/><circle cx="386" cy="220" r="34" fill="none" stroke-width="8"/>' +
-      '</svg>';
-    main.appendChild(logoWrap);
-
-    var greetName = String(prefs.name || "").trim();
-    if (greetName) {
-      var greet = document.createElement("div");
-      greet.className = "greeting";
-      greet.appendChild(document.createTextNode("Welkom terug, "));
-      var greetSpan = document.createElement("span");
-      greetSpan.className = "name";
-      greetSpan.textContent = greetName;
-      greet.appendChild(greetSpan);
-      main.appendChild(greet);
-    }
+    renderHomeToday(main);
 
     var tiles = document.createElement("div");
-    tiles.className = "tilerow";
+    tiles.className = "tilerow home-nav-tiles";
 
     var designTile = document.createElement("button");
     designTile.className = "tile";
@@ -2580,7 +2958,7 @@
     main.appendChild(curCard);
 
     var libRow = document.createElement("div");
-    libRow.className = "tilerow";
+    libRow.className = "tilerow home-nav-tiles";
     var libTile = document.createElement("button");
     libTile.className = "tile";
     libTile.innerHTML =
@@ -3451,13 +3829,14 @@
 
   var GUIDE_STEPS = [
     { title: "Stel je voorkeuren in", body: "Bij het eerste gebruik loop je een korte wizard door die alles in stapjes uitvraagt, elk met uitleg over wat die keuze precies doet. Later kun je alles terugvinden en aanpassen bij \u201cGerechten ontwerpen\u201d: doel (Onderhoud, Vetverlies, Cutting, Spieropbouw of Atleet), voedingsstijl, keukenstijl, smaakprofiel, culinair niveau, kindvriendelijk (gezinsmodus), beschikbare apparatuur, wat je niet wilt eten, en optioneel je lichaamsprofiel (geslacht, lengte, gewicht, leeftijd, activiteitsniveau)." },
+    { title: "Navigeren op je telefoon", body: "Op een smartphone staat onderin een vaste balk met Start, Ontwerpen, Plannen, Gerechten en Lijst. Tik nogmaals op het actieve onderdeel om terug te gaan naar het begin ervan. Het getal bij Lijst laat zien hoeveel boodschappen voor deze week nog open staan." },
     { title: "Genereer gerechten", body: "Kies bij welk maaltijdmoment(en) het gaat (Ontbijt/Lunch/Diner/Snack) en hoeveel gerechten je per moment wilt, en tik op \u201cGenereer gerechten\u201d. Daarna kies je of er ook afbeeldingen bij worden gezocht (duurt iets langer). Elk gerecht krijgt een Balans-score: hoe dichter bij het streefpercentage van jouw doel, hoe hoger de score. Het genereren kan even duren; je hoeft niet in de app te blijven wachten. Geldt er een limiet voor het aantal nieuwe gerechten per maand, dan zie je hier hoeveel je er nog over hebt." },
     { title: "Macro's berekend met NEVO", body: "De macro's van je gerechten worden uitgerekend met het Nederlands Voedingsstoffenbestand (NEVO) van het RIVM, niet alleen geschat: een groen \u201cNEVO-berekend\u201d label (in de app en in de PDF) laat zien wanneer dat is gelukt. Lukt het matchen van een ingredi\u00ebnt een keer niet, dan blijft de AI-schatting zichtbaar en duidelijk gelabeld. In \u201cOpgeslagen gerechten\u201d kun je oudere gerechten met \u00e9\u00e9n tik laten herberekenen." },
     { title: "Krijg een melding als het klaar is", body: "Ga je tijdens het genereren naar een andere app, dan werkt Balanza gewoon door en staan je gerechten klaar zodra je terugkomt. Wil je een seintje? Zet onder Instellingen \u2192 Meldingen de meldingen aan (of tik tijdens het genereren op \u201cStuur me een melding als het klaar is\u201d). Op een iPhone werkt dat als Balanza op je beginscherm staat: tik op Deel en kies \u201cZet op beginscherm\u201d." },
     { title: "Bekijk je bibliotheek", body: "Onder \u201cOpgeslagen gerechten\u201d vind je alles wat je ooit heb ontworpen of gegenereerd, gegroepeerd per maaltijdmoment. Filter op maaltijdmoment of doel, of verwijder gerechten die je niet meer wilt." },
     { title: "Plan een week", body: "Onder \u201cPlannen\u201d kies je de huidige week of een week in de toekomst. Elke dag heeft 6 momenten: Ontbijt, Snack na ontbijt, Lunch, Snack na lunch, Diner en Snack na diner. Tik een moment aan om er een gerecht aan toe te wijzen." },
     { title: "Stel het aantal personen in", body: "Bij een ingevuld moment kun je met + en \u2212 aangeven voor hoeveel personen je kookt. Dat aantal telt automatisch mee in de boodschappenlijst en de prepdag \u2014 handig als je bijvoorbeeld voor het avondeten met het hele gezin kookt." },
-    { title: "Vul een week automatisch in", body: "Liever niet elk moment los kiezen? \u201cVul week automatisch in\u201d kijkt eerst wat je al hebt opgeslagen en vult daarmee aan; alleen het tekort wordt nieuw gegenereerd \u2014 dat scheelt tijd en onnodige aanroepen." },
+    { title: "Vul een week automatisch in", body: "Liever niet elk moment los kiezen? \u201cVul week automatisch in\u201d vraagt eerst voor welke maaltijdmomenten (ontbijt, lunch, diner en/of snacks), kijkt dan wat je al hebt opgeslagen en vult daarmee aan; alleen het tekort wordt nieuw gegenereerd \u2014 dat scheelt tijd en onnodige aanroepen." },
     { title: "Bekijk je boodschappenlijst", body: "Vanuit een geplande week open je de boodschappenlijst \u2014 kies \u201cPer week (samengevoegd)\u201d om dezelfde ingredi\u00ebnten uit verschillende gerechten automatisch bij elkaar op te laten tellen en gegroepeerd per winkelcategorie te zien, of \u201cPer dag\u201d voor de ongecombineerde lijst." },
     { title: "Deel je boodschappenlijst", body: "Op het boodschappenscherm opent \u201cDelen en exporteren\u201d een menu: deel een live lijst via WhatsApp waarop jullie samen afvinken, stuur of kopieer de lijst als tekst, importeer hem in Bring! of exporteer als PDF. Heb je iets al in huis? Tik bij het product op \u201cNiet nodig\u201d: het telt dan niet mee bij delen, de PDF, Bring! en de kostenschatting (\u201cSchat de kosten\u201d)." },
     { title: "Laat een prepdag samenstellen", body: "Bovenaan een ingeplande week kun je een prepdag laten samenstellen: een geconsolideerd plan om zondag in bulk voor te bereiden, gebaseerd op precies de gerechten die je die week hebt gepland." },
@@ -3985,15 +4364,7 @@
     autoBtn.className = "ghost-btn";
     autoBtn.disabled = pw.autoFilling;
     autoBtn.textContent = pw.autoFilling ? "Week wordt ingevuld…" : "Vul week automatisch in";
-    autoBtn.onclick = function () {
-      askConfirm(
-        "Gebruik alleen opgeslagen gerechten, of vul ontbrekende recepten aan op basis van je voorkeuren? (langere wachttijd)",
-        function () { generateAutoWeek(pw, false); },
-        "Ook aanvullen",
-        "Alleen opgeslagen",
-        function () { generateAutoWeek(pw, true); }
-      );
-    };
+    autoBtn.onclick = function () { openAutofillDialog(pw); };
     actions.appendChild(autoBtn);
     var clearWeekBtn = document.createElement("button");
     clearWeekBtn.className = "ghost-btn";
@@ -4066,13 +4437,7 @@
         clearDayBtn.className = "plan-edit-btn";
         clearDayBtn.setAttribute("aria-label", "Maak dag leeg");
         clearDayBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>';
-        clearDayBtn.onclick = function () {
-          askConfirm("Maaltijden van " + d + " wissen?", function () {
-            PLAN_SLOTS.forEach(function (slot) { delete pw.slots[d + "|" + slot]; });
-            savePlannedWeeks();
-            render();
-          });
-        };
+        clearDayBtn.onclick = function () { openClearDayDialog(pw, d); };
         row.appendChild(clearDayBtn);
       }
 
@@ -6416,6 +6781,8 @@
       backFn = function () { goto("planday", { planWeekId: state.dayBackWeekId, planDayName: state.dayBackDayName }); };
     } else if (state.dayBackView === "library") {
       backFn = function () { goto("library"); };
+    } else if (state.dayBackView === "weeks") {
+      backFn = function () { goto("weeks"); };
     } else {
       backFn = function () { goto("week", { weekId: week.id }); };
     }
@@ -6695,15 +7062,39 @@
     return byType;
   }
 
-  function generateAutoWeek(pw, onlyExisting) {
+  // Tijdstempel uit het gerecht-id (bijv. "gen1727…_0"); 0 als er geen is.
+  function dishTimestamp(item) {
+    var m = String(item && item.day && item.day.id || "").match(/(\d{12,14})/);
+    return m ? Number(m[1]) : 0;
+  }
+
+  // Willekeurige keuze zonder herhaling, waarbij nieuwere gerechten meer kans hebben.
+  // Het nieuwste gerecht weegt 1, het 10e nieuwste ~0,4, het 20e ~0,25.
+  function pickWeightedRecent(list, n) {
+    var ranked = list.map(function (it, i) { return { it: it, ts: dishTimestamp(it), i: i }; });
+    ranked.sort(function (a, b) { return (b.ts - a.ts) || (a.i - b.i); });
+    var pool = ranked.map(function (r, rank) { return { it: r.it, w: 1 / (1 + rank * 0.15) }; });
+    var out = [];
+    while (out.length < n && pool.length) {
+      var total = pool.reduce(function (sum, p) { return sum + p.w; }, 0);
+      var x = Math.random() * total, k = 0;
+      for (; k < pool.length - 1; k++) { x -= pool[k].w; if (x <= 0) break; }
+      out.push(pool[k].it);
+      pool.splice(k, 1);
+    }
+    return out;
+  }
+
+  function generateAutoWeek(pw, onlyExisting, meals) {
     if (pw.autoFilling) return;
     pw.autoFillError = null;
+    var activeMeals = Array.isArray(meals) && meals.length ? meals : PLAN_MEALS.slice();
 
     try {
       var existingByType = collectExistingByType();
       var needed = {};
       var anyNeeded = false;
-      PLAN_MEALS.forEach(function (m) {
+      activeMeals.forEach(function (m) {
         var have = existingByType[m].length;
         var want = AUTOWEEK_COUNTS[m];
         if (have < want) { needed[m] = want - have; anyNeeded = true; }
@@ -6712,7 +7103,7 @@
       var finishFill = function (newDays) {
         var buckets = {};
         PLAN_MEALS.forEach(function (m) {
-          var pool = existingByType[m].slice(0, AUTOWEEK_COUNTS[m]);
+          var pool = pickWeightedRecent(existingByType[m], AUTOWEEK_COUNTS[m]);
           var extra = newDays.filter(function (d) { return d.mealType === m; }).map(function (d) {
             return { week: findWeek(d.__weekId), day: d };
           });
@@ -6725,6 +7116,7 @@
             var key = d + "|" + slot;
             if (pw.slots[key]) return;
             var m = SLOT_TO_MEALTYPE[slot];
+            if (activeMeals.indexOf(m) === -1) return;
             var bucket = buckets[m];
             if (!bucket || !bucket.length) return;
             var item = bucket[cursors[m] % bucket.length];
@@ -6734,7 +7126,9 @@
         });
         pw.autoFilling = false;
         savePlannedWeeks();
-        showToast("Week is automatisch ingevuld.");
+        var mealNames = activeMeals.map(function (m) { return m === "Snack" ? "snacks" : m.toLowerCase(); });
+        showToast(activeMeals.length === PLAN_MEALS.length ? "Week is automatisch ingevuld." :
+          "Week ingevuld voor " + mealNames.join(", ").replace(/, ([^,]*)$/, " en $1") + ".");
         render();
       };
 
@@ -7332,11 +7726,91 @@
     }, 1000);
   }
 
+  // ===== Tabbalk (mobiel) =====
+  var TAB_ICONS = {
+    start: '<path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/>',
+    ontwerpen: '<path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/><circle cx="12" cy="12" r="3"/>',
+    plannen: '<rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/>',
+    gerechten: '<path d="M5 4.5A1.5 1.5 0 0 1 6.5 3H19v15H6.5A1.5 1.5 0 0 0 5 19.5z"/><path d="M5 19.5A1.5 1.5 0 0 0 6.5 21H19M9 7h6"/>',
+    lijst: '<path d="M9 6h11M9 12h11M9 18h11"/><path d="m3.5 6 1 1 2-2M3.5 12l1 1 2-2M3.5 18l1 1 2-2"/>'
+  };
+  var TABS = [["start", "Start"], ["ontwerpen", "Ontwerpen"], ["plannen", "Plannen"], ["gerechten", "Gerechten"], ["lijst", "Lijst"]];
+  var TAB_OF_VIEW = { weeks: "start", guide: "start", prefs: "ontwerpen", plan: "plannen", planadd: "plannen", planweek: "plannen",
+    planday: "plannen", planprep: "plannen", planpick: "plannen", library: "gerechten" };
+  var TAB_ROOT_VIEWS = { weeks: true, prefs: true, plan: true, library: true };
+
+  function currentWeekPlan() {
+    var key = isoDateKey(getMonday(new Date()));
+    return plannedWeeks.filter(function (w) { return w.weekStart === key; })[0] || null;
+  }
+
+  function openShoppingCount() {
+    try {
+      var pw = currentWeekPlan();
+      if (!pw || !Object.keys(pw.slots || {}).length) return 0;
+      var cats = buildAggregatedShoppingList(buildPlanEntries(pw));
+      var n = 0;
+      CATEGORY_ORDER.forEach(function (c) { (cats[c] || []).forEach(function (it) { if (!shoppingChecked[it.key]) n++; }); });
+      return n;
+    } catch (e) { return 0; }
+  }
+
+  function activeTab() {
+    if (state.view === "planshopping" && state.tab === "lijst") return "lijst";
+    return TAB_OF_VIEW[state.view] || state.tab || "start";
+  }
+
+  function needDishesThen(fn) {
+    if (!hasAnyDishes()) {
+      askConfirm("Let op: er zijn nog geen recepten beschikbaar. Navigeer naar gerechten ontwerpen.", function () { goto("prefs", { tab: "ontwerpen" }); }, "Ok", "Nee");
+      return;
+    }
+    fn();
+  }
+
+  function onTab(id) {
+    if (state.view === "prefs") { savePrefs(); state.genSuccess = null; }
+    if (id === "start") goto("weeks", { tab: "start" });
+    else if (id === "ontwerpen") goto("prefs", { tab: "ontwerpen" });
+    else if (id === "plannen") needDishesThen(function () { goto("plan", { tab: "plannen" }); });
+    else if (id === "gerechten") needDishesThen(function () { goto("library", { tab: "gerechten" }); });
+    else if (id === "lijst") needDishesThen(function () {
+      var pw = currentWeekPlan() || addOrOpenPlannedWeek(getMonday(new Date()));
+      goto("planshopping", { tab: "lijst", planWeekId: pw.id });
+    });
+  }
+
+  function renderTabbar() {
+    var bar = document.getElementById("tabbar");
+    if (!bar) return;
+    var hidden = state.view === "cook" || state.view === "wizard";
+    document.body.classList.toggle("has-tabbar", !hidden);
+    var tab = activeTab();
+    state.tab = tab;
+    var isRoot = !!TAB_ROOT_VIEWS[state.view] || (state.view === "planshopping" && tab === "lijst");
+    document.body.classList.toggle("tab-root", isRoot);
+    if (hidden) return;
+    var open = openShoppingCount();
+    bar.innerHTML = "";
+    TABS.forEach(function (t) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = "tab";
+      if (t[0] === tab) b.setAttribute("aria-current", "page");
+      b.innerHTML = '<span class="tab-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+        TAB_ICONS[t[0]] + '</svg>' + (t[0] === "lijst" && open ? '<span class="tab-badge">' + (open > 99 ? "99+" : open) + '</span>' : "") +
+        '</span><span>' + t[1] + '</span>';
+      if (t[0] === "lijst" && open) b.setAttribute("aria-label", "Lijst, " + open + " open");
+      b.onclick = function () { onTab(t[0]); };
+      bar.appendChild(b);
+    });
+  }
+
   function render() {
     try {
-      if (!configLoaded) return renderLoading();
-      if (authState.mode === "reset" && authState.resetToken) return renderAuth();
-      if (!window.authToken && window.authRequired) return renderAuth();
+      if (!configLoaded) { document.body.classList.remove("has-tabbar"); return renderLoading(); }
+      if (authState.mode === "reset" && authState.resetToken) { document.body.classList.remove("has-tabbar"); return renderAuth(); }
+      if (!window.authToken && window.authRequired) { document.body.classList.remove("has-tabbar"); return renderAuth(); }
       if (state.view === "weeks") renderWeeks();
       else if (state.view === "library") renderLibrary();
       else if (state.view === "guide") renderGuide();
@@ -7359,11 +7833,18 @@
       else if (state.view === "cook") renderCook();
       else renderWeeks();
     } catch (e) {
+      renderTabbarSafe();
       console.error("Render error op scherm '" + state.view + "':", e);
       document.getElementById("app").innerHTML =
         '<div class="empty-hint">Er ging iets mis bij het laden van dit scherm.<br><br>' +
         '<span style="font-size:12px;color:var(--muted);">' + (e && e.message ? String(e.message).replace(/</g,"&lt;") : "Onbekende fout") + '</span></div>';
+      return;
     }
+    renderTabbarSafe();
+  }
+
+  function renderTabbarSafe() {
+    try { renderTabbar(); } catch (err) { console.error("Tabbalk", err); }
   }
 
   // ---------- Startup: ask the server whether login is currently required ----------
