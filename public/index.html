@@ -3290,13 +3290,13 @@
 
     var card = document.createElement("div");
     card.className = "today-card";
-    if (!agg) {
-      var empty = document.createElement("div");
-      empty.className = "today-empty";
-      var p = document.createElement("p");
-      p.textContent = "Voor vandaag staat nog niets gepland. Plan je dag, dan zie je hier je calorieën en macro's.";
+    // Ook zonder planning tonen we het dagdoel (op basis van profiel en doel), met alles nog op nul.
+    var emptyDay = !agg;
+    if (emptyDay) agg = { kcal: 0, khG: 0, eiwitG: 0, vetG: 0 };
+    function planTodayButton() {
       var btn = document.createElement("button");
       btn.className = "primary-btn";
+      btn.id = "planTodayBtn";
       btn.textContent = "Plan vandaag";
       btn.onclick = function () {
         if (!hasAnyDishes()) {
@@ -3306,21 +3306,17 @@
         var w = pw || addOrOpenPlannedWeek(getMonday(new Date()));
         goto("planday", { planWeekId: w.id, planDayName: dayName, tab: "plannen" });
       };
-      empty.appendChild(p);
-      empty.appendChild(btn);
-      card.appendChild(empty);
-      wrapToday.appendChild(card);
-      return;
+      return btn;
     }
 
     var target = dailyKcalTarget();
     var t = goalTarget();
     var r = 40, c = 2 * Math.PI * r;
-    var frac = target ? Math.min(1, agg.kcal / target) : 1;
+    var frac = target ? Math.min(1, agg.kcal / target) : (agg.kcal ? 1 : 0);
     card.innerHTML = '<svg class="today-ring" viewBox="0 0 96 96" role="img" aria-label="' + agg.kcal + ' kcal gepland' + (target ? ' van ' + target : '') + '">' +
       '<circle cx="48" cy="48" r="' + r + '" fill="none" stroke="rgba(26,20,12,0.09)" stroke-width="8"/>' +
-      '<circle cx="48" cy="48" r="' + r + '" fill="none" stroke="var(--ring, #C9973F)" stroke-width="8" stroke-linecap="round" stroke-dasharray="' +
-      (c * frac).toFixed(1) + ' ' + c.toFixed(1) + '" transform="rotate(-90 48 48)"/>' +
+      (frac > 0 ? '<circle cx="48" cy="48" r="' + r + '" fill="none" stroke="var(--ring, #C9973F)" stroke-width="8" stroke-linecap="round" stroke-dasharray="' +
+      (c * frac).toFixed(1) + ' ' + c.toFixed(1) + '" transform="rotate(-90 48 48)"/>' : '') +
       '<text class="num" x="48" y="50" text-anchor="middle">' + agg.kcal + '</text>' +
       '<text class="lbl" x="48" y="64" text-anchor="middle">' + (target ? '/ ' + target + ' kcal' : 'kcal gepland') + '</text></svg>';
     var macros = document.createElement("div");
@@ -3337,9 +3333,20 @@
     card.appendChild(macros);
     var note = document.createElement("div");
     note.className = "today-note";
-    note.textContent = target ? "Gepland voor vandaag, in gram. Je dagdoel is een schatting op basis van je profiel en doel."
+    note.textContent = emptyDay
+      ? (target ? "Nog niets gepland voor vandaag. Je dagdoel is een schatting op basis van je profiel en doel; plan je dag om het te vullen."
+                : "Nog niets gepland voor vandaag. Vul lengte, gewicht en leeftijd in bij Ontwerpen om je dagdoel te zien.")
+      : target ? "Gepland voor vandaag, in gram. Je dagdoel is een schatting op basis van je profiel en doel."
       : "Gepland voor vandaag. Vul lengte, gewicht en leeftijd in bij Ontwerpen om je dagdoel te zien.";
     card.appendChild(note);
+    if (emptyDay) {
+      var emptyActions = document.createElement("div");
+      emptyActions.className = "today-empty";
+      emptyActions.appendChild(planTodayButton());
+      card.appendChild(emptyActions);
+      wrapToday.appendChild(card);
+      return;
+    }
     wrapToday.appendChild(card);
 
     var listCol = document.createElement("div");
