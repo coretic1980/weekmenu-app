@@ -1182,6 +1182,7 @@ function buildPhotoPrompt(p, mode, mealType) {
     '"steps": [{"title": "korte staptitel", "content": "volledige instructie", "timer_seconds": 300}]}]\n' +
     '"mealType" moet exact één van deze waarden zijn: ' + types.join(", ") + (types.length > 1 ? " (kies het moment dat het best bij het gerecht past)" : "") + ". " +
     "\"bereidingstijd_minuten\" is de totale realistische bereidingstijd in hele minuten. " + FOTO_TERM_LINE +
+    "Houd het beknopt: hoogstens 6 bereidingsstappen van 1 tot 3 zinnen, \"benodigdheden\" in één korte regel. " +
     "timer_seconds alleen toevoegen bij stappen met wachttijd; anders weglaten." +
     nevoPromptText(balanza);
 }
@@ -1202,7 +1203,9 @@ function runPhotoAction(body, params) {
     list.forEach(function (d) { if (d && mealType) d.mealType = mealType; });
     return applyNevoToParsed(list);
   };
-  return generateWithBalansRetry(buildPhotoPrompt(params, mode, mealType), mode === "balanza" ? params.goal : null, post, params.dietStyle, { image: { mediaType: mediaType, data: data } });
+  // Eén bijstelronde en een kortere tijdslimiet: bij een foto telt snelheid zwaarder dan het laatste procentje Balans.
+  return generateWithBalansRetry(buildPhotoPrompt(params, mode, mealType), mode === "balanza" ? params.goal : null, post, params.dietStyle,
+    { image: { mediaType: mediaType, data: data }, repairRounds: 1, timeBudgetMs: 45000 });
 }
 
 function buildBackgroundGeneratePrompt(needed, p) {
@@ -1539,6 +1542,8 @@ function summarizeProgress(usage) {
 
 function generateWithBalansRetry(prompt, goal, post, dietStyle, opts) {
   var image = opts && opts.image ? opts.image : null;   // alleen de eerste aanroep krijgt de foto; bijstellen werkt op de tekst
+  var maxRounds = opts && opts.repairRounds !== undefined ? opts.repairRounds : BALANS_REPAIR_ROUNDS;
+  var budgetMs = opts && opts.timeBudgetMs ? opts.timeBudgetMs : BALANS_TIME_BUDGET_MS;
   prompt = adaptPromptToDiet(prompt, dietStyle);
   if (!goal && !DIET_FORBIDDEN_TEXT[dietStyle]) return callAnthropicOnce(prompt, null, null, image).then(function (parsed) { return post ? post(parsed) : parsed; });
   var t0 = Date.now();
@@ -1555,7 +1560,7 @@ function generateWithBalansRetry(prompt, goal, post, dietStyle, opts) {
     var bad = [];
     dishes.forEach(function (d, i) { if (dishNeedsRepair(d, goal, dietStyle)) bad.push(i); });
     track.total = dishes.length; track.ok = dishes.length - bad.length;
-    if (!bad.length || round > BALANS_REPAIR_ROUNDS || Date.now() - t0 > BALANS_TIME_BUDGET_MS) return Promise.resolve(done(finalizeDiet(dishes, dietStyle)));
+    if (!bad.length || round > maxRounds || Date.now() - t0 > budgetMs) return Promise.resolve(done(finalizeDiet(dishes, dietStyle)));
     track.stage = "repair"; track.fixing = bad.length; track.round = round;
     var subset = bad.map(function (i) { return dishes[i]; });
     return callAnthropicOnce(adaptPromptToDiet(buildRepairPrompt(subset, goal, dietStyle), dietStyle)).then(function (fixed) {

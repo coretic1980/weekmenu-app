@@ -4352,7 +4352,7 @@
   }
 
   // ---------- Gerecht van foto ----------
-  // De foto wordt in de browser verkleind (max. 1280 px, JPEG) en alleen meegestuurd om het gerecht te maken; hij wordt niet bewaard.
+  // De foto wordt in de browser verkleind (max. 1024 px, JPEG) en alleen meegestuurd om het gerecht te maken; hij wordt niet bewaard.
   var PHOTO_MEAL_OPTIONS = [["", "Automatisch"], ["Ontbijt", "Ontbijt"], ["Lunch", "Lunch"], ["Diner", "Diner"], ["Snack", "Snack"]];
   function compressPhoto(file) {
     return new Promise(function (resolve, reject) {
@@ -4360,7 +4360,7 @@
       var img = new Image();
       img.onload = function () {
         try {
-          var maxDim = 1280, quality = 0.82, out = null;
+          var maxDim = 1024, quality = 0.8, out = null;   // genoeg detail voor de AI, en sneller te versturen en te verwerken
           for (var tries = 0; tries < 5; tries++) {
             var scale = Math.min(1, maxDim / Math.max(img.naturalWidth, img.naturalHeight));
             var w = Math.max(1, Math.round(img.naturalWidth * scale)), h = Math.max(1, Math.round(img.naturalHeight * scale));
@@ -4471,7 +4471,8 @@
       if (!list || !list.length) throw new Error("Onverwacht antwoordformaat.");
       var days = dishesFromGenerated(list.slice(0, 1), meals);
       days[0].vanFoto = mode;
-      return Promise.resolve(moduleOn("images") ? Promise.all(days.map(fetchImageForDish)) : null).then(function () {
+      // Niet op de sfeerfoto wachten: het recept opent meteen en de foto wordt daar op de achtergrond opgehaald.
+      return Promise.resolve().then(function () {
         stopGenTicker(); busyEnd();
         state.generating = false;
         addToCacheLibrary(days);
