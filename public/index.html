@@ -523,7 +523,27 @@
   :root[data-theme="light"] .tile-icon:hover { color: #0F2219; background: rgba(15, 34, 25, 0.06); }
   .tile-row-1 > .card, .tile-row-1 > .plan-slot { padding-right: 50px; }
   .tile-row-2 > .card.day-line { padding-right: 84px; }
-  .tile-row-2 > .compact-slot .cs-top { padding-right: 70px; }
+  .tile-row-2 > .compact-slot .cs-top { padding-right: 118px; min-height: 30px; }
+  .tile-row-2 > .compact-slot ~ .tile-actions { top: 6px; }
+  .persons-chip { appearance: none; border: 1px solid rgba(26, 20, 12, 0.14); background: transparent; height: 30px; margin: 2px 4px 0 0;
+    padding: 0 9px; border-radius: 999px; display: inline-flex; align-items: center; gap: 4px; cursor: pointer;
+    font: 700 12.5px "Public Sans", sans-serif; color: #7A6B55; font-variant-numeric: tabular-nums; }
+  .persons-chip:hover, .persons-chip:focus-visible { background: rgba(26, 20, 12, 0.07); color: #1A140C; outline: none; }
+  .persons-chip.is-multi { background: #EADFC6; border-color: transparent; color: #1A140C; }
+  :root[data-theme="light"] .persons-chip { color: #55685D; border-color: rgba(15, 34, 25, 0.14); }
+  :root[data-theme="light"] .persons-chip.is-multi { background: #DDF3E5; color: #14543A; }
+  .servings-box { max-width: 340px; display: flex; flex-direction: column; gap: 14px; text-align: center; }
+  .servings-box .autofill-sub { margin: -8px 0 0; }
+  .servings-stepper { display: flex; align-items: center; justify-content: center; gap: 22px; }
+  .servings-btn { appearance: none; width: 52px; height: 52px; border-radius: 50%; border: 1px solid var(--line); background: var(--bg);
+    color: var(--ink); font-size: 26px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  .servings-btn:disabled { opacity: 0.35; cursor: default; }
+  .servings-value { display: flex; flex-direction: column; align-items: center; min-width: 70px; }
+  .servings-value b { font-family: "Fraunces", serif; font-size: 40px; line-height: 1; font-variant-numeric: tabular-nums; }
+  .servings-value span { font-size: 13px; color: var(--muted); margin-top: 4px; }
+  .servings-presets { display: flex; justify-content: center; gap: 6px; flex-wrap: wrap; }
+  .servings-presets .chip { min-width: 42px; min-height: 38px; padding: 8px 0; }
+  .servings-hint { font-size: 12.5px; color: var(--muted); margin: -4px 0 0; }
   .tile-row-2 > .card:not(.day-line) { padding-right: 84px; }
   .day-line ~ .tile-actions { top: 50%; transform: translateY(-50%); }
   @media (min-width: 701px) and (min-height: 501px), (min-width: 701px) and (orientation: portrait) {
@@ -574,7 +594,7 @@
 
   /* ===== Grote schermen: zijbalk-navigatie en meer kolommen ===== */
   .tabbar-brand { display: none; }
-  @media (min-width: 1024px) and (min-height: 501px) {
+  @media (min-width: 701px) and (min-height: 501px) {
     body.has-tabbar .tabbar {
       display: flex; flex-direction: column; gap: 4px; position: fixed; top: 0; bottom: 0; left: 0; right: auto; width: 236px; z-index: 40;
       padding: calc(22px + env(safe-area-inset-top, 0px)) 14px 20px; border-radius: 0; box-shadow: none;
@@ -596,17 +616,26 @@
     body.has-tabbar main { width: 100%; max-width: 1160px; margin: 0 auto; padding: 32px 32px 64px; }
     body.has-tabbar .home-nav-tiles, body.has-tabbar .topbar .backbtn[aria-label="Naar startscherm"] { display: none; }
     body.has-tabbar .busybar { left: 236px; }
+    body.has-tabbar .topbar .brandmark { display: none; }
+    body.has-tabbar.tab-root .topbar .backbtn[aria-label="Terug"] { display: none; }
     body.has-tabbar[data-view="day"] main, body.has-tabbar[data-view="guide"] main, body.has-tabbar[data-view="prefs"] main,
     body.has-tabbar[data-view="planprep"] main, body.has-tabbar[data-view="cook"] main, body.has-tabbar[data-view="account"] main,
     body.has-tabbar[data-view="settings"] main { max-width: 860px; }
+  }
+  @media (min-width: 1024px) and (min-height: 501px) {
     body.has-tabbar .wide-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
     body.has-tabbar .wide-grid > * { margin: 0; }
     body.has-tabbar .pickgroup, body.has-tabbar .pick-list, body.has-tabbar .plan-day { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-    body.has-tabbar .topbar .brandmark { display: none; }
-    body.has-tabbar.tab-root .topbar .backbtn[aria-label="Terug"] { display: none; }
     body.has-tabbar .home-today { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 24px; align-items: start; }
     body.has-tabbar .home-today > .today-card:only-child { grid-column: 1 / -1; }
     body.has-tabbar .home-today > .today-card { position: sticky; top: 96px; }
+  }
+  @media (min-width: 701px) and (max-width: 1023px) and (min-height: 501px) {
+    body.has-tabbar .tabbar { width: 208px; padding-left: 10px; padding-right: 10px; }
+    body.has-tabbar #app { margin-left: 208px; }
+    body.has-tabbar .busybar { left: 208px; }
+    body.has-tabbar main { padding: 26px 24px 56px; }
+    body.has-tabbar header.topbar { padding-left: 24px; padding-right: 24px; }
   }
   @media (min-width: 1440px) and (min-height: 501px) {
     body.has-tabbar .tabbar { width: 260px; padding-left: 20px; padding-right: 20px; }
@@ -1251,6 +1280,59 @@
   }
 
   var toastTimer = null;
+  // Dialoog om het aantal personen voor een ingepland gerecht te kiezen.
+  function openServingsDialog(assigned, mealName, dishName) {
+    var ov = document.getElementById("servingsOverlay");
+    if (!ov) {
+      ov = document.createElement("div");
+      ov.id = "servingsOverlay";
+      ov.className = "confirm-overlay";
+      ov.setAttribute("role", "dialog");
+      ov.setAttribute("aria-modal", "true");
+      ov.innerHTML = '<div class="confirm-box servings-box"><h2 class="autofill-title">Aantal personen</h2><p class="autofill-sub" id="servingsSub"></p>' +
+        '<div class="servings-stepper"><button type="button" class="servings-btn" id="servMinus" aria-label="Minder personen">\u2212</button>' +
+        '<div class="servings-value" aria-live="polite"><b id="servValue">1</b><span id="servUnit">persoon</span></div>' +
+        '<button type="button" class="servings-btn" id="servPlus" aria-label="Meer personen">+</button></div>' +
+        '<div class="servings-presets" id="servPresets"></div>' +
+        '<p class="servings-hint">Telt mee in de boodschappenlijst en de prepdag.</p>' +
+        '<button type="button" class="primary-btn" id="servDone">Klaar</button></div>';
+      document.body.appendChild(ov);
+    }
+    var val = assigned.servings || 1;
+    var start = val;
+    var subEl = document.getElementById("servingsSub");
+    subEl.textContent = mealName + " \u00b7 " + dishName;
+    var presets = document.getElementById("servPresets");
+    function sync() {
+      document.getElementById("servValue").textContent = val;
+      document.getElementById("servUnit").textContent = val === 1 ? "persoon" : "personen";
+      document.getElementById("servMinus").disabled = val <= 1;
+      document.getElementById("servPlus").disabled = val >= 20;
+      presets.innerHTML = "";
+      [1, 2, 3, 4, 5, 6].forEach(function (n) {
+        var c = document.createElement("button");
+        c.type = "button";
+        c.className = "chip" + (n === val ? " selected" : "");
+        c.textContent = n;
+        c.setAttribute("aria-pressed", n === val ? "true" : "false");
+        c.onclick = function () { val = n; sync(); };
+        presets.appendChild(c);
+      });
+    }
+    function close(save) {
+      ov.classList.remove("active");
+      if (save && val !== start) { assigned.servings = val; savePlannedWeeks(); render(); }
+    }
+    document.getElementById("servMinus").onclick = function () { if (val > 1) { val--; sync(); } };
+    document.getElementById("servPlus").onclick = function () { if (val < 20) { val++; sync(); } };
+    document.getElementById("servDone").onclick = function () { close(true); };
+    ov.onclick = function (e) { if (e.target === ov) close(true); };
+    ov.onkeydown = function (e) { if (e.key === "Escape") close(false); };
+    sync();
+    ov.classList.add("active");
+    setTimeout(function () { try { document.getElementById("servDone").focus(); } catch (e) {} }, 50);
+  }
+
   // Toast met een "Ongedaan maken"-knop, zodat een gewiste maaltijd snel terug kan.
   var undoTimer = null;
   function showUndoToast(message, onUndo) {
@@ -4853,51 +4935,15 @@
 
       if (assigned) {
         var curServings = assigned.servings || 1;
-        var stepper = document.createElement("span");
-        stepper.className = "cs-stepper";
-        stepper.onclick = function (e) { e.stopPropagation(); };
-
-        var minusBtn = document.createElement("span");
-        minusBtn.setAttribute("role", "button");
-        minusBtn.setAttribute("tabindex", "0");
-        minusBtn.className = "cs-step" + (curServings <= 1 ? " is-disabled" : "");
-        minusBtn.textContent = "\u2212";
-        minusBtn.setAttribute("aria-label", "Minder personen");
-        minusBtn.onclick = function (e) {
-          e.stopPropagation();
-          if ((assigned.servings || 1) > 1) {
-            assigned.servings = (assigned.servings || 1) - 1;
-            savePlannedWeeks();
-            render();
-          }
-        };
-
-        var countLabel = document.createElement("span");
-        countLabel.className = "cs-count";
-        countLabel.title = curServings + " " + (curServings === 1 ? "persoon" : "personen");
-        countLabel.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg>';
-        countLabel.appendChild(document.createTextNode(String(curServings)));
-
-        var plusBtn = document.createElement("span");
-        plusBtn.setAttribute("role", "button");
-        plusBtn.setAttribute("tabindex", "0");
-        plusBtn.className = "cs-step";
-        plusBtn.textContent = "+";
-        plusBtn.setAttribute("aria-label", "Meer personen");
-        plusBtn.onclick = function (e) {
-          e.stopPropagation();
-          assigned.servings = (assigned.servings || 1) + 1;
-          savePlannedWeeks();
-          render();
-        };
-        [minusBtn, plusBtn].forEach(function (btn) {
-          btn.onkeydown = function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); btn.onclick(e); } };
-        });
-
-        stepper.appendChild(minusBtn);
-        stepper.appendChild(countLabel);
-        stepper.appendChild(plusBtn);
-        bottom.appendChild(stepper);
+        var personsChip = document.createElement("button");
+        personsChip.type = "button";
+        personsChip.className = "persons-chip" + (curServings > 1 ? " is-multi" : "");
+        personsChip.setAttribute("aria-label", "Aantal personen: " + curServings + ". Wijzigen");
+        personsChip.title = curServings + " " + (curServings === 1 ? "persoon" : "personen");
+        personsChip.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg><span>' + curServings + '</span>';
+        personsChip.onclick = (function (asg, mealName, dishName) {
+          return function (e) { e.stopPropagation(); openServingsDialog(asg, mealName, dishName); };
+        })(assigned, m, assigned.name);
       }
       slot.appendChild(bottom);
       if (assignedDay) {
@@ -4915,7 +4961,7 @@
         editBtn.setAttribute("aria-label", "Wijzig gerecht");
         editBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>';
         editBtn.onclick = function () { goto("planpick", { pickFilter: null, planWeekId: pw.id, planSlotKey: key }); };
-        var slotActs = document.createElement("div"); slotActs.className = "tile-actions"; slotActs.appendChild(editBtn); row.appendChild(slotActs); row.classList.add("tile-row", "tile-row-2");
+        var slotActs = document.createElement("div"); slotActs.className = "tile-actions"; if (personsChip) slotActs.appendChild(personsChip); slotActs.appendChild(editBtn); row.appendChild(slotActs); row.classList.add("tile-row", "tile-row-2");
         var delSlotBtn = document.createElement("button");
         delSlotBtn.className = "tile-icon tile-icon-danger";
         delSlotBtn.setAttribute("aria-label", "Wis " + m.toLowerCase());
@@ -8361,7 +8407,7 @@
     });
   }
 
-  var SIDEBAR_MQ = "(min-width: 1024px) and (min-height: 501px)";
+  var SIDEBAR_MQ = "(min-width: 701px) and (min-height: 501px)";
   function isSidebarMode() {
     try { return window.matchMedia(SIDEBAR_MQ).matches; } catch (e) { return false; }
   }
