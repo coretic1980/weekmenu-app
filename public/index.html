@@ -223,6 +223,19 @@
     z-index: 60; text-align: center;
   }
   .toast.active { opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto; }
+  .update-banner { position: fixed; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 10px); transform: translate(-50%, -16px);
+    width: min(92vw, 520px); z-index: 120; display: flex; align-items: center; gap: 10px; padding: 10px 10px 10px 14px; border-radius: 14px;
+    background: #1A140C; color: #F6F0E3; box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35); font-size: 13.5px; line-height: 1.4;
+    opacity: 0; pointer-events: none; transition: opacity 0.25s ease, transform 0.25s ease; }
+  .update-banner.active { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+  :root[data-theme="light"] .update-banner { background: #12392A; color: #F2FAF5; }
+  .update-dot { width: 9px; height: 9px; border-radius: 50%; background: #E0AE55; flex: none; animation: busybar-pulse 1.4s ease-in-out infinite; }
+  :root[data-theme="light"] .update-dot { background: #8FE3B4; }
+  .update-text { flex: 1; min-width: 0; }
+  .update-btn { appearance: none; border: none; border-radius: 10px; padding: 8px 12px; font: 700 13px "Public Sans", sans-serif; cursor: pointer;
+    background: #E0AE55; color: #1A140C; white-space: nowrap; }
+  :root[data-theme="light"] .update-btn { background: #8FE3B4; color: #0F2219; }
+  @media (prefers-reduced-motion: reduce) { .update-banner { transition: none; } .update-dot { animation: none; } }
   .toast-undo { appearance: none; border: none; background: none; color: inherit; font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; padding: 0 0 0 6px; }
   .guide-step { display: flex; gap: 16px; align-items: flex-start; }
   .guide-num {
@@ -8604,6 +8617,110 @@ if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("/sw.js").catch(function () {});
   });
 }
+
+// ===== Automatisch verversen na een nieuwe deployment =====
+(function () {
+  var current = null, pending = null, countdown = null, waitTimer = null;
+  var POLL_MS = 5 * 60 * 1000;
+
+  function fetchVersion() {
+    return fetch("/api/version", { cache: "no-store" }).then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) { return d && d.version ? String(d.version) : null; })
+      .catch(function () { return null; });
+  }
+
+  // Niet verversen terwijl iemand midden in iets zit: genereren, koken, een open dialoog of typen.
+  function isBusy() {
+    var b = document.body;
+    if (!b) return false;
+    if (b.classList.contains("busy-active")) return true;
+    if (b.getAttribute("data-view") === "cook") return true;
+    if (document.querySelector(".confirm-overlay.active, .sheet-overlay.active, .pdf-preview-overlay.active")) return true;
+    var a = document.activeElement;
+    if (a && (a.tagName === "INPUT" || a.tagName === "TEXTAREA") && a.value) return true;
+    return false;
+  }
+
+  function banner() {
+    var el = document.getElementById("updateBanner");
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "updateBanner";
+      el.className = "update-banner";
+      el.setAttribute("role", "status");
+      el.innerHTML = '<span class="update-dot" aria-hidden="true"></span><span class="update-text" id="updateText"></span>' +
+        '<button type="button" class="update-btn" id="updateNow">Nu bijwerken</button>';
+      document.body.appendChild(el);
+      document.getElementById("updateNow").onclick = function () { doReload(); };
+    }
+    return el;
+  }
+
+  function doReload() {
+    clearInterval(countdown); clearTimeout(waitTimer);
+    try { sessionStorage.setItem("balanza_updated", pending || "1"); } catch (e) {}
+    var go = function () { location.reload(); };
+    try {
+      if (navigator.serviceWorker && navigator.serviceWorker.getRegistration) {
+        navigator.serviceWorker.getRegistration().then(function (r) { return r ? r.update() : null; }).then(go, go);
+        setTimeout(go, 1500);
+        return;
+      }
+    } catch (e) {}
+    go();
+  }
+
+  function startCountdown() {
+    var el = banner(), txt = document.getElementById("updateText");
+    el.classList.add("active");
+    if (isBusy()) {
+      txt.textContent = "Er is een nieuwe versie van Balanza. Hij wordt geladen zodra je klaar bent.";
+      clearTimeout(waitTimer);
+      waitTimer = setTimeout(startCountdown, 3000);
+      return;
+    }
+    var left = 5;
+    txt.textContent = "Nieuwe versie van Balanza. Wordt over " + left + " seconden bijgewerkt.";
+    clearInterval(countdown);
+    countdown = setInterval(function () {
+      if (isBusy()) { clearInterval(countdown); startCountdown(); return; }
+      left--;
+      if (left <= 0) { doReload(); return; }
+      txt.textContent = "Nieuwe versie van Balanza. Wordt over " + left + " seconde" + (left === 1 ? "" : "n") + " bijgewerkt.";
+    }, 1000);
+  }
+
+  function check() {
+    if (pending) return;
+    fetchVersion().then(function (v) {
+      if (!v) return;
+      if (!current) { current = v; return; }
+      if (v !== current) { pending = v; startCountdown(); }
+    });
+  }
+
+  // Na het verversen: korte bevestiging.
+  try {
+    if (sessionStorage.getItem("balanza_updated")) {
+      sessionStorage.removeItem("balanza_updated");
+      window.addEventListener("load", function () {
+        setTimeout(function () {
+          var t = document.getElementById("toast"), tt = document.getElementById("toastText");
+          if (!t || !tt) return;
+          tt.textContent = "Balanza is bijgewerkt naar de nieuwste versie.";
+          t.classList.add("active");
+          setTimeout(function () { t.classList.remove("active"); }, 4000);
+        }, 600);
+      });
+    }
+  } catch (e) {}
+
+  check();
+  setInterval(check, POLL_MS);
+  document.addEventListener("visibilitychange", function () { if (document.visibilityState === "visible") check(); });
+  window.addEventListener("online", check);
+  window.addEventListener("focus", check);
+})();
 </script>
 </body>
 </html>

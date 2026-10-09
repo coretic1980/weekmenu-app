@@ -4506,8 +4506,27 @@ var guardedBring = moduleGuard("bring", handleListBring, function (req, res, s) 
   res.end(moduleOffBody("bring", s).message);
 });
 
+// Versie van de app: verandert alleen als de frontend echt verandert, zodat open apps na een deploy
+// weten dat ze moeten verversen (een herstart zonder wijzigingen triggert geen verversing).
+var APP_VERSION = (function () {
+  try {
+    var h = crypto.createHash("sha1");
+    ["index.html", "sw.js"].forEach(function (f) {
+      try { h.update(fs.readFileSync(path.join(PUBLIC_DIR, f))); } catch (e) {}
+    });
+    return h.digest("hex").slice(0, 12);
+  } catch (e) {
+    return String(process.env.RENDER_GIT_COMMIT || Date.now()).slice(0, 12);
+  }
+})();
+
 var server = http.createServer(function (req, res) {
   var url = new URL(req.url, "http://localhost");
+
+  if (req.method === "GET" && url.pathname === "/api/version") {
+    res.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store, max-age=0" });
+    return res.end(JSON.stringify({ version: APP_VERSION }));
+  }
 
   if (req.method === "POST" && url.pathname === "/api/generate") return handleGenerate(req, res);
   var jobMatch = req.method === "GET" ? url.pathname.match(/^\/api\/generate\/job\/([a-f0-9]{32})$/) : null;
