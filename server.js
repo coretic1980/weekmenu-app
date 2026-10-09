@@ -1396,37 +1396,108 @@ function callAnthropicOnce(prompt, model, maxTokens) {
 // prep/price requests have no macros to score and skip this entirely.
 // "post" mag het antwoord aanpassen vóórdat het op de Balans-score wordt beoordeeld (bijv. de NEVO-herberekening
 // van de macro's): zo wordt er geretryd op de echte, uitgerekende macro's in plaats van de AI-schatting.
+var BALANS_REPAIR_ROUNDS = 2;          // hoeveel keer we alleen de afwijkende gerechten laten bijstellen
+var BALANS_TIME_BUDGET_MS = 110000;    // daarna leveren we het beste resultaat tot nu toe
+
+function dishMacroPcts(d) {
+  var kcal = Number(d && d.kcal) || 0;
+  if (!kcal) return null;
+  return { kh: Math.round(Number(d.kh_g || 0) * 4 / kcal * 100), eiwit: Math.round(Number(d.eiwit_g || 0) * 4 / kcal * 100), vet: Math.round(Number(d.vet_g || 0) * 9 / kcal * 100) };
+}
+function dishNeedsRepair(d, goal, dietStyle) {
+  if (dishDietViolations(d, dietStyle).length) return true;
+  return !!goal && dishBalans(d, goal, dietStyle) < BALANS_MIN_THRESHOLD;
+}
+// Alleen de gerechten die afwijken worden bijgesteld (kleine, snelle aanroep) in plaats van alles opnieuw te maken.
+function buildRepairPrompt(dishes, goal, dietStyle) {
+  var t = goalTargetFor(goal, dietStyle);
+  var names = { kh: "koolhydraten", eiwit: "eiwit", vet: "vet" };
+  var lines = dishes.map(function (d, i) {
+    var pc = dishMacroPcts(d), bits = [];
+    if (goal && pc) {
+      ["kh", "eiwit", "vet"].forEach(function (k) {
+        var diff = pc[k] - t[k];
+        if (Math.abs(diff) > 3) bits.push((diff > 0 ? "te veel " : "te weinig ") + names[k] + " (" + (diff > 0 ? "+" : "") + diff + ")");
+      });
+    }
+    var viol = dishDietViolations(d, dietStyle);
+    return (i + 1) + ". \"" + String(d.name || "gerecht") + "\"" + (pc ? ": nu " + pc.kh + "% koolhydraten, " + pc.eiwit + "% eiwit, " + pc.vet + "% vet" : "") +
+      (bits.length ? " \u2014 " + bits.join(", ") : "") +
+      (viol.length ? " \u2014 bevat ingrediënten die niet " + String(dietStyle).toLowerCase() + " zijn: " + viol.slice(0, 5).join(", ") : "");
+  });
+  var slim = dishes.map(function (d) {
+    var o = {};
+    ["name", "mealType", "kcal", "kh_g", "eiwit_g", "vet_g", "bereidingstijd_minuten", "foto_zoekterm", "benodigdheden", "ingredienten", "steps"].forEach(function (k) { if (d[k] !== undefined) o[k] = d[k]; });
+    return o;
+  });
+  return "Hieronder staan " + dishes.length + " gerechten in JSON. De macro's zijn nagerekend met het NEVO-bestand" +
+    (goal ? " en passen nog niet goed bij het doel \"" + goal + "\" (streef: " + t.kh + "% koolhydraten, " + t.eiwit + "% eiwit, " + t.vet + "% vet)" : "") + ".\n" +
+    lines.join("\n") + "\n\n" +
+    "Stel elk gerecht bij zodat elke macro binnen 3 procentpunt van het doel komt: pas hoeveelheden aan, voeg een eiwitrijke bron toe of vervang een ingrediënt " +
+    "(bijv. minder olie, kaas, noten, rijst, pasta of brood; meer van de eiwitbron). Behoud de naam (of een kleine aanpassing daarvan), het karakter, de keuken, " +
+    "het maaltijdmoment en ongeveer hetzelfde aantal kcal. Werk ingrediënten, kcal, kh_g, eiwit_g, vet_g en de bereidingsstappen bij zodat alles klopt.\n" +
+    dietHardRuleText(dietStyle) +
+    "Gerechten: " + JSON.stringify(slim) + "\n" +
+    "Geef ALLEEN geldig JSON terug: een array van EXACT " + dishes.length + " objecten, in dezelfde volgorde en met exact hetzelfde schema als de invoer, " +
+    "geen markdown, geen uitleg erbuiten." + nevoPromptText();
+}
+
 function generateWithBalansRetry(prompt, goal, post, dietStyle) {
   prompt = adaptPromptToDiet(prompt, dietStyle);
   if (!goal && !DIET_FORBIDDEN_TEXT[dietStyle]) return callAnthropicOnce(prompt).then(function (parsed) { return post ? post(parsed) : parsed; });
+  var t0 = Date.now();
 
-  var bestParsed = null;
-  var bestScore = -Infinity;
-  var attempt = 0;
-  var currentPrompt = prompt;
-
-  function tryOnce() {
-    attempt++;
-    return callAnthropicOnce(currentPrompt).then(function (parsed) {
-      if (post) parsed = post(parsed);
-      var violations = dietViolationCount(parsed, dietStyle);
-      // Overtreding van de voedingsstijl weegt zwaarder dan elke balans-score.
-      var score = (goal ? minBalans(parsed, goal, dietStyle) : 100) - violations * 1000;
-      if (score > bestScore) { bestScore = score; bestParsed = parsed; }
-      if ((violations === 0 && (!goal || score >= BALANS_MIN_THRESHOLD)) || attempt >= BALANS_MAX_ATTEMPTS) {
-        return finalizeDiet(bestParsed, dietStyle);
-      }
-      if (violations) {
-        var found = [];
-        (Array.isArray(parsed) ? parsed : [parsed]).forEach(function (d) { dishDietViolations(d, dietStyle).forEach(function (h) { if (found.indexOf(h) === -1) found.push(h); }); });
-        currentPrompt = prompt + "\nLET OP: een vorige poging bevatte ingrediënten die niet " + dietStyle.toLowerCase() + " zijn (" +
-          found.slice(0, 8).join(", ") + "). Dat is niet toegestaan; maak alle gerechten volledig " + dietStyle.toLowerCase() + ".";
-      }
-      return tryOnce();
+  // Een lijst gerechten: eerst één keer genereren, daarna alleen de afwijkers bijstellen.
+  function repairRound(dishes, round) {
+    var bad = [];
+    dishes.forEach(function (d, i) { if (dishNeedsRepair(d, goal, dietStyle)) bad.push(i); });
+    if (!bad.length || round > BALANS_REPAIR_ROUNDS || Date.now() - t0 > BALANS_TIME_BUDGET_MS) return Promise.resolve(finalizeDiet(dishes, dietStyle));
+    var subset = bad.map(function (i) { return dishes[i]; });
+    return callAnthropicOnce(adaptPromptToDiet(buildRepairPrompt(subset, goal, dietStyle), dietStyle)).then(function (fixed) {
+      if (post) fixed = post(fixed);
+      if (!Array.isArray(fixed)) return finalizeDiet(dishes, dietStyle);
+      var next = dishes.slice(), improved = 0;
+      bad.forEach(function (idx, j) {
+        var nd = fixed[j], od = dishes[idx];
+        if (!nd || typeof nd !== "object" || !Array.isArray(nd.ingredienten)) return;
+        if (od.mealType) nd.mealType = od.mealType;
+        var ov = dishDietViolations(od, dietStyle).length, nv = dishDietViolations(nd, dietStyle).length;
+        var ob = goal ? dishBalans(od, goal, dietStyle) : 100, nb = goal ? dishBalans(nd, goal, dietStyle) : 100;
+        if (nv < ov || (nv === ov && nb > ob)) { next[idx] = nd; improved++; }
+      });
+      console.log("Balans bijstellen ronde " + round + ": " + bad.length + " afwijkend, " + improved + " verbeterd (" + Math.round((Date.now() - t0) / 1000) + " s)");
+      return repairRound(next, round + 1);
+    }, function (err) {
+      console.warn("Bijstellen mislukt, we leveren het beste resultaat tot nu toe: " + (err && err.message));
+      return finalizeDiet(dishes, dietStyle);
     });
   }
 
-  return tryOnce();
+  // Eén los gerecht (bijv. een variatie): het oude gedrag, opnieuw proberen met de hele opdracht.
+  var bestParsed = null, bestScore = -Infinity, attempt = 0, currentPrompt = prompt;
+  function handleSingle(parsed) {
+    var violations = dietViolationCount(parsed, dietStyle);
+    var score = (goal ? minBalans(parsed, goal, dietStyle) : 100) - violations * 1000;   // overtreding weegt zwaarder dan elke balans-score
+    if (score > bestScore) { bestScore = score; bestParsed = parsed; }
+    if ((violations === 0 && (!goal || score >= BALANS_MIN_THRESHOLD)) || attempt >= BALANS_MAX_ATTEMPTS || Date.now() - t0 > BALANS_TIME_BUDGET_MS) {
+      return finalizeDiet(bestParsed, dietStyle);
+    }
+    if (violations) {
+      var found = dishDietViolations(parsed, dietStyle);
+      currentPrompt = prompt + "\nLET OP: een vorige poging bevatte ingrediënten die niet " + dietStyle.toLowerCase() + " zijn (" +
+        found.slice(0, 8).join(", ") + "). Dat is niet toegestaan; maak het gerecht volledig " + dietStyle.toLowerCase() + ".";
+    }
+    return next();
+  }
+  function next() {
+    attempt++;
+    return callAnthropicOnce(currentPrompt).then(function (parsed) {
+      if (post) parsed = post(parsed);
+      if (attempt === 1 && Array.isArray(parsed)) return repairRound(parsed, 1);
+      return handleSingle(parsed);
+    });
+  }
+  return next();
 }
 // Blijft er na alle pogingen toch iets niet-passends over, dan laten we die gerechten weg (als er iets overblijft).
 function finalizeDiet(parsed, dietStyle) {
