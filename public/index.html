@@ -565,6 +565,23 @@
     .tile-row-2 > .card.day-line { padding-right: 90px; }
     .day-line ~ .tile-actions { top: 12px; transform: none; }
   }
+  .lib-cookbook { display: flex; flex-direction: column; gap: 10px; }
+  .lib-cookbook.is-on { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 78px); z-index: 4; padding: 14px; border-radius: 16px;
+    background: var(--surface); border: 1px solid var(--accent2); box-shadow: 0 10px 26px rgba(0, 0, 0, 0.18); }
+  .lib-cookbook-info { font-size: 14px; font-weight: 700; }
+  .lib-cookbook-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .lib-cookbook-actions .ghost-btn { flex: 1 1 120px; }
+  .lib-cookbook-actions .primary-btn { flex: 2 1 200px; width: auto; }
+  .lib-cookbook-actions .primary-btn:disabled { opacity: 0.5; cursor: default; filter: none; }
+  @media (max-width: 700px), (max-height: 500px) and (orientation: landscape) {
+    body.tabbar-actions .lib-cookbook-actions { display: none; }
+    .lib-cookbook.is-on { top: calc(env(safe-area-inset-top, 0px) + 70px); padding: 10px 14px; }
+  }
+  .lib-selectable .card { position: relative; padding-left: 58px; }
+  .lib-check { position: absolute; left: 18px; top: 24px; width: 26px; height: 26px; border-radius: 8px; border: 2px solid rgba(26, 20, 12, 0.25);
+    display: flex; align-items: center; justify-content: center; color: transparent; background: #FFFFFF; }
+  .lib-selectable.is-selected .lib-check { background: #1F8A55; border-color: #1F8A55; color: #FFFFFF; }
+  .lib-selectable.is-selected .card { box-shadow: 0 0 0 2px #1F8A55, var(--card-shadow); }
   .archive-toggle { appearance: none; border: none; background: none; color: var(--ink); font-family: inherit; cursor: pointer;
     display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 14px 2px 4px; margin-top: 8px;
     font-size: 11px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; border-top: 1px solid var(--line); }
@@ -1383,6 +1400,7 @@
   var libraryFilter = "Alle";
   var libraryGoalFilter = "Alle";
   var libraryPeriodFilter = "alle";
+  var librarySelect = { on: false, ids: {} };
 
   // Aanmaakdatum van een gerecht: createdAt als die er is, anders de tijdstempel in het id (bijv. "gen1727…_0").
   function dishCreatedAt(day) {
@@ -1567,6 +1585,7 @@
   }
 
   function goto(view, extra) {
+    if (view !== "library" && view !== "day" && librarySelect.on) { librarySelect.on = false; librarySelect.ids = {}; }
     stopTimer();
     if (view !== "weeks") stopFactCarousel();
     state.view = view;
@@ -4370,17 +4389,57 @@
       clearAllBtn.textContent = "Wis alles";
       clearAllBtn.onclick = function () { clearAllStoredDishes(); };
       if (moduleOn("pdf") && shownTotal) {
-        var libPdfBtn = document.createElement("button");
-        libPdfBtn.className = "primary-btn";
-        libPdfBtn.id = "libPdfBtn";
-        libPdfBtn.textContent = "Exporteer " + (shownTotal === 1 ? "dit gerecht" : "deze " + shownTotal + " gerechten") + " als PDF";
-        libPdfBtn.dataset.label = libPdfBtn.textContent;
-        libPdfBtn.onclick = function () {
-          var list = [];
-          shownTypes.forEach(function (m) { filteredItems(m).forEach(function (it) { list.push(it); }); });
-          exportLibraryPdf(list, libPdfBtn);
-        };
-        main.appendChild(libPdfBtn);
+        var visibleItems = [];
+        shownTypes.forEach(function (m) { filteredItems(m).forEach(function (it) { visibleItems.push(it); }); });
+        var selectedItems = visibleItems.filter(function (it) { return librarySelect.ids[it.day.id]; });
+        var bar = document.createElement("div");
+        bar.className = "lib-cookbook" + (librarySelect.on ? " is-on" : "");
+        if (!librarySelect.on) {
+          var startSel = document.createElement("button");
+          startSel.className = "primary-btn";
+          startSel.textContent = "Kookboek samenstellen (PDF)";
+          startSel.onclick = function () { librarySelect.on = true; librarySelect.ids = {}; render(); };
+          bar.appendChild(startSel);
+        } else {
+          var info = document.createElement("div");
+          info.className = "lib-cookbook-info";
+          info.textContent = selectedItems.length ? selectedItems.length + " van " + visibleItems.length + " geselecteerd" : "Tik op de gerechten voor je kookboek";
+          bar.appendChild(info);
+          var row1 = document.createElement("div");
+          row1.className = "lib-cookbook-actions";
+          var allBtn = document.createElement("button");
+          allBtn.className = "ghost-btn";
+          var allSelected = selectedItems.length === visibleItems.length;
+          allBtn.textContent = allSelected ? "Niets selecteren" : "Alles selecteren";
+          allBtn.onclick = function () {
+            if (allSelected) librarySelect.ids = {}; else visibleItems.forEach(function (it) { librarySelect.ids[it.day.id] = true; });
+            render();
+          };
+          var cancelSel = document.createElement("button");
+          cancelSel.className = "ghost-btn";
+          cancelSel.textContent = "Annuleren";
+          cancelSel.onclick = function () { librarySelect.on = false; librarySelect.ids = {}; render(); };
+          var dlBtn = document.createElement("button");
+          dlBtn.className = "primary-btn";
+          dlBtn.id = "libPdfBtn";
+          dlBtn.disabled = !selectedItems.length;
+          dlBtn.textContent = selectedItems.length ? "Download kookboek (" + selectedItems.length + ")" : "Download kookboek";
+          dlBtn.dataset.label = dlBtn.textContent;
+          dlBtn.onclick = function () {
+            exportLibraryPdf(selectedItems, dlBtn, selectedItems.length === 1 ? { title: selectedItems[0].day.name, subtitle: "Recept uit Balanza", file: "recept-" + selectedItems[0].day.name } : null);
+          };
+          row1.appendChild(allBtn);
+          row1.appendChild(cancelSel);
+          row1.appendChild(dlBtn);
+          bar.appendChild(row1);
+          bar.classList.add("tabbar-dup-keep");
+          state.tabActions = [
+            { id: "auto", label: allSelected ? "Geen" : "Alles", title: allBtn.textContent, icon: '<path d="M4 12l5 5L20 6"/>', onClick: function () { allBtn.onclick(); } },
+            { id: "pdf", label: selectedItems.length ? "Download (" + selectedItems.length + ")" : "Download", title: "Download kookboek", disabled: !selectedItems.length, onClick: function () { dlBtn.onclick(); } },
+            { id: "terug", label: "Klaar", title: "Selecteren stoppen", icon: '<path d="M18 6L6 18M6 6l12 12"/>', onClick: function () { cancelSel.onclick(); } }
+          ];
+        }
+        main.appendChild(bar);
       }
       main.appendChild(clearAllBtn);
 
@@ -4439,15 +4498,43 @@
           card.appendChild(made);
         }
         card.appendChild(macroTags(item.day, { hideMealType: true }));
-        card.onclick = function () { goto("day", { weekId: item.week.id, dayId: item.day.id, dayServings: null, dayBackView: "library", dayBackWeekId: null, dayBackDayName: null }); };
+        var isSel = !!librarySelect.ids[item.day.id];
+        if (librarySelect.on) {
+          row.classList.add("lib-selectable");
+          if (isSel) row.classList.add("is-selected");
+          card.setAttribute("aria-pressed", isSel ? "true" : "false");
+          var check = document.createElement("span");
+          check.className = "lib-check";
+          check.setAttribute("aria-hidden", "true");
+          check.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>';
+          card.insertBefore(check, card.firstChild);
+          card.onclick = function () {
+            if (librarySelect.ids[item.day.id]) delete librarySelect.ids[item.day.id]; else librarySelect.ids[item.day.id] = true;
+            render();
+          };
+        } else {
+          card.onclick = function () { goto("day", { weekId: item.week.id, dayId: item.day.id, dayServings: null, dayBackView: "library", dayBackWeekId: null, dayBackDayName: null }); };
+        }
         row.appendChild(card);
+
+        var pdfOneBtn = document.createElement("button");
+        pdfOneBtn.className = "tile-icon";
+        pdfOneBtn.setAttribute("aria-label", "Download " + item.day.name + " als PDF");
+        pdfOneBtn.title = "Download als PDF";
+        pdfOneBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M12 11v6M9.5 14.5 12 17l2.5-2.5"/></svg>';
+        pdfOneBtn.onclick = function () { exportLibraryPdf([item], null, { title: item.day.name, subtitle: "Recept uit Balanza", file: "recept-" + item.day.name }); };
 
         var delBtn = document.createElement("button");
         delBtn.className = "tile-icon tile-icon-danger";
         delBtn.setAttribute("aria-label", "Verwijder gerecht");
         delBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>';
         delBtn.onclick = function () { deleteOneStoredDish(item); };
-        var libActs = document.createElement("div"); libActs.className = "tile-actions"; libActs.appendChild(delBtn); row.appendChild(libActs); row.classList.add("tile-row", "tile-row-1");
+        if (!librarySelect.on) {
+          var libActs = document.createElement("div"); libActs.className = "tile-actions";
+          if (moduleOn("pdf")) libActs.appendChild(pdfOneBtn);
+          libActs.appendChild(delBtn); row.appendChild(libActs);
+          row.classList.add("tile-row", moduleOn("pdf") ? "tile-row-2" : "tile-row-1");
+        }
 
         group.appendChild(row);
       });
@@ -7355,7 +7442,7 @@
     });
   }
 
-  function exportLibraryPdf(items, btn) {
+  function exportLibraryPdf(items, btn, opts) {
     if (!window.jspdf || !window.jspdf.jsPDF) { if (btn) btn.textContent = "PDF-bibliotheek niet geladen"; return; }
     if (!items.length) return;
     var resetLabel = btn && btn.dataset && btn.dataset.label ? btn.dataset.label : "Exporteer als PDF";
@@ -7370,10 +7457,14 @@
     var per = DISH_PERIODS.filter(function (x) { return x[0] === libraryPeriodFilter; })[0];
     if (per && per[0] !== "alle") parts.push(per[1].toLowerCase());
     var sub = (parts.length ? parts.join(" \u00b7 ") + " \u00b7 " : "") + "geëxporteerd op " + new Date().toLocaleDateString("nl-NL", { day: "numeric", month: "long", year: "numeric" });
+    var pdfTitle = opts && opts.title ? opts.title : (entries.length === 1 ? entries[0].day.name : "Mijn kookboek");
+    var pdfSub = opts && opts.subtitle ? opts.subtitle : sub;
+    var fileBase = opts && opts.file ? opts.file : (entries.length === 1 ? "recept-" + entries[0].day.name : "balanza-kookboek");
+    if (!btn) showToast("PDF wordt gemaakt…");
     buildPdfWithImages(entries, function (images) {
-      return generatePdfBlob("Mijn gerechten", sub, entries, images);
+      return generatePdfBlob(pdfTitle, pdfSub, entries, images);
     }).then(function (blob) {
-      downloadPdf(blob, "balanza-gerechten", btn, resetLabel);
+      downloadPdf(blob, fileBase, btn, resetLabel);
     }).catch(function () {
       if (btn) btn.textContent = "PDF maken mislukt — probeer opnieuw";
     });
