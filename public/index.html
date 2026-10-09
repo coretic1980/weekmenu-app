@@ -629,6 +629,21 @@
   .plan-badge.plus { background: var(--accent); color: var(--accent-ink); }
   .acct-btn .plan-badge { margin-left: -2px; }
   .am-name-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .plus-benefits { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+  .plus-benefits li { display: flex; gap: 12px; align-items: flex-start; }
+  .plus-benefits .pb-ic { flex: none; width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: var(--bg); color: var(--accent2); }
+  .plus-benefits .pb-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding-top: 1px; }
+  .plus-benefits .pb-txt b { font-size: 14.5px; }
+  .plus-benefits .pb-txt span { font-size: 13px; color: var(--muted); line-height: 1.45; }
+  .plus-benefits.compact { gap: 8px; text-align: left; }
+  .plus-benefits.compact li { align-items: center; gap: 10px; }
+  .plus-benefits.compact .pb-ic { width: 28px; height: 28px; border-radius: 8px; }
+  .plus-benefits.compact .pb-txt b { font-size: 13.5px; font-weight: 600; }
+  .plus-ben-card { display: flex; flex-direction: column; gap: 14px; border-color: var(--accent2); }
+  .plus-ben-card .pbc-head { display: flex; flex-direction: column; gap: 2px; }
+  .plus-ben-card .pbc-head b { font-family: "Fraunces", serif; font-size: 19px; font-weight: 600; }
+  .plus-ben-card .pbc-head span { font-size: 13px; color: var(--muted); }
+  .plus-prompt #plusPromptList { margin: -4px 0 18px; }
   .plan-table { width: 100%; border-collapse: collapse; }
   .plan-table th, .plan-table td { padding: 10px 8px; text-align: left; border-bottom: 1px solid var(--line); font-size: 14px; vertical-align: top; }
   .plan-table th { font-family: "Fraunces", serif; font-weight: 600; font-size: 15px; }
@@ -2373,6 +2388,13 @@
   // Accountmenu (avatar rechtsboven), "Mijn profiel" en "Instellingen"
   // =====================================================================================
   var ICONS = {
+    sparkle: '<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/>',
+    calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/>',
+    wand: '<path d="M15 4V2M15 16v-2M8 9h2M20 9h2M17.8 11.8l1.4 1.4M17.8 6.2l1.4-1.4M12.2 6.2l-1.4-1.4"/><path d="M3 21l9-9"/>',
+    pot: '<path d="M4 10h16v6a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4z"/><path d="M2 10h20M9 6c0-1 1-2 3-2s3 1 3 2"/>',
+    shuffle: '<path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/>',
+    euro: '<path d="M18 7a7 7 0 1 0 0 10M4 10h10M4 14h10"/>',
+    heart: '<path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21.2l8.8-8.8a5.5 5.5 0 0 0 0-7.8z"/>',
     sliders: '<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/>',
     gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
     sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>',
@@ -2681,6 +2703,7 @@
       if (trialModel() && userPlan() === "trial") line("Je proef loopt nog " + trialDaysLeft() + (trialDaysLeft() === 1 ? " dag" : " dagen") + ". Met Plus blijf je daarna ontwerpen en plannen (" + benefit + "). Je kunt maandelijks opzeggen.", "plusBenefit");
       else if (trialModel()) line("Je proefperiode is voorbij. Met Plus ontwerp je weer nieuwe gerechten en pas je je planning aan (" + benefit + "). Je kunt maandelijks opzeggen.", "plusBenefit");
       else line("Met Plus maak je " + benefit + (info.freeDishCap > 0 ? " in plaats van " + info.freeDishCap : "") + ". Je kunt maandelijks opzeggen.", "plusBenefit");
+      body.appendChild(plusBenefitList({ compact: true, id: "plusCardBenefits" }));
     }
     if (info.pending && !info.plusActive) {
       line("Je betaling wordt nog verwerkt. Dat kan even duren.", "plusPending");
@@ -2775,12 +2798,15 @@
       ov.id = "plusPromptOverlay"; ov.className = "confirm-overlay";
       ov.setAttribute("role", "dialog"); ov.setAttribute("aria-modal", "true"); ov.setAttribute("aria-labelledby", "plusPromptTitle");
       ov.innerHTML = '<div class="confirm-box plus-prompt"><div class="pp-ic" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></div>' +
-        '<h2 id="plusPromptTitle"></h2><p id="plusPromptText"></p>' +
+        '<h2 id="plusPromptTitle"></h2><p id="plusPromptText"></p><div id="plusPromptList"></div>' +
         '<div class="confirm-actions"><button type="button" class="ghost-btn" id="plusPromptClose">Sluiten</button><button type="button" class="primary-btn" id="plusPromptGo">Bekijk Plus</button></div></div>';
       document.body.appendChild(ov);
     }
     document.getElementById("plusPromptTitle").textContent = (what || "Dit") + " kan met Plus";
-    document.getElementById("plusPromptText").textContent = "Je gratis proefperiode is voorbij. Alles wat je al hebt, blijft gewoon bruikbaar: je gerechten, recepten, kookmodus, planning en boodschappenlijst. Nieuwe gerechten ontwerpen en je planning aanpassen kan met Balanza Plus.";
+    document.getElementById("plusPromptText").textContent = "Je gratis proefperiode is voorbij. Alles wat je al hebt, blijft gewoon bruikbaar. Met Balanza Plus kun je weer:";
+    var ppl = document.getElementById("plusPromptList"); ppl.innerHTML = "";
+    ppl.appendChild(plusBenefitList({ compact: true, max: 6 }));
+    if (billingOn() && !billingInfo) refreshBilling().then(function () { var l = document.getElementById("plusPromptList"); if (l) { l.innerHTML = ""; l.appendChild(plusBenefitList({ compact: true, max: 6 })); } });
     function close() { ov.classList.remove("active"); }
     document.getElementById("plusPromptClose").onclick = close;
     ov.onclick = function (e) { if (e.target === ov) close(); };
@@ -5460,6 +5486,38 @@
     { title: "Begin opnieuw", body: "Via je avatar rechtsboven (het accountmenu) kies je \u201cReset app \u2014 begin opnieuw\u201d: dit wist al je opgeslagen gerechten, voorkeuren en planning in \u00e9\u00e9n keer, mocht je helemaal fris willen beginnen." }
   ];
 
+  // Wat je met Plus kunt: één lijst voor de vergelijkingspagina, de Plus-kaart in Mijn profiel en de uitleg bij een grijze knop.
+  function plusBenefits() {
+    var cap = billingInfo && billingInfo.plusDishCap != null ? billingInfo.plusDishCap : null;
+    var mods = window.appModules || {};
+    var list = [
+      { icon: "sparkle", title: "Nieuwe gerechten ontwerpen", text: (cap > 0 ? "Tot " + cap + " per maand" : cap === 0 ? "Onbeperkt" : "Elke maand nieuwe gerechten") + ", op jouw doel, smaak, voedingsstijl en apparatuur. Macro's berekend met NEVO." },
+      mods.photo !== false ? { icon: "camera", title: "Gerecht van foto", text: "Maak een foto van een bord of receptpagina; Balanza maakt er een gebalanceerde versie van." } : null,
+      { icon: "shuffle", title: "Varianten met één tik", text: "Maak een gerecht fitter, simpeler of net even anders." },
+      { icon: "calendar", title: "Je week plannen", text: "Gerechten inplannen, verslepen naar een andere dag, porties aanpassen en extra koken voor morgen." },
+      { icon: "wand", title: "Week automatisch invullen", text: "Je hele week in één keer gevuld, passend bij je dagdoel." },
+      { icon: "pot", title: "Prepdag", text: "Eén kookplan om je week in bulk voor te bereiden." },
+      mods.prices !== false ? { icon: "euro", title: "Kostenschatting", text: "Wat je boodschappen ongeveer kosten bij een Nederlandse supermarkt." } : null,
+      { icon: "heart", title: "Alles wat je al hebt", text: "Je gerechten, recepten, kookmodus en boodschappenlijst blijven altijd van jou, ook zonder Plus." }
+    ];
+    return list.filter(Boolean);
+  }
+  function plusBenefitList(opts) {
+    opts = opts || {};
+    var items = plusBenefits();
+    if (opts.max) items = items.slice(0, opts.max);
+    var ul = document.createElement("ul"); ul.className = "plus-benefits" + (opts.compact ? " compact" : "");
+    if (opts.id) ul.id = opts.id;
+    items.forEach(function (b) {
+      var li = document.createElement("li");
+      li.innerHTML = '<span class="pb-ic">' + iconSvg(b.icon, opts.compact ? 16 : 18) + '</span><span class="pb-txt"><b></b><span></span></span>';
+      li.querySelector("b").textContent = b.title;
+      if (opts.compact) li.querySelector(".pb-txt span").remove(); else li.querySelector(".pb-txt span").textContent = b.text;
+      ul.appendChild(li);
+    });
+    return ul;
+  }
+
   function renderPlans() {
     if (!billingOn() && !trialModel()) { goto(window.authToken || !window.authRequired ? "account" : "weeks"); return; }
     var app = document.getElementById("app");
@@ -5505,6 +5563,20 @@
       ];
     }
     main.appendChild(intro);
+    var benCard = document.createElement("div"); benCard.className = "acc-card plus-ben-card"; benCard.id = "plusBenefitsCard";
+    var benHead = document.createElement("div"); benHead.className = "pbc-head";
+    benHead.innerHTML = "<b>Dit kun je met Plus</b><span></span>";
+    benHead.querySelector("span").textContent = info ? fmtEur(info.plans.month.cents) + " per maand of " + fmtEur(info.plans.year.cents) + " per jaar \u00b7 maandelijks opzegbaar" : "Maandelijks opzegbaar";
+    benCard.appendChild(benHead);
+    benCard.appendChild(plusBenefitList({ id: "plusBenefitsList" }));
+    main.appendChild(benCard);
+    if (info && curLabel !== "Plus") {
+      var goTop = document.createElement("button"); goTop.className = "primary-btn"; goTop.id = "plansGoTopBtn"; goTop.textContent = info.isAccount ? "Word Plus" : "Account aanmaken om Plus te nemen";
+      goTop.onclick = function () { if (info.isAccount) goto("account"); else { upgradeState.error = null; goto("upgrade"); } };
+      main.appendChild(goTop);
+    }
+    var cmpLab = document.createElement("div"); cmpLab.className = "eyebrow"; cmpLab.textContent = "Vergelijken"; cmpLab.style.marginTop = "6px";
+    main.appendChild(cmpLab);
     var table = document.createElement("table"); table.className = "plan-table" + (cols.length > 2 ? " cols3" : "");
     var thead = document.createElement("thead");
     var headRow = document.createElement("tr");

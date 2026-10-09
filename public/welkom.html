@@ -414,7 +414,7 @@
     var intro = h("p", { id: "priceIntro", text: "Balanza is gratis te gebruiken. Even geduld, de actuele prijzen worden opgehaald…" });
     frag.appendChild(h("div", { class: "wrap page-head" },
       h("p", { class: "eyebrow", text: "Prijzen" }),
-      h("h1", { text: "Begin gratis" }),
+      h("h1", { text: trialDays() ? "Probeer " + trialDays() + " dagen gratis" : "Begin gratis" }),
       intro));
     var grid = h("div", { class: "price-grid", id: "priceGrid", style: { display: "none" } });
     frag.appendChild(h("div", { class: "wrap" }, h("section", {}, grid)));
@@ -442,7 +442,10 @@
     grid.appendChild(h("div", { class: "price-card highlight" }, h("h3", { text: "Balanza Plus" }),
       h("div", { class: "price-amount" }, fmtEur(info.monthCents) + " ", h("span", { text: "/ maand" })),
       h("div", { class: "price-alt", style: { fontSize: "13px", color: "var(--muted)", marginTop: "-4px" }, text: "of " + fmtEur(info.yearCents) + " per jaar" }),
-      h("ul", { class: "price-list" }, h("li", { text: plusBenefit }), h("li", { text: trialDays() ? "Planning maken en aanpassen, prepdag" : "Alles uit Gratis" }), h("li", { text: "Maandelijks opzegbaar" }))));
+      h("ul", { class: "price-list" }, (trialDays() ? [
+        plusBenefit + " ontwerpen", "Gerecht van foto en varianten met één tik", "Je week plannen, verslepen en porties aanpassen",
+        "Week automatisch invullen en prepdag", "Kostenschatting van je boodschappen", "Maandelijks opzegbaar"
+      ] : [plusBenefit, "Alles uit Gratis", "Maandelijks opzegbaar"]).map(function (t) { return h("li", { text: t }); }))));
     grid.style.display = "grid";
   }
 
