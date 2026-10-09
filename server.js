@@ -1118,6 +1118,7 @@ dietStyleInstructionText(p.dietStyle) +
     familyModeInstructionText(p.familyMode) +
     "- Beschikbare apparatuur (mag je gebruiken, niet elk gerecht hoeft alles te gebruiken): " + equipTxt + "\n" +
     "- Uitgesloten ingrediënten: " + excludeTxt + "\n" +
+    wishInstructionText(p) + tasteInstructionText(p) +
     buildBodyProfileLine(p) +
     goalInstructionText(p.goal, p.dietStyle) +
     "Gebruik reële, haalbare porties en ingrediënten die passen " +
@@ -1208,6 +1209,40 @@ function runPhotoAction(body, params) {
     { image: { mediaType: mediaType, data: data }, repairRounds: 1, timeBudgetMs: 45000 });
 }
 
+// ---------- Wens voor deze keer en smaakgeschiedenis ----------
+function cleanShortList(v, maxItems, maxLen) {
+  return (Array.isArray(v) ? v : []).filter(function (x) { return typeof x === "string" && x.trim(); })
+    .slice(0, maxItems).map(function (x) { return x.replace(/[\r\n]+/g, " ").trim().slice(0, maxLen); });
+}
+var WISH_TEXTS = {
+  snel: "snel klaar: totale bereidingstijd hoogstens 20 minuten",
+  budget: "budgetvriendelijk: betaalbare, alledaagse ingrediënten uit een Nederlandse supermarkt, geen dure specialiteiten",
+  prep: "geschikt voor meal prep: goed vooruit te koken, 3 tot 4 dagen houdbaar in de koelkast en goed op te warmen",
+  nieuw: "iets nieuws: verrassende gerechten in plaats van de bekende klassiekers",
+  huis: "gebruik zoveel mogelijk de ingrediënten die de gebruiker al in huis heeft"
+};
+function wishInstructionText(p) {
+  var w = p && p.wish && typeof p.wish === "object" ? p.wish : null;
+  if (!w) return "";
+  var tags = cleanShortList(w.tags, 6, 20).filter(function (t) { return WISH_TEXTS[t]; });
+  var text = typeof w.text === "string" ? w.text.replace(/[\r\n]+/g, " ").trim().slice(0, 200) : "";
+  if (!tags.length && !text) return "";
+  var parts = tags.map(function (t) { return WISH_TEXTS[t]; });
+  var out = "- WENS VAN DE GEBRUIKER VOOR DEZE KEER (volg dit zo goed mogelijk, binnen de voedingsstijl en het doel): " + parts.join("; ");
+  if (text) out += (parts.length ? "; " : "") + (tags.indexOf("huis") > -1 ? "dit heeft de gebruiker in huis: " : "toelichting van de gebruiker: ") + "\"" + text + "\"";
+  out += ".\n";
+  var avoid = cleanShortList(p.avoidNames, 30, 80);
+  if (tags.indexOf("nieuw") > -1 && avoid.length) out += "- Maak andere gerechten dan deze recente: " + avoid.join("; ") + ".\n";
+  return out;
+}
+function tasteInstructionText(p) {
+  var likes = cleanShortList(p && p.likes, 15, 80), dislikes = cleanShortList(p && p.dislikes, 15, 80);
+  if (!likes.length && !dislikes.length) return "";
+  return "- SMAAK VAN DE GEBRUIKER (leer hiervan, maar kopieer geen gerechten letterlijk):" +
+    (likes.length ? " lekker gevonden: " + likes.join("; ") + "." : "") +
+    (dislikes.length ? " Niet lekker gevonden (vermijd vergelijkbare gerechten en smaken): " + dislikes.join("; ") + "." : "") + "\n";
+}
+
 function buildBackgroundGeneratePrompt(needed, p) {
   var cuisineTxt = (p.cuisines && p.cuisines.length) ? p.cuisines.join(", ") : "geen specifieke voorkeur";
   var flavorTxt = (p.flavors && p.flavors.length) ? p.flavors.join(", ") : "geen specifieke voorkeur";
@@ -1218,6 +1253,8 @@ function buildBackgroundGeneratePrompt(needed, p) {
   return "Je bent een voedingskundige chef-kok. Genereer in totaal " + totalCount + " macro-gebalanceerde " +
     "gerechten (per 1 persoon), verdeeld als: " + countTxt + ". Precies deze aantallen per maaltijdmoment.\n" +
     dietHardRuleText(p.dietStyle) +
+    wishInstructionText(p) + tasteInstructionText(p) +
+    "- Uitgesloten ingrediënten: " + ((p.exclude && String(p.exclude).trim()) ? String(p.exclude).trim() : "geen") + "\n" +
     "- Keukenstijl: " + cuisineTxt + "\n- Smaakprofiel: " + flavorTxt + "\n- Culinair niveau: " + (p.level || "Home-style") + "\n" +
     dietStyleInstructionText(p.dietStyle) +
     familyModeInstructionText(p.familyMode) +
@@ -1326,10 +1363,20 @@ function runGenerateAction(body) {
 
   if (action === "generate") {
     var mealTypes = (params.mealTypes && params.mealTypes.length) ? params.mealTypes : ["Diner"];
-    if (mealTypes.length > 1) {
+    // Aantal per maaltijdmoment (nieuw): { Ontbijt: 2, Lunch: 3, ... }; anders hetzelfde aantal voor elk moment.
+    var mc = params.mealCounts && typeof params.mealCounts === "object" ? params.mealCounts : null;
+    if (mc) {
+      var typed = PHOTO_MEALTYPES.filter(function (m) { var n = Number(mc[m]); return Number.isInteger(n) && n >= 1 && n <= 7; });
+      if (!typed.length) { var noneErr = new Error("Kies minstens één gerecht."); noneErr.isBadRequest = true; return Promise.reject(noneErr); }
+      mealTypes = typed;
+    }
+    if (mealTypes.length > 1 || mc) {
       return Promise.all(mealTypes.map(function (mt) {
-        var subParams = Object.assign({}, params, { mealTypes: [mt] });
-        return generateWithBalansRetry(buildGeneratePrompt(subParams), params.goal, applyNevoToParsed, params.dietStyle);
+        var subParams = Object.assign({}, params, { mealTypes: [mt] }, mc ? { count: Number(mc[mt]) } : {});
+        return generateWithBalansRetry(buildGeneratePrompt(subParams), params.goal, applyNevoToParsed, params.dietStyle).then(function (arr) {
+          (Array.isArray(arr) ? arr : []).forEach(function (d) { if (d && typeof d === "object") d.mealType = mt; });   // elk deelverzoek is één moment
+          return arr;
+        });
       })).then(mergeDishArrays);
     }
     return generateWithBalansRetry(buildGeneratePrompt(params), params.goal, applyNevoToParsed, params.dietStyle);
