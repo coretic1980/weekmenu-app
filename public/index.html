@@ -611,6 +611,11 @@
   }
   .tabbar { --ink: var(--tab-ink); --muted: var(--tab-muted); --accent2: var(--tab-active); }
   .tab-badge { background: #D4A24A; color: #1A140C; }
+  .tab:disabled { opacity: 0.4; cursor: default; }
+  @media (max-width: 700px) {
+    body.has-tabbar.tabbar-actions .tabbar-dup { display: none !important; }
+    body.has-tabbar.tabbar-actions .tab span:last-child { white-space: nowrap; }
+  }
 </style>
 </head>
 <body>
@@ -4525,7 +4530,14 @@
       });
     };
     actions.appendChild(clearWeekBtn);
+    actions.classList.add("tabbar-dup");
     main.appendChild(actions);
+
+    var weekActs = [{ id: "lijst", label: "Lijst", title: "Boodschappenlijst", onClick: function () { goto("planshopping", { planWeekId: pw.id }); } }];
+    if (moduleOn("pdf")) weekActs.push({ id: "pdf", label: "Exporteer", title: "Exporteer weekmenu als PDF", onClick: function () { exportPlanPdf(pw); } });
+    weekActs.push({ id: "auto", label: pw.autoFilling ? "Bezig…" : "Vul in", title: "Vul week automatisch in", disabled: !!pw.autoFilling, onClick: function () { openAutofillDialog(pw); } });
+    weekActs.push({ id: "wis", label: "Wis week", title: "Wis hele week", disabled: !Object.keys(pw.slots).length, onClick: function () { clearWeekBtn.onclick(); } });
+    state.tabActions = weekActs;
 
     if (pw.autoFillError) {
       var autoErr = document.createElement("div");
@@ -4743,6 +4755,12 @@
       col.appendChild(row);
     });
     main.appendChild(col);
+
+    var hasAny = PLAN_SLOTS.some(function (sl) { return !!pw.slots[d + "|" + sl]; });
+    state.tabActions = [
+      { id: "lijst", label: "Lijst", title: "Boodschappenlijst van deze week", onClick: function () { goto("planshopping", { planWeekId: pw.id }); } },
+      { id: "wis", label: "Wis dag", title: "Maaltijden van deze dag wissen", disabled: !hasAny, onClick: function () { openClearDayDialog(pw, d); } }
+    ];
 
     app.appendChild(main);
   }
@@ -6225,6 +6243,7 @@
       menuBtn.className = "ghost-btn";
       menuBtn.id = "shopMenuBtn";
       menuBtn.textContent = "Delen en exporteren";
+      menuBtn.classList.add("tabbar-dup");
       menuBtn.onclick = function () { openShareMenu(title, entries, menuBtn); };
       headerRow.appendChild(menuBtn);
     }
@@ -6358,8 +6377,13 @@
       priceBtn.disabled = shoppingPriceLoading || !currentItemTexts.length;
       priceBtn.textContent = shoppingPriceLoading ? "Prijzen worden geschat…" : "Schat de kosten";
       priceBtn.onclick = function () { estimateShoppingPrices(currentItemTexts); };
+      priceBtn.classList.add("tabbar-dup");
       priceRow.appendChild(priceBtn);
     }
+    var shopActs = [];
+    if (entries.length && menuBtn) shopActs.push({ id: "delen", label: "Delen", title: "Delen en exporteren", onClick: function () { openShareMenu(title, entries, menuBtn); } });
+    if (!allPriced && priceBtn) shopActs.push({ id: "kosten", label: shoppingPriceLoading ? "Bezig…" : "Kosten", title: "Schat de kosten", disabled: priceBtn.disabled, onClick: function () { estimateShoppingPrices(currentItemTexts); } });
+    if (shopActs.length) state.tabActions = shopActs;
     main.appendChild(priceRow);
 
     if (shoppingPriceError) {
@@ -7191,10 +7215,14 @@
     main.appendChild(spacer);
 
     var startBtn = document.createElement("button");
-    startBtn.className = "primary-btn";
+    startBtn.className = "primary-btn tabbar-dup";
     startBtn.textContent = "Start het kookproces";
     startBtn.onclick = function () { goto("cook", { weekId: week.id, dayId: day.id, stepIndex: 0 }); };
     main.appendChild(startBtn);
+
+    var dayActs = [{ id: "kook", label: "Koken", title: "Start het kookproces", onClick: function () { startBtn.onclick(); } }];
+    if (!day.prep && vLabel) dayActs.push({ id: "varianten", label: "Varianten", title: "Naar varianten", onClick: function () { vLabel.scrollIntoView({ behavior: "smooth", block: "start" }); } });
+    state.tabActions = dayActs;
 
     app.appendChild(main);
   }
@@ -8081,6 +8109,37 @@
     });
   }
 
+  var ACTION_ICONS = {
+    lijst: '<path d="M9 6h11M9 12h11M9 18h11"/><path d="m3.5 6 1 1 2-2M3.5 12l1 1 2-2M3.5 18l1 1 2-2"/>',
+    pdf: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M12 11v6M9.5 14.5 12 17l2.5-2.5"/>',
+    auto: '<path d="m15 4 1.5 3L20 8.5 16.5 10 15 13l-1.5-3L10 8.5 13.5 7z"/><path d="M5 14l1 2 2 1-2 1-1 2-1-2-2-1 2-1z"/><path d="M14.5 15.5 9 21"/>',
+    wis: '<path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>',
+    week: '<rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/>',
+    kook: '<path d="M6 13.9A4 4 0 0 1 7.6 6.2a5 5 0 0 1 8.8 0A4 4 0 0 1 18 13.9V20H6z"/><path d="M6 17h12"/>',
+    varianten: '<path d="M4 7h11M4 17h7"/><circle cx="17.5" cy="7" r="2.5"/><circle cx="13.5" cy="17" r="2.5"/><path d="M20 17h0"/>',
+    delen: '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/>',
+    kosten: '<path d="M17 6.5A6.5 6.5 0 1 0 17 17.5"/><path d="M4 10.5h9M4 13.5h9"/>',
+    terug: '<path d="M15 18l-6-6 6-6"/>'
+  };
+
+  // Pagina's kunnen state.tabActions vullen: dan toont de balk Start plus de acties van die pagina.
+  function renderActionBar(bar, actions) {
+    var items = [{ id: "start", label: "Start", icon: TAB_ICONS.start, onClick: function () { onTab("start"); } }].concat(actions.slice(0, 4));
+    bar.style.gridTemplateColumns = "repeat(" + items.length + ", 1fr)";
+    items.forEach(function (a) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = "tab" + (a.danger ? " tab-danger" : "");
+      if (a.disabled) b.disabled = true;
+      b.innerHTML = '<span class="tab-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+        (a.icon || ACTION_ICONS[a.id] || "") + '</svg>' + (a.badge ? '<span class="tab-badge">' + (a.badge > 99 ? "99+" : a.badge) + '</span>' : "") +
+        '</span><span>' + a.label + '</span>';
+      if (a.title) b.setAttribute("aria-label", a.title);
+      b.onclick = function () { if (!a.disabled) a.onClick(); };
+      bar.appendChild(b);
+    });
+  }
+
   function renderTabbar() {
     var bar = document.getElementById("tabbar");
     if (!bar) return;
@@ -8093,6 +8152,10 @@
     if (hidden) return;
     var open = openShoppingCount();
     bar.innerHTML = "";
+    var acts = Array.isArray(state.tabActions) && state.tabActions.length ? state.tabActions : null;
+    document.body.classList.toggle("tabbar-actions", !!acts);
+    if (acts) { renderActionBar(bar, acts); return; }
+    bar.style.gridTemplateColumns = "";
     TABS.forEach(function (t) {
       var b = document.createElement("button");
       b.type = "button";
@@ -8108,6 +8171,7 @@
   }
 
   function render() {
+    state.tabActions = null;
     try {
       if (!configLoaded) { document.body.classList.remove("has-tabbar"); return renderLoading(); }
       if (authState.mode === "reset" && authState.resetToken) { document.body.classList.remove("has-tabbar"); return renderAuth(); }
