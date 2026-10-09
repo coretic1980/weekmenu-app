@@ -315,6 +315,25 @@
   }
   .confirm-overlay.active { opacity: 1; pointer-events: auto; }
   .autofill-box { max-width: 400px; display: flex; flex-direction: column; gap: 14px; }
+  .photo-card { display: flex; align-items: center; gap: 14px; width: 100%; text-align: left; margin: 4px 0 18px; padding: 14px 16px;
+    border-radius: 16px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; cursor: pointer; box-shadow: var(--card-shadow); }
+  .photo-card:disabled { opacity: .5; cursor: default; }
+  .photo-card-ic { flex: none; width: 44px; height: 44px; border-radius: 13px; display: grid; place-items: center; background: var(--nevo-bg); color: var(--nevo-ink); }
+  .photo-card-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .photo-card-txt b { font-size: 15.5px; }
+  .photo-card-txt span { font-size: 13px; color: var(--muted); line-height: 1.45; }
+  .photo-card-go { flex: none; font-size: 26px; color: var(--muted); line-height: 1; }
+  .photo-box { max-height: calc(100vh - 40px); overflow-y: auto; }
+  .photo-preview { width: 100%; max-height: 190px; object-fit: cover; border-radius: 12px; background: var(--line); }
+  .photo-label { font-size: 12.5px; font-weight: 700; color: var(--label); text-transform: uppercase; letter-spacing: .05em; margin-bottom: -6px; }
+  .photo-modes { display: flex; flex-direction: column; gap: 8px; }
+  .photo-mode { display: flex; flex-direction: column; gap: 2px; text-align: left; padding: 11px 13px; border-radius: 12px; border: 1.5px solid var(--line);
+    background: var(--surface); color: var(--ink); font: inherit; cursor: pointer; }
+  .photo-mode b { font-size: 14.5px; }
+  .photo-mode span { font-size: 12.5px; color: var(--muted); line-height: 1.4; }
+  .photo-mode.selected { border-color: var(--accent2); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent2) 18%, transparent); }
+  .photo-meals { margin: 0; }
+  .photo-note { margin: -4px 0 0; font-size: 12px; color: var(--muted); text-align: center; }
   .autofill-title { font-family: "Fraunces", serif; font-weight: 600; font-size: 20px; margin: 0; }
   .autofill-sub { font-size: 13.5px; line-height: 1.55; color: var(--muted); margin: -6px 0 0; }
   .autofill-meals { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
@@ -2091,7 +2110,8 @@
     mail: '<path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/><path d="M22 6l-10 7L2 6"/>',
     trash: '<path d="M3 6h18"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
     devices: '<rect x="2" y="4" width="14" height="10" rx="2"/><path d="M8 18h2"/><rect x="18" y="8" width="4" height="10" rx="1"/>',
-    bell: '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>'
+    bell: '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>',
+    camera: '<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>'
   };
   function iconSvg(key, size) {
     return '<svg width="' + (size || 20) + '" height="' + (size || 20) + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (ICONS[key] || "") + '</svg>';
@@ -3805,6 +3825,16 @@
     eyebrow.textContent = "Genereren";
     main.appendChild(eyebrow);
 
+    if (moduleOn("generate") && moduleOn("photo")) {
+      var photoCard = document.createElement("button");
+      photoCard.type = "button"; photoCard.className = "photo-card"; photoCard.id = "photoCardBtn";
+      photoCard.innerHTML = '<span class="photo-card-ic">' + iconSvg("camera", 22) + '</span><span class="photo-card-txt"><b>Gerecht van foto</b>' +
+        '<span>Maak een foto van je bord of van een recept. Balanza maakt er een gerecht van, op jouw manier.</span></span><span class="photo-card-go" aria-hidden="true">\u203a</span>';
+      photoCard.disabled = !!state.generating || quotaBlocked();
+      photoCard.onclick = pickDishPhoto;
+      main.appendChild(photoCard);
+    }
+
     function labelEl(text, hint) {
       var l = document.createElement("div");
       l.className = "field-label";
@@ -4314,6 +4344,145 @@
     });
   }
 
+  // ---------- Gerecht van foto ----------
+  // De foto wordt in de browser verkleind (max. 1280 px, JPEG) en alleen meegestuurd om het gerecht te maken; hij wordt niet bewaard.
+  var PHOTO_MEAL_OPTIONS = [["", "Automatisch"], ["Ontbijt", "Ontbijt"], ["Lunch", "Lunch"], ["Diner", "Diner"], ["Snack", "Snack"]];
+  function compressPhoto(file) {
+    return new Promise(function (resolve, reject) {
+      var url = URL.createObjectURL(file);
+      var img = new Image();
+      img.onload = function () {
+        try {
+          var maxDim = 1280, quality = 0.82, out = null;
+          for (var tries = 0; tries < 5; tries++) {
+            var scale = Math.min(1, maxDim / Math.max(img.naturalWidth, img.naturalHeight));
+            var w = Math.max(1, Math.round(img.naturalWidth * scale)), h = Math.max(1, Math.round(img.naturalHeight * scale));
+            var c = document.createElement("canvas"); c.width = w; c.height = h;
+            var ctx = c.getContext("2d"); ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, w, h); ctx.drawImage(img, 0, 0, w, h);
+            out = c.toDataURL("image/jpeg", quality);
+            if (out.length < 900000) break;
+            maxDim = Math.round(maxDim * 0.8); quality = Math.max(0.6, quality - 0.06);
+          }
+          URL.revokeObjectURL(url);
+          resolve(out);
+        } catch (e) { URL.revokeObjectURL(url); reject(e); }
+      };
+      img.onerror = function () { URL.revokeObjectURL(url); var e = new Error("Dit fotoformaat kan deze browser niet openen. Probeer een JPG- of PNG-foto."); reject(e); };
+      img.src = url;
+    });
+  }
+  function pickDishPhoto() {
+    if (state.generating) { showToast("Even geduld: er worden al gerechten gemaakt."); return; }
+    var inp = document.createElement("input");
+    inp.type = "file"; inp.accept = "image/*";
+    inp.style.display = "none";
+    inp.onchange = function () {
+      var f = inp.files && inp.files[0];
+      if (inp.parentNode) inp.parentNode.removeChild(inp);
+      if (!f) return;
+      compressPhoto(f).then(openPhotoDialog, function (e) { showToast(e && e.message ? e.message : "Deze foto kon niet worden geopend."); });
+    };
+    document.body.appendChild(inp);
+    inp.click();
+  }
+  function openPhotoDialog(dataUrl) {
+    var ov = document.getElementById("photoOverlay");
+    if (!ov) {
+      ov = document.createElement("div");
+      ov.id = "photoOverlay"; ov.className = "confirm-overlay";
+      ov.setAttribute("role", "dialog"); ov.setAttribute("aria-modal", "true"); ov.setAttribute("aria-labelledby", "photoTitle");
+      ov.innerHTML = '<div class="confirm-box autofill-box photo-box"><h2 class="autofill-title" id="photoTitle">Gerecht van foto</h2>' +
+        '<img class="photo-preview" id="photoPreview" alt="Jouw foto">' +
+        '<div class="photo-label">Wat wil je maken?</div><div class="photo-modes" id="photoModes"></div>' +
+        '<div class="photo-label">Maaltijdmoment</div><div class="chiprow photo-meals" id="photoMeals"></div>' +
+        '<div class="autofill-actions"><button type="button" class="primary-btn" id="photoGo">Maak gerecht</button>' +
+        '<button type="button" class="autofill-cancel" id="photoCancel">Annuleren</button></div>' +
+        '<p class="photo-note">Je foto wordt alleen gebruikt om dit gerecht te maken en niet bewaard.</p></div>';
+      document.body.appendChild(ov);
+    }
+    var mode = "balanza", meal = "";
+    document.getElementById("photoPreview").src = dataUrl;
+    function paint() {
+      var modes = document.getElementById("photoModes");
+      modes.innerHTML = "";
+      [["balanza", "Balanza-versie", "Hetzelfde gerecht, afgestemd op je doel (" + String(prefs.goal || "Onderhoud").split(" (")[0].toLowerCase() + ")" + (prefs.dietStyle && prefs.dietStyle !== "Omnivoor" ? " en " + prefs.dietStyle.toLowerCase() : "")],
+       ["origineel", "Zoals op de foto", "Zo dicht mogelijk bij het origineel, met eerlijk uitgerekende macro's"]].forEach(function (m) {
+        var b = document.createElement("button");
+        b.type = "button"; b.className = "photo-mode" + (mode === m[0] ? " selected" : ""); b.id = "photoMode-" + m[0];
+        b.setAttribute("aria-pressed", mode === m[0] ? "true" : "false");
+        b.innerHTML = "<b></b><span></span>";
+        b.querySelector("b").textContent = m[1]; b.querySelector("span").textContent = m[2];
+        b.onclick = function () { mode = m[0]; paint(); };
+        modes.appendChild(b);
+      });
+      var meals = document.getElementById("photoMeals");
+      meals.innerHTML = "";
+      PHOTO_MEAL_OPTIONS.forEach(function (o) {
+        var c = document.createElement("button");
+        c.type = "button"; c.className = "chip" + (meal === o[0] ? " selected" : ""); c.textContent = o[1];
+        c.onclick = function () { meal = o[0]; paint(); };
+        meals.appendChild(c);
+      });
+    }
+    function close() { ov.classList.remove("active"); document.getElementById("photoPreview").src = ""; }
+    document.getElementById("photoCancel").onclick = close;
+    ov.onclick = function (e) { if (e.target === ov) close(); };
+    ov.onkeydown = function (e) { if (e.key === "Escape") close(); };
+    document.getElementById("photoGo").onclick = function () { close(); generateFromPhoto(dataUrl, mode, meal); };
+    paint();
+    ov.classList.add("active");
+  }
+  function generateFromPhoto(dataUrl, mode, meal) {
+    if (state.generating) return;
+    var m = String(dataUrl).match(/^data:(image\/[a-z]+);base64,(.+)$/);
+    if (!m) { showToast("Deze foto kon niet worden gelezen."); return; }
+    state.generating = true;
+    state.genError = null;
+    window.genProgress = null;
+    var start = Date.now();
+    busyStart(function () {
+      var p = window.genProgress;
+      if (p && p.stage === "repair") return "Gerecht wordt bijgesteld voor de Balans-score…";
+      if (p && (p.stage === "check" || p.stage === "finishing")) return "Gerecht wordt afgerond…";
+      var secs = Math.round((Date.now() - start) / 1000);
+      return (secs < 6 ? "Foto wordt bekeken…" : "Recept wordt gemaakt op basis van je foto…") + (secs > 50 ? " · nog even geduld" : "");
+    });
+    startGenTicker();
+    goto("weeks");
+    var meals = ["Ontbijt", "Lunch", "Diner", "Snack"];
+    var params = {
+      cuisines: prefs.cuisines, flavors: prefs.flavors, level: prefs.level, dietStyle: prefs.dietStyle, familyMode: prefs.familyMode,
+      equipment: prefs.equipment, exclude: prefs.exclude, goal: prefs.goal, gender: prefs.gender, heightCm: prefs.heightCm,
+      weightKg: prefs.weightKg, age: prefs.age, activityLevel: prefs.activityLevel
+    };
+    claude.use("sample").then(function (sample) {
+      if (!sample) throw new Error("Niet beschikbaar.");
+      return sample.json({ action: "photo", mode: mode, mealType: meal || undefined, image: { mediaType: m[1], data: m[2] }, params: params },
+        { modelTier: "default", jobMeta: { withImages: moduleOn("images"), mealTypes: meals } });
+    }).then(function (result) {
+      var list = extractDishArray(result);
+      if (!list || !list.length) throw new Error("Onverwacht antwoordformaat.");
+      var days = dishesFromGenerated(list.slice(0, 1), meals);
+      return Promise.resolve(moduleOn("images") ? Promise.all(days.map(fetchImageForDish)) : null).then(function () {
+        stopGenTicker(); busyEnd();
+        state.generating = false;
+        addToCacheLibrary(days);
+        persistDishesToDb(days);
+        refreshQuota();
+        showToast("“" + days[0].name + "” is toegevoegd aan je gerechten.");
+        if (state.view === "weeks") goto("day", { weekId: "cache", dayId: days[0].id, dayServings: null, dayBackView: "library", dayBackWeekId: null, dayBackDayName: null });
+        else render();
+      });
+    }).catch(function (e) {
+      stopGenTicker(); busyEnd();
+      state.generating = false;
+      var msg = (e && (e.code === "bad_request" || e.code === "quota_exceeded" || e.code === "module_disabled") && e.message) ? e.message :
+        (e && e.code === "rate_limited") ? "Even geduld, probeer het over een moment opnieuw." : "Het gerecht maken is niet gelukt. Probeer het nogmaals.";
+      showToast(msg);
+      render();
+    });
+  }
+
   function generateMeals(withImages) {
     if (state.generating) return;
     state.genError = null;
@@ -4429,6 +4598,7 @@
     { title: "Stel je voorkeuren in", body: "Bij het eerste gebruik loop je een korte wizard door die alles in stapjes uitvraagt, elk met uitleg over wat die keuze precies doet. Later kun je alles terugvinden en aanpassen bij \u201cGerechten ontwerpen\u201d: doel (Onderhoud, Vetverlies, Cutting, Spieropbouw of Atleet), voedingsstijl, keukenstijl, smaakprofiel, culinair niveau, kindvriendelijk (gezinsmodus), beschikbare apparatuur, wat je niet wilt eten, en optioneel je lichaamsprofiel (geslacht, lengte, gewicht, leeftijd, activiteitsniveau)." },
     { title: "Navigeren op je telefoon", body: "Op een smartphone staat onderin een vaste balk met Start, Ontwerpen, Plannen, Gerechten en Lijst. Tik nogmaals op het actieve onderdeel om terug te gaan naar het begin ervan. Het getal bij Lijst laat zien hoeveel boodschappen voor deze week nog open staan." },
     { title: "Genereer gerechten", body: "Kies bij welk maaltijdmoment(en) het gaat (Ontbijt/Lunch/Diner/Snack) en hoeveel gerechten je per moment wilt, en tik op \u201cGenereer gerechten\u201d. Daarna kies je of er ook afbeeldingen bij worden gezocht (duurt iets langer). Elk gerecht krijgt een Balans-score: hoe dichter bij het streefpercentage van jouw doel, hoe hoger de score. Het genereren kan even duren; je hoeft niet in de app te blijven wachten. Geldt er een limiet voor het aantal nieuwe gerechten per maand, dan zie je hier hoeveel je er nog over hebt." },
+    { title: "Gerecht van foto", body: "Zie je ergens iets lekkers, of heb je een recept uit een kookboek? Tik bij \u201cOntwerpen\u201d op \u201cGerecht van foto\u201d en maak een foto van je bord of van de receptpagina. Kies een Balanza-versie (afgestemd op je doel en voedingsstijl) of blijf zo dicht mogelijk bij het origineel. Balanza rekent de macro's na met NEVO en zet het gerecht in je lijst. Je foto wordt niet bewaard." },
     { title: "Macro's berekend met NEVO", body: "De macro's van je gerechten worden uitgerekend met het Nederlands Voedingsstoffenbestand (NEVO) van het RIVM, niet alleen geschat: een groen \u201cNEVO-berekend\u201d label (in de app en in de PDF) laat zien wanneer dat is gelukt. Lukt het matchen van een ingredi\u00ebnt een keer niet, dan blijft de AI-schatting zichtbaar en duidelijk gelabeld. In \u201cOpgeslagen gerechten\u201d kun je oudere gerechten met \u00e9\u00e9n tik laten herberekenen." },
     { title: "Krijg een melding als het klaar is", body: "Ga je tijdens het genereren naar een andere app, dan werkt Balanza gewoon door en staan je gerechten klaar zodra je terugkomt. Wil je een seintje? Zet onder Instellingen \u2192 Meldingen de meldingen aan (of tik tijdens het genereren op \u201cStuur me een melding als het klaar is\u201d). Op een iPhone werkt dat als Balanza op je beginscherm staat: tik op Deel en kies \u201cZet op beginscherm\u201d." },
     { title: "Bekijk je bibliotheek", body: "Onder \u201cOpgeslagen gerechten\u201d vind je alles wat je ooit heb ontworpen of gegenereerd, gegroepeerd per maaltijdmoment. Filter op maaltijdmoment of doel, of verwijder gerechten die je niet meer wilt." },
@@ -8946,7 +9116,7 @@
     Object.keys(pending).forEach(function (id) {
       var rec = pending[id];
       if (J.isActive(id)) return;
-      if (!rec || rec.action !== "generate" || Date.now() - (Number(rec.startedAt) || 0) > 2 * 60 * 60 * 1000) { J.claim(id); return; }
+      if (!rec || (rec.action !== "generate" && rec.action !== "photo") || Date.now() - (Number(rec.startedAt) || 0) > 2 * 60 * 60 * 1000) { J.claim(id); return; }
       var busy = true;
       busyStart("Je gerechten worden afgerond\u2026");
       var stopBusy = function () { if (busy) { busy = false; busyEnd(); } };

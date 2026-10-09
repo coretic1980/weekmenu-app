@@ -148,6 +148,7 @@ function issueUserSession(uid, email) {
 var MODULE_DEFS = [
   { key: "generate", label: "Gerechten genereren", desc: "Het maken van gerechten en weekmenu's met AI. Uit: niemand kan nieuwe gerechten laten maken.", enforced: "server" },
   { key: "prices", label: "Kostenschatting", desc: "De prijsschatting op het boodschappenscherm (gebruikt ook de AI).", enforced: "server" },
+  { key: "photo", label: "Gerecht van foto", desc: "Een gerecht laten maken op basis van een foto van een bord of een receptpagina (gebruikt de AI).", enforced: "server" },
   { key: "tips", label: "Tips tijdens het wachten", desc: "De weetjes en tips die getoond worden tijdens het genereren.", enforced: "server" },
   { key: "images", label: "Gerechtfoto's", desc: "Foto's bij gerechten (Unsplash) en de foto's in de PDF.", enforced: "server" },
   { key: "sharing", label: "Boodschappenlijst delen", desc: "Nieuwe lijsten delen en bijwerken (WhatsApp/link). Bestaande gedeelde lijsten blijven te lezen en af te vinken.", enforced: "server" },
@@ -156,7 +157,7 @@ var MODULE_DEFS = [
   { key: "registration", label: "Nieuwe accounts (registreren)", desc: "Zelf een account aanmaken. Uit: alleen jij maakt accounts aan; inloggen blijft werken.", enforced: "server" },
   { key: "passwordReset", label: "Wachtwoord vergeten", desc: "De wachtwoord-vergeten-mail en de resetlink.", enforced: "server" }
 ];
-var MAINTENANCE_OFF_MODULES = ["generate", "prices", "tips", "sharing", "bring", "registration"];
+var MAINTENANCE_OFF_MODULES = ["generate", "photo", "prices", "tips", "sharing", "bring", "registration"];
 var LIMIT_DEFS = [
   { key: "dailyGenerateCap", label: "Generaties per dag (totaal)", def: DAILY_GENERATE_CAP, min: 0, max: 100000 },
   { key: "monthlyDishCap", label: "Nieuwe gerechten per gebruiker per maand (0 = onbeperkt)", def: MONTHLY_DISH_CAP, min: 0, max: 100000 },
@@ -1134,6 +1135,63 @@ dietStyleInstructionText(p.dietStyle) +
     nevoPromptText();
 }
 
+// ---------- Gerecht van foto ----------
+var PHOTO_MEALTYPES = ["Ontbijt", "Lunch", "Diner", "Snack"];
+var PHOTO_MEDIA = ["image/jpeg", "image/png", "image/webp"];
+function buildPhotoPrompt(p, mode, mealType) {
+  var types = mealType && PHOTO_MEALTYPES.indexOf(mealType) > -1 ? [mealType] : PHOTO_MEALTYPES;
+  var equipTxt = (p.equipment && p.equipment.length) ? p.equipment.join(", ") : "standaard fornuis en oven";
+  var excludeTxt = (p.exclude && String(p.exclude).trim()) ? String(p.exclude).trim() : "geen";
+  var balanza = mode !== "origineel";
+  return "Je bent een voedingskundige chef-kok. Bekijk de foto. Er staat een gerecht op (bijv. een bord eten, een foto van een maaltijd) " +
+    "of een recept (bijv. een kookboekpagina, een screenshot of een handgeschreven recept).\n" +
+    "Als er GEEN gerecht en GEEN recept op de foto staat, geef dan alleen dit terug: {\"error\": \"geen_gerecht\"}\n\n" +
+    "Anders: maak er precies één recept van (per 1 persoon).\n" +
+    "- Staat er een recept op de foto: neem de ingrediënten en hoeveelheden daaruit over en reken ze om naar 1 persoon.\n" +
+    "- Staat er een bord eten op: herken het gerecht en de zichtbare ingrediënten en schat realistische hoeveelheden in.\n" +
+    (balanza
+      ? "- Maak een BALANZA-VERSIE: houd het herkenbaar als hetzelfde gerecht (zelfde idee, smaak en keuken), maar pas ingrediënten en " +
+        "hoeveelheden aan zodat het past bij het doel hieronder (bijv. magerder vlees, meer eiwit, minder olie of kaas, meer groente).\n" +
+        goalInstructionText(p.goal, p.dietStyle) + "\n" +
+        "- Stem de portie af op het maaltijdmoment: " + types.map(function (mt) { return mt + " (" + mealtypeGuideText(mt, p.goal) + ")"; }).join("; ") + "\n" +
+        buildBodyProfileLine(p)
+      : "- Blijf ZO DICHT MOGELIJK bij het origineel: dezelfde ingrediënten en een realistische portie zoals op de foto. Pas niets aan om het gezonder te maken.\n") +
+    dietHardRuleText(p.dietStyle) +
+    dietStyleInstructionText(p.dietStyle) +
+    familyModeInstructionText(p.familyMode) +
+    "- Beschikbare apparatuur (gebruik bij de bereiding alleen wat er is): " + equipTxt + "\n" +
+    "- Uitgesloten ingrediënten (vervang ze door iets passends): " + excludeTxt + "\n" +
+    "- Culinair niveau van de stappen: " + (p.level || "Home-style") + "\n" +
+    INGREDIENT_SPECIFICITY_LINE +
+    "Geef de naam in het Nederlands. Geef ALLEEN geldig JSON terug: een array met EXACT 1 object, exact dit schema, geen markdown, geen uitleg erbuiten:\n" +
+    '[{"name": "gerechtnaam", "mealType": "' + types[0] + '", "kcal": 600, "kh_g": 50, "eiwit_g": 48, "vet_g": 22, ' +
+    '"bereidingstijd_minuten": 30, "foto_zoekterm": "grilled salmon asparagus", "benodigdheden": "korte tekst met keukenapparatuur", "ingredienten": ' + nevoIngredientSchema() + ', ' +
+    '"steps": [{"title": "korte staptitel", "content": "volledige instructie", "timer_seconds": 300}]}]\n' +
+    '"mealType" moet exact één van deze waarden zijn: ' + types.join(", ") + (types.length > 1 ? " (kies het moment dat het best bij het gerecht past)" : "") + ". " +
+    "\"bereidingstijd_minuten\" is de totale realistische bereidingstijd in hele minuten. " + FOTO_TERM_LINE +
+    "timer_seconds alleen toevoegen bij stappen met wachttijd; anders weglaten." +
+    nevoPromptText(balanza);
+}
+function photoBadRequest(msg) { var e = new Error(msg); e.isBadRequest = true; return e; }
+function runPhotoAction(body, params) {
+  var img = body && body.image;
+  var mediaType = img && typeof img.mediaType === "string" ? img.mediaType : "";
+  var data = img && typeof img.data === "string" ? img.data : "";
+  if (PHOTO_MEDIA.indexOf(mediaType) === -1 || !data) return Promise.reject(photoBadRequest("Kies een foto (JPG, PNG of WebP)."));
+  if (data.length > 1400000 || !/^[A-Za-z0-9+/=]+$/.test(data.slice(0, 2000))) return Promise.reject(photoBadRequest("Deze foto is te groot of ongeldig. Probeer een andere."));
+  var mode = body.mode === "origineel" ? "origineel" : "balanza";
+  var mealType = PHOTO_MEALTYPES.indexOf(body.mealType) > -1 ? body.mealType : null;
+  var post = function (parsed) {
+    if (parsed && !Array.isArray(parsed) && typeof parsed === "object" && parsed.error) {
+      throw photoBadRequest("Op deze foto herkennen we geen gerecht of recept. Probeer een duidelijkere foto van je bord of van het recept.");
+    }
+    var list = Array.isArray(parsed) ? parsed.slice(0, 1) : [parsed];
+    list.forEach(function (d) { if (d && mealType) d.mealType = mealType; });
+    return applyNevoToParsed(list);
+  };
+  return generateWithBalansRetry(buildPhotoPrompt(params, mode, mealType), mode === "balanza" ? params.goal : null, post, params.dietStyle, { image: { mediaType: mediaType, data: data } });
+}
+
 function buildBackgroundGeneratePrompt(needed, p) {
   var cuisineTxt = (p.cuisines && p.cuisines.length) ? p.cuisines.join(", ") : "geen specifieke voorkeur";
   var flavorTxt = (p.flavors && p.flavors.length) ? p.flavors.join(", ") : "geen specifieke voorkeur";
@@ -1274,6 +1332,8 @@ function runGenerateAction(body) {
     return generateWithBalansRetry(buildBackgroundGeneratePrompt(needed, params), params.goal, applyNevoToParsed, params.dietStyle);
   }
 
+  if (action === "photo") return runPhotoAction(body, params);
+
   if (action === "variation") {
     return generateWithBalansRetry(buildVariationPromptServer(body.current || {}, body.kind, params), params.goal, applyNevoToParsed, params.dietStyle);
   }
@@ -1355,7 +1415,7 @@ function minBalans(parsed, goal, dietStyle) {
 var BALANS_MIN_THRESHOLD = 75;
 var BALANS_MAX_ATTEMPTS = 3;
 
-function callAnthropicOnce(prompt, model, maxTokens) {
+function callAnthropicOnce(prompt, model, maxTokens, image) {
   return fetch(ANTHROPIC_BASE_URL + "/v1/messages", {
     method: "POST",
     headers: {
@@ -1366,7 +1426,7 @@ function callAnthropicOnce(prompt, model, maxTokens) {
     body: JSON.stringify({
       model: model || ANTHROPIC_MODEL,
       max_tokens: maxTokens || 64000,
-      messages: [{ role: "user", content: prompt }]
+      messages: [{ role: "user", content: image ? [{ type: "image", source: { type: "base64", media_type: image.mediaType, data: image.data } }, { type: "text", text: prompt }] : prompt }]
     })
   }).then(function (apiRes) {
     if (!apiRes.ok) {
@@ -1463,9 +1523,10 @@ function summarizeProgress(usage) {
   return sum;
 }
 
-function generateWithBalansRetry(prompt, goal, post, dietStyle) {
+function generateWithBalansRetry(prompt, goal, post, dietStyle, opts) {
+  var image = opts && opts.image ? opts.image : null;   // alleen de eerste aanroep krijgt de foto; bijstellen werkt op de tekst
   prompt = adaptPromptToDiet(prompt, dietStyle);
-  if (!goal && !DIET_FORBIDDEN_TEXT[dietStyle]) return callAnthropicOnce(prompt).then(function (parsed) { return post ? post(parsed) : parsed; });
+  if (!goal && !DIET_FORBIDDEN_TEXT[dietStyle]) return callAnthropicOnce(prompt, null, null, image).then(function (parsed) { return post ? post(parsed) : parsed; });
   var t0 = Date.now();
   var track = progressTrack();
   function done(result) {
@@ -1522,7 +1583,7 @@ function generateWithBalansRetry(prompt, goal, post, dietStyle) {
   }
   function next() {
     attempt++;
-    return callAnthropicOnce(currentPrompt).then(function (parsed) {
+    return callAnthropicOnce(currentPrompt, null, null, image).then(function (parsed) {
       if (attempt === 1) track.stage = "check";
       if (post) parsed = post(parsed);
       if (attempt === 1 && Array.isArray(parsed)) return repairRound(parsed, 1);
@@ -1584,14 +1645,15 @@ function handleGenerate(req, res) {
 
       readBody(req).then(function (body) {
         var action = (body && body.action) || "onbekend";
-        if (action === "price" && !mods.prices) {
-          log(action, false, 503, "Module uitgeschakeld: prices");
-          return sendJSON(res, 503, moduleOffBody("prices", settings));
+        var gatedModule = { price: "prices", photo: "photo" }[action] || null;
+        if (gatedModule && !mods[gatedModule]) {
+          log(action, false, 503, "Module uitgeschakeld: " + gatedModule);
+          return sendJSON(res, 503, moduleOffBody(gatedModule, settings));
         }
-        return (action === "price" ? getUserPlan(uidForLog, settings) : Promise.resolve(null)).then(function (plan) {
-          if (action === "price" && planBlocksModule(settings, "prices", plan)) {
-            log(action, false, 503, "Kostenschatting is alleen voor Plus");
-            return sendJSON(res, 503, moduleOffBody("prices", settings));
+        return (gatedModule ? getUserPlan(uidForLog, settings) : Promise.resolve(null)).then(function (plan) {
+          if (gatedModule && planBlocksModule(settings, gatedModule, plan)) {
+            log(action, false, 503, "Alleen voor Plus: " + gatedModule);
+            return sendJSON(res, 503, moduleOffBody(gatedModule, settings));
           }
 
           var isAsync = !!(body && body.async === true);
@@ -2237,7 +2299,7 @@ function recordCallUsage(model, data) {
 }
 function round6(n) { return Math.round(n * 1e6) / 1e6; }
 // Acties die nieuwe gerechten opleveren en dus van de maandlimiet afgaan.
-var DISH_ACTIONS = { generate: true, background: true, variation: true };
+var DISH_ACTIONS = { generate: true, background: true, variation: true, photo: true };
 function dishesInResult(action, parsed) {
   if (!DISH_ACTIONS[action]) return 0;
   if (action === "variation") return 1;
@@ -2301,7 +2363,7 @@ function effectiveDishCap(uid) {
   });
 }
 // Onderdelen die je (naast algeheel aan/uit) ook per abonnement kunt vrijgeven: "iedereen" of "alleen Plus".
-var PLAN_GATEABLE_MODULES = ["prices", "bring", "sharing", "pdf", "images"];
+var PLAN_GATEABLE_MODULES = ["prices", "photo", "bring", "sharing", "pdf", "images"];
 // True als dit onderdeel voor deze gebruiker geblokkeerd is omdat het alleen voor Plus is vrijgegeven.
 function planBlocksModule(s, key, plan) {
   return PLAN_GATEABLE_MODULES.indexOf(key) > -1 && !!(s.planOnly && s.planOnly[key]) && plan !== "plus";
