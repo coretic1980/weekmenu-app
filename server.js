@@ -1699,6 +1699,268 @@ function handleAuthUpgrade(req, res) {
   });
 }
 
+// ---------- Inloggen met Apple of Google (OpenID Connect, zonder externe bibliotheek) ----------
+// Beide knoppen verschijnen pas als de bijbehorende omgevingsvariabelen gezet zijn:
+//   Apple:  APPLE_CLIENT_ID (de Services ID uit het Apple Developer-portaal)
+//   Google: GOOGLE_CLIENT_ID en GOOGLE_CLIENT_SECRET
+//   Optioneel: PUBLIC_BASE_URL (bijv. https://balanza.nl), anders afgeleid uit het verzoek.
+// Terugkeer-URL's om bij Apple/Google op te geven: <basis>/api/auth/oauth/apple/callback en <basis>/api/auth/oauth/google/callback.
+// Koppeling: auth/oauth/<provider>_<sub> = { uid, email }. Een bestaand account met hetzelfde (geverifieerde) e-mailadres
+// wordt gekoppeld; anders komt er een nieuw account, desgewenst met de gegevens van het anonieme profiel.
+const APPLE_CLIENT_ID = String(process.env.APPLE_CLIENT_ID || "").trim();
+const GOOGLE_CLIENT_ID = String(process.env.GOOGLE_CLIENT_ID || "").trim();
+const GOOGLE_CLIENT_SECRET = String(process.env.GOOGLE_CLIENT_SECRET || "").trim();
+var OAUTH_PROVIDERS = {
+  apple: {
+    label: "Apple",
+    enabled: function () { return !!APPLE_CLIENT_ID; },
+    clientId: function () { return APPLE_CLIENT_ID; },
+    authorizeUrl: "https://appleid.apple.com/auth/authorize",
+    jwksUrl: "https://appleid.apple.com/auth/keys",
+    issuers: ["https://appleid.apple.com"]
+  },
+  google: {
+    label: "Google",
+    enabled: function () { return !!(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET); },
+    clientId: function () { return GOOGLE_CLIENT_ID; },
+    authorizeUrl: "https://accounts.google.com/o/oauth2/v2/auth",
+    tokenUrl: "https://oauth2.googleapis.com/token",
+    jwksUrl: "https://www.googleapis.com/oauth2/v3/certs",
+    issuers: ["https://accounts.google.com", "accounts.google.com"]
+  }
+};
+var OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
+var OAUTH_COOKIE = "bz_oauth";
+var oauthStartAllowed = makeHourlyLimiter(60);
+var oauthCallbackAllowed = makeHourlyLimiter(60);
+var oauthLocks = new Set();
+
+function oauthConfig() {
+  return { apple: OAUTH_PROVIDERS.apple.enabled(), google: OAUTH_PROVIDERS.google.enabled() };
+}
+function publicBaseUrl(req) {
+  if (PUBLIC_BASE_URL) return PUBLIC_BASE_URL;
+  var proto = String(req.headers["x-forwarded-proto"] || "").split(",")[0].trim() || (req.socket && req.socket.encrypted ? "https" : "http");
+  var host = String(req.headers["x-forwarded-host"] || req.headers.host || "").split(",")[0].trim();
+  return proto + "://" + host;
+}
+function oauthRedirectUri(req, provider) { return publicBaseUrl(req) + "/api/auth/oauth/" + provider + "/callback"; }
+function parseCookies(req) {
+  var out = {};
+  String(req.headers.cookie || "").split(";").forEach(function (part) {
+    var i = part.indexOf("=");
+    if (i > 0) out[part.slice(0, i).trim()] = decodeURIComponent(part.slice(i + 1).trim());
+  });
+  return out;
+}
+function oauthCookieHeader(value, maxAgeSec, secure) {
+  // SameSite=None: Apple stuurt het antwoord terug als een POST vanaf zijn eigen domein.
+  return OAUTH_COOKIE + "=" + encodeURIComponent(value) + "; Path=/api/auth/oauth; HttpOnly; Max-Age=" + maxAgeSec +
+    (secure ? "; Secure; SameSite=None" : "; SameSite=Lax");
+}
+function sha256b64(s) { return base64url(crypto.createHash("sha256").update(s).digest()); }
+function readFormBody(req) {
+  return new Promise(function (resolve, reject) {
+    var chunks = [], total = 0;
+    req.on("data", function (c) { total += c.length; if (total > 64 * 1024) { reject(new Error("body too large")); req.destroy(); return; } chunks.push(c); });
+    req.on("end", function () {
+      var out = {};
+      new URLSearchParams(Buffer.concat(chunks).toString("utf8")).forEach(function (v, k) { out[k] = v; });
+      resolve(out);
+    });
+    req.on("error", reject);
+  });
+}
+// Terug naar de app; het resultaat staat in het #-deel van de URL (dat gaat nooit naar de server).
+function oauthFinish(res, params) {
+  var hash = Object.keys(params).filter(function (k) { return params[k] !== undefined && params[k] !== null; })
+    .map(function (k) { return encodeURIComponent(k) + "=" + encodeURIComponent(String(params[k])); }).join("&");
+  res.writeHead(303, { "Location": "/#" + hash, "Cache-Control": "no-store", "Set-Cookie": oauthCookieHeader("", 0, true) });
+  res.end();
+}
+function oauthFail(res, message) { return oauthFinish(res, { auth_error: message }); }
+
+// --- JWT (id_token) controleren met de openbare sleutels van Apple/Google ---
+var jwksCache = {};
+function fetchJwks(url, force) {
+  var c = jwksCache[url];
+  if (c && !force && Date.now() - c.at < 60 * 60 * 1000) return Promise.resolve(c.keys);
+  if (c && force && Date.now() - c.at < 60 * 1000) return Promise.resolve(c.keys);   // niet vaker dan eens per minuut opnieuw
+  return fetch(url).then(function (r) {
+    if (!r.ok) throw new Error("Sleutels niet op te halen (" + r.status + ")");
+    return r.json();
+  }).then(function (j) {
+    var keys = Array.isArray(j && j.keys) ? j.keys : [];
+    jwksCache[url] = { at: Date.now(), keys: keys };
+    return keys;
+  });
+}
+function b64urlToBuf(s) { return Buffer.from(String(s).replace(/-/g, "+").replace(/_/g, "/"), "base64"); }
+function verifyIdToken(token, provider, nonce) {
+  var p = OAUTH_PROVIDERS[provider];
+  var parts = String(token || "").split(".");
+  if (parts.length !== 3) return Promise.reject(new Error("Ongeldig id_token"));
+  var header, payload;
+  try { header = JSON.parse(b64urlToBuf(parts[0]).toString()); payload = JSON.parse(b64urlToBuf(parts[1]).toString()); }
+  catch (e) { return Promise.reject(new Error("Ongeldig id_token")); }
+  if (header.alg !== "RS256") return Promise.reject(new Error("Onverwacht algoritme"));
+  function findKey(force) {
+    return fetchJwks(p.jwksUrl, force).then(function (keys) { return keys.filter(function (k) { return k.kid === header.kid; })[0] || null; });
+  }
+  return findKey(false).then(function (jwk) { return jwk || findKey(true); }).then(function (jwk) {
+    if (!jwk) throw new Error("Onbekende sleutel");
+    var key = crypto.createPublicKey({ key: jwk, format: "jwk" });
+    var ok = crypto.verify("RSA-SHA256", Buffer.from(parts[0] + "." + parts[1]), key, b64urlToBuf(parts[2]));
+    if (!ok) throw new Error("Handtekening klopt niet");
+    var now = Math.floor(Date.now() / 1000);
+    if (p.issuers.indexOf(payload.iss) === -1) throw new Error("Onverwachte uitgever");
+    var aud = Array.isArray(payload.aud) ? payload.aud : [payload.aud];
+    if (aud.indexOf(p.clientId()) === -1) throw new Error("Bestemd voor een andere app");
+    if (!payload.exp || payload.exp + 60 < now) throw new Error("Verlopen");
+    if (payload.iat && payload.iat - 300 > now) throw new Error("Tijd klopt niet");
+    if (!payload.sub) throw new Error("Geen gebruikers-ID");
+    if (payload.nonce !== nonce) throw new Error("Controlecode klopt niet");
+    return payload;
+  });
+}
+
+// --- Stap 1: naar Apple/Google ---
+function handleOAuthStart(req, res, provider, url) {
+  var p = OAUTH_PROVIDERS[provider];
+  if (!p || !p.enabled()) return oauthFail(res, "Inloggen met " + (p ? p.label : "deze dienst") + " is nog niet ingesteld.");
+  if (!oauthStartAllowed(clientIp(req))) return oauthFail(res, "Te veel pogingen. Probeer het later opnieuw.");
+  var anon = String(url.searchParams.get("anon") || "");
+  var nonce = base64url(crypto.randomBytes(18));
+  var state = signSessionToken({
+    p: provider, n: nonce, exp: Date.now() + OAUTH_STATE_TTL_MS,
+    anon: ANON_ID_PATTERN.test(anon) ? anon : null, take: url.searchParams.get("take") === "1"
+  });
+  var q = new URLSearchParams({ client_id: p.clientId(), redirect_uri: oauthRedirectUri(req, provider), state: state, nonce: nonce });
+  if (provider === "apple") { q.set("response_type", "code id_token"); q.set("response_mode", "form_post"); q.set("scope", "name email"); }
+  else { q.set("response_type", "code"); q.set("scope", "openid email profile"); q.set("prompt", "select_account"); }
+  var secure = publicBaseUrl(req).indexOf("https://") === 0;
+  res.writeHead(302, { "Location": p.authorizeUrl + "?" + q.toString(), "Cache-Control": "no-store", "Set-Cookie": oauthCookieHeader(sha256b64(nonce), OAUTH_STATE_TTL_MS / 1000, secure) });
+  res.end();
+}
+
+// --- Stap 2: terug van Apple/Google ---
+function handleOAuthCallback(req, res, provider, url) {
+  var p = OAUTH_PROVIDERS[provider];
+  var ip = clientIp(req);
+  if (!p || !p.enabled()) return oauthFail(res, "Inloggen met deze dienst is niet ingesteld.");
+  if (!oauthCallbackAllowed(ip)) return oauthFail(res, "Te veel pogingen. Probeer het later opnieuw.");
+  var getParams = req.method === "POST" ? readFormBody(req) : Promise.resolve(Object.fromEntries(url.searchParams.entries()));
+  return getParams.then(function (params) {
+    if (params.error) {
+      var cancelled = /cancel|access_denied/i.test(params.error);
+      return oauthFail(res, cancelled ? "Inloggen met " + p.label + " is geannuleerd." : "Inloggen met " + p.label + " is niet gelukt.");
+    }
+    var st = verifySessionToken(params.state || "");
+    if (!st || st.p !== provider || !st.n) return oauthFail(res, "Deze inlogpoging is verlopen. Probeer het opnieuw.");
+    if (parseCookies(req)[OAUTH_COOKIE] !== sha256b64(st.n)) return oauthFail(res, "Deze inlogpoging hoort niet bij deze browser. Probeer het opnieuw.");
+    var getIdToken;
+    if (provider === "apple") getIdToken = Promise.resolve(params.id_token);
+    else {
+      getIdToken = fetch(p.tokenUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ code: params.code || "", client_id: GOOGLE_CLIENT_ID, client_secret: GOOGLE_CLIENT_SECRET, redirect_uri: oauthRedirectUri(req, provider), grant_type: "authorization_code" }).toString()
+      }).then(function (r) { return r.json().then(function (j) { if (!r.ok || !j.id_token) throw new Error("Code inwisselen mislukt"); return j.id_token; }); });
+    }
+    return getIdToken.then(function (idToken) { return verifyIdToken(idToken, provider, st.n); }).then(function (claims) {
+      var verified = claims.email_verified === true || claims.email_verified === "true";
+      var email = verified ? normalizeEmail(claims.email) : "";
+      return completeOAuthLogin(req, res, provider, claims.sub, email, st);
+    }, function (err) {
+      logEvent("auth", "oauth-" + provider, false, 401, { error: err && err.message ? err.message : "onbekend", ip: ip });
+      return oauthFail(res, "Inloggen met " + p.label + " kon niet worden bevestigd. Probeer het opnieuw.");
+    });
+  }).catch(function (err) {
+    try { oauthFail(res, "Inloggen mislukt: " + (err && err.message ? err.message : "onbekende fout")); } catch (e) {}
+  });
+}
+
+// Zoekt het account bij een gekoppelde identiteit; geeft null als de koppeling niet (meer) klopt.
+function accountForIdentity(link) {
+  if (!link || !link.uid) return Promise.resolve(null);
+  function check(email) {
+    if (!email) return Promise.resolve(null);
+    return dbGetDoc("auth/users/" + email).then(function (r) { return r.exists && r.value && r.value.uid === link.uid ? { email: email, acc: r.value } : null; });
+  }
+  return check(link.email).then(function (hit) {
+    if (hit) return hit;
+    return dbGetDoc("data/users/" + link.uid + "/meta").then(function (m) { return check(m.exists && m.value ? normalizeEmail(m.value.email) : ""); });
+  });
+}
+
+function completeOAuthLogin(req, res, provider, sub, email, st) {
+  var ip = clientIp(req), p = OAUTH_PROVIDERS[provider];
+  var idPath = "auth/oauth/" + provider + "_" + String(sub).replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 200);
+  var lockKeys = ["oauth:" + idPath].concat(email ? ["email:" + email] : []).concat(st.anon ? ["anon:" + st.anon] : []);
+  if (lockKeys.some(function (k) { return upgradeLocks.has(k) || oauthLocks.has(k); })) return oauthFail(res, "Je aanvraag wordt al verwerkt. Even geduld en probeer het opnieuw.");
+  lockKeys.forEach(function (k) { oauthLocks.add(k); });
+  var release = function () { lockKeys.forEach(function (k) { oauthLocks.delete(k); }); };
+  var now = new Date().toISOString();
+
+  function signIn(found, extra) {
+    return getBlocked().then(function (b) {
+      if (b.uids[found.acc.uid]) {
+        logEvent("auth", "oauth-" + provider, false, 403, { error: "Account geblokkeerd", email: found.email, uid: found.acc.uid, ip: ip });
+        return oauthFail(res, "Dit account is geblokkeerd. Neem contact op met de beheerder.");
+      }
+      var providers = Object.assign({}, found.acc.providers || {});
+      providers[provider] = sub;
+      var updated = Object.assign({}, found.acc, { providers: providers, lastLoginAt: now, loginCount: (found.acc.loginCount || 0) + 1 });
+      return Promise.all([
+        dbSetDoc("auth/users/" + found.email, updated),
+        dbSetDoc(idPath, { uid: found.acc.uid, email: found.email, linkedAt: (extra && extra.linkedAt) || now })
+      ]).then(function () {
+        logEvent("auth", "oauth-" + provider, true, 200, { email: found.email, uid: found.acc.uid, ip: ip, linked: extra && extra.linked ? true : undefined });
+        oauthFinish(res, { auth: issueUserSession(found.acc.uid, found.email), uid: found.acc.uid, via: provider, linked: extra && extra.linked ? 1 : undefined });
+      });
+    });
+  }
+
+  return dbGetDoc(idPath).then(function (link) {
+    return accountForIdentity(link.exists ? link.value : null).then(function (found) {
+      if (found) return signIn(found, { linkedAt: link.value.linkedAt });
+      if (!email) return oauthFail(res, p.label + " gaf geen bevestigd e-mailadres door. Log in met e-mail en wachtwoord.");
+      return dbGetDoc("auth/users/" + email).then(function (existing) {
+        if (existing.exists && existing.value && existing.value.uid) return signIn({ email: email, acc: existing.value }, { linked: true });
+        // Nieuw account: alleen als registreren aan staat.
+        return getSettings().then(function (s) {
+          if (!effectiveModules(s).registration) return oauthFail(res, "Nieuwe accounts kunnen op dit moment niet worden aangemaakt.");
+          var uid = "u_" + crypto.randomBytes(12).toString("hex");
+          var providers = {}; providers[provider] = sub;
+          var accDoc = { uid: uid, createdAt: now, createdBy: "self", via: provider, providers: providers, lastLoginAt: now, loginCount: 1 };
+          var anon = st.take ? st.anon : null;
+          var migrate = anon ? getBlocked().then(function (b) {
+            if (b.uids[anon]) return null;
+            return readAnonData(anon).then(function (data) {
+              var sum = anonSummary(data);
+              if (!(sum.prefs || sum.dishes || sum.plannedWeeks || sum.lists)) return null;
+              return copyAnonData(anon, uid, data, email, false).then(function (moved) { sum.lists = moved.length; return { data: data, moved: moved, sum: sum }; });
+            });
+          }) : Promise.resolve(null);
+          return migrate.then(function (mig) {
+            if (mig) accDoc.upgradedFrom = anon;
+            var made = dbSetDoc("auth/users/" + email, accDoc).then(function () { return dbSetDoc(idPath, { uid: uid, email: email, linkedAt: now }); });
+            if (!mig) made = made.then(function () { return dbSetDoc("data/users/" + uid + "/meta", { lastIp: ip, lastSeenAt: now, email: email }); });
+            return made.catch(function (e) { return (mig ? removeCopies(uid, mig.moved, anon) : Promise.resolve()).then(function () { throw e; }); }).then(function () {
+              return mig ? reassignJobs(anon, uid).then(function () { return cleanupAnon(anon); }) : null;
+            }).then(function () {
+              invalidateSummaries();
+              logEvent("auth", "oauth-" + provider, true, 200, { email: email, uid: uid, ip: ip, created: true, fromUid: mig ? anon : undefined });
+              oauthFinish(res, { auth: issueUserSession(uid, email), uid: uid, via: provider, created: 1,
+                m: mig ? [mig.sum.dishes, mig.sum.plannedWeeks, mig.sum.lists, mig.sum.prefs ? 1 : 0].join(".") : undefined });
+            });
+          });
+        });
+      });
+    });
+  }).then(release, function (e) { release(); throw e; });
+}
+
 // ---------- Het eigen account beheren (voor de ingelogde gebruiker zelf) ----------
 // Profielgegevens, gegevens downloaden, wachtwoord en e-mailadres wijzigen, op andere apparaten uitloggen en het
 // account verwijderen. Alles wat een wachtwoord controleert heeft een strenge grens per IP-adres (tegen raden).
@@ -1731,6 +1993,7 @@ function handleAccountInfo(req, res) {
       var s = anonSummary(r[0]), acc = r[1];
       sendJSON(res, 200, { type: user.email ? "account" : "anon", uid: user.uid, email: user.email || null,
         createdAt: acc ? acc.createdAt || null : null, lastLoginAt: acc ? acc.lastLoginAt || null : null, upgraded: !!(acc && acc.upgradedFrom),
+        hasPassword: !!(acc && acc.hash), providers: acc && acc.providers ? Object.keys(acc.providers) : [],
         counts: { dishes: s.dishes, plannedWeeks: s.plannedWeeks, lists: s.lists } });
     });
   });
@@ -1764,12 +2027,13 @@ function handleAccountChangePassword(req, res) {
   return withAccountUser(req, res, { sensitive: true, needAccount: true }, function (user) {
     return readBody(req).then(function (body) {
       var cur = cleanBodyPassword(body && body.currentPassword), nw = cleanBodyPassword(body && body.newPassword);
-      if (!cur) return sendJSON(res, 400, { code: "bad_request", message: "Vul je huidige wachtwoord in." });
       if (nw.length < 8) return sendJSON(res, 400, { code: "bad_request", message: "Het nieuwe wachtwoord moet minstens 8 tekens zijn." });
       if (nw.length > 200) return sendJSON(res, 400, { code: "bad_request", message: "Een wachtwoord mag hoogstens 200 tekens hebben." });
       return loadOwnAccount(user).then(function (acc) {
         if (!acc) return sendUnauthorized(res);
-        if (!verifyPassword(cur, acc)) { logEvent("auth", "password-change", false, 403, { error: "Huidig wachtwoord onjuist", email: user.email, uid: user.uid, ip: clientIp(req) }); return forbiddenPassword(res); }
+        // Een account dat alleen via Apple/Google inlogt heeft nog geen wachtwoord: dan stel je er hier een in.
+        if (acc.hash && !cur) return sendJSON(res, 400, { code: "bad_request", message: "Vul je huidige wachtwoord in." });
+        if (acc.hash && !verifyPassword(cur, acc)) { logEvent("auth", "password-change", false, 403, { error: "Huidig wachtwoord onjuist", email: user.email, uid: user.uid, ip: clientIp(req) }); return forbiddenPassword(res); }
         if (nw === cur) return sendJSON(res, 400, { code: "bad_request", message: "Kies een ander wachtwoord dan je huidige." });
         var rec = makePasswordRecord(nw), stamp = Date.now();
         return dbSetDoc("auth/users/" + user.email, Object.assign({}, acc, { salt: rec.salt, hash: rec.hash })).then(function () {
@@ -1796,6 +2060,7 @@ function handleAccountChangeEmail(req, res) {
       var release = function () { upgradeLocks.delete(lockKey); };
       return loadOwnAccount(user).then(function (acc) {
         if (!acc) return sendUnauthorized(res);
+        if (!acc.hash) return sendJSON(res, 400, { code: "bad_request", message: "Stel eerst een wachtwoord in; daarna kun je je e-mailadres wijzigen." });
         if (!verifyPassword(password, acc)) { logEvent("auth", "email-change", false, 403, { error: "Wachtwoord onjuist", email: user.email, uid: user.uid, ip: clientIp(req) }); return forbiddenPassword(res); }
         return dbGetDoc("auth/users/" + next).then(function (taken) {
           if (taken.exists) { logEvent("auth", "email-change", false, 409, { error: "Bestaat al", email: user.email, uid: user.uid, ip: clientIp(req) }); return sendJSON(res, 409, { code: "conflict", message: "Er bestaat al een account met dit e-mailadres." }); }
@@ -1834,10 +2099,10 @@ function handleAccountDelete(req, res) {
     return readBody(req).then(function (body) {
       var password = cleanBodyPassword(body && body.password);
       if (!body || body.confirm !== "VERWIJDEREN") return sendJSON(res, 400, { code: "bad_request", message: "Typ VERWIJDEREN om te bevestigen." });
-      if (!password) return sendJSON(res, 400, { code: "bad_request", message: "Vul je wachtwoord in om je account te verwijderen." });
       return loadOwnAccount(user).then(function (acc) {
         if (!acc) return sendUnauthorized(res);
-        if (!verifyPassword(password, acc)) { logEvent("auth", "self-delete", false, 403, { error: "Wachtwoord onjuist", email: user.email, uid: user.uid, ip: clientIp(req) }); return forbiddenPassword(res); }
+        if (acc.hash && !password) return sendJSON(res, 400, { code: "bad_request", message: "Vul je wachtwoord in om je account te verwijderen." });
+        if (acc.hash && !verifyPassword(password, acc)) { logEvent("auth", "self-delete", false, 403, { error: "Wachtwoord onjuist", email: user.email, uid: user.uid, ip: clientIp(req) }); return forbiddenPassword(res); }
         return deleteUserEverywhere({ uid: user.uid, email: user.email }).then(function () {
           logEvent("auth", "self-delete", true, 200, { email: user.email, uid: user.uid, ip: clientIp(req) });
           sendJSON(res, 200, { ok: true });
@@ -2537,6 +2802,11 @@ function handleAuthLogin(req, res) {
     var email = normalizeEmail(body && body.email);
     var password = (body && body.password) || "";
     return dbGetDoc("auth/users/" + email).then(function (result) {
+      if (result.exists && result.value && !result.value.hash && result.value.providers && Object.keys(result.value.providers).length) {
+        var via = Object.keys(result.value.providers).map(function (k) { return OAUTH_PROVIDERS[k] ? OAUTH_PROVIDERS[k].label : k; }).join(" of ");
+        logEvent("auth", "login", false, 401, { error: "Account zonder wachtwoord", email: email.slice(0, 200), ip: ip });
+        return sendJSON(res, 401, { code: "use_oauth", message: "Dit account logt in met " + via + ". Gebruik die knop, of stel via \u201cWachtwoord vergeten?\u201d een wachtwoord in." });
+      }
       if (!result.exists || !verifyPassword(password, result.value)) {
         logEvent("auth", "login", false, 401, { error: "Onjuiste inloggegevens", email: email.slice(0, 200), ip: ip });
         return sendJSON(res, 401, { code: "unauthorized", message: "E-mailadres of wachtwoord onjuist." });
@@ -4133,7 +4403,14 @@ function handleAdminUserDetail(req, res, uid) {
 
 function deleteUserEverywhere(user) {
   var uid = user.uid;
-  return cancelBillingForDeletion(uid).then(function () { return dbGetDoc("listsIndex/" + uid); }).then(function (r) {
+  return cancelBillingForDeletion(uid).then(function () {
+    // Koppelingen met Apple/Google opruimen
+    if (!user.email) return null;
+    return dbGetDoc("auth/users/" + user.email).then(function (acc) {
+      var prov = acc.exists && acc.value && acc.value.uid === uid && acc.value.providers ? acc.value.providers : {};
+      return Promise.all(Object.keys(prov).map(function (k) { return dbDeleteDoc("auth/oauth/" + k + "_" + String(prov[k]).replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 200)); }));
+    }).catch(function () {});
+  }).then(function () { return dbGetDoc("listsIndex/" + uid); }).then(function (r) {
     var tokens = r.exists && r.value && Array.isArray(r.value.tokens) ? r.value.tokens : [];
     return Promise.all(tokens.map(function (t) { return dbDeleteDoc("lists/" + t); }));
   }).then(function () {
@@ -4451,6 +4728,8 @@ function handleAdminSystem(req, res) {
       { key: "unsplash", label: "Foto's (UNSPLASH_ACCESS_KEY)", ok: !!UNSPLASH_ACCESS_KEY, optional: true, detail: UNSPLASH_ACCESS_KEY ? "ingesteld" : "niet ingesteld: gerechten krijgen geen foto" },
       { key: "webPush", label: "Meldingen (Web Push)", ok: pushInfo.ok && (pushInfo.source === "env" || mongoConnected), optional: true, detail: !pushInfo.ok ? "niet beschikbaar: " + pushInfo.error : pushInfo.source === "env" ? "sleutels uit de omgeving (VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY)" : mongoConnected ? "sleutels bewaard in de database" : "sleutels staan alleen in het lokale bestand en verdwijnen bij een herstart: stel VAPID_PUBLIC_KEY en VAPID_PRIVATE_KEY in" },
       { key: "billing", label: "Betalingen (Mollie)", ok: benv.keyPresent && benv.baseOk, optional: !billingEnabled, detail: !benv.keyPresent ? "MOLLIE_API_KEY staat niet ingesteld" + (billingEnabled ? "" : " (abonnementen staan uit)") : !benv.baseOk ? "PUBLIC_BASE_URL ontbreekt of is ongeldig (verwacht https://jouw-adres, zonder slash); Mollie heeft dat nodig voor de webhook" : (benv.mode === "live" ? "LIVE-sleutel" : benv.mode === "test" ? "testsleutel: er wordt niet echt afgeschreven" : "sleutel met een onbekend formaat") + " · webhook: " + benv.webhookUrl + (billingEnabled ? " · abonnementen staan aan" : " · abonnementen staan uit") },
+      { key: "oauthApple", label: "Inloggen met Apple (APPLE_CLIENT_ID)", ok: OAUTH_PROVIDERS.apple.enabled(), optional: true, detail: OAUTH_PROVIDERS.apple.enabled() ? "ingesteld · terugkeer-URL: " + (PUBLIC_BASE_URL || "<jouw adres>") + "/api/auth/oauth/apple/callback" : "niet ingesteld: de Apple-knop is verborgen" },
+      { key: "oauthGoogle", label: "Inloggen met Google (GOOGLE_CLIENT_ID/SECRET)", ok: OAUTH_PROVIDERS.google.enabled(), optional: true, detail: OAUTH_PROVIDERS.google.enabled() ? "ingesteld · terugkeer-URL: " + (PUBLIC_BASE_URL || "<jouw adres>") + "/api/auth/oauth/google/callback" : "niet ingesteld: de Google-knop is verborgen" },
       { key: "resend", label: "E-mail (RESEND_API_KEY)", ok: !!RESEND_API_KEY, optional: true, detail: RESEND_API_KEY ? "ingesteld" : "niet ingesteld: geen wachtwoord-vergeten-mails of uitnodigingen per e-mail" },
       { key: "nevo", label: "Voedingswaarden (NEVO)", ok: nevoAvailable(), optional: true, detail: nevoAvailable() ? nevoLoad().list.length + " producten geladen · " + NEVO_VERSION : "nevo/nevo2025_macros.json ontbreekt of is leeg: macro's worden alleen nog door de AI geschat" }
     ];
@@ -4610,6 +4889,7 @@ function handleConfig(req, res) {
       modules: effectiveModules(s),
       planOnly: s.planOnly,
       billing: billingLive(s),
+      oauth: oauthConfig(),
       maintenance: s.maintenance.enabled ? { enabled: true, message: s.maintenance.message || "De app is tijdelijk in onderhoud." } : { enabled: false },
       announcement: s.announcement.enabled && s.announcement.message ? { enabled: true, message: s.announcement.message, level: s.announcement.level } : { enabled: false }
     });
@@ -4668,6 +4948,11 @@ var server = http.createServer(function (req, res) {
   if (req.method === "POST" && url.pathname === "/api/auth/register") return guardedRegister(req, res);
   if (req.method === "POST" && url.pathname === "/api/auth/upgrade") return guardedUpgrade(req, res);
   if (req.method === "GET" && url.pathname === "/api/auth/anon-status") return handleAnonStatus(req, res);
+  var oauthMatch = url.pathname.match(/^\/api\/auth\/oauth\/(apple|google)\/(start|callback)$/);
+  if (oauthMatch) {
+    if (oauthMatch[2] === "start" && req.method === "GET") return handleOAuthStart(req, res, oauthMatch[1], url);
+    if (oauthMatch[2] === "callback" && (req.method === "GET" || req.method === "POST")) return handleOAuthCallback(req, res, oauthMatch[1], url);
+  }
   if (req.method === "GET" && url.pathname === "/api/account") return handleAccountInfo(req, res);
   if (req.method === "GET" && url.pathname === "/api/account/export") return handleAccountExport(req, res);
   if (req.method === "POST" && url.pathname === "/api/account/change-password") return handleAccountChangePassword(req, res);

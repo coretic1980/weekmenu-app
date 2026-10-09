@@ -132,6 +132,15 @@
   .prepcard h2 { font-family: "Fraunces", serif; font-weight: 600; font-size: 24px; margin: 0; color: inherit; }
   .ingr-list { margin: 0; padding-left: 18px; font-size: 15px; line-height: 1.8; }
   .plainbox { font-size: 15px; line-height: 1.7; }
+  .social-auth { display: flex; flex-direction: column; gap: 10px; }
+  .social-btn { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; min-height: 48px; padding: 12px 16px;
+    border-radius: 14px; font: inherit; font-size: 16px; font-weight: 600; cursor: pointer; border: 1px solid transparent; }
+  .social-btn:disabled { opacity: 0.6; cursor: default; }
+  .social-apple { background: #000; color: #fff; }
+  .social-google { background: #fff; color: #1F1F1F; border-color: #DADCE0; }
+  :root:not([data-theme="light"]) .social-apple { background: #fff; color: #000; }
+  .social-or { display: flex; align-items: center; gap: 12px; margin: 18px 0 14px; color: var(--muted); font-size: 13px; }
+  .social-or::before, .social-or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
   .dietnote { margin-top: 12px; padding: 12px 14px; border-radius: 14px; background: var(--tag-vet-bg); color: var(--tag-vet-ink);
     border: 1px solid color-mix(in srgb, var(--tag-vet-ink) 22%, transparent); font-size: 13.5px; line-height: 1.55; }
   .dietnote strong { display: block; font-size: 14px; margin-bottom: 4px; }
@@ -920,6 +929,40 @@
     return id;
   }
   window.anonId = getAnonId();
+
+  // Terug van "Doorgaan met Apple/Google": de server zet het resultaat in het #-deel van de URL.
+  (function readOAuthReturn() {
+    var hash = String(window.location.hash || "");
+    if (!/^#(auth|auth_error)=/.test(hash)) return;
+    var q = {};
+    hash.slice(1).split("&").forEach(function (kv) {
+      var i = kv.indexOf("=");
+      if (i > 0) { try { q[decodeURIComponent(kv.slice(0, i))] = decodeURIComponent(kv.slice(i + 1)); } catch (e) {} }
+    });
+    try { history.replaceState(null, "", window.location.pathname + window.location.search); } catch (e) { window.location.hash = ""; }
+    var label = q.via === "apple" ? "Apple" : q.via === "google" ? "Google" : "";
+    var notice;
+    if (q.auth && q.uid) {
+      window.authToken = q.auth; setAuthToken(q.auth);
+      window.USER_ID = q.uid; setStoredUid(q.uid);
+      if (q.created) {
+        var m = String(q.m || "").split(".").map(Number), parts = [];
+        if (m[0]) parts.push(m[0] + (m[0] === 1 ? " gerecht" : " gerechten"));
+        if (m[1]) parts.push(m[1] + (m[1] === 1 ? " week planning" : " weken planning"));
+        if (m[2]) parts.push(m[2] + (m[2] === 1 ? " gedeelde lijst" : " gedeelde lijsten"));
+        if (m[3]) parts.push("je voorkeuren");
+        notice = "Account aangemaakt met " + label + (parts.length ? " \u2014 meegenomen: " + parts.join(", ") + "." : ".");
+      } else if (q.linked) {
+        notice = "Ingelogd met " + label + ". Je kunt voortaan ook zo inloggen.";
+      } else {
+        notice = "Ingelogd met " + label + ".";
+      }
+    } else if (q.auth_error) {
+      notice = q.auth_error;
+      try { sessionStorage.setItem("weekmenu_oauth_error", q.auth_error); } catch (e) {}
+    }
+    if (notice) { try { sessionStorage.setItem("weekmenu_notice", notice); } catch (e) {} }
+  })();
   window.isStandalone = true; // deze versie genereert per maaltijdmoment parallel
   window.authHeaders = authHeaders;
 
@@ -1853,6 +1896,7 @@
   }
 
   var authState = { mode: "login", error: null, busy: false, info: null };
+  try { var oauthErr = sessionStorage.getItem("weekmenu_oauth_error"); if (oauthErr) { sessionStorage.removeItem("weekmenu_oauth_error"); authState.error = oauthErr; } } catch (e) {}
   (function () {
     try {
       var params = new URLSearchParams(window.location.search);
@@ -2594,33 +2638,46 @@
       showToast(bringBefore ? "Bring!-link opgeslagen." : "Bring!-link verwijderd.");
     };
 
+    // Of dit account een wachtwoord heeft (accounts via Apple/Google hebben dat niet altijd).
+    var ai = state.accountAuth;
+    if (loggedIn && (!ai || ai.token !== window.authToken)) {
+      state.accountAuth = { token: window.authToken, loading: true };
+      accountRequest("GET", "/api/account").then(function (d) {
+        state.accountAuth = { token: window.authToken, hasPassword: d.hasPassword !== false, providers: Array.isArray(d.providers) ? d.providers : [] };
+        if (state.view === "settings") render();
+      }).catch(function () { state.accountAuth = { token: window.authToken, hasPassword: true, providers: [] }; });
+    }
+    var noPassword = !!(ai && ai.token === window.authToken && ai.hasPassword === false);
+    var viaText = ai && ai.providers && ai.providers.length ? " \u00b7 gekoppeld met " + ai.providers.map(function (p) { return p === "apple" ? "Apple" : p === "google" ? "Google" : p; }).join(" en ") : "";
+
     if (loggedIn) {
       var acc = accCard(main, "Account en beveiliging");
       var mailLine = document.createElement("div"); mailLine.className = "acc-sub"; mailLine.id = "settingsEmailLine";
-      mailLine.textContent = "Ingelogd als " + (accountEmail() || "je account");
+      mailLine.textContent = "Ingelogd als " + (accountEmail() || "je account") + viaText;
       acc.appendChild(mailLine);
 
-      foldForm(acc, "settingsPw", "key", "Wachtwoord wijzigen", function (box, form) {
-        var cur = accInput(box, "settingsCurrentPw", "password", "Huidig wachtwoord", "current-password");
+      foldForm(acc, "settingsPw", "key", noPassword ? "Wachtwoord instellen" : "Wachtwoord wijzigen", function (box, form) {
+        var cur = noPassword ? { value: "" } : accInput(box, "settingsCurrentPw", "password", "Huidig wachtwoord", "current-password");
         var nw = accInput(box, "settingsNewPw", "password", "Nieuw wachtwoord (minstens 8 tekens)", "new-password");
         var nw2 = accInput(box, "settingsNewPw2", "password", "Herhaal nieuw wachtwoord", "new-password");
         var go = document.createElement("button"); go.className = "primary-btn"; go.id = "settingsPwSubmit"; go.textContent = "Wachtwoord opslaan";
         go.onclick = function () {
-          if (!cur.value) return form.fail("Vul je huidige wachtwoord in.");
+          if (!noPassword && !cur.value) return form.fail("Vul je huidige wachtwoord in.");
           if (nw.value.length < 8) return form.fail("Het nieuwe wachtwoord moet minstens 8 tekens zijn.");
           if (nw.value !== nw2.value) return form.fail("De nieuwe wachtwoorden komen niet overeen.");
-          if (nw.value === cur.value) return form.fail("Kies een ander wachtwoord dan je huidige.");
+          if (!noPassword && nw.value === cur.value) return form.fail("Kies een ander wachtwoord dan je huidige.");
           runForm(go, form, function () { return accountRequest("POST", "/api/account/change-password", { currentPassword: cur.value, newPassword: nw.value }); }, function (data) {
             storeSession(data);
             cur.value = ""; nw.value = ""; nw2.value = "";
             form.close();
-            showToast("Wachtwoord gewijzigd. Op je andere apparaten ben je uitgelogd.");
+            showToast(noPassword ? "Wachtwoord ingesteld. Je kunt nu ook met e-mail en wachtwoord inloggen." : "Wachtwoord gewijzigd. Op je andere apparaten ben je uitgelogd.");
+            if (noPassword) { state.accountAuth = null; render(); }
           });
         };
         box.appendChild(go);
       });
 
-      foldForm(acc, "settingsEmail", "mail", "E-mailadres wijzigen", function (box, form) {
+      if (!noPassword) foldForm(acc, "settingsEmail", "mail", "E-mailadres wijzigen", function (box, form) {
         var ne = accInput(box, "settingsNewEmail", "email", "Nieuw e-mailadres", "email");
         var pw = accInput(box, "settingsEmailPw", "password", "Je wachtwoord ter bevestiging", "current-password");
         var go = document.createElement("button"); go.className = "primary-btn"; go.id = "settingsEmailSubmit"; go.textContent = "E-mailadres opslaan";
@@ -2670,12 +2727,12 @@
       dd.textContent = "Wist je account en al je gegevens definitief: gerechten, voorkeuren, planning en gedeelde lijsten. Dit kan niet ongedaan worden gemaakt.";
       danger.appendChild(dd);
       foldForm(danger, "settingsDelete", "trash", "Account verwijderen\u2026", function (box, form) {
-        var pw = accInput(box, "settingsDeletePw", "password", "Je wachtwoord", "current-password");
+        var pw = noPassword ? { value: "" } : accInput(box, "settingsDeletePw", "password", "Je wachtwoord", "current-password");
         var word = accInput(box, "settingsDeleteWord", "text", "Typ VERWIJDEREN ter bevestiging", "off");
         var go = document.createElement("button"); go.className = "primary-btn"; go.id = "settingsDeleteSubmit"; go.textContent = "Definitief verwijderen";
         go.onclick = function () {
           if (word.value !== "VERWIJDEREN") return form.fail("Typ VERWIJDEREN om te bevestigen.");
-          if (!pw.value) return form.fail("Vul je wachtwoord in om je account te verwijderen.");
+          if (!noPassword && !pw.value) return form.fail("Vul je wachtwoord in om je account te verwijderen.");
           runForm(go, form, function () { return accountRequest("POST", "/api/account/delete", { password: pw.value, confirm: word.value }); }, function () {
             try { sessionStorage.setItem("weekmenu_notice", "Je account en al je gegevens zijn verwijderd."); } catch (e) {}
             clearDeviceData();
@@ -2752,6 +2809,43 @@
     });
   }
 
+  // ---- Doorgaan met Apple / Google ----
+  function isAppleDevice() {
+    var ua = String(navigator.userAgent || "");
+    return /iPhone|iPad|iPod|Macintosh|Mac OS X/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  }
+  var APPLE_LOGO = '<svg viewBox="0 0 17 20" width="17" height="20" aria-hidden="true"><path fill="currentColor" d="M14.1 10.6c0-2.6 2.1-3.8 2.2-3.9-1.2-1.8-3.1-2-3.7-2-1.6-.2-3.1.9-3.9.9-.8 0-2-.9-3.4-.9-1.7 0-3.3 1-4.2 2.6-1.8 3.1-.5 7.7 1.3 10.2.9 1.2 1.9 2.6 3.2 2.6 1.3-.1 1.8-.8 3.3-.8 1.6 0 2 .8 3.4.8 1.4 0 2.3-1.3 3.1-2.5 1-1.4 1.4-2.8 1.4-2.9 0 0-2.7-1-2.7-4.1zM11.6 3c.7-.9 1.2-2 1-3.2-1 0-2.3.7-3 1.6-.7.8-1.2 2-1.1 3.1 1.2.1 2.3-.6 3.1-1.5z"/></svg>';
+  var GOOGLE_LOGO = '<svg viewBox="0 0 18 18" width="18" height="18" aria-hidden="true"><path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62z"/><path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.8.54-1.84.86-3.04.86-2.34 0-4.33-1.58-5.04-3.7H.96v2.33A9 9 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.96 10.72a5.4 5.4 0 0 1 0-3.44V4.95H.96a9 9 0 0 0 0 8.1l3-2.33z"/><path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58A9 9 0 0 0 .96 4.95l3 2.33C4.67 5.16 6.66 3.58 9 3.58z"/></svg>';
+  function oauthEnabled(p) { return !!(window.appOAuth && window.appOAuth[p]); }
+  function startOAuth(provider, take) {
+    var url = "/api/auth/oauth/" + provider + "/start?anon=" + encodeURIComponent(window.anonId || "") + "&take=" + (take ? "1" : "0");
+    window.location.href = url;
+  }
+  // Voegt de knoppen toe (Apple bovenaan op een Apple-apparaat). Geeft false als er geen enkele aan staat.
+  function appendSocialButtons(container, getTake, mode) {
+    var list = ["apple", "google"].filter(oauthEnabled);
+    if (!list.length) return false;
+    if (!isAppleDevice()) list.reverse();
+    var wrap = document.createElement("div");
+    wrap.className = "social-auth";
+    list.forEach(function (p) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = "social-btn social-" + p;
+      b.id = "oauth-" + p;
+      b.innerHTML = (p === "apple" ? APPLE_LOGO : GOOGLE_LOGO) + "<span></span>";
+      b.querySelector("span").textContent = (mode === "register" ? "Account maken met " : "Doorgaan met ") + (p === "apple" ? "Apple" : "Google");
+      b.onclick = function () { b.disabled = true; startOAuth(p, getTake()); };
+      wrap.appendChild(b);
+    });
+    container.appendChild(wrap);
+    var or = document.createElement("div");
+    or.className = "social-or";
+    or.innerHTML = "<span>of met e-mail</span>";
+    container.appendChild(or);
+    return true;
+  }
+
   function renderUpgrade() {
     var app = document.getElementById("app");
     app.innerHTML = "";
@@ -2773,6 +2867,8 @@
       err.textContent = upgradeState.error;
       main.appendChild(err);
     }
+
+    if (moduleOn("registration")) appendSocialButtons(main, function () { return true; }, "register");
 
     var emailInput = document.createElement("input");
     emailInput.type = "email"; emailInput.id = "upgradeEmail"; emailInput.placeholder = "E-mailadres"; emailInput.className = "textinput";
@@ -2799,7 +2895,7 @@
     var note = document.createElement("div");
     note.className = "muted";
     note.style.cssText = "font-size:12px;margin-top:14px;";
-    note.textContent = "Je bent daarna ingelogd op dit apparaat. Op een ander apparaat log je in met je e-mailadres en wachtwoord.";
+    note.textContent = "Je bent daarna ingelogd op dit apparaat. Op een ander apparaat log je op dezelfde manier in.";
     main.appendChild(note);
 
     app.appendChild(main);
@@ -2903,6 +2999,9 @@
     }
 
     if (authState.mode === "login" || authState.mode === "register") {
+      appendSocialButtons(main, function () {
+        return !!authState.anonStatus && authState.anonStatus.hasData === true && authState.takeAnon !== false;
+      }, authState.mode);
       var emailInput = document.createElement("input");
       emailInput.type = "email";
       emailInput.id = "authEmail";
@@ -8806,6 +8905,7 @@
       window.authRequired = cfg.authRequired !== false;
       window.bringImportEndpoint = typeof cfg.bringImportEndpoint === "string" ? cfg.bringImportEndpoint : "";
       window.appBilling = cfg.billing === true;
+      window.appOAuth = cfg.oauth && typeof cfg.oauth === "object" ? cfg.oauth : {};
       applyRuntimeConfig(cfg);
       try { var pendingNotice = sessionStorage.getItem("weekmenu_notice"); if (pendingNotice) { sessionStorage.removeItem("weekmenu_notice"); setTimeout(function () { showToast(pendingNotice); }, 400); } } catch (e) {}
       lastConfigRefresh = Date.now();
