@@ -484,6 +484,17 @@
   .cs-step.is-disabled { opacity: 0.35; cursor: default; }
   .cs-count { display: inline-flex; align-items: center; gap: 3px; min-width: 30px; justify-content: center; font-size: 12.5px; font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums; }
   .plan-slot-row:has(.compact-slot) .plan-edit-btn { width: 40px; }
+  .pick-filters { display: flex; flex-direction: column; gap: 10px; }
+  .pick-search { padding: 11px 14px; font-size: 15px; }
+  .pick-chips { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .pick-chip { min-height: 36px; padding: 8px 14px; font-size: 13px; }
+  .pick-sort { width: auto; flex: 1 1 140px; min-width: 140px; padding: 8px 12px; font-size: 14px; border-radius: 999px; min-height: 36px; }
+  .pick-count { font-size: 12px; color: var(--muted); margin: -8px 0 -10px; }
+  .pick-list { display: flex; flex-direction: column; gap: 8px; }
+  .pick-row .dishname { -webkit-line-clamp: 2; }
+  .pick-sub { font-size: 12px; color: var(--muted); }
+  .pick-row.is-current { border-color: var(--accent2); box-shadow: 0 0 0 2px var(--accent2), var(--card-shadow); }
+  .pick-empty { font-size: 14px; color: var(--muted); padding: 18px 2px; }
   .archive-toggle { appearance: none; border: none; background: none; color: var(--ink); font-family: inherit; cursor: pointer;
     display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 14px 2px 4px; margin-top: 8px;
     font-size: 11px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; border-top: 1px solid var(--line); }
@@ -4520,7 +4531,7 @@
         editBtn.className = "plan-edit-btn";
         editBtn.setAttribute("aria-label", "Wijzig gerecht");
         editBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>';
-        editBtn.onclick = function () { goto("planpick", { planWeekId: pw.id, planSlotKey: primary.key }); };
+        editBtn.onclick = function () { goto("planpick", { pickFilter: null, planWeekId: pw.id, planSlotKey: primary.key }); };
         row.appendChild(editBtn);
 
         var clearDayBtn = document.createElement("button");
@@ -4664,10 +4675,10 @@
         editBtn.className = "plan-edit-btn";
         editBtn.setAttribute("aria-label", "Wijzig gerecht");
         editBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>';
-        editBtn.onclick = function () { goto("planpick", { planWeekId: pw.id, planSlotKey: key }); };
+        editBtn.onclick = function () { goto("planpick", { pickFilter: null, planWeekId: pw.id, planSlotKey: key }); };
         row.appendChild(editBtn);
       } else {
-        slot.onclick = function () { goto("planpick", { planWeekId: pw.id, planSlotKey: key }); };
+        slot.onclick = function () { goto("planpick", { pickFilter: null, planWeekId: pw.id, planSlotKey: key }); };
         row.appendChild(slot);
       }
 
@@ -4780,43 +4791,153 @@
       main.appendChild(clearBtn);
     }
 
-    var matched = WEEKS.some(function (week) {
-      return week.days.some(function (d) { return !d.prep && d.mealType === mealType; });
+    // Alleen gerechten van dit maaltijdmoment, zonder dubbelen, met filters bovenin.
+    var seenPick = {};
+    var pool = [];
+    WEEKS.forEach(function (week) {
+      week.days.forEach(function (d) {
+        if (d.prep || d.mealType !== mealType || seenPick[d.id]) return;
+        seenPick[d.id] = true;
+        pool.push({ week: week, day: d });
+      });
     });
-    if (!matched) {
-      var hint = document.createElement("div");
-      hint.className = "field-hint";
-      hint.textContent = "Nog geen gerechten specifiek ontworpen voor " + mealType + " — kies uit alle gerechten of ontwerp er eerst een paar.";
-      main.appendChild(hint);
+    var current = pw.slots[key];
+    var pf = state.pickFilter || (state.pickFilter = { q: "", nevo: false, highBal: false, sort: "nieuw" });
+
+    if (!pool.length) {
+      var none = document.createElement("div");
+      none.className = "pick-empty";
+      none.textContent = "Je hebt nog geen gerechten voor " + mealType.toLowerCase() + ". Laat er eerst een paar ontwerpen.";
+      main.appendChild(none);
+      var designBtn = document.createElement("button");
+      designBtn.className = "primary-btn";
+      designBtn.textContent = "Gerechten ontwerpen";
+      designBtn.onclick = function () { goto("prefs", { tab: "ontwerpen" }); };
+      main.appendChild(designBtn);
+      app.appendChild(main);
+      return;
     }
 
-    WEEKS.forEach(function (week) {
-      var eligible = week.days.filter(function (d) { return !d.prep && (matched ? d.mealType === mealType : true); });
-      if (!eligible.length) return;
+    var filters = document.createElement("div");
+    filters.className = "pick-filters";
+    var search = document.createElement("input");
+    search.type = "search";
+    search.id = "pickSearch";
+    search.className = "textinput pick-search";
+    search.placeholder = "Zoek in " + pool.length + " " + (mealType === "Snack" ? "snacks" : mealType.toLowerCase() + "s") + " (naam of ingrediënt)";
+    search.value = pf.q;
+    filters.appendChild(search);
 
-      var label = document.createElement("div");
-      label.className = "section-label";
-      label.textContent = week.title;
-      main.appendChild(label);
+    var chipRow = document.createElement("div");
+    chipRow.className = "pick-chips";
+    function chip(label, on, fn) {
+      var c = document.createElement("button");
+      c.type = "button";
+      c.className = "chip pick-chip" + (on ? " selected" : "");
+      c.setAttribute("aria-pressed", on ? "true" : "false");
+      c.textContent = label;
+      c.onclick = fn;
+      return c;
+    }
+    chipRow.appendChild(chip("NEVO-berekend", pf.nevo, function () { pf.nevo = !pf.nevo; render(); }));
+    chipRow.appendChild(chip("Balans 80%+", pf.highBal, function () { pf.highBal = !pf.highBal; render(); }));
+    var sortSel = document.createElement("select");
+    sortSel.className = "selectinput pick-sort";
+    sortSel.id = "pickSort";
+    sortSel.setAttribute("aria-label", "Sorteren");
+    [["nieuw", "Nieuwste eerst"], ["balans", "Beste balans"], ["kcal", "Minste kcal"], ["eiwit", "Meeste eiwit"]].forEach(function (o) {
+      var op = document.createElement("option");
+      op.value = o[0]; op.textContent = o[1];
+      if (pf.sort === o[0]) op.selected = true;
+      sortSel.appendChild(op);
+    });
+    sortSel.onchange = function () { pf.sort = sortSel.value; render(); };
+    chipRow.appendChild(sortSel);
+    filters.appendChild(chipRow);
+    main.appendChild(filters);
 
-      var group = document.createElement("div");
-      group.className = "pickgroup";
-      eligible.forEach(function (day) {
-        var card = document.createElement("button");
-        card.className = "card";
-        var h2 = document.createElement("h2");
-        h2.textContent = day.name;
-        card.appendChild(h2);
-        card.appendChild(macroTags(day));
-        card.onclick = function () {
-          pw.slots[key] = { name: day.name, weekId: week.id, dayId: day.id, balans: day.balans };
+    var countEl = document.createElement("div");
+    countEl.className = "pick-count";
+    main.appendChild(countEl);
+    var list = document.createElement("div");
+    list.className = "pick-list";
+    main.appendChild(list);
+
+    function ts(it) { var m2 = String(it.day.id || "").match(/(\d{12,14})/); return m2 ? Number(m2[1]) : 0; }
+    function drawList() {
+      var q = pf.q.trim().toLowerCase();
+      var items = pool.filter(function (it) {
+        var d = it.day;
+        if (pf.nevo && d.macroBron !== "nevo") return false;
+        if (pf.highBal && !(d.balans >= 80)) return false;
+        if (q) {
+          var hay = (d.name + " " + (Array.isArray(d.ingredienten) ? d.ingredienten.join(" ") : "")).toLowerCase();
+          if (hay.indexOf(q) === -1) return false;
+        }
+        return true;
+      });
+      items.sort(function (x, y) {
+        if (pf.sort === "balans") return (y.day.balans || 0) - (x.day.balans || 0);
+        if (pf.sort === "kcal") return (x.day.kcal || 0) - (y.day.kcal || 0);
+        if (pf.sort === "eiwit") return (y.day.eiwitG || 0) - (x.day.eiwitG || 0);
+        return ts(y) - ts(x);
+      });
+      countEl.textContent = items.length === pool.length ? pool.length + " gerechten" : items.length + " van " + pool.length + " gerechten";
+      list.innerHTML = "";
+      if (!items.length) {
+        var e = document.createElement("div");
+        e.className = "pick-empty";
+        e.textContent = "Geen gerechten die aan deze filters voldoen.";
+        list.appendChild(e);
+        return;
+      }
+      items.forEach(function (it) {
+        var d = it.day;
+        var isCur = current && current.dayId === d.id;
+        var row = document.createElement("button");
+        row.type = "button";
+        row.className = "plan-slot compact-slot pick-row" + (isCur ? " is-current" : "");
+        var top = document.createElement("div");
+        top.className = "cs-top";
+        var nm = document.createElement("span");
+        nm.className = "dishname";
+        nm.textContent = d.name;
+        top.appendChild(nm);
+        var stats = document.createElement("span");
+        stats.className = "cs-stats";
+        var kc = document.createElement("span");
+        kc.className = "cs-kcal";
+        kc.textContent = d.kcal + " kcal";
+        stats.appendChild(kc);
+        if (d.balans != null) {
+          var bp = document.createElement("span");
+          bp.className = "tag balans";
+          bp.title = "Balans-score";
+          bp.textContent = d.balans + "%";
+          stats.appendChild(bp);
+        }
+        top.appendChild(stats);
+        row.appendChild(top);
+        var sub = document.createElement("div");
+        sub.className = "pick-sub";
+        var bits = [];
+        if (d.eiwitG) bits.push(d.eiwitG + " g eiwit");
+        if (d.macroBron === "nevo") bits.push("NEVO");
+        if (isCur) bits.push("nu ingepland");
+        sub.textContent = bits.join(" · ");
+        if (bits.length) row.appendChild(sub);
+        row.onclick = function () {
+          var prev = pw.slots[key];
+          pw.slots[key] = { name: d.name, weekId: it.week.id, dayId: d.id, balans: d.balans };
+          if (prev && prev.servings) pw.slots[key].servings = prev.servings;
           savePlannedWeeks();
           goto("planday", { planWeekId: pw.id, planDayName: parts[0] });
         };
-        group.appendChild(card);
+        list.appendChild(row);
       });
-      main.appendChild(group);
-    });
+    }
+    search.oninput = function () { pf.q = search.value; drawList(); };
+    drawList();
 
     app.appendChild(main);
   }
