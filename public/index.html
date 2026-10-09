@@ -1384,7 +1384,8 @@
     var d = dishCreatedAt(day);
     if (!d) return "";
     var now = new Date();
-    return d.getDate() + " " + MONTHS_SHORT[d.getMonth()] + (d.getFullYear() !== now.getFullYear() ? " " + d.getFullYear() : "");
+    var hh = String(d.getHours()).padStart(2, "0"), mm = String(d.getMinutes()).padStart(2, "0");
+    return d.getDate() + " " + MONTHS_SHORT[d.getMonth()] + (d.getFullYear() !== now.getFullYear() ? " " + d.getFullYear() : "") + " " + hh + ":" + mm;
   }
   var DISH_PERIODS = [["alle", "Alle data"], ["7", "Laatste week"], ["30", "Laatste maand"], ["ouder", "Ouder"]];
   function matchesDishPeriod(day, period) {
@@ -4406,7 +4407,7 @@
         if (madeTxt) {
           var made = document.createElement("div");
           made.className = "dish-made";
-          made.textContent = "Gegenereerd op " + madeTxt;
+          made.textContent = "Gegenereerd op " + madeTxt.replace(/ (\d{2}:\d{2})$/, " om $1");
           card.appendChild(made);
         }
         card.appendChild(macroTags(item.day, { hideMealType: true }));
