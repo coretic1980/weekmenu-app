@@ -930,6 +930,14 @@
   }
   window.anonId = getAnonId();
 
+  // Verhuisd van het oude adres: de overdracht bewaren we tot de server bevestigt dat de verwijzer echt ons oude adres is.
+  (function readHandoff() {
+    var hash = String(window.location.hash || "");
+    if (hash.indexOf("#handoff=") !== 0) return;
+    try { sessionStorage.setItem("weekmenu_handoff", JSON.stringify({ data: decodeURIComponent(hash.slice(9)), ref: document.referrer || "" })); } catch (e) {}
+    try { history.replaceState(null, "", window.location.pathname + window.location.search); } catch (e) { window.location.hash = ""; }
+  })();
+
   // Terug van "Doorgaan met Apple/Google": de server zet het resultaat in het #-deel van de URL.
   (function readOAuthReturn() {
     var hash = String(window.location.hash || "");
@@ -2816,7 +2824,10 @@
   }
   var APPLE_LOGO = '<svg viewBox="0 0 17 20" width="17" height="20" aria-hidden="true"><path fill="currentColor" d="M14.1 10.6c0-2.6 2.1-3.8 2.2-3.9-1.2-1.8-3.1-2-3.7-2-1.6-.2-3.1.9-3.9.9-.8 0-2-.9-3.4-.9-1.7 0-3.3 1-4.2 2.6-1.8 3.1-.5 7.7 1.3 10.2.9 1.2 1.9 2.6 3.2 2.6 1.3-.1 1.8-.8 3.3-.8 1.6 0 2 .8 3.4.8 1.4 0 2.3-1.3 3.1-2.5 1-1.4 1.4-2.8 1.4-2.9 0 0-2.7-1-2.7-4.1zM11.6 3c.7-.9 1.2-2 1-3.2-1 0-2.3.7-3 1.6-.7.8-1.2 2-1.1 3.1 1.2.1 2.3-.6 3.1-1.5z"/></svg>';
   var GOOGLE_LOGO = '<svg viewBox="0 0 18 18" width="18" height="18" aria-hidden="true"><path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62z"/><path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.8.54-1.84.86-3.04.86-2.34 0-4.33-1.58-5.04-3.7H.96v2.33A9 9 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.96 10.72a5.4 5.4 0 0 1 0-3.44V4.95H.96a9 9 0 0 0 0 8.1l3-2.33z"/><path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58A9 9 0 0 0 .96 4.95l3 2.33C4.67 5.16 6.66 3.58 9 3.58z"/></svg>';
-  function oauthEnabled(p) { return !!(window.appOAuth && window.appOAuth[p]); }
+  function oauthEnabled(p) {
+    if (window.appCanonical && window.appCanonical !== window.location.origin) return false;   // terugkeer gaat naar het hoofdadres
+    return !!(window.appOAuth && window.appOAuth[p]);
+  }
   function startOAuth(provider, take) {
     var url = "/api/auth/oauth/" + provider + "/start?anon=" + encodeURIComponent(window.anonId || "") + "&take=" + (take ? "1" : "0");
     window.location.href = url;
@@ -8894,6 +8905,42 @@
     });
   }
 
+  // Gegevens uit de browser op het oude adres overnemen (zie readHandoff). Een bestaande inlog hier gaat altijd voor.
+  function applyHandoff(cfg) {
+    var raw = null;
+    try { raw = sessionStorage.getItem("weekmenu_handoff"); sessionStorage.removeItem("weekmenu_handoff"); } catch (e) {}
+    if (!raw) return;
+    var h, data;
+    try { h = JSON.parse(raw); data = JSON.parse(decodeURIComponent(escape(atob(h.data)))); } catch (e) { return; }
+    var allowed = cfg && Array.isArray(cfg.legacyOrigins) ? cfg.legacyOrigins : [];
+    var refOrigin = "";
+    try { refOrigin = new URL(h.ref).origin; } catch (e) {}
+    if (!refOrigin || allowed.indexOf(refOrigin) === -1 || !data || typeof data !== "object") return;
+    var KEYS = ["weekmenu_anon", "weekmenu_token", "weekmenu_uid", "weekmenu_theme", "weekmenu_shares", "weekmenu_share_meta", "weekmenu_tips_seen", "weekmenu_skipped", "balanza_autofill_meals"];
+    var hadLogin = !!window.authToken, moved = false;
+    KEYS.forEach(function (k) {
+      var v = data[k];
+      if (typeof v !== "string" || v.length > 20000) return;
+      try {
+        if (k === "weekmenu_token" || k === "weekmenu_uid" || k === "weekmenu_anon") {
+          if (hadLogin) return;
+          if (k === "weekmenu_anon" && !/^anon_[a-z0-9]{10,40}$/.test(v)) return;
+          localStorage.setItem(k, v); moved = true;
+          if (k === "weekmenu_token") window.authToken = v;
+          if (k === "weekmenu_uid") window.USER_ID = v;
+          if (k === "weekmenu_anon") window.anonId = v;
+        } else if (localStorage.getItem(k) === null) {
+          localStorage.setItem(k, v); moved = true;
+          if (k === "weekmenu_theme" && (v === "light" || v === "dark") && v !== currentTheme) {
+            currentTheme = v;
+            document.documentElement.setAttribute("data-theme", v);
+          }
+        }
+      } catch (e) {}
+    });
+    if (moved) setTimeout(function () { showToast("Welkom op " + window.location.host + " \u2014 je gegevens zijn meegekomen."); }, 600);
+  }
+
   function bootstrapApp() {
     configLoaded = false;
     render();
@@ -8902,10 +8949,12 @@
     }).catch(function () {
       return { authRequired: true };
     }).then(function (cfg) {
+      applyHandoff(cfg);
       window.authRequired = cfg.authRequired !== false;
       window.bringImportEndpoint = typeof cfg.bringImportEndpoint === "string" ? cfg.bringImportEndpoint : "";
       window.appBilling = cfg.billing === true;
       window.appOAuth = cfg.oauth && typeof cfg.oauth === "object" ? cfg.oauth : {};
+      window.appCanonical = typeof cfg.canonicalOrigin === "string" ? cfg.canonicalOrigin : null;
       applyRuntimeConfig(cfg);
       try { var pendingNotice = sessionStorage.getItem("weekmenu_notice"); if (pendingNotice) { sessionStorage.removeItem("weekmenu_notice"); setTimeout(function () { showToast(pendingNotice); }, 400); } } catch (e) {}
       lastConfigRefresh = Date.now();

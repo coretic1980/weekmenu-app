@@ -1829,6 +1829,13 @@ function handleOAuthStart(req, res, provider, url) {
   var p = OAUTH_PROVIDERS[provider];
   if (!p || !p.enabled()) return oauthFail(res, "Inloggen met " + (p ? p.label : "deze dienst") + " is nog niet ingesteld.");
   if (!oauthStartAllowed(clientIp(req))) return oauthFail(res, "Te veel pogingen. Probeer het later opnieuw.");
+  // De terugkeer gaat altijd naar het hoofdadres; daar moet ook het controle-cookie staan.
+  var canonStart = canonicalOrigin();
+  var reqHost = String(req.headers["x-forwarded-host"] || req.headers.host || "").split(",")[0].trim().toLowerCase();
+  if (canonStart && reqHost && reqHost !== new URL(canonStart).host.toLowerCase()) {
+    res.writeHead(302, { "Location": canonStart + url.pathname + url.search, "Cache-Control": "no-store" });
+    return res.end();
+  }
   var anon = String(url.searchParams.get("anon") || "");
   var nonce = base64url(crypto.randomBytes(18));
   var state = signSessionToken({
@@ -4890,6 +4897,8 @@ function handleConfig(req, res) {
       planOnly: s.planOnly,
       billing: billingLive(s),
       oauth: oauthConfig(),
+      canonicalOrigin: canonicalOrigin(),
+      legacyOrigins: canonicalOrigin() ? legacyOrigins() : [],
       maintenance: s.maintenance.enabled ? { enabled: true, message: s.maintenance.message || "De app is tijdelijk in onderhoud." } : { enabled: false },
       announcement: s.announcement.enabled && s.announcement.message ? { enabled: true, message: s.announcement.message, level: s.announcement.level } : { enabled: false }
     });
@@ -4925,8 +4934,72 @@ var APP_VERSION = (function () {
   }
 })();
 
+// ---------- Verhuizing naar het eigen domein (PUBLIC_BASE_URL) ----------
+// Komt iemand binnen via een ander adres van deze server (bijv. het onrender.com-adres), dan sturen we die door.
+// De app zelf ("/") geeft een kleine overdrachtspagina: die neemt het anonieme profiel, de inlog en een paar
+// instellingen uit de browser mee (via het #-deel van de URL, dat nooit naar een server gaat). Het nieuwe adres
+// accepteert die overdracht alleen als de verwijzer één van onze eigen oude adressen is (zie legacyOrigins).
+// Uitzetten kan met DOMAIN_REDIRECT=off. API-aanroepen, het service worker-bestand en iconen worden nooit doorgestuurd.
+var HANDOFF_KEYS = ["weekmenu_anon", "weekmenu_token", "weekmenu_uid", "weekmenu_theme", "weekmenu_shares", "weekmenu_share_meta",
+  "weekmenu_tips_seen", "weekmenu_skipped", "balanza_autofill_meals"];
+function canonicalOrigin() {
+  if (String(process.env.DOMAIN_REDIRECT || "").toLowerCase() === "off") return null;
+  try { var u = new URL(PUBLIC_BASE_URL); return /^https?:$/.test(u.protocol) ? u.origin : null; } catch (e) { return null; }
+}
+function legacyOrigins() {
+  var hosts = String(process.env.LEGACY_HOSTS || "").split(",").map(function (h) { return h.trim(); }).filter(Boolean);
+  if (process.env.RENDER_EXTERNAL_HOSTNAME) hosts.push(String(process.env.RENDER_EXTERNAL_HOSTNAME).trim());
+  return hosts.map(function (h) { return /^https?:\/\//.test(h) ? h.replace(/\/+$/, "") : "https://" + h; });
+}
+function handoffPageHtml(target) {
+  var t = JSON.stringify(target).replace(/</g, "\\u003c");
+  var host = new URL(target).host;
+  return '<!doctype html><html lang="nl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">' +
+    '<meta name="referrer" content="origin"><meta name="theme-color" content="#F3F7F4"><title>Balanza verhuist</title>' +
+    '<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#F3F7F4;color:#0F2219;font-family:-apple-system,system-ui,"Segoe UI",sans-serif;text-align:center;padding:24px;box-sizing:border-box}' +
+    '.c{max-width:420px}h1{font-size:24px;margin:0 0 10px}p{color:#55685D;line-height:1.55;margin:0 0 18px}' +
+    'a.b{display:inline-block;background:#14543A;color:#fff;text-decoration:none;font-weight:700;padding:13px 22px;border-radius:999px}' +
+    'a.s{display:block;margin-top:14px;color:#55685D;font-size:14px}</style></head><body><div class="c">' +
+    '<h1>Balanza heeft een nieuw adres</h1><p id="t">Je wordt doorgestuurd naar ' + host + '… Je gegevens gaan automatisch mee.</p>' +
+    '<a class="b" id="go" href="' + target + '">Ga naar ' + host + '</a><a class="s" id="stay" href="/?stay=1" style="display:none">Voorlopig hier blijven</a></div>' +
+    '<script>(function(){var T=' + t + ',K=' + JSON.stringify(HANDOFF_KEYS) + ',d={};' +
+    'try{K.forEach(function(k){var v=localStorage.getItem(k);if(v!==null&&v.length<20000)d[k]=v;});}catch(e){}' +
+    'var u=T.replace(/\\/$/,"")+"/"+location.search.replace(/[?&]stay=1/,"");' +
+    'if(Object.keys(d).length){try{u+="#handoff="+encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(d)))));}catch(e){}}' +
+    'document.getElementById("go").href=u;' +
+    'var sa=window.navigator.standalone===true||(window.matchMedia&&matchMedia("(display-mode: standalone)").matches);' +
+    'if(sa){document.getElementById("t").textContent="Je opent Balanza vanaf je beginscherm. Tik op de knop om ' + host + ' in je browser te openen en zet het daar opnieuw op je beginscherm. Je gegevens gaan automatisch mee.";' +
+    'document.getElementById("go").target="_blank";document.getElementById("stay").style.display="block";}' +
+    'else location.replace(u);})();</script></body></html>';
+}
+// Geeft true als het verzoek is afgehandeld (doorgestuurd).
+function handleDomainMove(req, res, url) {
+  if (req.method !== "GET" && req.method !== "HEAD") return false;
+  var canon = canonicalOrigin();
+  if (!canon) return false;
+  var host = String(req.headers["x-forwarded-host"] || req.headers.host || "").split(",")[0].trim().toLowerCase();
+  var canonHost = new URL(canon).host.toLowerCase();
+  if (!host || host === canonHost) return false;
+  var p = url.pathname;
+  if (p.indexOf("/api/") === 0) return false;
+  if (host === "www." + canonHost) {
+    res.writeHead(301, { "Location": canon + p + url.search, "Cache-Control": "public, max-age=3600" });
+    res.end(); return true;
+  }
+  if ((p === "/" || p === "/index.html") && url.searchParams.get("stay") !== "1") {
+    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
+    res.end(handoffPageHtml(canon + "/")); return true;
+  }
+  if (p === "/welkom" || p.indexOf("/l/") === 0) {
+    res.writeHead(301, { "Location": canon + p + url.search, "Cache-Control": "public, max-age=3600" });
+    res.end(); return true;
+  }
+  return false;
+}
+
 var server = http.createServer(function (req, res) {
   var url = new URL(req.url, "http://localhost");
+  if (handleDomainMove(req, res, url)) return;
 
   if (req.method === "GET" && url.pathname === "/api/version") {
     res.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store, max-age=0" });
