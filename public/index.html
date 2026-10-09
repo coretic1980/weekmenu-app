@@ -1817,15 +1817,20 @@
     { t: "feit", s: "Kruiden en specerijen geven veel smaak zonder noemenswaardig calorieën toe te voegen." },
     { t: "feit", s: "Zout, zuur, vet en hitte zijn de basis van smaak; een scheutje citroensap of azijn maakt een gerecht vaak levendiger." },
     { t: "feit", s: "Het kookwater van pasta bevat zetmeel; een klein scheutje ervan helpt een saus mooi te binden." },
-    { t: "tip", s: "Laat gebakken vlees even rusten voordat je het aansnijdt; het vocht verdeelt zich dan beter en blijft meer in het vlees." },
-    { t: "tip", s: "Zet de pan eerst goed heet en vul hem niet te vol: dan bruinen groenten en vlees mooier in plaats van te stomen." },
+    { t: "tip", meat: true, s: "Laat gebakken vlees even rusten voordat je het aansnijdt; het vocht verdeelt zich dan beter en blijft meer in het vlees." },
+    { t: "tip", s: "Zet de pan eerst goed heet en vul hem niet te vol: dan bruinen groenten, tofu en vlees mooier in plaats van te stomen." },
     { t: "tip", s: "Voeg stevige kruiden zoals tijm en rozemarijn vroeg toe, en zachte kruiden zoals peterselie en basilicum pas aan het eind." },
     { t: "tip", s: "Verdeel meal prep meteen in porties en koel het snel af; dat is beter voor de smaak en houdt het gerecht veiliger." },
     { t: "tip", s: "Proef vlak voor het serveren en pas zout en zuur aan: dat is vaak het verschil tussen goed en heel goed." },
     { t: "tip", s: "Snijd alle ingrediënten klaar voordat je gaat koken. Dat maakt koken rustiger en sneller." },
-    { t: "tip", s: "Bak kip of vis niet te lang: net gaar blijft veel sappiger dan kurkdroog gebakken." },
+    { t: "tip", meat: true, s: "Bak kip of vis niet te lang: net gaar blijft veel sappiger dan kurkdroog gebakken." },
     { t: "tip", s: "Kook een grote pan rijst of graan voor meerdere maaltijden, maar koel het snel af en bewaar het in de koelkast." },
     { t: "tip", s: "Loop je boodschappen per categorie langs (groente, zuivel, droge voorraad): zo ben je sneller door de winkel." },
+    { t: "tip", plant: true, s: "Dep tofu goed droog of druk hem een kwartiertje aan onder iets zwaars: dan wordt hij in de pan veel krokanter." },
+    { t: "tip", plant: true, s: "Marineer tempeh of tofu minstens een half uur, bijvoorbeeld in sojasaus, knoflook en limoen: ze nemen smaak goed op." },
+    { t: "feit", plant: true, s: "Seitan, tempeh en sojagehakt leveren veel eiwit met weinig koolhydraten; peulvruchten zijn ook eiwitrijk, maar bevatten meer koolhydraten." },
+    { t: "feit", plant: true, s: "Peulvruchten en granen vullen elkaars aminozuren aan; over de dag gecombineerd leveren ze samen hoogwaardig eiwit." },
+    { t: "tip", plant: true, s: "Een scheutje sojasaus, miso of wat gerookt paprikapoeder geeft plantaardige gerechten een diepe, hartige smaak." },
     { t: "balanza", s: "De Balans-score op elk gerecht laat zien hoe dicht de macroverdeling bij jouw doel zit: hoe hoger, hoe beter het past." },
     { t: "balanza", s: "Bij elk maaltijdmoment kun je aangeven voor hoeveel personen je kookt; de hoeveelheden en de boodschappenlijst schalen mee." },
     { t: "balanza", s: "De boodschappenlijst telt dezelfde ingrediënten uit verschillende gerechten automatisch bij elkaar op." },
@@ -1861,11 +1866,26 @@
   }
   function recentTipTexts() { return tipSeen.slice(-25); }
 
+  // Tips moeten passen bij de voedingsstijl: geen vlees of vis bij vegetarisch/veganistisch, geen zuivel of ei bij veganistisch.
+  var TIP_MEAT_RE = /\b(kip|vlees|vis|zalm|tonijn|kabeljauw|garnalen|gehakt|biefstuk|spek|ham|kalkoen|varkens\w*|rund\w*)\b/i;
+  var TIP_ANIMAL_RE = /\b(kwark|skyr|yoghurt|kaas|melk|room|boter|eieren|ei|honing|wei)\b/i;
+  function tipAllowed(text, tip) {
+    var diet = prefs && prefs.dietStyle;
+    var plantDiet = diet === "Vegetarisch" || diet === "Veganistisch";
+    if (tip && tip.plant && !plantDiet && diet !== "Flexitarisch") return false;   // plantaardige tips alleen waar ze passen
+    if (!plantDiet) return true;
+    if (tip && tip.meat) return false;
+    var t = String(text || "").replace(/\b(vegetarisch\w*|plantaardig\w*|vegan\w*)\s+\w+/gi, " ");
+    if (TIP_MEAT_RE.test(t)) return false;
+    if (diet === "Veganistisch" && TIP_ANIMAL_RE.test(t.replace(/\b(soja|haver|kokos|amandel|plantaardige?)[\s-]*\w+/gi, " "))) return false;
+    return true;
+  }
   function nextStaticTip() {
+    while (tipDeck.length && !tipAllowed(STATIC_TIPS[tipDeck[tipDeck.length - 1]].s, STATIC_TIPS[tipDeck[tipDeck.length - 1]])) tipDeck.pop();
     if (!tipDeck.length) {
       var pool = [];
-      STATIC_TIPS.forEach(function (t, i) { if (!tipIsSeen(t.s)) pool.push(i); });
-      if (!pool.length) STATIC_TIPS.forEach(function (t, i) { pool.push(i); });
+      STATIC_TIPS.forEach(function (t, i) { if (!tipIsSeen(t.s) && tipAllowed(t.s, t)) pool.push(i); });
+      if (!pool.length) STATIC_TIPS.forEach(function (t, i) { if (tipAllowed(t.s, t)) pool.push(i); });
       for (var i = pool.length - 1; i > 0; i--) {
         var j = Math.floor(Math.random() * (i + 1));
         var tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp;
@@ -1877,7 +1897,7 @@
 
   function addTips(raw) {
     cleanTipList(raw).forEach(function (tip) {
-      if (tipIsSeen(tip.tekst)) return;
+      if (tipIsSeen(tip.tekst) || !tipAllowed(tip.tekst)) return;
       var k = tipKey(tip.tekst);
       if (tipQueue.some(function (q) { return tipKey(q.s) === k; })) return;
       tipQueue.push({ t: tip.type, s: tip.tekst, ai: true });
