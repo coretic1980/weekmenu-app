@@ -333,6 +333,9 @@
   .photo-mode span { font-size: 12.5px; color: var(--muted); line-height: 1.4; }
   .photo-mode.selected { border-color: var(--accent2); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent2) 18%, transparent); }
   .photo-meals { margin: 0; }
+  .cook-top-btn { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 4px 0 6px; }
+  .cook-top-btn small { font-size: 12.5px; font-weight: 600; opacity: .8; }
+  .cook-top-btn small:not(:empty)::before { content: "\00b7"; margin-right: 8px; }
   .from-photo { margin: 2px 0 6px; padding: 12px 14px; border-radius: 14px; background: var(--nevo-bg); color: var(--ink); font-size: 13.5px; line-height: 1.5; }
   .from-photo-head { display: flex; align-items: flex-start; gap: 8px; font-weight: 700; color: var(--nevo-ink); }
   .from-photo-head svg { flex: none; margin-top: 1px; }
@@ -7970,6 +7973,21 @@
         fromPhoto.appendChild(ul);
       }
       main.appendChild(fromPhoto);
+    }
+
+    // Direct bovenaan: koken starten, zonder eerst naar beneden te hoeven scrollen.
+    var stepCount = Array.isArray(day.steps) ? day.steps.length : 0;
+    if (stepCount) {
+      var cookTop = document.createElement("button");
+      cookTop.type = "button";
+      cookTop.className = "primary-btn cook-top-btn";
+      cookTop.id = "cookTopBtn";
+      cookTop.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+        '<path d="M6 13.87A4 4 0 0 1 7.41 6a5.11 5.11 0 0 1 1.05-1.54 5 5 0 0 1 7.08 0A5.11 5.11 0 0 1 16.59 6 4 4 0 0 1 18 13.87V21H6Z"/><path d="M6 17h12"/></svg>' +
+        '<span>Start het kookproces</span><small></small>';
+      cookTop.querySelector("small").textContent = stepCount + (stepCount === 1 ? " stap" : " stappen") + (day.bereidingstijd ? " \u00b7 " + day.bereidingstijd + " min" : "");
+      cookTop.onclick = function () { goto("cook", { weekId: week.id, dayId: day.id, stepIndex: 0 }); };
+      main.appendChild(cookTop);
     }
 
     var servingsForView = state.dayServings || 1;
