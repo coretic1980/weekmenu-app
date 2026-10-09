@@ -220,6 +220,7 @@
     z-index: 60; text-align: center;
   }
   .toast.active { opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto; }
+  .toast-undo { appearance: none; border: none; background: none; color: inherit; font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; padding: 0 0 0 6px; }
   .guide-step { display: flex; gap: 16px; align-items: flex-start; }
   .guide-num {
     flex: none; width: 34px; height: 34px; border-radius: 50%; background: var(--accent); color: var(--accent-ink);
@@ -1218,6 +1219,25 @@
   }
 
   var toastTimer = null;
+  // Toast met een "Ongedaan maken"-knop, zodat een gewiste maaltijd snel terug kan.
+  var undoTimer = null;
+  function showUndoToast(message, onUndo) {
+    var el = document.getElementById("toast");
+    var txt = document.getElementById("toastText");
+    if (!el || !txt) { showToast(message); return; }
+    txt.textContent = message + " ";
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "toast-undo";
+    b.textContent = "Ongedaan maken";
+    b.onclick = function () { clearTimeout(undoTimer); el.classList.remove("active"); onUndo(); };
+    txt.appendChild(b);
+    el.classList.add("active");
+    if (typeof toastTimer !== "undefined" && toastTimer) clearTimeout(toastTimer);
+    clearTimeout(undoTimer);
+    undoTimer = setTimeout(function () { el.classList.remove("active"); }, 5000);
+  }
+
   function showToast(message) {
     var el = document.getElementById("toast");
     var textEl = document.getElementById("toastText");
@@ -4864,6 +4884,19 @@
         editBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>';
         editBtn.onclick = function () { goto("planpick", { pickFilter: null, planWeekId: pw.id, planSlotKey: key }); };
         row.appendChild(editBtn);
+        var delSlotBtn = document.createElement("button");
+        delSlotBtn.className = "plan-edit-btn";
+        delSlotBtn.setAttribute("aria-label", "Wis " + m.toLowerCase());
+        delSlotBtn.title = "Wis " + m.toLowerCase();
+        delSlotBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>';
+        delSlotBtn.onclick = function () {
+          var removed = pw.slots[key];
+          delete pw.slots[key];
+          savePlannedWeeks();
+          render();
+          showUndoToast(m + " gewist", function () { pw.slots[key] = removed; savePlannedWeeks(); render(); });
+        };
+        row.appendChild(delSlotBtn);
       } else {
         slot.onclick = function () { goto("planpick", { pickFilter: null, planWeekId: pw.id, planSlotKey: key }); };
         row.appendChild(slot);
