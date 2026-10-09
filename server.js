@@ -693,7 +693,8 @@ var NEVO_DATASET = (function () {
   var NEVO_REFERENCE = "Gebaseerd op gegevens uit NEVO online versie 2025/9.0, RIVM, Bilthoven";
   var NEVO_ADDITIONS = [
     // [code, naam, kcal, eiwit, kh, vet] — Balanza-aanvulling (gemiddelde etiketwaarden), niet afkomstig uit NEVO
-    ["B1", "Eiwitpoeder wei- (Balanza-aanvulling)", 380, 78, 7, 6]
+    ["B1", "Eiwitpoeder wei- (Balanza-aanvulling)", 380, 78, 7, 6],
+    ["B2", "Eiwitpoeder erwten- (Balanza-aanvulling)", 375, 80, 3, 7]
   ];
   var NEVO_STAPLE_CODES = [
     1634, 1305, 1936, 1405, 1421, 1400, 1663, 1422, 1790, 1587, 1096, 820, 3322, 1590, 353, 3320, 83, 358, 5519, 5573,
@@ -704,7 +705,9 @@ var NEVO_DATASET = (function () {
     921, 14, 959, 50, 922, 884, 51, 19, 71, 63, 5459, 830, 60, 2739, 2346, 2736, 10, 562, 1892, 23, 57, 682, 3220, 689, 832, 141, 1524, 2293,
     147, 151, 148, 161, 152, 692, 5369, 158, 1127,
     601, 317, 3376, 198, 206, 199, 204, 5275, 838, 3447, 2806,
-    5470, 5471, 2178, 2290, 451, 824, 443, 5253, 1232, 871, 1528, 616
+    5470, 5471, 2178, 2290, 451, 824, 443, 5253, 1232, 871, 1528, 616,
+    // Plantaardige eiwitbronnen (seitan, soja-/tarwe-vleesvervangers, mycoproteïne, sojadrink/-yoghurt, lupine)
+    1458, 5561, 5485, 2030, 3180, 5247, 5610
   ];
   // Kruiden, zout en water leveren verwaarloosbaar weinig energie en tellen niet mee voor de dekking.
   var NEVO_NEGLIGIBLE = ["zout", "zeezout", "peper", "water", "ijsblokjes", "ijs", "kaneel", "oregano", "basilicum", "peterselie",
@@ -973,8 +976,13 @@ function mealtypeGuideText(mealType, goal) {
   return min + "-" + max + " kcal per portie; " + g.desc;
 }
 
-function goalInstructionText(goal) {
+function goalInstructionText(goal, dietStyle) {
   var desc = GOAL_DESCRIPTIONS[goal] || GOAL_DESCRIPTIONS["Onderhoud"];
+  if (dietTargetAdjusted(goal, dietStyle)) {
+    var t = goalTargetFor(goal, dietStyle);
+    desc = "aangepast aan " + String(dietStyle).toLowerCase() + " eten: ca. " + t.kh + "% koolhydraten, " + t.eiwit + "% eiwit, " + t.vet + "% vet " +
+      "(plantaardige eiwitbronnen bevatten van nature meer koolhydraten of vet, daarom ligt het eiwitdoel iets lager)";
+  }
   return "Streef naar een macroverdeling passend bij het doel \"" + goal + "\": " + desc +
     " (elke macro binnen 2-3 procentpunt van het streefpercentage). ";
 }
@@ -997,13 +1005,23 @@ var DIET_FORBIDDEN_TEXT = {
   "Veganistisch": "geen vlees, gevogelte, vis, schaal- of schelpdieren, zuivel (melk, kaas, boter, room, yoghurt, kwark, skyr), eieren, honing, " +
     "gelatine, wei-eiwit of andere dierlijke producten; plantaardige varianten (sojamelk, havermelk, kokosmelk, tofu, tempeh) zijn wel goed"
 };
+// Eiwitstrategie: plantaardige eiwitbronnen die weinig koolhydraten/vet meebrengen, zodat de balans haalbaar blijft.
+function plantProteinStrategyText(dietStyle) {
+  if (!DIET_FORBIDDEN_TEXT[dietStyle]) return "";
+  var sources = dietStyle === "Vegetarisch"
+    ? "seitan, tempeh, stevige tofu, vegetarisch gehakt of vegetarische reepjes op basis van soja, mycoproteïne, magere kwark, skyr, eiwit(wit) van eieren, of eiwitpoeder"
+    : "seitan, tempeh, stevige tofu, vegetarisch gehakt of reepjes op basis van soja (vegan), sojadrink of sojayoghurt zonder suiker, lupine, of erwteneiwitpoeder";
+  return "EIWITSTRATEGIE: kies als hoofd-eiwitbron bij voorkeur " + sources + ". " +
+    "Peulvruchten (linzen, kikkererwten, bonen) bevatten veel koolhydraten; gebruik ze als bijgerecht of aanvulling, niet als enige eiwitbron. " +
+    "Houd vet laag (weinig olie, noten, kaas of kokos) en combineer eiwitbronnen waar nodig om het eiwitpercentage te halen.\n";
+}
 function dietHardRuleText(dietStyle) {
   var forbidden = DIET_FORBIDDEN_TEXT[dietStyle];
   if (!forbidden) return "";
   return "HARDE EIS \u2014 VOEDINGSSTIJL " + dietStyle.toUpperCase() + ": elk gerecht is volledig " + dietStyle.toLowerCase() + ": " + forbidden + ". " +
     "Deze eis gaat boven keukenstijl, smaak, apparatuur en doel. Bij klassieke gerechten met vlees of vis (bijv. paella, wokgerechten, stoofpot) " +
     "maak je de " + dietStyle.toLowerCase() + "e variant, met eiwitbronnen als peulvruchten, tofu, tempeh" + (dietStyle === "Vegetarisch" ? ", eieren of kaas" : "") +
-    ". Controleer vóór je antwoordt elk ingrediënt hierop.\n";
+    ". Controleer vóór je antwoordt elk ingrediënt hierop.\n" + plantProteinStrategyText(dietStyle);
 }
 var MEAT_FISH_RE = /\b(kip\w*|kippe\w*|kalkoen\w*|eend\w*|rund\w*|biefstuk\w*|ossenhaas|entrecote|gehakt\w*|varken\w*|spek\w*|bacon|ham|hammen|parmaham|serranoham|chorizo|salami|pancetta|prosciutto|\w*worst\w*|lams?\w*vlees|lamsrack|lamskotelet\w*|kalfs?\w*|hert\w*|konijn\w*|\w*vlees\w*|vis|vissen|visfilet\w*|vissaus|visbouillon|zalm\w*|tonijn\w*|kabeljauw\w*|pangasius|tilapia|makreel\w*|haring\w*|sardine\w*|sardientje\w*|ansjovis\w*|garnaal|garnalen\w*|gamba\w*|scampi|mossel\w*|inktvis\w*|octopus|calamaris?|kreeft\w*|krab\w*|oester\w*|sint-jakobsschelp\w*|schelpdier\w*|schaaldier\w*|zeevruchten|gelatine|kippenbouillon|runderbouillon)\b/i;
 var ANIMAL_RE = /\b(kaas\w*|\w*kaas|melk|volle melk|halfvolle melk|magere melk|karnemelk|boter|roomboter|room|slagroom|kookroom|zure room|cr[eè]me fra[iî]che|yoghurt\w*|kwark\w*|skyr|ei|eieren|eidooier\w*|eiwitten|honing|ghee|mozzarella|feta|parmezaan\w*|ricotta|mascarpone|cottage cheese|h[uü]ttenk[aä]se|wei|wei-eiwit\w*|whey|gelatine)\b/i;
@@ -1044,8 +1062,11 @@ function adaptPromptToDiet(prompt, dietStyle) {
   out = lines.filter(function (ln) {
     if (ln.indexOf(" | ") === -1 || !/kcal/.test(ln)) return true;   // alleen regels uit de NEVO-lijst filteren
     var name = ln.split(" | ")[0].toLowerCase();
-    if (MEAT_FISH_RE.test(name)) return false;
-    if (dietStyle === "Veganistisch" && ANIMAL_RE.test(name.replace(PLANT_DAIRY_RE, " "))) return false;
+    var plantBased = /\b(vegetarisch\w*|veganistisch\w*|vegan|plantaardig\w*|vega)\b|obv soja|obv mycoprote/.test(name);
+    if (dietStyle === "Veganistisch" && /^eiwitpoeder wei|mycoprote/.test(name)) return false;   // mycoproteïne bevat vaak kippeneiwit
+    if (dietStyle === "Veganistisch" && /^plantaardig alternatief/.test(name)) return true;
+    if (MEAT_FISH_RE.test(name) && !plantBased) return false;
+    if (dietStyle === "Veganistisch" && ANIMAL_RE.test(name.replace(PLANT_DAIRY_RE, " ").replace(/\bobv (soja|tarwe)\b/g, " "))) return false;
     return true;
   }).join("\n");
   return out;
@@ -1097,7 +1118,7 @@ dietStyleInstructionText(p.dietStyle) +
     "- Beschikbare apparatuur (mag je gebruiken, niet elk gerecht hoeft alles te gebruiken): " + equipTxt + "\n" +
     "- Uitgesloten ingrediënten: " + excludeTxt + "\n" +
     buildBodyProfileLine(p) +
-    goalInstructionText(p.goal) +
+    goalInstructionText(p.goal, p.dietStyle) +
     "Gebruik reële, haalbare porties en ingrediënten die passen " +
     "bij het gekozen maaltijdmoment van elk gerecht.\n" +
     INGREDIENT_SPECIFICITY_LINE +
@@ -1128,7 +1149,7 @@ function buildBackgroundGeneratePrompt(needed, p) {
     familyModeInstructionText(p.familyMode) +
     "- Beschikbare apparatuur (mag je gebruiken, niet elk gerecht hoeft alles te gebruiken): " + equipTxt + "\n" +
     buildBodyProfileLine(p) +
-    goalInstructionText(p.goal) + "\n" +
+    goalInstructionText(p.goal, p.dietStyle) + "\n" +
     INGREDIENT_SPECIFICITY_LINE +
     "Geef ALLEEN geldig JSON terug: een array van EXACT " + totalCount + " objecten, exact dit schema, " +
     "geen markdown-opmaak, geen uitleg erbuiten:\n" +
@@ -1146,7 +1167,7 @@ function buildVariationPromptServer(current, kind, p) {
   return "Hier is een bestaand gerecht in JSON: " + JSON.stringify(current) + "\n\n" +
     "Opdracht: " + (VARIATION_INSTRUCTIONS[kind] || "") + "\n" +
     dietHardRuleText(p.dietStyle) +
-    "Streef naar een macroverdeling passend bij het doel \"" + p.goal + "\": " + (GOAL_DESCRIPTIONS[p.goal] || "") + "\n" +
+    goalInstructionText(p.goal, p.dietStyle) + "\n" +
     (p.dietStyle ? dietStyleInstructionText(p.dietStyle) : "") +
     familyModeInstructionText(p.familyMode) +
     INGREDIENT_SPECIFICITY_LINE +
@@ -1289,23 +1310,46 @@ var GOAL_TARGETS = {
   "Spieropbouw (lean bulk)": { kh: 40, eiwit: 30, vet: 30 },
   "Atleet (prestatiegericht)": { kh: 45, eiwit: 25, vet: 30 }
 };
-function computeBalanceServer(khPct, eiwitPct, vetPct, goal) {
-  var t = GOAL_TARGETS[goal] || GOAL_TARGETS["Onderhoud"];
+// Plantaardig eten: realistische streefwaarden per doel (eiwit iets lager, koolhydraten iets hoger).
+var DIET_GOAL_TARGETS = {
+  "Vegetarisch": {
+    "Onderhoud": { kh: 35, eiwit: 30, vet: 35 },
+    "Vetverlies (spierbehoud)": { kh: 35, eiwit: 35, vet: 30 },
+    "Cutting": { kh: 30, eiwit: 40, vet: 30 }
+  },
+  "Veganistisch": {
+    "Onderhoud": { kh: 40, eiwit: 25, vet: 35 },
+    "Vetverlies (spierbehoud)": { kh: 40, eiwit: 30, vet: 30 },
+    "Cutting": { kh: 35, eiwit: 35, vet: 30 },
+    "Spieropbouw (lean bulk)": { kh: 45, eiwit: 25, vet: 30 },
+    "Atleet (prestatiegericht)": { kh: 50, eiwit: 22, vet: 28 }
+  }
+};
+function goalTargetFor(goal, dietStyle) {
+  var byDiet = DIET_GOAL_TARGETS[dietStyle];
+  return (byDiet && byDiet[goal]) || GOAL_TARGETS[goal] || GOAL_TARGETS["Onderhoud"];
+}
+function dietTargetAdjusted(goal, dietStyle) {
+  var byDiet = DIET_GOAL_TARGETS[dietStyle];
+  return !!(byDiet && byDiet[goal]);
+}
+function computeBalanceServer(khPct, eiwitPct, vetPct, goal, dietStyle) {
+  var t = goalTargetFor(goal, dietStyle);
   var maxDev = Math.max(Math.abs(khPct - t.kh), Math.abs(eiwitPct - t.eiwit), Math.abs(vetPct - t.vet));
   return Math.max(0, Math.min(100, Math.round(100 - 3 * maxDev)));
 }
-function dishBalans(d, goal) {
+function dishBalans(d, goal, dietStyle) {
   var kcal = Number(d && d.kcal) || 0;
   if (!kcal) return 0;
   var khPct = Math.round((Number(d.kh_g || 0) * 4 / kcal) * 100);
   var eiwitPct = Math.round((Number(d.eiwit_g || 0) * 4 / kcal) * 100);
   var vetPct = Math.round((Number(d.vet_g || 0) * 9 / kcal) * 100);
-  return computeBalanceServer(khPct, eiwitPct, vetPct, goal);
+  return computeBalanceServer(khPct, eiwitPct, vetPct, goal, dietStyle);
 }
-function minBalans(parsed, goal) {
+function minBalans(parsed, goal, dietStyle) {
   var dishes = Array.isArray(parsed) ? parsed : [parsed];
   if (!dishes.length) return 0;
-  return dishes.reduce(function (min, d) { return Math.min(min, dishBalans(d, goal)); }, 100);
+  return dishes.reduce(function (min, d) { return Math.min(min, dishBalans(d, goal, dietStyle)); }, 100);
 }
 
 var BALANS_MIN_THRESHOLD = 75;
@@ -1367,7 +1411,7 @@ function generateWithBalansRetry(prompt, goal, post, dietStyle) {
       if (post) parsed = post(parsed);
       var violations = dietViolationCount(parsed, dietStyle);
       // Overtreding van de voedingsstijl weegt zwaarder dan elke balans-score.
-      var score = (goal ? minBalans(parsed, goal) : 100) - violations * 1000;
+      var score = (goal ? minBalans(parsed, goal, dietStyle) : 100) - violations * 1000;
       if (score > bestScore) { bestScore = score; bestParsed = parsed; }
       if ((violations === 0 && (!goal || score >= BALANS_MIN_THRESHOLD)) || attempt >= BALANS_MAX_ATTEMPTS) {
         return finalizeDiet(bestParsed, dietStyle);

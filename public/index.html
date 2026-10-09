@@ -132,6 +132,11 @@
   .prepcard h2 { font-family: "Fraunces", serif; font-weight: 600; font-size: 24px; margin: 0; color: inherit; }
   .ingr-list { margin: 0; padding-left: 18px; font-size: 15px; line-height: 1.8; }
   .plainbox { font-size: 15px; line-height: 1.7; }
+  .dietnote { margin-top: 12px; padding: 12px 14px; border-radius: 14px; background: var(--tag-vet-bg); color: var(--tag-vet-ink);
+    border: 1px solid color-mix(in srgb, var(--tag-vet-ink) 22%, transparent); font-size: 13.5px; line-height: 1.55; }
+  .dietnote strong { display: block; font-size: 14px; margin-bottom: 4px; }
+  .goalnote { margin-top: 10px; font-size: 13.5px; line-height: 1.55; color: var(--muted); }
+  .goalnote b { color: var(--ink); }
   .primary-btn {
     appearance: none; border: none; background: var(--accent); color: var(--accent-ink);
     font-family: "Public Sans", sans-serif; font-weight: 700; font-size: 15px; letter-spacing: 0.01em;
@@ -3502,10 +3507,15 @@
       descBox.className = "plainbox";
       descBox.textContent = GOAL_DESCRIPTIONS[prefs.goal];
       main.appendChild(descBox);
+      if (goalTargetAdjusted(prefs.goal, prefs.dietStyle)) main.appendChild(goalNoteEl(prefs.goal, prefs.dietStyle));
+      var wWarn1 = dietGoalWarningEl(prefs.goal, prefs.dietStyle);
+      if (wWarn1) main.appendChild(wWarn1);
     } else if (state.wizardStep === 2) {
       heading("Heb je een voedingsstijl?", "Dit is een harde regel, geen suggestie: gerechten die hier niet aan voldoen worden nooit voorgesteld. Kies \u201cGeen voorkeur\u201d als dit niet van toepassing is.");
       var dietPairs = [["", "Geen voorkeur"]].concat(DIET_STYLES.map(function (d) { return [d, d]; }));
       chipGroupSingle(dietPairs, prefs.dietStyle, function (d) { prefs.dietStyle = d; });
+      var wWarn2 = dietGoalWarningEl(prefs.goal, prefs.dietStyle);
+      if (wWarn2) { main.appendChild(wWarn2); main.appendChild(goalNoteEl(prefs.goal, prefs.dietStyle)); }
     } else if (state.wizardStep === 3) {
       heading("Welke keuken en smaak spreken je aan?", "Mag je overslaan als je geen voorkeur hebt \u2014 dan houden we alle keukens en smaken open.");
       labelEl("Keukenstijl", "Bepaalt de stijl van de gerechten. Meerdere kiezen geeft meer afwisseling.");
@@ -3682,6 +3692,8 @@
       dietSeg.appendChild(chip);
     });
     main.appendChild(dietSeg);
+    var prefWarnDiet = dietGoalWarningEl(prefs.goal, prefs.dietStyle);
+    if (prefWarnDiet) main.appendChild(prefWarnDiet);
 
     labelEl("Kindvriendelijk", "Mildere smaken en herkenbare ingrediënten voor het hele gezin");
     var familySeg = document.createElement("div");
@@ -3800,6 +3812,14 @@
       goalCol.appendChild(chip);
     });
     main.appendChild(goalCol);
+    main.appendChild(goalNoteEl(prefs.goal, prefs.dietStyle));
+    var prefWarnGoal = dietGoalWarningEl(prefs.goal, prefs.dietStyle);
+    if (prefWarnGoal && prefs.dietStyle) {
+      var shortWarn = document.createElement("div");
+      shortWarn.className = "dietnote";
+      shortWarn.textContent = "Met " + prefs.dietStyle.toLowerCase() + " eten valt de Balans-score bij dit doel vaak lager uit \u2014 zie de toelichting bij Voedingsstijl.";
+      main.appendChild(shortWarn);
+    }
 
     var spacer = document.createElement("div");
     spacer.style.flex = "1";
@@ -3870,8 +3890,56 @@
     "Atleet (prestatiegericht)": "hoger koolhydraten voor trainings- en wedstrijdbrandstof, met voldoende eiwit voor herstel (streef naar 45% koolhydraten / 25% eiwit / 30% vet)"
   };
 
+  // Plantaardig eten: realistische streefwaarden per doel (eiwit iets lager, koolhydraten iets hoger). Gelijk aan server.js.
+  var DIET_GOAL_TARGETS = {
+    "Vegetarisch": {
+      "Onderhoud": { kh: 35, eiwit: 30, vet: 35 },
+      "Vetverlies (spierbehoud)": { kh: 35, eiwit: 35, vet: 30 },
+      "Cutting": { kh: 30, eiwit: 40, vet: 30 }
+    },
+    "Veganistisch": {
+      "Onderhoud": { kh: 40, eiwit: 25, vet: 35 },
+      "Vetverlies (spierbehoud)": { kh: 40, eiwit: 30, vet: 30 },
+      "Cutting": { kh: 35, eiwit: 35, vet: 30 },
+      "Spieropbouw (lean bulk)": { kh: 45, eiwit: 25, vet: 30 },
+      "Atleet (prestatiegericht)": { kh: 50, eiwit: 22, vet: 28 }
+    }
+  };
+  function goalTargetFor(goal, diet) {
+    var byDiet = DIET_GOAL_TARGETS[diet];
+    return (byDiet && byDiet[goal]) || GOAL_TARGETS[goal] || GOAL_TARGETS["Onderhoud"];
+  }
   function goalTarget() {
-    return GOAL_TARGETS[prefs.goal] || GOAL_TARGETS["Onderhoud"];
+    return goalTargetFor(prefs.goal, prefs.dietStyle);
+  }
+  function goalTargetAdjusted(goal, diet) {
+    var byDiet = DIET_GOAL_TARGETS[diet];
+    return !!(byDiet && byDiet[goal]);
+  }
+  // Korte regel onder het doel: welke streefverdeling geldt nu, en is die aangepast aan de voedingsstijl?
+  function goalNoteEl(goal, diet) {
+    var t = goalTargetFor(goal, diet);
+    var el = document.createElement("div");
+    el.className = "goalnote";
+    el.innerHTML = "Streefverdeling: <b>" + t.kh + "% koolhydraten \u00b7 " + t.eiwit + "% eiwit \u00b7 " + t.vet + "% vet</b>" +
+      (goalTargetAdjusted(goal, diet) ? " \u2014 aangepast aan " + String(diet).toLowerCase() + " eten (standaard " +
+        GOAL_TARGETS[goal].kh + "/" + GOAL_TARGETS[goal].eiwit + "/" + GOAL_TARGETS[goal].vet + ")." : ".");
+    return el;
+  }
+  // Waarschuwing bij een lastige combinatie van voedingsstijl en doel.
+  function dietGoalWarningEl(goal, diet) {
+    var hard = (diet === "Vegetarisch" && (goal === "Vetverlies (spierbehoud)" || goal === "Cutting")) || diet === "Veganistisch";
+    if (!hard) return null;
+    var el = document.createElement("div");
+    el.className = "dietnote";
+    el.setAttribute("role", "note");
+    var heavy = goal === "Vetverlies (spierbehoud)" || goal === "Cutting";
+    el.innerHTML = "<strong>" + (heavy ? "Lastige combinatie: " + String(diet).toLowerCase() + " + " + goal.split(" (")[0].toLowerCase() : "Let op bij " + String(diet).toLowerCase() + " eten") + "</strong>" +
+      "Plantaardige eiwitbronnen zoals peulvruchten, noten en tofu brengen ook koolhydraten of vet mee. " +
+      (heavy ? "Een heel hoog eiwitpercentage is daardoor moeilijk te halen, " : "Daardoor is de macroverdeling lastiger te sturen, ") +
+      "dus de Balans-score valt vaak wat lager uit. We passen het eiwitdoel daarom realistisch aan en kiezen eiwitrijke bronnen als seitan, tempeh, sojagehakt" +
+      (diet === "Vegetarisch" ? ", magere kwark en skyr" : " en erwteneiwit") + ".";
+    return el;
   }
 
   function computeBalance(khPct, eiwitPct, vetPct, target) {
