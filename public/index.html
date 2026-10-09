@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Balanza">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="theme-color" content="#0A0805">
+<meta name="theme-color" content="#F3F7F4">
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
@@ -1232,7 +1232,7 @@
   }
 
   var currentTheme = (function () {
-    try { return localStorage.getItem("weekmenu_theme") || "dark"; } catch (e) { return "dark"; }
+    try { return localStorage.getItem("weekmenu_theme") || "light"; } catch (e) { return "light"; }
   })();
   try { document.documentElement.setAttribute("data-theme", currentTheme); } catch (e) {}
   function toggleTheme() {
@@ -4367,6 +4367,19 @@
       clearAllBtn.className = "ghost-btn";
       clearAllBtn.textContent = "Wis alles";
       clearAllBtn.onclick = function () { clearAllStoredDishes(); };
+      if (moduleOn("pdf") && shownTotal) {
+        var libPdfBtn = document.createElement("button");
+        libPdfBtn.className = "primary-btn";
+        libPdfBtn.id = "libPdfBtn";
+        libPdfBtn.textContent = "Exporteer " + (shownTotal === 1 ? "dit gerecht" : "deze " + shownTotal + " gerechten") + " als PDF";
+        libPdfBtn.dataset.label = libPdfBtn.textContent;
+        libPdfBtn.onclick = function () {
+          var list = [];
+          shownTypes.forEach(function (m) { filteredItems(m).forEach(function (it) { list.push(it); }); });
+          exportLibraryPdf(list, libPdfBtn);
+        };
+        main.appendChild(libPdfBtn);
+      }
       main.appendChild(clearAllBtn);
 
       var nevoTodo = 0, nevoSeen = {};
@@ -7076,196 +7089,207 @@
     var pageW = doc.internal.pageSize.getWidth();
     var pageH = doc.internal.pageSize.getHeight();
     var margin = 48;
+    var contentW = pageW - margin * 2;
+    var footerSpace = 40;
+    var maxY = pageH - margin - footerSpace + 24;
     var y = margin;
     var lineH = 15;
-    var maxY = pageH - margin;
 
-    var NAVY = [14, 26, 48];
-    var INK = [16, 24, 43];
-    var MUTED = [107, 97, 82];
-    var ORANGE = [184, 134, 59];
-    var ORANGE_INK = [42, 28, 0];
-    var KH_BG = [233, 231, 222], KH_INK = [16, 24, 43];
-    var EIWIT_BG = [237, 234, 225], EIWIT_INK = [74, 68, 56];
-    var VET_BG = [243, 230, 208], VET_INK = [138, 98, 32];
-    var NEUTRAL_BG = [247, 242, 231];
-    var LINE = [231, 223, 204];
+    // Fris licht palet, gelijk aan het lichte thema van de app
+    var GREEN = [20, 84, 58];        // #14543A
+    var GREEN_2 = [31, 138, 85];     // #1F8A55
+    var MINT = [221, 243, 229];      // #DDF3E5
+    var MINT_BG = [238, 245, 240];   // #EEF5F0
+    var INK = [15, 34, 25];          // #0F2219
+    var MUTED = [85, 104, 93];       // #55685D
+    var LINE = [220, 230, 224];      // #DCE6E0
+    var KH_BG = [255, 242, 210], KH_INK = [138, 90, 16];
+    var EIWIT_BG = [231, 240, 234], EIWIT_INK = [15, 34, 25];
+    var VET_BG = [226, 238, 248], VET_INK = [34, 86, 130];
+    var NEUTRAL_BG = [243, 247, 244];
 
-    function ensureRoom(h) {
-      if (y + h > maxY) { doc.addPage(); y = margin; }
-    }
-    function heading(text, size, color) {
-      ensureRoom(size + 10);
-      doc.setTextColor(color[0], color[1], color[2]);
-      doc.setFont("times", "bold");
-      doc.setFontSize(size);
-      doc.text(text, margin, y);
-      y += size + 8;
-      doc.setTextColor(INK[0], INK[1], INK[2]);
-    }
-    function bodyLines(text, opts) {
-      doc.setFont("helvetica", opts && opts.bold ? "bold" : "normal");
-      doc.setFontSize(opts && opts.size ? opts.size : 11);
-      var wrapped = doc.splitTextToSize(text, pageW - margin * 2);
-      wrapped.forEach(function (line) {
-        ensureRoom(lineH);
-        doc.text(line, margin, y);
-        y += lineH;
-      });
-    }
-    function measureLines(text, size, bold) {
+    function setInk(c) { doc.setTextColor(c[0], c[1], c[2]); }
+    function newPage() { doc.addPage(); y = margin; }
+    // Blokken worden nooit midden doorgebroken: past het niet meer, dan gaat het hele blok naar de volgende pagina.
+    function keep(h) { if (y + h > maxY && y > margin + 1) newPage(); }
+    function wrap(text, size, bold, width) {
       doc.setFont("helvetica", bold ? "bold" : "normal");
       doc.setFontSize(size);
-      return doc.splitTextToSize(text, pageW - margin * 2).length;
+      return doc.splitTextToSize(String(text || ""), width || contentW);
     }
-    function drawBadge(x, yTop, text, fill, ink) {
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(8.5);
-      var padX = 8, h = 16;
-      var w = doc.getTextWidth(text) + padX * 2;
-      doc.setFillColor(fill[0], fill[1], fill[2]);
-      doc.roundedRect(x, yTop, w, h, 8, 8, "F");
-      doc.setTextColor(ink[0], ink[1], ink[2]);
-      doc.text(text, x + padX, yTop + h / 2 + 3);
-      doc.setTextColor(INK[0], INK[1], INK[2]);
-      return x + w + 6;
+    function blockHeight(lines, lh) { return lines.length * (lh || lineH); }
+    function drawLines(lines, x, size, bold, color, lh) {
+      doc.setFont("helvetica", bold ? "bold" : "normal");
+      doc.setFontSize(size);
+      setInk(color || INK);
+      lines.forEach(function (ln) { doc.text(ln, x, y); y += (lh || lineH); });
+    }
+    function badgesHeight(items) {
+      var x = margin, rows = 1;
+      doc.setFont("helvetica", "bold"); doc.setFontSize(8.5);
+      items.forEach(function (it) {
+        var w = doc.getTextWidth(it[0]) + 16;
+        if (x + w > pageW - margin) { rows++; x = margin; }
+        x += w + 6;
+      });
+      return rows * 22;
+    }
+    function drawBadges(items) {
+      var x = margin, top = y;
+      doc.setFont("helvetica", "bold"); doc.setFontSize(8.5);
+      items.forEach(function (it) {
+        var w = doc.getTextWidth(it[0]) + 16;
+        if (x + w > pageW - margin) { x = margin; top += 22; }
+        doc.setFillColor(it[1][0], it[1][1], it[1][2]);
+        doc.roundedRect(x, top, w, 16, 8, 8, "F");
+        setInk(it[2]);
+        doc.text(it[0], x + 8, top + 11);
+        x += w + 6;
+      });
+      y = top + 22;
     }
 
-    // --- Cover page ---
-    doc.setFillColor(NAVY[0], NAVY[1], NAVY[2]);
-    doc.rect(0, 0, pageW, 220, "F");
+    // --- Voorblad ---
+    doc.setFillColor(GREEN[0], GREEN[1], GREEN[2]);
+    doc.rect(0, 0, pageW, 230, "F");
+    doc.setFillColor(GREEN_2[0], GREEN_2[1], GREEN_2[2]);
+    doc.circle(pageW - 70, 40, 120, "F");
+    doc.setFillColor(GREEN[0], GREEN[1], GREEN[2]);
+    doc.circle(pageW - 70, 40, 92, "F");
+    doc.setFont("helvetica", "bold"); doc.setFontSize(10);
+    doc.setTextColor(143, 227, 180);
+    doc.text("BALANZA", margin, 70);
     doc.setTextColor(255, 255, 255);
-    doc.setFont("times", "bold");
-    doc.setFontSize(30);
-    doc.splitTextToSize(title, pageW - margin * 2).forEach(function (line, i) {
-      doc.text(line, margin, 110 + i * 34);
-    });
+    doc.setFont("times", "bold"); doc.setFontSize(30);
+    var titleLines = doc.splitTextToSize(title, contentW - 90);
+    titleLines.forEach(function (ln, i) { doc.text(ln, margin, 112 + i * 34); });
+    var afterTitle = 112 + (titleLines.length - 1) * 34;
     if (subtitle) {
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(12);
-      doc.setTextColor(224, 216, 196);
-      doc.text(subtitle, margin, 168);
+      doc.setFont("helvetica", "normal"); doc.setFontSize(12);
+      doc.setTextColor(207, 245, 221);
+      doc.text(subtitle, margin, afterTitle + 30);
     }
-    doc.setDrawColor(ORANGE[0], ORANGE[1], ORANGE[2]);
-    doc.setLineWidth(2);
-    doc.line(margin, 190, margin + 60, 190);
+    doc.setDrawColor(143, 227, 180); doc.setLineWidth(2.5);
+    doc.line(margin, afterTitle + 50, margin + 60, afterTitle + 50);
     doc.setLineWidth(1);
 
-    y = 260;
-    doc.setTextColor(INK[0], INK[1], INK[2]);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(11);
-    doc.text(entries.length + (entries.length === 1 ? " gerecht in dit menu" : " gerechten in dit menu"), margin, y);
-    y += 26;
-
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(11);
+    y = 272;
+    setInk(INK);
+    doc.setFont("helvetica", "bold"); doc.setFontSize(11);
+    doc.text(entries.length + (entries.length === 1 ? " gerecht" : " gerechten"), margin, y);
+    y += 24;
     entries.forEach(function (entry) {
-      ensureRoom(lineH + 2);
-      var left = entry.label + " — " + entry.day.name;
       var right = entry.day.prep ? "" : (entry.day.kcal + " kcal");
-      doc.setTextColor(INK[0], INK[1], INK[2]);
-      var leftLines = doc.splitTextToSize(left, pageW - margin * 2 - 70);
-      doc.text(leftLines[0], margin, y);
+      var leftLines = wrap(entry.label + " — " + entry.day.name, 10.5, false, contentW - 80);
+      var h = blockHeight(leftLines, 14) + 6;
+      keep(h);
+      var rowTop = y;
+      drawLines(leftLines, margin, 10.5, false, INK, 14);
       if (right) {
-        doc.setTextColor(MUTED[0], MUTED[1], MUTED[2]);
-        doc.text(right, pageW - margin, y, { align: "right" });
+        doc.setFont("helvetica", "bold"); doc.setFontSize(10.5); setInk(GREEN_2);
+        doc.text(right, pageW - margin, rowTop, { align: "right" });
       }
-      y += lineH;
+      doc.setDrawColor(LINE[0], LINE[1], LINE[2]);
+      doc.line(margin, y - 8, pageW - margin, y - 8);
+      y += 6;
     });
 
-    // --- Dish pages ---
-    doc.addPage();
-    y = margin;
-
+    // --- Gerechten: elk gerecht begint op een nieuwe pagina, blokken worden niet gesplitst ---
     entries.forEach(function (entry, entryIdx) {
+      newPage();
       var day = entry.day;
       var pdfImg = images && images[entryIdx] && images[entryIdx].dataUrl ? images[entryIdx] : null;
-      var meta = day.prep ? "" : (day.kcal + " kcal  ·  KH " + day.kh + "%" + (day.khG !== undefined ? " (" + day.khG + "g)" : "") +
-        " / Eiwit " + day.eiwit + "%" + (day.eiwitG !== undefined ? " (" + day.eiwitG + "g)" : "") +
-        " / Vet " + day.vet + "%" + (day.vetG !== undefined ? " (" + day.vetG + "g)" : "") +
-        "  ·  Balans " + day.balans + "%");
-      var benodigdhedenText = "Benodigdheden: " + day.benodigdheden;
 
-      var estHeight = 26 + (20 + 8) + 26 + 4 + 4 + 10;
-      if (pdfImg) estHeight += PDF_BANNER_H + 22;
-      estHeight += measureLines(benodigdhedenText, 11) * lineH;
-      estHeight += measureLines("Ingrediënten:", 11, true) * lineH;
-      day.ingredienten.forEach(function (ing) { estHeight += measureLines("• " + ing, 11) * lineH; });
-      estHeight += measureLines("Bereiding:", 11, true) * lineH;
-      day.steps.forEach(function (st, i) { estHeight += measureLines((i + 1) + ". " + st.title + " — " + st.content, 11) * lineH; });
-
-      if (y > margin && y + estHeight > maxY) { doc.addPage(); y = margin; }
-
-      if (y > margin) {
-        doc.setDrawColor(LINE[0], LINE[1], LINE[2]);
-        doc.line(margin, y, pageW - margin, y);
-        y += 22;
-      }
-
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(9.5);
-      doc.setTextColor(ORANGE[0], ORANGE[1], ORANGE[2]);
-      doc.text(entry.label.toUpperCase(), margin, y);
-      y += 16;
-
-      heading(day.name, 20, NAVY);
+      // label + titel
+      doc.setFont("helvetica", "bold"); doc.setFontSize(9.5); setInk(GREEN_2);
+      doc.text(String(entry.label).toUpperCase(), margin, y);
+      y += 26;
+      var tLines = (function () { doc.setFont("times", "bold"); doc.setFontSize(22); return doc.splitTextToSize(day.name, contentW); })();
+      doc.setFont("times", "bold"); doc.setFontSize(22); setInk(GREEN);
+      tLines.forEach(function (ln) { doc.text(ln, margin, y); y += 26; });
       y += 2;
 
-      var bx = margin;
+      var badges = [];
       if (day.prep) {
-        bx = drawBadge(bx, y, day.benodigdheden, NEUTRAL_BG, INK);
+        if (day.benodigdheden) badges.push([String(day.benodigdheden), NEUTRAL_BG, INK]);
       } else {
-        bx = drawBadge(bx, y, day.kcal + " kcal", NEUTRAL_BG, INK);
-        bx = drawBadge(bx, y, "KH " + day.kh + "%" + (day.khG !== undefined ? " (" + day.khG + "g)" : ""), KH_BG, KH_INK);
-        bx = drawBadge(bx, y, "Eiwit " + day.eiwit + "%" + (day.eiwitG !== undefined ? " (" + day.eiwitG + "g)" : ""), EIWIT_BG, EIWIT_INK);
-        bx = drawBadge(bx, y, "Vet " + day.vet + "%" + (day.vetG !== undefined ? " (" + day.vetG + "g)" : ""), VET_BG, VET_INK);
-        bx = drawBadge(bx, y, "Balans " + day.balans + "%", ORANGE, ORANGE_INK);
-        if (day.macroBron === "nevo") bx = drawBadge(bx, y, "NEVO-berekend", [228, 244, 233], [29, 106, 59]);
+        badges.push([day.kcal + " kcal", NEUTRAL_BG, INK]);
+        badges.push(["KH " + day.kh + "%" + (day.khG !== undefined ? " (" + day.khG + "g)" : ""), KH_BG, KH_INK]);
+        badges.push(["Eiwit " + day.eiwit + "%" + (day.eiwitG !== undefined ? " (" + day.eiwitG + "g)" : ""), EIWIT_BG, EIWIT_INK]);
+        badges.push(["Vet " + day.vet + "%" + (day.vetG !== undefined ? " (" + day.vetG + "g)" : ""), VET_BG, VET_INK]);
+        badges.push(["Balans " + day.balans + "%", GREEN_2, [255, 255, 255]]);
+        if (day.macroBron === "nevo") badges.push(["NEVO-berekend", MINT, GREEN]);
+        if (entry.servings > 1) badges.push(["Voor " + entry.servings + " personen", MINT_BG, GREEN]);
       }
-      y += 16 + 12;
+      if (badges.length) { keep(badgesHeight(badges)); drawBadges(badges); y += 10; }
 
       if (pdfImg) {
-        var imgW = pageW - margin * 2;
-        if (y + PDF_BANNER_H + 22 > maxY) { doc.addPage(); y = margin; }
+        keep(PDF_BANNER_H + 22);
         try {
-          doc.addImage(pdfImg.dataUrl, "JPEG", margin, y, imgW, PDF_BANNER_H, pdfImg.alias, "FAST");
-          doc.setDrawColor(LINE[0], LINE[1], LINE[2]);
-          doc.rect(margin, y, imgW, PDF_BANNER_H);
+          doc.addImage(pdfImg.dataUrl, "JPEG", margin, y, contentW, PDF_BANNER_H, pdfImg.alias, "FAST");
           y += PDF_BANNER_H;
           if (pdfImg.credit && pdfImg.credit.name) {
-            doc.setFont("helvetica", "normal");
-            doc.setFontSize(7.5);
-            doc.setTextColor(MUTED[0], MUTED[1], MUTED[2]);
+            doc.setFont("helvetica", "normal"); doc.setFontSize(7.5); setInk(MUTED);
             doc.text("Foto: " + pdfImg.credit.name + " (Unsplash)", pageW - margin, y + 10, { align: "right" });
-            doc.setTextColor(INK[0], INK[1], INK[2]);
             y += 22;
-          } else {
-            y += 12;
-          }
-        } catch (imgErr) { /* foto overslaan als het toevoegen mislukt; de rest van het gerecht blijft */ }
+          } else { y += 14; }
+        } catch (imgErr) { /* foto overslaan */ }
       }
 
-      if (!day.prep) { bodyLines(benodigdhedenText, { size: 11 }); y += 4; }
-      doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
-      bodyLines("Ingrediënten", { bold: true, size: 11 });
-      doc.setTextColor(INK[0], INK[1], INK[2]);
-      day.ingredienten.forEach(function (ing) { bodyLines("• " + ing, { size: 11 }); });
-      y += 4;
-      doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
-      bodyLines("Bereiding", { bold: true, size: 11 });
-      doc.setTextColor(INK[0], INK[1], INK[2]);
-      day.steps.forEach(function (st, i) { bodyLines((i + 1) + ". " + st.title + " — " + st.content, { size: 11 }); });
-      y += 14;
+      if (!day.prep && day.benodigdheden) {
+        var bLines = wrap("Benodigdheden: " + day.benodigdheden, 10.5, false);
+        keep(blockHeight(bLines) + 6);
+        drawLines(bLines, margin, 10.5, false, MUTED);
+        y += 6;
+      }
+
+      // Sectiekop houdt altijd minstens het eerste item bij zich
+      function section(titleTxt, items, render) {
+        if (!items.length) return;
+        var first = render(items[0], 0, true);
+        keep(26 + first);
+        doc.setFillColor(MINT_BG[0], MINT_BG[1], MINT_BG[2]);
+        doc.roundedRect(margin - 6, y - 13, contentW + 12, 20, 6, 6, "F");
+        doc.setFont("helvetica", "bold"); doc.setFontSize(11); setInk(GREEN);
+        doc.text(titleTxt, margin, y + 1);
+        y += 22;
+        items.forEach(function (it, i) { render(it, i, false); });
+        y += 8;
+      }
+      section("Ingrediënten", day.ingredienten || [], function (ing, i, measureOnly) {
+        var lines = wrap(ing, 10.5, false, contentW - 14);
+        var h = blockHeight(lines, 14) + 2;
+        if (measureOnly) return h;
+        keep(h);
+        doc.setFillColor(GREEN_2[0], GREEN_2[1], GREEN_2[2]);
+        doc.circle(margin + 3, y - 3.5, 1.8, "F");
+        drawLines(lines, margin + 14, 10.5, false, INK, 14);
+        y += 2;
+        return h;
+      });
+      section("Bereiding", day.steps || [], function (st, i, measureOnly) {
+        var txt = (st.title ? st.title + " — " : "") + (st.content || "");
+        var lines = wrap(txt, 10.5, false, contentW - 26);
+        var h = blockHeight(lines, 14) + 8;
+        if (measureOnly) return h;
+        keep(h);
+        doc.setFillColor(MINT[0], MINT[1], MINT[2]);
+        doc.circle(margin + 8, y - 4, 8, "F");
+        doc.setFont("helvetica", "bold"); doc.setFontSize(9); setInk(GREEN);
+        doc.text(String(i + 1), margin + 8, y - 0.8, { align: "center" });
+        drawLines(lines, margin + 26, 10.5, false, INK, 14);
+        y += 8;
+        return h;
+      });
     });
 
     var totalPages = doc.internal.getNumberOfPages();
     for (var p = 2; p <= totalPages; p++) {
       doc.setPage(p);
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(9);
-      doc.setTextColor(MUTED[0], MUTED[1], MUTED[2]);
-      doc.text(title, margin, pageH - 24);
+      doc.setDrawColor(LINE[0], LINE[1], LINE[2]);
+      doc.line(margin, pageH - 40, pageW - margin, pageH - 40);
+      doc.setFont("helvetica", "normal"); doc.setFontSize(8.5); setInk(MUTED);
+      doc.text(doc.splitTextToSize(title, contentW - 60)[0], margin, pageH - 24);
       doc.text((p - 1) + " / " + (totalPages - 1), pageW - margin, pageH - 24, { align: "right" });
     }
 
@@ -7324,6 +7348,30 @@
       return generatePdfBlob(week.title, week.subtitle, entries, images);
     }).then(function (blob) {
       downloadPdf(blob, week.title, btn, "Exporteer Week Menu");
+    }).catch(function () {
+      if (btn) btn.textContent = "PDF maken mislukt — probeer opnieuw";
+    });
+  }
+
+  function exportLibraryPdf(items, btn) {
+    if (!window.jspdf || !window.jspdf.jsPDF) { if (btn) btn.textContent = "PDF-bibliotheek niet geladen"; return; }
+    if (!items.length) return;
+    var resetLabel = btn && btn.dataset && btn.dataset.label ? btn.dataset.label : "Exporteer als PDF";
+    if (btn) btn.textContent = "PDF wordt gemaakt…";
+    var entries = items.map(function (it) {
+      var made = formatDishDate(it.day);
+      return { label: (it.day.mealType || "Gerecht") + (made ? " \u00b7 " + made : ""), day: it.day, key: "lib|" + it.day.id };
+    });
+    var parts = [];
+    if (libraryFilter !== "Alle") parts.push(libraryFilter);
+    if (libraryGoalFilter !== "Alle") parts.push(libraryGoalFilter);
+    var per = DISH_PERIODS.filter(function (x) { return x[0] === libraryPeriodFilter; })[0];
+    if (per && per[0] !== "alle") parts.push(per[1].toLowerCase());
+    var sub = (parts.length ? parts.join(" \u00b7 ") + " \u00b7 " : "") + "geëxporteerd op " + new Date().toLocaleDateString("nl-NL", { day: "numeric", month: "long", year: "numeric" });
+    buildPdfWithImages(entries, function (images) {
+      return generatePdfBlob("Mijn gerechten", sub, entries, images);
+    }).then(function (blob) {
+      downloadPdf(blob, "balanza-gerechten", btn, resetLabel);
     }).catch(function () {
       if (btn) btn.textContent = "PDF maken mislukt — probeer opnieuw";
     });
