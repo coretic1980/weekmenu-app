@@ -467,6 +467,23 @@
   .plan-slot-row:has(.day-line) .plan-edit-btn { width: 40px; }
   @media (max-width: 420px) { .day-line-when { flex-direction: column; gap: 0; } .day-line-when span { font-size: 12px; } }
   @media (max-width: 380px) { .day-line-when b { font-size: 15.5px; } .day-line-info .tag { padding: 3px 7px; font-size: 11px; } }
+  .plan-slot.compact-slot { flex-direction: column; align-items: stretch; gap: 3px; padding: 10px 12px 10px 14px; }
+  .cs-top, .cs-bottom { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 0; }
+  .compact-slot .mealname { font-size: 10.5px; }
+  .compact-slot .dishname { font-family: "Fraunces", serif; font-size: 15px; font-weight: 600; line-height: 1.25; margin: 0; min-width: 0;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .compact-slot.empty .dishname { font-family: inherit; font-size: 14px; font-weight: 500; }
+  .cs-stats { display: flex; align-items: center; gap: 6px; flex: none; }
+  .cs-kcal { font-size: 12.5px; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .cs-stats .tag { padding: 2px 8px; font-size: 11.5px; }
+  .cs-stepper { display: inline-flex; align-items: center; gap: 2px; flex: none; border: 1px solid var(--line); border-radius: 999px; padding: 2px; }
+  .cs-step { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 15px;
+    color: var(--ink); cursor: pointer; user-select: none; }
+  .cs-step:hover { background: var(--bg); }
+  .cs-step:focus-visible { outline: 2px solid var(--accent2); }
+  .cs-step.is-disabled { opacity: 0.35; cursor: default; }
+  .cs-count { display: inline-flex; align-items: center; gap: 3px; min-width: 30px; justify-content: center; font-size: 12.5px; font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .plan-slot-row:has(.compact-slot) .plan-edit-btn { width: 40px; }
   .archive-toggle { appearance: none; border: none; background: none; color: var(--ink); font-family: inherit; cursor: pointer;
     display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 14px 2px 4px; margin-top: 8px;
     font-size: 11px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; border-top: 1px solid var(--line); }
@@ -4552,34 +4569,56 @@
       row.className = "plan-slot-row";
 
       var slot = document.createElement("button");
-      slot.className = "plan-slot" + (assigned ? " has-macros" : " empty");
-      var left = document.createElement("div");
-      var mn = document.createElement("div");
-      mn.className = "mealname";
-      mn.textContent = m;
-      var dn = document.createElement("div");
-      dn.className = "dishname";
-      dn.textContent = assigned ? assigned.name : "Nog niet gepland";
-      left.appendChild(mn);
-      left.appendChild(dn);
-      slot.appendChild(left);
+      slot.className = "plan-slot compact-slot" + (assigned ? "" : " empty");
       var assignedDay = null;
       if (assigned) {
         var resolvedSlot = resolveAssignedDish(assigned);
         assignedDay = resolvedSlot ? resolvedSlot.day : null;
-        if (assignedDay) slot.appendChild(macroTags(assignedDay, { hideMealType: true }));
+      }
 
+      var top = document.createElement("div");
+      top.className = "cs-top";
+      var mn = document.createElement("span");
+      mn.className = "mealname";
+      mn.textContent = m;
+      top.appendChild(mn);
+      if (assignedDay) {
+        var stats = document.createElement("span");
+        stats.className = "cs-stats";
+        var kc = document.createElement("span");
+        kc.className = "cs-kcal";
+        kc.textContent = assignedDay.kcal + " kcal";
+        stats.appendChild(kc);
+        if (assignedDay.balans != null) {
+          var bp = document.createElement("span");
+          bp.className = "tag balans";
+          bp.title = "Balans-score";
+          bp.textContent = assignedDay.balans + "%";
+          stats.appendChild(bp);
+        }
+        top.appendChild(stats);
+      }
+      slot.appendChild(top);
+
+      var bottom = document.createElement("div");
+      bottom.className = "cs-bottom";
+      var dn = document.createElement("span");
+      dn.className = "dishname";
+      dn.textContent = assigned ? assigned.name : "Nog niet gepland";
+      bottom.appendChild(dn);
+
+      if (assigned) {
         var curServings = assigned.servings || 1;
-        var servingsRow = document.createElement("div");
-        servingsRow.style.display = "flex";
-        servingsRow.style.alignItems = "center";
-        servingsRow.style.gap = "10px";
-        servingsRow.style.marginTop = "4px";
+        var stepper = document.createElement("span");
+        stepper.className = "cs-stepper";
+        stepper.onclick = function (e) { e.stopPropagation(); };
 
-        var minusBtn = document.createElement("button");
-        minusBtn.textContent = "−";
+        var minusBtn = document.createElement("span");
+        minusBtn.setAttribute("role", "button");
+        minusBtn.setAttribute("tabindex", "0");
+        minusBtn.className = "cs-step" + (curServings <= 1 ? " is-disabled" : "");
+        minusBtn.textContent = "\u2212";
         minusBtn.setAttribute("aria-label", "Minder personen");
-        minusBtn.style.cssText = "width:36px;height:36px;border-radius:11px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-weight:700;cursor:pointer;flex:none;";
         minusBtn.onclick = function (e) {
           e.stopPropagation();
           if ((assigned.servings || 1) > 1) {
@@ -4590,27 +4629,33 @@
         };
 
         var countLabel = document.createElement("span");
-        countLabel.style.fontSize = "13px";
-        countLabel.style.fontWeight = "600";
-        countLabel.style.color = "var(--muted)";
-        countLabel.textContent = curServings + " " + (curServings === 1 ? "persoon" : "personen");
+        countLabel.className = "cs-count";
+        countLabel.title = curServings + " " + (curServings === 1 ? "persoon" : "personen");
+        countLabel.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg>';
+        countLabel.appendChild(document.createTextNode(String(curServings)));
 
-        var plusBtn = document.createElement("button");
+        var plusBtn = document.createElement("span");
+        plusBtn.setAttribute("role", "button");
+        plusBtn.setAttribute("tabindex", "0");
+        plusBtn.className = "cs-step";
         plusBtn.textContent = "+";
         plusBtn.setAttribute("aria-label", "Meer personen");
-        plusBtn.style.cssText = "width:36px;height:36px;border-radius:11px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-weight:700;cursor:pointer;flex:none;";
         plusBtn.onclick = function (e) {
           e.stopPropagation();
           assigned.servings = (assigned.servings || 1) + 1;
           savePlannedWeeks();
           render();
         };
+        [minusBtn, plusBtn].forEach(function (btn) {
+          btn.onkeydown = function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); btn.onclick(e); } };
+        });
 
-        servingsRow.appendChild(minusBtn);
-        servingsRow.appendChild(countLabel);
-        servingsRow.appendChild(plusBtn);
-        slot.appendChild(servingsRow);
+        stepper.appendChild(minusBtn);
+        stepper.appendChild(countLabel);
+        stepper.appendChild(plusBtn);
+        bottom.appendChild(stepper);
       }
+      slot.appendChild(bottom);
 
       if (assigned) {
         slot.onclick = function () { goto("day", { weekId: assigned.weekId, dayId: assigned.dayId, dayServings: assigned.servings || 1, dayBackView: "planday", dayBackWeekId: pw.id, dayBackDayName: d }); };
