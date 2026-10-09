@@ -1193,6 +1193,26 @@
       saveBill,
       h("div", { class: "hint", text: "Geef Mollie geen andere webhook: de app geeft het webhookadres zelf mee bij elke betaling. Zet in je Mollie-profiel wel de betaalmethoden aan die herhaald afschrijven ondersteunen (iDEAL werkt via SEPA-incasso; schakel die dan ook in)." })));
 
+    // proefperiode
+    var trialDaysIn = h("input", { type: "number", id: "trialDays", min: 1, max: 60, step: 1, "aria-label": "Aantal proefdagen" }); trialDaysIn.value = String(bs.trialDays || 7);
+    var saveTrial = h("button", { class: "ghost", id: "saveTrialBtn", text: "Opslaan" });
+    saveTrial.onclick = function () {
+      var n = Number(trialDaysIn.value.trim());
+      if (!isFinite(n) || Math.floor(n) !== n || n < 1 || n > 60) return toast("Kies 1 tot 60 dagen.", "bad");
+      if (n === bs.trialDays) return toast("Er is niets gewijzigd.");
+      apply({ billing: { trialDays: n } }, "Proefperiode is nu " + n + " dagen.");
+    };
+    var trialSw = switchBtn(bs.trialEnabled, function (on) {
+      if (!on) return confirmDialog({ title: "Proefmodel uitzetten", confirmLabel: "Uitzetten", message: "Iedereen zonder Plus valt terug op de gewone gratis versie (met de algemene maandlimiet). Of anoniem gebruik weer kan, hangt af van 'Inloggen verplicht'." }).then(function (ok) { if (ok) apply({ billing: { trialEnabled: false } }, "Proefmodel staat uit."); });
+      confirmDialog({ title: "Proefmodel aanzetten", confirmLabel: "Aanzetten", message: "Vanaf nu is een account verplicht: anonieme bezoekers komen op de welkomstpagina. Elk account krijgt " + (bs.trialDays || 7) + " dagen alle functies, gerekend vanaf het eerste gebruik na het aanzetten (ook bestaande accounts). Daarna kan zonder Plus alleen nog bekeken en gebruikt worden wat er al is; ontwerpen en plannen staan grijs." + (bs.enabled && envOk ? "" : " Let op: abonnementen staan nog niet aan, dus na de proef kan nog niemand Plus nemen.") }).then(function (ok) { if (ok) apply({ billing: { trialEnabled: true } }, "Proefmodel staat aan."); });
+    }, "Proefmodel");
+    trialSw.id = "trialSwitch";
+    view.appendChild(card("Proefperiode",
+      h("div", { class: "hint", style: { marginTop: "-4px", marginBottom: "10px" }, text: "Nieuwe accounts krijgen eerst een aantal dagen alle functies (zoals Plus). Daarna kan zonder Plus alleen nog worden bekeken en gebruikt wat er al is: gerechten, recepten, kookmodus, planning en boodschappenlijst. Ontwerpen en de planning wijzigen kan dan alleen met Plus. Anoniem gebruik is in dit model niet mogelijk. Een cadeau-Plus (per gebruiker) telt ook als Plus." }),
+      h("div", { class: "module", style: { padding: "0 0 12px" } }, h("div", {}, h("div", { class: "name", text: bs.trialEnabled ? "Staat aan" : "Staat uit" }), h("div", { class: "desc", text: bs.trialEnabled && !(bs.enabled && envOk) ? "Abonnementen staan nog uit: na de proef kan nog niemand Plus nemen." : "Proef van " + (bs.trialDays || 7) + " dagen per account." })), trialSw),
+      h("div", { class: "form-grid" }, field("Aantal proefdagen", trialDaysIn, "1 t/m 60. Geldt ook voor lopende proeven (de einddatum schuift mee).")),
+      saveTrial));
+
     // onderhoud
     var mMsg = h("textarea", { id: "maintMsg", maxLength: 300, placeholder: "Bijvoorbeeld: We zijn zo terug! Er wordt onderhoud uitgevoerd." }); mMsg.value = s.maintenance.message;
     var offLabels = cfg.maintenanceOffModules.map(function (k) { return defs[k].label.toLowerCase(); }).join(", ");
@@ -1242,7 +1262,7 @@
     if (parts[0] === "modules") { var d = s.moduleDefs.filter(function (x) { return x.key === parts[1]; })[0]; return "Onderdeel: " + (d ? d.label : parts[1]); }
     if (parts[0] === "limits") { var l = s.limitDefs.filter(function (x) { return x.key === parts[1]; })[0]; return "Limiet: " + (l ? l.label : parts[1]); }
     if (parts[0] === "planOnly") { var pd = s.moduleDefs.filter(function (x) { return x.key === parts[1]; })[0]; return "Voor wie: " + (pd ? pd.label : parts[1]); }
-    return ({ "billing.enabled": "Abonnementen aan", "billing.plusMonthlyCents": "Plus: maandprijs (centen)", "billing.plusYearlyCents": "Plus: jaarprijs (centen)", "billing.plusDishCap": "Plus: gerechten per maand", "billing.termsUrl": "Link naar voorwaarden", "maintenance.enabled": "Onderhoudsmodus", "maintenance.message": "Onderhoudsmelding", "announcement.enabled": "Mededeling tonen", "announcement.message": "Mededeling (tekst)", "announcement.level": "Mededeling (soort)" })[key] || key;
+    return ({ "billing.enabled": "Abonnementen aan", "billing.plusMonthlyCents": "Plus: maandprijs (centen)", "billing.plusYearlyCents": "Plus: jaarprijs (centen)", "billing.plusDishCap": "Plus: gerechten per maand", "billing.termsUrl": "Link naar voorwaarden", "billing.trialEnabled": "Proefmodel aan", "billing.trialDays": "Proefdagen", "maintenance.enabled": "Onderhoudsmodus", "maintenance.message": "Onderhoudsmelding", "announcement.enabled": "Mededeling tonen", "announcement.message": "Mededeling (tekst)", "announcement.level": "Mededeling (soort)" })[key] || key;
   }
   function settingValue(key, v) { return key.indexOf("planOnly.") === 0 ? (v ? "alleen Plus" : "iedereen") : typeof v === "boolean" ? (v ? "aan" : "uit") : v === "" ? "(leeg)" : String(v); }
   function summarizeAudit(e) {

@@ -210,6 +210,19 @@
     z-index: 50;
   }
   .busybar.active { opacity: 1; }
+  .locked, button.locked, .tab.locked { opacity: 0.45; filter: grayscale(0.6); cursor: not-allowed; }
+  .locked:hover { border-color: var(--line); }
+  .trial-banner { appearance: none; display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; font: inherit; color: var(--ink); cursor: pointer;
+    background: var(--surface); border: 1px solid var(--accent2); border-radius: 14px; padding: 12px 14px; box-shadow: 0 2px 12px rgba(20, 16, 8, 0.05); }
+  .trial-banner .tb-txt { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .trial-banner .tb-txt b { font-size: 14.5px; }
+  .trial-banner .tb-txt span { font-size: 12.5px; color: var(--muted); line-height: 1.4; }
+  .trial-banner .tb-go { flex: none; font-size: 13px; font-weight: 700; color: var(--accent2); white-space: nowrap; }
+  .trial-banner.expired { border-color: #E3A22F; background: #FFF8EA; }
+  .plus-prompt { text-align: center; }
+  .plus-prompt .pp-ic { width: 46px; height: 46px; margin: 0 auto 10px; border-radius: 14px; display: grid; place-items: center; background: var(--bg); color: var(--accent2); }
+  .plus-prompt h2 { font-family: "Fraunces", serif; font-size: 20px; margin: 0 0 8px; }
+  .plus-prompt p { font-size: 14px; line-height: 1.55; color: var(--muted); margin: 0 0 16px; }
   .busybar:not(.active) .busybar-card { pointer-events: none; }   /* onzichtbaar = niet aanklikbaar: anders vangt hij tikken op knoppen eronder */
   .busybar-card {
     width: calc(100% - 24px); max-width: 560px; margin: 0 12px 8px; pointer-events: auto; transition: max-width .2s ease;
@@ -1255,6 +1268,7 @@
     return res.json().catch(function () { return {}; }).then(function (body) {
       var e = new Error(body.message || ("HTTP " + res.status));
       e.code = body.code || (res.status === 429 ? "rate_limited" : "error");
+      if (e.code === "plan_required") { setTimeout(function () { refreshQuota(); openPlusPrompt("Dit"); }, 0); }   // proef net verlopen
       return e;
     });
   }
@@ -1475,6 +1489,7 @@
     return PLAN_MEALS.slice();
   }
   function openAutofillDialog(pw) {
+    if (requirePlus("Je week automatisch invullen")) return;
     var overlay = document.getElementById("autofillOverlay");
     var wrap = document.getElementById("autofillMeals");
     var genBtn = document.getElementById("autofillGenBtn");
@@ -1519,6 +1534,7 @@
 
   // Dialoog: kies welke maaltijdmomenten van een dag gewist worden.
   function openClearDayDialog(pw, d) {
+    if (requirePlus("Je planning aanpassen")) return;
     var overlay = document.getElementById("clearDayOverlay");
     var wrap = document.getElementById("clearDayMeals");
     var okBtn = document.getElementById("clearDayOkBtn");
@@ -2600,6 +2616,8 @@
   // Tekent de Plus-kaart opnieuw in zijn eigen vak (de kaart zelf staat al in Mijn profiel).
   // Geeft "Gratis" of "Plus" terug voor het label bij de avatar en in het menu, of null als het (nog) niet te bepalen is.
   function currentPlanLabel() {
+    if (trialModel() && userPlan() === "trial") return "Proef";
+    if (trialModel() && userPlan() === "expired") return "Proef voorbij";
     if (!billingOn()) return null;
     if (!billingInfo || !billingInfo.enabled) return null;
     return billingInfo.plusActive ? "Plus" : "Gratis";
@@ -2713,6 +2731,79 @@
     })();
   }
 
+
+  // ---- Proefmodel: de eerste dagen alles open, daarna alleen met Plus ontwerpen en plannen ----
+  // De server bepaalt de stand ("trial", "plus" of "expired" in /api/usage); dit stuurt alleen wat je ziet.
+  // "expired" = alles wat je hebt blijft bruikbaar (bekijken, koken, boodschappen), maar uitvoeren of wijzigen
+  // (ontwerpen, planning aanpassen) staat grijs met een uitleg.
+  function trialModel() { return !!window.appTrial; }
+  function userPlan() { return quotaInfo && quotaInfo.plan ? quotaInfo.plan : null; }
+  function readOnlyMode() { return trialModel() && userPlan() === "expired"; }
+  function trialDaysLeft() {
+    if (userPlan() !== "trial" || !quotaInfo.trialEndsAt) return null;
+    return Math.max(0, Math.ceil((Date.parse(quotaInfo.trialEndsAt) - Date.now()) / 86400000));
+  }
+  var LOCK_TIP = "Kan met Plus · je proefperiode is voorbij";
+  // Zet een knop op slot: grijs, met tooltip, en een tik toont de uitleg (op een telefoon is er geen hover).
+  function lockEl(el, what) {
+    if (!el || !readOnlyMode()) return false;
+    el.classList.add("locked");
+    el.disabled = false;
+    el.setAttribute("aria-disabled", "true");
+    el.title = LOCK_TIP;
+    el.onclick = function (e) { if (e) { e.preventDefault(); e.stopPropagation(); } openPlusPrompt(what); };
+    el.draggable = false;
+    return true;
+  }
+  function requirePlus(what) {
+    if (!readOnlyMode()) return false;
+    openPlusPrompt(what);
+    return true;
+  }
+  function openPlusPrompt(what) {
+    var ov = document.getElementById("plusPromptOverlay");
+    if (!ov) {
+      ov = document.createElement("div");
+      ov.id = "plusPromptOverlay"; ov.className = "confirm-overlay";
+      ov.setAttribute("role", "dialog"); ov.setAttribute("aria-modal", "true"); ov.setAttribute("aria-labelledby", "plusPromptTitle");
+      ov.innerHTML = '<div class="confirm-box plus-prompt"><div class="pp-ic" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></div>' +
+        '<h2 id="plusPromptTitle"></h2><p id="plusPromptText"></p>' +
+        '<div class="confirm-actions"><button type="button" class="ghost-btn" id="plusPromptClose">Sluiten</button><button type="button" class="primary-btn" id="plusPromptGo">Bekijk Plus</button></div></div>';
+      document.body.appendChild(ov);
+    }
+    document.getElementById("plusPromptTitle").textContent = (what || "Dit") + " kan met Plus";
+    document.getElementById("plusPromptText").textContent = "Je gratis proefperiode is voorbij. Alles wat je al hebt, blijft gewoon bruikbaar: je gerechten, recepten, kookmodus, planning en boodschappenlijst. Nieuwe gerechten ontwerpen en je planning aanpassen kan met Balanza Plus.";
+    function close() { ov.classList.remove("active"); }
+    document.getElementById("plusPromptClose").onclick = close;
+    ov.onclick = function (e) { if (e.target === ov) close(); };
+    ov.onkeydown = function (e) { if (e.key === "Escape") close(); };
+    document.getElementById("plusPromptGo").onclick = function () {
+      close();
+      if (billingOn()) goto("plans");
+      else showToast("Balanza Plus is binnenkort beschikbaar.");
+    };
+    ov.classList.add("active");
+    setTimeout(function () { var g = document.getElementById("plusPromptGo"); if (g) g.focus(); }, 0);
+  }
+  // Balk met de stand van de proef (bovenaan Start, Ontwerpen en Plannen).
+  function planStatusBanner() {
+    if (!trialModel()) return null;
+    var plan = userPlan();
+    if (plan !== "trial" && plan !== "expired") return null;
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "trial-banner" + (plan === "expired" ? " expired" : ""); b.id = "trialBanner";
+    var left = trialDaysLeft();
+    var title = plan === "expired" ? "Je proefperiode is voorbij"
+      : left <= 1 ? "Laatste dag van je proefperiode" : "Nog " + left + " dagen alle functies gratis";
+    var sub = plan === "expired" ? "Alles wat je hebt blijft bruikbaar. Ontwerpen en plannen kan met Plus."
+      : "Daarna ontwerp en plan je verder met Balanza Plus.";
+    b.innerHTML = '<span class="tb-txt"><b></b><span></span></span><span class="tb-go">Bekijk Plus ›</span>';
+    b.querySelector("b").textContent = title;
+    b.querySelector(".tb-txt span").textContent = sub;
+    b.onclick = function () { if (billingOn()) goto("plans"); else showToast("Balanza Plus is binnenkort beschikbaar."); };
+    return b;
+  }
+
   // ---- Maandlimiet: hoeveel nieuwe gerechten je deze maand nog kunt laten maken ----
   var quotaInfo = null;   // { dishes, cap, unlimited, remaining, resetsOn } van de server, of null zolang onbekend
   function quotaBlocked() { return !!quotaInfo && !quotaInfo.unlimited && quotaInfo.remaining === 0; }
@@ -2736,7 +2827,7 @@
   }
   // Haalt de stand op. Verandert daardoor of de generatieknop geblokkeerd moet zijn, dan wordt het scherm opnieuw getekend.
   function refreshQuota() {
-    var before = quotaBlocked();
+    var before = quotaBlocked(), planBefore = userPlan();
     if (typeof fetch !== "function") return Promise.resolve();
     return fetch("/api/usage", { headers: window.authHeaders ? window.authHeaders() : {} }).then(function (res) {
       if (!res.ok) throw new Error("HTTP " + res.status);
@@ -2746,6 +2837,7 @@
       paintQuota();
       if (quotaBlocked() && billingOn() && !billingInfo) refreshBilling().then(paintQuota);   // om te weten of we Plus kunnen aanbieden
       if (before !== quotaBlocked() && state.view === "prefs" && !state.generating) render();
+      else if (planBefore !== userPlan() && !state.generating) render();
     }).catch(function () {});
   }
 
@@ -3306,9 +3398,11 @@
     main.appendChild(logoWrap);
 
     var titles = { login: "Welkom terug", register: "Account aanmaken", forgot: "Wachtwoord vergeten", reset: "Nieuw wachtwoord instellen" };
+    var trialDays = window.appTrial && window.appTrial.days;
+    if (trialDays) titles.register = "Probeer " + trialDays + " dagen gratis";
     var subtitles = {
       login: "Log in om je gerechten en planning te zien.",
-      register: "Je gegevens worden bewaard onder dit account.",
+      register: trialDays ? "Alle functies, geen betaalgegevens nodig. Daarna kies je zelf of je Plus neemt." : "Je gegevens worden bewaard onder dit account.",
       forgot: "Vul je e-mailadres in, dan sturen we je een link.",
       reset: "Kies een nieuw wachtwoord voor je account."
     };
@@ -3386,7 +3480,7 @@
       submitBtn.className = "primary-btn";
       submitBtn.style.marginTop = "8px";
       submitBtn.disabled = authState.busy;
-      submitBtn.textContent = authState.busy ? "Even geduld…" : (authState.mode === "login" ? "Inloggen" : "Account aanmaken");
+      submitBtn.textContent = authState.busy ? "Even geduld…" : (authState.mode === "login" ? "Inloggen" : (trialDays ? "Start je gratis proef" : "Account aanmaken"));
       submitBtn.onclick = function () { submitAuth(authState.mode === "login" ? "login" : "register"); };
       main.appendChild(submitBtn);
 
@@ -3394,13 +3488,19 @@
         var toggle = document.createElement("button");
         toggle.className = "wizard-skip";
         toggle.style.marginTop = "14px";
-        toggle.textContent = authState.mode === "login" ? "Nog geen account? Account aanmaken" : "Al een account? Inloggen";
+        toggle.textContent = authState.mode === "login" ? (trialDays ? "Nog geen account? Probeer " + trialDays + " dagen gratis" : "Nog geen account? Account aanmaken") : "Al een account? Inloggen";
         toggle.onclick = function () {
           authState.mode = authState.mode === "login" ? "register" : "login";
           authState.error = null; authState.info = null;
           render();
         };
         main.appendChild(toggle);
+        if (trialDays) {
+          var site = document.createElement("a"); site.className = "wizard-skip"; site.href = "/welkom"; site.id = "authToSite";
+          site.style.cssText = "display:block;text-align:center;margin-top:6px;text-decoration:none;";
+          site.textContent = "‹ Meer over Balanza";
+          main.appendChild(site);
+        }
       } else {
         var noReg = document.createElement("div");
         noReg.className = "muted";
@@ -3705,6 +3805,8 @@
     }
 
     renderHomeToday(main, "greeting");
+    var homeTrial = planStatusBanner();
+    if (homeTrial) main.appendChild(homeTrial);
 
     // Vaste plek: account aanmaken (alleen voor wie anoniem werkt), altijd direct onder de begroeting.
     if (!window.authToken && moduleOn("registration")) {
@@ -4355,6 +4457,7 @@
         '<span>Maak een foto van je bord of van een recept. Balanza maakt er een gerecht van, op jouw manier.</span></span><span class="photo-card-go" aria-hidden="true">›</span>';
       photoCard.disabled = !!state.generating || quotaBlocked();
       photoCard.onclick = pickDishPhoto;
+      lockEl(photoCard, "Een gerecht van een foto maken");
       main.appendChild(photoCard);
     }
 
@@ -4448,7 +4551,8 @@
     goBtn.className = "primary-btn gen-go"; goBtn.id = "generateBtn";
     var estSecs = estimateGenerationSeconds(total, false);
     var title, sub;
-    if (!moduleOn("generate")) { title = "Genereren staat tijdelijk uit"; sub = ""; goBtn.disabled = true; }
+    if (readOnlyMode()) { title = "Ontwerpen kan met Plus"; sub = "Je proefperiode is voorbij"; }
+    else if (!moduleOn("generate")) { title = "Genereren staat tijdelijk uit"; sub = ""; goBtn.disabled = true; }
     else if (state.generating) { title = "Bezig met genereren…"; sub = "Je kunt gerust iets anders doen"; goBtn.disabled = true; }
     else if (quotaBlocked()) { title = "Limiet voor deze maand bereikt"; sub = ""; goBtn.disabled = true; }
     else if (!total) { title = "Kies minstens één gerecht"; sub = "Zet hierboven een aantal bij een maaltijdmoment"; goBtn.disabled = true; }
@@ -4462,6 +4566,7 @@
     goBtn.querySelector("small").textContent = sub;
     if (!sub) goBtn.querySelector("small").style.display = "none";
     goBtn.onclick = startGenerateFlow;
+    lockEl(goBtn, "Nieuwe gerechten ontwerpen");
     dock.appendChild(goBtn);
     main.appendChild(dock);
 
@@ -4656,6 +4761,7 @@
   }
   function regenerateResultDish(day) {
     if (state.genRegenId) return;
+    if (requirePlus("Een ander gerecht laten maken")) return;
     state.genRegenId = day.id;
     busyStart("Ander gerecht wordt gemaakt…");
     render();
@@ -4690,6 +4796,7 @@
   }
   // Vult lege plekken in deze week (vanaf vandaag), of anders volgende week, met de nieuwe gerechten.
   function planResultDishes(days) {
+    if (requirePlus("Gerechten inplannen")) return;
     var today = new Date();
     var weeks = [getMonday(today)];
     var nextMon = getMonday(today); nextMon.setDate(nextMon.getDate() + 7); weeks.push(nextMon);
@@ -5088,6 +5195,7 @@
     });
   }
   function pickDishPhoto() {
+    if (requirePlus("Een gerecht van een foto maken")) return;
     if (state.generating) { showToast("Even geduld: er worden al gerechten gemaakt."); return; }
     var inp = document.createElement("input");
     inp.type = "file"; inp.accept = "image/*";
@@ -5204,6 +5312,7 @@
   // Geen vraag meer over afbeeldingen: dat is een instelling, en de foto's laden achteraf op de achtergrond.
   function startGenerateFlow() {
     if (state.generating) return;
+    if (requirePlus("Nieuwe gerechten ontwerpen")) return;
     if (!plannedGenerationCount()) { goto("prefs", { tab: "ontwerpen" }); return; }
     savePrefs();
     goto("weeks");
@@ -5212,6 +5321,7 @@
 
   function generateMeals(withImages) {
     if (state.generating) return;
+    if (requirePlus("Nieuwe gerechten ontwerpen")) return;
     state.genError = null;
     state.genSuccess = null;
     state.generating = true;
@@ -5356,9 +5466,24 @@
     var intro = document.createElement("p"); intro.style.margin = "0"; intro.style.fontSize = "15px"; intro.style.lineHeight = "1.7"; intro.style.color = "var(--muted)";
     var plusCap = info && info.plusDishCap != null ? info.plusDishCap : null, freeCap = info && info.freeDishCap != null ? info.freeDishCap : null;
     intro.textContent = "Iedereen kan Balanza gratis gebruiken. Met Plus laat je meer nieuwe gerechten per maand maken door de AI. Je opgeslagen gerechten, planning, boodschappenlijst en delen blijven in beide gevallen hetzelfde.";
-    main.appendChild(intro);
     var curLabel = currentPlanLabel();
-    var rows = [
+    var colA = "Gratis";
+    if (trialModel()) {
+      var tdays = window.appTrial.days, tleft = trialDaysLeft();
+      intro.textContent = "De eerste " + tdays + " dagen probeer je alle functies gratis" + (tleft != null ? " (nog " + tleft + (tleft === 1 ? " dag" : " dagen") + ")" : "") +
+        ". Daarna blijft alles wat je hebt bruikbaar: je gerechten, recepten, kookmodus, planning en boodschappenlijst. Nieuwe gerechten ontwerpen en je planning aanpassen kan dan met Plus.";
+      colA = "Na de proef";
+      if (curLabel === "Proef voorbij") curLabel = colA;
+    }
+    main.appendChild(intro);
+    var rows = trialModel() ? [
+      ["Je gerechten, recepten en kookmodus", true, true],
+      ["Planning en boodschappenlijst bekijken en afvinken", true, true],
+      ["Nieuwe gerechten ontwerpen (ook van een foto)", false, plusCap != null ? (plusCap > 0 ? plusCap + " per maand" : "onbeperkt") : true],
+      ["Planning maken en aanpassen", false, true],
+      ["Week automatisch invullen en prepdag", false, true],
+      ["Prijs", "Gratis", info ? (fmtEur(info.plans.month.cents) + " / maand of " + fmtEur(info.plans.year.cents) + " / jaar") : "\u2014"]
+    ] : [
       ["Nieuwe gerechten per maand", freeCap != null ? (freeCap > 0 ? freeCap : "onbeperkt") : "\u2014", plusCap != null ? (plusCap > 0 ? plusCap : "onbeperkt") : "\u2014"],
       ["Planning, boodschappenlijst en delen", true, true],
       ["Prepdag en week automatisch invullen", true, true],
@@ -5370,7 +5495,7 @@
     var thead = document.createElement("thead");
     var headRow = document.createElement("tr");
     headRow.appendChild(document.createElement("th"));
-    var thFree = document.createElement("th"); thFree.className = "center"; thFree.textContent = "Gratis" + (curLabel === "Gratis" ? " (nu)" : "");
+    var thFree = document.createElement("th"); thFree.className = "center"; thFree.textContent = colA + (curLabel === colA ? " (nu)" : "");
     var thPlus = document.createElement("th"); thPlus.className = "center"; thPlus.textContent = "Plus" + (curLabel === "Plus" ? " (nu)" : "");
     headRow.appendChild(thFree); headRow.appendChild(thPlus); thead.appendChild(headRow); table.appendChild(thead);
     var tbody = document.createElement("tbody");
@@ -5378,7 +5503,7 @@
       var tr = document.createElement("tr");
       var th = document.createElement("td"); th.textContent = r[0]; tr.appendChild(th);
       [r[1], r[2]].forEach(function (v, i) {
-        var td = document.createElement("td"); td.className = "center" + (curLabel === (i === 0 ? "Gratis" : "Plus") ? " cur" : "");
+        var td = document.createElement("td"); td.className = "center" + (curLabel === (i === 0 ? colA : "Plus") ? " cur" : "");
         if (v === true) { td.textContent = "\u2713"; td.classList.add("yes"); }
         else if (v === false) { td.textContent = "\u2014"; td.classList.add("no"); }
         else td.textContent = String(v);
@@ -5756,6 +5881,7 @@
     addBtn.className = "primary-btn";
     addBtn.textContent = "+ Week plannen";
     addBtn.onclick = function () { goto("planadd"); };
+    lockEl(addBtn, "Een nieuwe week plannen");
     main.appendChild(addBtn);
 
     if (archivedWeeks.length) {
@@ -5951,6 +6077,7 @@
     return pool.filter(function (it) { var n = String(it.day.name).toLowerCase(); if (seen[n]) return false; seen[n] = 1; return true; }).slice(0, 2);
   }
   function assignSlot(pw, key, item) {
+    if (requirePlus("Je planning aanpassen")) return;
     pw.slots[key] = { name: item.day.name, weekId: item.week.id, dayId: item.day.id, balans: item.day.balans };
     savePlannedWeeks();
   }
@@ -5962,6 +6089,7 @@
     return { pw: openOrCreateWeek(mon), d: PLAN_DAYS[0] };
   }
   function planLeftover(pw, d, slot) {
+    if (requirePlus("Je planning aanpassen")) return;
     var a = pw.slots[d + "|" + slot];
     if (!a) return;
     var nx = nextDayOf(pw, d), nk = nx.d + "|Lunch";
@@ -5973,6 +6101,7 @@
     showToast("Er wordt een portie extra gekookt: " + nx.d.toLowerCase() + " eet je het als lunch.");
   }
   function removeSlot(pw, key) {
+    if (requirePlus("Je planning aanpassen")) return;
     var removed = pw.slots[key];
     if (!removed) return;
     var extra = [];
@@ -5995,6 +6124,7 @@
     showUndoToast(key.split("|")[1] + " gewist", function () { pw.slots[key] = removed; extra.forEach(function (f) { f(); }); savePlannedWeeks(); render(); });
   }
   function moveSlot(pw, fromKey, toDay) {
+    if (requirePlus("Je planning aanpassen")) return;
     var slot = fromKey.split("|")[1], toKey = toDay + "|" + slot;
     if (toKey === fromKey) return;
     var a = pw.slots[fromKey], b = pw.slots[toKey];
@@ -6009,6 +6139,7 @@
   }
   // Menu bij een ingepland gerecht
   function openSlotMenu(pw, d, slot) {
+    if (requirePlus("Je planning aanpassen")) return;
     var key = d + "|" + slot, a = pw.slots[key];
     if (!a) return;
     var ov = document.getElementById("slotMenuOverlay");
@@ -6148,6 +6279,8 @@
     var date = planDayDate(pw, d);
     var agg = aggregateDayMacros(pw, d) || { kcal: 0, khG: 0, eiwitG: 0, vetG: 0 };
     var t = goalTarget();
+    var planTrial = planStatusBanner();
+    if (planTrial) main.appendChild(planTrial);
     var card = document.createElement("div"); card.className = "day-panel card";
     var isToday = isoDateKey(date) === isoDateKey(new Date());
     card.innerHTML = '<div class="dp-head"><b></b><span class="dp-kcal"></span></div><div class="dp-bar"><i></i></div><div class="dp-macros"></div><div class="dp-advice"></div>';
@@ -6203,13 +6336,15 @@
         pc.setAttribute("aria-label", "Aantal personen: " + (a.servings || 1) + ". Wijzigen");
         pc.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg><span>' + (a.servings || 1) + "</span>";
         pc.onclick = function () { openServingsDialog(a, slot, a.name); };
+        lockEl(pc, "Het aantal personen aanpassen");
         c.appendChild(pc);
         var more = document.createElement("button"); more.type = "button"; more.className = "tile-icon"; more.id = "slotMore-" + slot;
         more.setAttribute("aria-label", "Opties voor " + dish.name);
         more.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg>';
         more.onclick = function () { openSlotMenu(pw, d, slot); };
+        lockEl(more, "Je planning aanpassen");
         c.appendChild(more);
-        attachSlotDrag(handle, c, pw, key);
+        if (readOnlyMode()) handle.style.visibility = "hidden"; else attachSlotDrag(handle, c, pw, key);
         main.appendChild(c);
       } else {
         var box = document.createElement("div"); box.className = "pslot-empty";
@@ -6223,11 +6358,13 @@
           sb.querySelector("b").textContent = it.day.name;
           sb.querySelector("small").textContent = it.day.kcal + " kcal · Balans " + computeBalance(it.day.kh, it.day.eiwit, it.day.vet) + "%";
           sb.onclick = function () { assignSlot(pw, key, it); render(); };
+          lockEl(sb, "Je planning aanpassen");
           box.appendChild(sb);
         });
         var other = document.createElement("button"); other.type = "button"; other.className = "pe-other";
         other.textContent = sugs.length ? "Ander gerecht kiezen ›" : "Gerechten ontwerpen ›";
         other.onclick = function () { if (sugs.length) goto("planpick", { pickFilter: null, planWeekId: pw.id, planSlotKey: key }); else goto("prefs", { tab: "ontwerpen" }); };
+        lockEl(other, sugs.length ? "Je planning aanpassen" : "Nieuwe gerechten ontwerpen");
         box.appendChild(other);
         main.appendChild(box);
       }
@@ -6248,6 +6385,7 @@
         var pick = free.indexOf("Snack na lunch") > -1 ? "Snack na lunch" : free[0];
         goto("planpick", { pickFilter: null, planWeekId: pw.id, planSlotKey: d + "|" + pick });
       };
+      lockEl(add, "Een snack inplannen");
       sh.appendChild(add);
     }
     snackBox.appendChild(sh);
@@ -6260,6 +6398,7 @@
       o.onclick = function () { goto("day", { weekId: r.week.id, dayId: r.day.id, dayServings: a.servings || 1, dayBackView: "planweek", dayBackWeekId: pw.id, dayBackDayName: d }); };
       var x = document.createElement("button"); x.type = "button"; x.className = "sr-x"; x.setAttribute("aria-label", "Snack wissen: " + r.day.name); x.textContent = "×";
       x.onclick = function () { removeSlot(pw, d + "|" + s); };
+      lockEl(x, "Je planning aanpassen");
       row.appendChild(o); row.appendChild(x); snackBox.appendChild(row);
     });
     main.appendChild(snackBox);
@@ -6269,28 +6408,30 @@
     var fill = document.createElement("button"); fill.className = "primary-btn"; fill.id = "fillWeekBtn";
     fill.textContent = pw.autoFilling ? "Week wordt ingevuld…" : "Vul rest van de week"; fill.disabled = !!pw.autoFilling;
     fill.onclick = function () { openAutofillDialog(pw); };
+    lockEl(fill, "Je week automatisch invullen");
     var prep = document.createElement("button"); prep.className = "ghost-btn"; prep.id = "prepBtn";
     var nDishes = collectWeekDishes(pw).length;
     prep.textContent = pw.dynamicPrep ? "Prepdag bekijken" : pw.prepGenerating ? "Prepdag wordt gemaakt…" : "Prepdag";
     prep.disabled = !nDishes || !!pw.prepGenerating;
     prep.onclick = function () { if (pw.dynamicPrep) goto("planprep", { planWeekId: pw.id }); else generatePrepPlan(pw); };
+    if (!pw.dynamicPrep && nDishes) lockEl(prep, "Een prepdag laten maken");
     acts.appendChild(fill); acts.appendChild(prep);
     main.appendChild(acts);
     if (pw.prepError) { var pe = document.createElement("div"); pe.className = "errorbox"; pe.textContent = pw.prepError; main.appendChild(pe); }
 
     // Op brede schermen (zonder actiebalk) de overige acties als knoppen
     var desk = document.createElement("div"); desk.className = "actionrow tabbar-dup";
-    function dbtn(label, fn, dis) { var b = document.createElement("button"); b.className = "ghost-btn"; b.textContent = label; b.disabled = !!dis; b.onclick = fn; desk.appendChild(b); }
+    function dbtn(label, fn, dis, lockWhat) { var b = document.createElement("button"); b.className = "ghost-btn"; b.textContent = label; b.disabled = !!dis; b.onclick = fn; if (lockWhat && !dis) lockEl(b, lockWhat); desk.appendChild(b); }
     dbtn("Boodschappenlijst", function () { goto("planshopping", { planWeekId: pw.id }); });
     if (moduleOn("pdf")) dbtn("Exporteer weekmenu", function () { exportPlanPdf(pw); });
-    dbtn("Wis dag", function () { openClearDayDialog(pw, d); }, !PLAN_SLOTS.some(function (s) { return pw.slots[d + "|" + s]; }));
-    dbtn("Wis hele week", function () { askConfirm("Weet je zeker dat je alle maaltijden van deze week wilt wissen?", function () { pw.slots = {}; savePlannedWeeks(); render(); }); }, !filledN);
+    dbtn("Wis dag", function () { openClearDayDialog(pw, d); }, !PLAN_SLOTS.some(function (s) { return pw.slots[d + "|" + s]; }), "Je planning aanpassen");
+    dbtn("Wis hele week", function () { askConfirm("Weet je zeker dat je alle maaltijden van deze week wilt wissen?", function () { pw.slots = {}; savePlannedWeeks(); render(); }); }, !filledN, "Je planning aanpassen");
     main.appendChild(desk);
 
     var weekActs = [{ id: "lijst", label: "Lijst", title: "Boodschappenlijst", onClick: function () { goto("planshopping", { planWeekId: pw.id }); } }];
     if (moduleOn("pdf")) weekActs.push({ id: "pdf", label: "Exporteer", title: "Exporteer weekmenu als PDF", onClick: function () { exportPlanPdf(pw); } });
-    weekActs.push({ id: "auto", label: pw.autoFilling ? "Bezig…" : "Vul in", title: "Vul week automatisch in", disabled: !!pw.autoFilling, onClick: function () { openAutofillDialog(pw); } });
-    weekActs.push({ id: "wis", label: "Wis dag", title: "Maaltijden van deze dag wissen", disabled: !PLAN_SLOTS.some(function (s) { return pw.slots[d + "|" + s]; }), onClick: function () { openClearDayDialog(pw, d); } });
+    weekActs.push({ id: "auto", label: pw.autoFilling ? "Bezig…" : "Vul in", title: "Vul week automatisch in", disabled: !!pw.autoFilling, onClick: function () { openAutofillDialog(pw); }, locked: readOnlyMode() ? "Je week automatisch invullen" : null });
+    weekActs.push({ id: "wis", label: "Wis dag", title: "Maaltijden van deze dag wissen", disabled: !PLAN_SLOTS.some(function (s) { return pw.slots[d + "|" + s]; }), onClick: function () { openClearDayDialog(pw, d); }, locked: readOnlyMode() ? "Je planning aanpassen" : null });
     state.tabActions = weekActs;
 
     app.appendChild(main);
@@ -6402,6 +6543,7 @@
       clearBtn.className = "ghost-btn";
       clearBtn.textContent = "Slot leegmaken";
       clearBtn.onclick = function () { delete pw.slots[key]; savePlannedWeeks(); goto("planday", { planWeekId: pw.id, planDayName: parts[0] }); };
+      lockEl(clearBtn, "Je planning aanpassen");
       main.appendChild(clearBtn);
     }
 
@@ -6550,6 +6692,7 @@
         pickDetail.appendChild(macroTags(d, { hideMealType: true }));
         row.appendChild(pickDetail);
         row.onclick = function () {
+          if (requirePlus("Je planning aanpassen")) return;
           var prev = pw.slots[key];
           pw.slots[key] = { name: d.name, weekId: it.week.id, dayId: d.id, balans: d.balans };
           if (prev && prev.servings) pw.slots[key].servings = prev.servings;
@@ -9115,6 +9258,7 @@
         vBtn.disabled = state.variating;
         vBtn.textContent = state.variating ? "Bezig…" : pair[0];
         vBtn.onclick = function () { variateDish(week, day, pair[1], vBtn); };
+        lockEl(vBtn, "Een variatie laten maken");
         vRow.appendChild(vBtn);
       });
       main.appendChild(vRow);
@@ -9141,6 +9285,7 @@
 
   function variateDish(week, day, kind, btnEl) {
     if (state.variating) return;
+    if (requirePlus("Een variatie laten maken")) return;
     state.variateError = null;
     state.variating = true;
     busyStart("Variant wordt gemaakt…");
@@ -9227,6 +9372,7 @@
 
 
   function generatePrepPlan(pw) {
+    if (requirePlus("Een prepdag laten maken")) return;
     if (pw.prepGenerating) return;
     var dishes = collectWeekDishes(pw);
     if (!dishes.length) return;
@@ -10048,6 +10194,7 @@
         '</span><span>' + a.label + '</span>';
       if (a.title) b.setAttribute("aria-label", a.title);
       b.onclick = function () { if (!a.disabled) a.onClick(); };
+      if (a.locked && !a.disabled) lockEl(b, a.locked);
       bar.appendChild(b);
     });
   }
@@ -10157,7 +10304,7 @@
   // abonnee gaat; zo verschijnt een knop niet even voordat hij weer verdwijnt zodra de stand binnenkomt.
   function moduleOn(key) {
     if (window.appModules && window.appModules[key] === false) return false;
-    if (window.appPlanOnly && window.appPlanOnly[key] && !(billingInfo && billingInfo.plusActive)) return false;
+    if (window.appPlanOnly && window.appPlanOnly[key] && !(billingInfo && billingInfo.plusActive) && userPlan() !== "plus" && userPlan() !== "trial") return false;
     return true;
   }
 
@@ -10292,11 +10439,22 @@
       window.appBilling = cfg.billing === true;
       window.appOAuth = cfg.oauth && typeof cfg.oauth === "object" ? cfg.oauth : {};
       window.appCanonical = typeof cfg.canonicalOrigin === "string" ? cfg.canonicalOrigin : null;
+      window.appTrial = cfg.trial && typeof cfg.trial === "object" ? cfg.trial : null;
+      // Proefmodel: zonder account kom je niet in de app maar op de welkomstpagina. Vandaar kom je terug met
+      // ?start=trial (account aanmaken) of ?start=login. Een terugkeer na inloggen via Apple/Google (#auth=…) of een
+      // resetlink heeft een eigen hash/parameter en blijft hier.
+      if (window.appTrial && !window.authToken) {
+        var startParam = null;
+        try { startParam = new URLSearchParams(location.search).get("start"); } catch (e) {}
+        if (startParam === "trial") authState.mode = "register";
+        else if (startParam === "login") authState.mode = "login";
+        else if (!location.search && !location.hash) { location.replace("/welkom"); return; }
+      }
       applyRuntimeConfig(cfg);
       try { var pendingNotice = sessionStorage.getItem("weekmenu_notice"); if (pendingNotice) { sessionStorage.removeItem("weekmenu_notice"); setTimeout(function () { showToast(pendingNotice); }, 400); } } catch (e) {}
       lastConfigRefresh = Date.now();
       configLoaded = true;
-      if (window.authToken || !window.authRequired) { initPersistence(); recoverPendingJobs(); syncPush(); }
+      if (window.authToken || !window.authRequired) { initPersistence(); recoverPendingJobs(); syncPush(); if (window.appTrial) refreshQuota(); }
       render();
       if (window.appBilling && (window.authToken || !window.authRequired)) { handleBillingReturn(); refreshBilling().then(render); }
     });

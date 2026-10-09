@@ -241,6 +241,13 @@
     return s;
   }
 
+  // Instellingen van de app: met het proefmodel aan worden de knoppen "Probeer N dagen gratis" en gaan ze
+  // rechtstreeks naar het aanmaken van een account (/?start=trial) of inloggen (/?start=login).
+  var CFG = null;
+  function trialDays() { return CFG && CFG.trial && CFG.trial.days ? CFG.trial.days : 0; }
+  function startHref() { return trialDays() ? "/?start=trial" : "/"; }
+  function loginHref() { return trialDays() ? "/?start=login" : "/"; }
+  function startLabel() { return trialDays() ? "Probeer " + trialDays() + " dagen gratis" : "Start gratis"; }
   var TABS = [["home", "Home"], ["functies", "Functies"], ["waarom", "Waarom Balanza"], ["prijzen", "Prijzen"]];
   function navigate(hash) {
     if (window.location.hash === hash) render(); else window.location.hash = hash;
@@ -262,12 +269,12 @@
       h("a", { class: "brand", href: "/" }, h("span", { class: "brand-mark" }, logoSvg(26)), h("span", { text: "Balanza" })),
       nav,
       h("nav", { class: "nav-links" },
-        h("a", { class: "btn btn-text", href: "/" }, "Inloggen"),
-        h("a", { class: "btn btn-primary", href: "/" }, "Start gratis")))));
+        h("a", { class: "btn btn-text", href: loginHref() }, "Inloggen"),
+        h("a", { class: "btn btn-primary", href: startHref() }, startLabel())))));
     root.appendChild(h("main", { id: "view" }));
     root.appendChild(h("footer", {}, h("div", { class: "wrap foot-row" },
       h("div", { text: "© " + new Date().getFullYear() + " Balanza. Voedingswaarden gebaseerd op gegevens uit NEVO online, RIVM, Bilthoven. Het RIVM onderschrijft Balanza niet; berekende waarden zijn indicatief." }),
-      h("div", {}, h("a", { href: "/", text: "Open de app" })))));
+      h("div", {}, h("a", { href: loginHref(), text: "Open de app" })))));
   }
   function render() {
     var tab = currentRoute();
@@ -346,7 +353,7 @@
     return h("div", { class: "wrap final-cta" }, h("div", { class: "cta-panel" },
       h("h2", { text: "Zet vanavond nog een macro-gebalanceerd menu op tafel." }),
       h("p", { text: "In een minuut ingesteld. Je doel, je smaak, je week \u2014 de rest rekent Balanza uit." }),
-      h("a", { class: "btn btn-light", href: "/", text: "Start gratis" })));
+      h("a", { class: "btn btn-light", href: startHref(), text: startLabel() })));
   }
 
   var VIEWS = {};
@@ -359,9 +366,9 @@
         h("h1", {}, "Macro's die ", h("em", { text: "kloppen" }), ", niet die gokken."),
         h("p", { class: "lede", text: "Balanza ontwerpt met AI maaltijden op jouw doel en voorkeuren — en rekent de voedingswaarden vervolgens echt uit met het Nederlands Voedingsstoffenbestand (NEVO) van het RIVM, in plaats van ze te laten schatten." }),
         h("div", { class: "hero-ctas" },
-          h("a", { class: "btn btn-primary", href: "/", text: "Start gratis" }),
+          h("a", { class: "btn btn-primary", href: startHref(), text: startLabel() }),
           (function () { var b = h("button", { class: "btn btn-ghost", text: "Bekijk waarom" }); b.onclick = function () { navigate("#/waarom"); }; return b; })()),
-        h("p", { class: "hero-note", text: "Geen creditcard nodig om te beginnen." })),
+        h("p", { class: "hero-note", text: trialDays() ? "Alle functies, geen betaalgegevens nodig." : "Geen creditcard nodig om te beginnen." })),
       demoCard())));
     frag.appendChild(h("div", { class: "wrap" }, h("section", { class: "lead-block" },
       h("h2", { text: "Een Nederlandse planner voor wie traint en let op voeding" }),
@@ -416,36 +423,31 @@
     return frag;
   };
 
-  function randomAnonId() {
-    var bytes = new Uint8Array(16);
-    (window.crypto || window.msCrypto).getRandomValues(bytes);
-    var hexStr = Array.prototype.map.call(bytes, function (b) { return b.toString(16).padStart(2, "0"); }).join("");
-    return "anon_" + hexStr;
-  }
   function fmtEur(cents) { return "€" + (cents / 100).toFixed(2).replace(".", ","); }
   function loadPricing(intro, grid) {
-    fetch("/api/config").then(function (r) { return r.ok ? r.json() : null; }).then(function (cfg) {
-      if (!cfg || cfg.billing !== true) return null;
-      return fetch("/api/billing", { headers: { "X-Anon-Id": randomAnonId() } }).then(function (r) { return r.ok ? r.json() : null; });
-    }).then(function (info) {
-      if (currentRoute() !== "prijzen" || !byId("priceGrid")) return;
-      if (!info || !info.enabled) { intro.textContent = "Balanza is gratis te gebruiken."; return; }
+    var info = CFG && CFG.pricing;
+    if (!info) { intro.textContent = trialDays() ? "Probeer Balanza " + trialDays() + " dagen gratis met alle functies." : "Balanza is gratis te gebruiken."; return; }
+    var plusBenefit = info.plusDishCap > 0 ? "Tot " + info.plusDishCap + " nieuwe gerechten per maand" : "Onbeperkt nieuwe gerechten";
+    clear(grid);
+    if (trialDays()) {
+      intro.textContent = "De eerste " + trialDays() + " dagen gebruik je alles gratis. Daarna blijft alles wat je hebt bruikbaar; om verder te ontwerpen en te plannen neem je Plus.";
+      grid.appendChild(h("div", { class: "price-card" }, h("h3", { text: "Proef" }), h("div", { class: "price-amount" }, "\u20ac0 ", h("span", { text: "/ " + trialDays() + " dagen" })),
+        h("ul", { class: "price-list" }, h("li", { text: "Alle functies" }), h("li", { text: "Geen betaalgegevens nodig" }), h("li", { text: "Daarna blijft alles wat je hebt bruikbaar" }))));
+    } else {
       var freeBenefit = info.freeDishCap > 0 ? info.freeDishCap + " nieuwe gerechten per maand" : "onbeperkt nieuwe gerechten";
-      var plusBenefit = info.plusDishCap > 0 ? "tot " + info.plusDishCap + " nieuwe gerechten per maand" : "onbeperkt nieuwe gerechten";
       intro.textContent = "Gratis om te beginnen. Wil je meer, dan is er Balanza Plus.";
-      clear(grid);
-      grid.appendChild(h("div", { class: "price-card" }, h("h3", { text: "Gratis" }), h("div", { class: "price-amount", text: "€0" }),
+      grid.appendChild(h("div", { class: "price-card" }, h("h3", { text: "Gratis" }), h("div", { class: "price-amount", text: "\u20ac0" }),
         h("ul", { class: "price-list" }, h("li", { text: freeBenefit }), h("li", { text: "Planning, boodschappenlijst en delen" }), h("li", { text: "Prepdag en kookmodus" }))));
-      grid.appendChild(h("div", { class: "price-card highlight" }, h("h3", { text: "Balanza Plus" }),
-        h("div", { class: "price-amount" }, fmtEur(info.plans.month.cents) + " ", h("span", { text: "/ maand" })),
-        h("div", { class: "price-alt", style: { fontSize: "13px", color: "var(--muted)", marginTop: "-4px" }, text: "of " + fmtEur(info.plans.year.cents) + " per jaar" }),
-        h("ul", { class: "price-list" }, h("li", { text: plusBenefit }), h("li", { text: "Alles uit Gratis" }), h("li", { text: "Maandelijks opzegbaar" }))));
-      grid.style.display = "grid";
-    }).catch(function () {});
+    }
+    grid.appendChild(h("div", { class: "price-card highlight" }, h("h3", { text: "Balanza Plus" }),
+      h("div", { class: "price-amount" }, fmtEur(info.monthCents) + " ", h("span", { text: "/ maand" })),
+      h("div", { class: "price-alt", style: { fontSize: "13px", color: "var(--muted)", marginTop: "-4px" }, text: "of " + fmtEur(info.yearCents) + " per jaar" }),
+      h("ul", { class: "price-list" }, h("li", { text: plusBenefit }), h("li", { text: trialDays() ? "Planning maken en aanpassen, prepdag" : "Alles uit Gratis" }), h("li", { text: "Maandelijks opzegbaar" }))));
+    grid.style.display = "grid";
   }
 
-  renderShell();
-  render();
+  function boot() { renderShell(); render(); }
+  fetch("/api/config").then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; }).then(function (cfg) { CFG = cfg; boot(); });
 })();
 </script>
 </body>

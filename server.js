@@ -194,7 +194,7 @@ function normalizeSettings(raw) {
     modules: modules,
     planOnly: planOnly,
     limits: limits,
-    billing: { enabled: b.enabled === true, plusMonthlyCents: intIn(b.plusMonthlyCents, 100, 99900, 399), plusYearlyCents: intIn(b.plusYearlyCents, 100, 999900, 3499), plusDishCap: intIn(b.plusDishCap, 0, 100000, 150), termsUrl: cleanTermsUrl(b.termsUrl) },
+    billing: { enabled: b.enabled === true, plusMonthlyCents: intIn(b.plusMonthlyCents, 100, 99900, 399), plusYearlyCents: intIn(b.plusYearlyCents, 100, 999900, 3499), plusDishCap: intIn(b.plusDishCap, 0, 100000, 150), termsUrl: cleanTermsUrl(b.termsUrl), trialEnabled: b.trialEnabled === true, trialDays: intIn(b.trialDays, 1, 60, 7) },
     maintenance: { enabled: m.enabled === true, message: cleanText(m.message, 300) },
     announcement: { enabled: a.enabled === true, message: cleanText(a.message, 300), level: a.level === "warning" ? "warning" : "info" }
   };
@@ -285,6 +285,8 @@ function validateSettingsPatch(body) {
     var BL = { plusMonthlyCents: [100, 99900, "De maandprijs"], plusYearlyCents: [100, 999900, "De jaarprijs"], plusDishCap: [0, 100000, "De Plus-limiet"] };
     for (var bk of Object.keys(bl)) {
       if (bk === "enabled") { if (typeof bl.enabled !== "boolean") return { error: "billing.enabled moet true of false zijn." }; patch.billing.enabled = bl.enabled; n++; }
+      else if (bk === "trialEnabled") { if (typeof bl.trialEnabled !== "boolean") return { error: "billing.trialEnabled moet true of false zijn." }; patch.billing.trialEnabled = bl.trialEnabled; n++; }
+      else if (bk === "trialDays") { if (typeof bl.trialDays !== "number" || Math.floor(bl.trialDays) !== bl.trialDays || bl.trialDays < 1 || bl.trialDays > 60) return { error: "De proefperiode moet tussen 1 en 60 dagen zijn." }; patch.billing.trialDays = bl.trialDays; n++; }
       else if (BL[bk]) {
         var bv = bl[bk];
         if (typeof bv !== "number" || !isFinite(bv) || Math.floor(bv) !== bv || bv < BL[bk][0] || bv > BL[bk][1]) return { error: BL[bk][2] + " moet een geheel getal zijn tussen " + BL[bk][0] + " en " + BL[bk][1] + (bk === "plusDishCap" ? " (0 = onbeperkt)." : " (in centen).") };
@@ -335,7 +337,9 @@ function moduleGuard(key, handler, onOff) {
   };
 }
 
-function getAuthRequired() { return getSettings().then(function (s) { return s.authRequired; }); }
+// Met het proefmodel aan is een account altijd nodig: anoniem gebruik kan dan niet meer (alleen de welkomstpagina).
+function authRequiredFor(s) { return !!(s.authRequired || (s.billing && s.billing.trialEnabled)); }
+function getAuthRequired() { return getSettings().then(authRequiredFor); }
 function setAuthRequired(value) { return updateSettings({ authRequired: !!value }); }
 
 // ---------- Geblokkeerde accounts en ingetrokken sessies ----------
@@ -1716,7 +1720,11 @@ function handleGenerate(req, res) {
           log(action, false, 503, "Module uitgeschakeld: " + gatedModule);
           return sendJSON(res, 503, moduleOffBody(gatedModule, settings));
         }
-        return (gatedModule ? getUserPlan(uidForLog, settings) : Promise.resolve(null)).then(function (plan) {
+        return getUserPlan(uidForLog, settings).then(function (plan) {
+          if (plan === "expired") {
+            log(action, false, 402, "Proefperiode voorbij");
+            return sendJSON(res, 402, planRequiredBody());
+          }
           if (gatedModule && planBlocksModule(settings, gatedModule, plan)) {
             log(action, false, 503, "Alleen voor Plus: " + gatedModule);
             return sendJSON(res, 503, moduleOffBody(gatedModule, settings));
@@ -2413,18 +2421,43 @@ function recordAccounting(uid, action, usage, dishes, ok) {
 // Volgorde: eigen limiet (beheer) > Plus (als abonnementen aan staan en het Plus is) > de algemene limiet.
 // Het abonnement van een gebruiker, nu: "plus" of "free". Voor anonieme profielen (geen account) altijd "free",
 // want Plus is alleen voor accounts. Wordt zowel voor de maandlimiet als voor het per-module vrijgeven gebruikt.
-function getUserPlan(uid, settings) {
-  if (!uid) return Promise.resolve("free");
-  return dbGetDoc("billing/" + uid).then(function (r) {
-    return billingLive(settings) && plusActiveDoc(r.exists ? r.value : null, Date.now()) ? "plus" : "free";
-  }, function () { return "free"; });
+// Met het proefmodel (billing.trialEnabled) kent een account drie standen: "plus", "trial" (de eerste dagen, alles
+// open, net als Plus) en "expired" (proef voorbij zonder Plus: alles wat je hebt blijft bruikbaar, maar nieuwe gerechten
+// ontwerpen en de planning wijzigen kan niet meer). Zonder proefmodel: "plus" of "free", zoals voorheen.
+// De proef start bij het eerste verzoek van het account na het aanzetten (nieuwe accounts: meteen bij aanmaken).
+var DAY_MS = 24 * 60 * 60 * 1000;
+function trialEndsAt(doc, s) { return doc && doc.trialStart ? doc.trialStart + s.billing.trialDays * DAY_MS : null; }
+function ensureTrialStart(uid) {
+  return withBillingLock(uid, function () {
+    return getBillingDoc(uid).then(function (doc) {
+      if (doc.trialStart) return doc;
+      doc.trialStart = Date.now();
+      return dbSetDoc("billing/" + uid, doc).then(function () { return doc; });
+    });
+  });
 }
+function getUserPlanInfo(uid, settings) {
+  if (!uid) return Promise.resolve({ plan: settings.billing.trialEnabled ? "expired" : "free" });
+  return dbGetDoc("billing/" + uid).then(function (r) {
+    var doc = r.exists ? r.value : null, now = Date.now();
+    var plusOk = plusActiveDoc(doc, now) && (billingLive(settings) || (settings.billing.trialEnabled && doc.grantUntil > now));
+    if (plusOk) return { plan: "plus" };
+    if (!settings.billing.trialEnabled) return { plan: "free" };
+    if (!UID_RE.test(uid)) return { plan: "expired" };
+    return (doc && doc.trialStart ? Promise.resolve(doc) : ensureTrialStart(uid)).then(function (d) {
+      var end = trialEndsAt(d, settings);
+      return { plan: end && now < end ? "trial" : "expired", trialEndsAt: end };
+    });
+  }).catch(function () { return { plan: settings.billing.trialEnabled ? "trial" : "free" }; });   // opslag haperde: niet blokkeren
+}
+function getUserPlan(uid, settings) { return getUserPlanInfo(uid, settings).then(function (i) { return i.plan; }); }
+function hasPlusAccess(plan) { return plan === "plus" || plan === "trial"; }
 function effectiveDishCap(uid) {
   return Promise.all([dbGetDoc("adminMeta/" + uid), getSettings()]).then(function (r) {
     var own = r[0].exists && r[0].value && typeof r[0].value.dishCap === "number" ? r[0].value.dishCap : null;
     var s = r[1];
     return getUserPlan(uid, s).then(function (plan) {
-      return { cap: own !== null ? own : plan === "plus" ? s.billing.plusDishCap : s.limits.monthlyDishCap, own: own, plan: plan };
+      return { cap: own !== null ? own : hasPlusAccess(plan) ? s.billing.plusDishCap : s.limits.monthlyDishCap, own: own, plan: plan };
     });
   });
 }
@@ -2432,12 +2465,15 @@ function effectiveDishCap(uid) {
 var PLAN_GATEABLE_MODULES = ["prices", "photo", "bring", "sharing", "pdf", "images"];
 // True als dit onderdeel voor deze gebruiker geblokkeerd is omdat het alleen voor Plus is vrijgegeven.
 function planBlocksModule(s, key, plan) {
-  return PLAN_GATEABLE_MODULES.indexOf(key) > -1 && !!(s.planOnly && s.planOnly[key]) && plan !== "plus";
+  return PLAN_GATEABLE_MODULES.indexOf(key) > -1 && !!(s.planOnly && s.planOnly[key]) && !hasPlusAccess(plan);
 }
 function quotaState(uid) {
   return Promise.all([getQuotaDoc(uid), effectiveDishCap(uid)]).then(function (r) {
     return { used: r[0].dishes, cap: r[1].cap, own: r[1].own, plan: r[1].plan, doc: r[0] };
   }).catch(function () { return null; });   // opslag haperde: liever doorlaten dan iedereen blokkeren
+}
+function planRequiredBody() {
+  return { code: "plan_required", message: "Je gratis proefperiode is voorbij. Met Balanza Plus ontwerp je weer nieuwe gerechten en pas je je planning aan. Alles wat je al hebt, blijft gewoon bruikbaar." };
 }
 function quotaBlocked(q, extraRunning) {
   return !!q && q.cap > 0 && q.used + (extraRunning || 0) >= q.cap;
@@ -2448,9 +2484,9 @@ function quotaBody(q) {
 function handleUsageGet(req, res) {
   return resolveUser(req).then(function (user) {
     if (!user) return sendUnauthorized(res);
-    return quotaState(user.uid).then(function (q) {
-      q = q || { used: 0, cap: 0 };
-      sendJSON(res, 200, { plan: q.plan || "free", month: monthKey(), dishes: q.used, cap: q.cap, unlimited: !(q.cap > 0), remaining: q.cap > 0 ? Math.max(0, q.cap - q.used) : null, resetsOn: nextMonthStart() });
+    return Promise.all([quotaState(user.uid), getSettings().then(function (s) { return getUserPlanInfo(user.uid, s).then(function (i) { i.trialDays = s.billing.trialDays; return i; }); })]).then(function (r) {
+      var q = r[0] || { used: 0, cap: 0 }, pi = r[1] || {};
+      sendJSON(res, 200, { plan: pi.plan || q.plan || "free", trialEndsAt: pi.trialEndsAt ? new Date(pi.trialEndsAt).toISOString() : null, trialDays: pi.trialDays || null, month: monthKey(), dishes: q.used, cap: q.cap, unlimited: !(q.cap > 0), remaining: q.cap > 0 ? Math.max(0, q.cap - q.used) : null, resetsOn: nextMonthStart() });
     });
   }).catch(function () { sendJSON(res, 500, { code: "error", message: "Verbruik ophalen mislukt." }); });
 }
@@ -5123,7 +5159,9 @@ function handleAdminApi(req, res, url) {
 function handleConfig(req, res) {
   getSettings().then(function (s) {
     sendJSON(res, 200, {
-      authRequired: s.authRequired,
+      authRequired: authRequiredFor(s),
+      trial: s.billing.trialEnabled ? { days: s.billing.trialDays } : null,
+      pricing: billingLive(s) ? { monthCents: s.billing.plusMonthlyCents, yearCents: s.billing.plusYearlyCents, plusDishCap: s.billing.plusDishCap, freeDishCap: s.limits.monthlyDishCap } : null,
       bringImportEndpoint: BRING_IMPORT_ENDPOINT,
       modules: effectiveModules(s),
       planOnly: s.planOnly,
