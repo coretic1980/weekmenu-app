@@ -42,27 +42,29 @@
     --topbar-bg: rgba(12, 9, 6, 0.72);
   }
   :root[data-theme="light"] {
-    --bg: #F3EBDB;
-    --surface: #FFFDF8;
-    --ink: #1A140C;
-    --muted: #6B6152;
-    --label: #8C8270;
-    --line: #E7DFCC;
-    --accent: #1A140C;
-    --accent-ink: #F6F0E3;
-    --accent2: #B8863B;
-    --accent2-ink: #2A1C00;
-    --tag-kh-bg: #E9E7DE; --tag-kh-ink: #1A140C;
-    --tag-eiwit-bg: #EDEAE1; --tag-eiwit-ink: #4A4438;
-    --tag-vet-bg: #F3E6D0; --tag-vet-ink: #8A6220;
-    --nevo-bg: #D7F0E0; --nevo-ink: #1D6A3B;
-    --dark-panel: #1A140C;
-    --dark-panel-ink: #F6F0E3;
-    --tabbar-bg: rgba(26, 20, 12, 0.95); --tab-raised: rgba(246, 240, 227, 0.14);
-    --tab-ink: #F6F0E3; --tab-muted: #A8977A; --tab-active: #E0AE55;
-    --card: #FFFFFF; --card-shadow: 0 10px 24px rgba(90, 60, 20, 0.12);
-    --glow1: rgba(240, 175, 85, 0.50); --glow2: rgba(230, 130, 80, 0.26); --lines: rgba(184, 134, 59, 0.20);
-    --topbar-bg: rgba(243, 235, 219, 0.78);
+    /* Licht thema "Fris": koel wit met een vleugje groen, diep bosgroen als kracht, mint en citroen als frisse accenten */
+    --bg: #F3F7F4;
+    --surface: #FFFFFF;
+    --ink: #0F2219;
+    --muted: #55685D;
+    --label: #6B7D72;
+    --line: #DCE6E0;
+    --accent: #14543A;
+    --accent-ink: #FFFFFF;
+    --accent2: #1F8A55;
+    --accent2-ink: #FFFFFF;
+    --tag-kh-bg: #E7F0EA; --tag-kh-ink: #0F2219;
+    --tag-eiwit-bg: #EDF3EF; --tag-eiwit-ink: #2F4A3C;
+    --tag-vet-bg: #FFF2D2; --tag-vet-ink: #8A5A10;
+    --nevo-bg: #DDF3E5; --nevo-ink: #17643A;
+    --dark-panel: #12392A;
+    --dark-panel-ink: #F2FAF5;
+    --tabbar-bg: rgba(15, 42, 30, 0.95); --tab-raised: rgba(160, 230, 190, 0.16);
+    --tab-ink: #F2FAF5; --tab-muted: #9DBBAA; --tab-active: #8FE3B4;
+    --card: #FFFFFF; --card-shadow: 0 8px 22px rgba(15, 55, 38, 0.08);
+    --glow1: rgba(120, 214, 160, 0.42); --glow2: rgba(255, 220, 110, 0.26); --lines: rgba(20, 84, 58, 0.12);
+    --topbar-bg: rgba(243, 247, 244, 0.82);
+    --ring: #1F8A55; --bar-eiwit: #1F8A55; --bar-kh: #E3A22F; --bar-vet: #3C8DCB;
   }
   html, body { height: 100%; }
   html { scroll-padding-top: env(safe-area-inset-top, 0px); }
@@ -77,6 +79,7 @@
   #app { max-width: 760px; margin: 0 auto; min-height: 100%; display: flex; flex-direction: column; }
   .notice-bar { align-items: center; justify-content: center; gap: 12px; padding: calc(10px + env(safe-area-inset-top, 0px)) 16px 10px; font-size: 13px; line-height: 1.45; text-align: center; background: var(--surface); color: var(--ink); border-bottom: 1px solid var(--line); }
   .notice-bar.warning { background: #3A2A10; color: #F1D9A8; border-bottom-color: #6B4E1E; }
+  :root[data-theme="light"] .tab-badge { background: #F2C14E; color: #0F2219; }
   :root[data-theme="light"] .notice-bar.warning { background: #FBEBC8; color: #5A3E0B; border-bottom-color: #E2C283; }
   .notice-bar button { background: transparent; border: none; color: inherit; font-size: 17px; line-height: 1; cursor: pointer; padding: 2px 6px; opacity: 0.8; }
   header.topbar {
@@ -507,6 +510,26 @@
   .chiprow .pick-sort { flex: 0 1 auto; }
   .pick-row.is-current { border-color: var(--accent2); box-shadow: 0 0 0 2px var(--accent2), var(--card-shadow); }
   .pick-empty { font-size: 14px; color: var(--muted); padding: 18px 2px; }
+  .wide-grid { display: flex; flex-direction: column; gap: 12px; }
+  /* Wijzig- en wisknoppen binnen de tegel */
+  .tile-row { position: relative; }
+  .tile-actions { position: absolute; top: 7px; right: 7px; display: flex; gap: 2px; z-index: 2; }
+  .tile-icon { appearance: none; border: none; background: transparent; width: 34px; height: 34px; border-radius: 10px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; color: #7A6B55; -webkit-tap-highlight-color: transparent; }
+  .tile-icon:hover, .tile-icon:focus-visible { background: rgba(26, 20, 12, 0.07); color: #1A140C; outline: none; }
+  .tile-icon:focus-visible { box-shadow: 0 0 0 2px #A87A30; }
+  .tile-icon-danger:hover, .tile-icon-danger:focus-visible { color: #B4463D; background: rgba(180, 70, 61, 0.09); }
+  :root[data-theme="light"] .tile-icon { color: #55685D; }
+  :root[data-theme="light"] .tile-icon:hover { color: #0F2219; background: rgba(15, 34, 25, 0.06); }
+  .tile-row-1 > .card, .tile-row-1 > .plan-slot { padding-right: 50px; }
+  .tile-row-2 > .card.day-line { padding-right: 84px; }
+  .tile-row-2 > .compact-slot .cs-top { padding-right: 70px; }
+  .tile-row-2 > .card:not(.day-line) { padding-right: 84px; }
+  .day-line ~ .tile-actions { top: 50%; transform: translateY(-50%); }
+  @media (min-width: 701px) and (min-height: 501px), (min-width: 701px) and (orientation: portrait) {
+    .tile-row-2 > .card.day-line { padding-right: 90px; }
+    .day-line ~ .tile-actions { top: 12px; transform: none; }
+  }
   .archive-toggle { appearance: none; border: none; background: none; color: var(--ink); font-family: inherit; cursor: pointer;
     display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 14px 2px 4px; margin-top: 8px;
     font-size: 11px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; border-top: 1px solid var(--line); }
@@ -561,7 +584,7 @@
     }
     :root[data-theme="light"] body.has-tabbar .tabbar {
       background: rgba(255, 253, 248, 0.72); border-right-color: rgba(120, 85, 30, 0.16);
-      --ink: #1A140C; --muted: #74664F; --tab-raised: #EADFC6; --accent2: #8C6428;
+      --ink: #0F2219; --muted: #55685D; --tab-raised: #E1F0E6; --accent2: #14543A;
     }
     .tabbar-brand { display: flex; align-items: center; gap: 12px; padding: 4px 8px 22px; font-family: "Fraunces", serif; font-weight: 700; font-size: 21px; color: var(--ink); }
     body.has-tabbar .tabbar .tab { flex-direction: row; justify-content: flex-start; gap: 12px; padding: 6px 8px; font-size: 14.5px; border-radius: 12px; }
@@ -635,6 +658,15 @@
     --nevo-bg: #E1F1E6; --nevo-ink: #1D6A3B; --nevo-line: #A7D8B7; --nevo-seal: #2E9A5C;
     background: var(--card); color: var(--ink); border-color: transparent; box-shadow: var(--card-shadow);
   }
+  :root[data-theme="light"] .card, :root[data-theme="light"] .tile, :root[data-theme="light"] .weekrow, :root[data-theme="light"] .plan-slot,
+  :root[data-theme="light"] .plan-edit-btn, :root[data-theme="light"] .gencard, :root[data-theme="light"] .confirm-box,
+  :root[data-theme="light"] .busybar-card, :root[data-theme="light"] .today-card, :root[data-theme="light"] .meal-row {
+    --surface: #FFFFFF; --bg: #EEF4F0; --ink: #0F2219; --muted: #55685D; --label: #6B7D72; --line: rgba(15, 34, 25, 0.12);
+    --accent: #14543A; --accent-ink: #FFFFFF; --accent2: #1F8A55; --accent2-ink: #FFFFFF;
+    --tag-kh-bg: #E7F0EA; --tag-kh-ink: #0F2219; --tag-eiwit-bg: #EDF3EF; --tag-eiwit-ink: #2F4A3C; --tag-vet-bg: #FFF2D2; --tag-vet-ink: #8A5A10;
+    --nevo-bg: #DDF3E5; --nevo-ink: #17643A;
+    border: 1px solid rgba(15, 34, 25, 0.06);
+  }
   .card, .tile, .weekrow { border-radius: 18px; }
   .plan-slot, .plan-edit-btn { border-radius: 14px; }
   .gencard { border: 1px dashed rgba(26, 20, 12, 0.18); }
@@ -645,7 +677,7 @@
   /* Kop van het beginscherm */
   .brandmark { width: 36px; height: 36px; border-radius: 11px; flex: none; display: flex; align-items: center; justify-content: center;
     background: linear-gradient(145deg, #E0AE55, #8E6524); color: #1A140C; box-shadow: inset 0 1px 0 rgba(255,255,255,0.35); }
-  :root[data-theme="light"] .brandmark { background: linear-gradient(145deg, #2A2014, #1A140C); color: #E0AE55; }
+  :root[data-theme="light"] .brandmark { background: linear-gradient(145deg, #1F7A4E, #12392A); color: #CFF5DD; }
   .hello { font-family: "Fraunces", serif; font-weight: 700; font-size: 30px; line-height: 1.12; letter-spacing: -0.01em; margin: 2px 0 0; text-wrap: balance; }
   .hello .name { color: var(--accent2); }
   .hello-sub { font-size: 13.5px; color: var(--muted); margin-top: -12px; }
@@ -2970,14 +3002,14 @@
     var frac = target ? Math.min(1, agg.kcal / target) : 1;
     card.innerHTML = '<svg class="today-ring" viewBox="0 0 96 96" role="img" aria-label="' + agg.kcal + ' kcal gepland' + (target ? ' van ' + target : '') + '">' +
       '<circle cx="48" cy="48" r="' + r + '" fill="none" stroke="rgba(26,20,12,0.09)" stroke-width="8"/>' +
-      '<circle cx="48" cy="48" r="' + r + '" fill="none" stroke="#C9973F" stroke-width="8" stroke-linecap="round" stroke-dasharray="' +
+      '<circle cx="48" cy="48" r="' + r + '" fill="none" stroke="var(--ring, #C9973F)" stroke-width="8" stroke-linecap="round" stroke-dasharray="' +
       (c * frac).toFixed(1) + ' ' + c.toFixed(1) + '" transform="rotate(-90 48 48)"/>' +
       '<text class="num" x="48" y="50" text-anchor="middle">' + agg.kcal + '</text>' +
       '<text class="lbl" x="48" y="64" text-anchor="middle">' + (target ? '/ ' + target + ' kcal' : 'kcal gepland') + '</text></svg>';
     var macros = document.createElement("div");
     macros.className = "today-macros";
     function goal(pct, per) { return target ? Math.round(target * pct / 100 / per) : null; }
-    [["Eiwit", agg.eiwitG, goal(t.eiwit, 4), "#C9973F"], ["Koolh.", agg.khG, goal(t.kh, 4), "#8C6428"], ["Vet", agg.vetG, goal(t.vet, 9), "#2E9A5C"]].forEach(function (m) {
+    [["Eiwit", agg.eiwitG, goal(t.eiwit, 4), "var(--bar-eiwit, #C9973F)"], ["Koolh.", agg.khG, goal(t.kh, 4), "var(--bar-kh, #8C6428)"], ["Vet", agg.vetG, goal(t.vet, 9), "var(--bar-vet, #2E9A5C)"]].forEach(function (m) {
       var row = document.createElement("div");
       row.className = "mrow";
       var pctW = m[2] ? Math.min(100, Math.round(m[1] / m[2] * 100)) : Math.min(100, Math.round(m[1] / Math.max(agg.eiwitG, agg.khG, agg.vetG, 1) * 100));
@@ -4298,11 +4330,11 @@
         row.appendChild(card);
 
         var delBtn = document.createElement("button");
-        delBtn.className = "plan-edit-btn";
+        delBtn.className = "tile-icon tile-icon-danger";
         delBtn.setAttribute("aria-label", "Verwijder gerecht");
         delBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>';
         delBtn.onclick = function () { deleteOneStoredDish(item); };
-        row.appendChild(delBtn);
+        var libActs = document.createElement("div"); libActs.className = "tile-actions"; libActs.appendChild(delBtn); row.appendChild(libActs); row.classList.add("tile-row", "tile-row-1");
 
         group.appendChild(row);
       });
@@ -4728,18 +4760,18 @@
 
       if (primary) {
         var editBtn = document.createElement("button");
-        editBtn.className = "plan-edit-btn";
+        editBtn.className = "tile-icon";
         editBtn.setAttribute("aria-label", "Wijzig gerecht");
         editBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>';
         editBtn.onclick = function () { goto("planpick", { pickFilter: null, planWeekId: pw.id, planSlotKey: primary.key }); };
-        row.appendChild(editBtn);
+        var dayActs2 = document.createElement("div"); dayActs2.className = "tile-actions"; dayActs2.appendChild(editBtn); row.appendChild(dayActs2); row.classList.add("tile-row", "tile-row-2");
 
         var clearDayBtn = document.createElement("button");
-        clearDayBtn.className = "plan-edit-btn";
+        clearDayBtn.className = "tile-icon tile-icon-danger";
         clearDayBtn.setAttribute("aria-label", "Maak dag leeg");
         clearDayBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>';
         clearDayBtn.onclick = function () { openClearDayDialog(pw, d); };
-        row.appendChild(clearDayBtn);
+        dayActs2.appendChild(clearDayBtn);
       }
 
       dayGrid.appendChild(row);
@@ -4879,13 +4911,13 @@
         slot.onclick = function () { goto("day", { weekId: assigned.weekId, dayId: assigned.dayId, dayServings: assigned.servings || 1, dayBackView: "planday", dayBackWeekId: pw.id, dayBackDayName: d }); };
         row.appendChild(slot);
         var editBtn = document.createElement("button");
-        editBtn.className = "plan-edit-btn";
+        editBtn.className = "tile-icon";
         editBtn.setAttribute("aria-label", "Wijzig gerecht");
         editBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>';
         editBtn.onclick = function () { goto("planpick", { pickFilter: null, planWeekId: pw.id, planSlotKey: key }); };
-        row.appendChild(editBtn);
+        var slotActs = document.createElement("div"); slotActs.className = "tile-actions"; slotActs.appendChild(editBtn); row.appendChild(slotActs); row.classList.add("tile-row", "tile-row-2");
         var delSlotBtn = document.createElement("button");
-        delSlotBtn.className = "plan-edit-btn";
+        delSlotBtn.className = "tile-icon tile-icon-danger";
         delSlotBtn.setAttribute("aria-label", "Wis " + m.toLowerCase());
         delSlotBtn.title = "Wis " + m.toLowerCase();
         delSlotBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>';
@@ -4896,7 +4928,7 @@
           render();
           showUndoToast(m + " gewist", function () { pw.slots[key] = removed; savePlannedWeeks(); render(); });
         };
-        row.appendChild(delSlotBtn);
+        slotActs.appendChild(delSlotBtn);
       } else {
         slot.onclick = function () { goto("planpick", { pickFilter: null, planWeekId: pw.id, planSlotKey: key }); };
         row.appendChild(slot);
