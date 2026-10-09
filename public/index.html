@@ -453,8 +453,8 @@
   .weekrow-head h2 { font-family: "Fraunces", serif; font-weight: 600; font-size: 24px; margin: 0; }
   .weekrow-head .sub { color: var(--muted); font-size: 14px; }
   .weekrow-head:hover h2 { color: var(--accent2); }
-  @media (min-width: 701px) { .mobile-only { display: none !important; } }
-  @media (max-width: 700px) { .desk-only { display: none !important; } }
+  @media (min-width: 701px) and (min-height: 501px), (min-width: 701px) and (orientation: portrait) { .mobile-only { display: none !important; } }
+  @media (max-width: 700px), (max-height: 500px) and (orientation: landscape) { .desk-only { display: none !important; } }
   .row-detail { display: flex; flex-direction: column; gap: 8px; width: 100%; }
   .card.day-line { flex-direction: row; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 12px 12px 14px; min-height: 56px; width: auto; min-width: 0; }
   .day-line-when { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
@@ -467,7 +467,7 @@
   .day-line-when { overflow: hidden; }
   .day-line-empty { font-size: 13px; color: var(--muted); }
   .plan-slot-row:has(.day-line) { gap: 6px; }
-  @media (min-width: 701px) {
+  @media (min-width: 701px) and (min-height: 501px), (min-width: 701px) and (orientation: portrait) {
     .card.day-line { flex-direction: column; align-items: flex-start; padding: 20px 22px; gap: 10px; }
     .card.day-line .day-line-when { flex-direction: row; }
     .plan-slot.compact-slot { padding: 14px 16px; gap: 8px; }
@@ -518,7 +518,7 @@
   @media (prefers-reduced-motion: reduce) { .archive-toggle svg { transition: none; } }
   /* Tabbalk onderin: alleen op smalle schermen */
   .tabbar { display: none; }
-  @media (max-width: 700px) {
+  @media (max-width: 700px), (max-height: 500px) and (orientation: landscape) {
     body.has-tabbar .tabbar {
       display: grid; grid-template-columns: repeat(5, 1fr); position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
       padding: 6px 4px calc(8px + env(safe-area-inset-bottom, 0px)); background: var(--tabbar-bg); border-top: 1px solid var(--line);
@@ -547,6 +547,30 @@
     font-variant-numeric: tabular-nums;
   }
   @media (prefers-reduced-motion: reduce) { .tab .tab-ic { transition: none; } }
+
+  /* Telefoon in liggende stand: weinig hoogte, dus alles compacter; ruimte voor de notch links/rechts */
+  #app { padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px); }
+  @media (max-height: 500px) and (orientation: landscape) {
+    header.topbar { padding-top: calc(8px + env(safe-area-inset-top, 0px)); padding-bottom: 8px; }
+    .topbar h1 { font-size: 19px; }
+    .backbtn { width: 36px; height: 36px; }
+    main { padding-top: 16px; gap: 14px; }
+    body.has-tabbar .tabbar {
+      left: max(10px, env(safe-area-inset-left, 0px)); right: max(10px, env(safe-area-inset-right, 0px));
+      bottom: calc(6px + env(safe-area-inset-bottom, 0px)); padding: 3px 4px; max-width: 640px; margin: 0 auto;
+    }
+    .tab { flex-direction: row; gap: 6px; padding: 3px 0; font-size: 11px; }
+    .tab .tab-ic { width: 34px; height: 26px; }
+    .tab svg { width: 20px; height: 20px; }
+    .tab-badge { top: -4px; right: -2px; }
+    body.has-tabbar main { padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px)); }
+    body.has-tabbar .busybar { bottom: calc(50px + env(safe-area-inset-bottom, 0px)); }
+    .hello { font-size: 24px; }
+    .today-card { grid-template-columns: 84px minmax(0, 1fr); padding: 14px; }
+    .today-ring { width: 84px; height: 84px; }
+    .meal-list, .pick-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    .cook-step-body { font-size: 16px; }
+  }
 
   /* ===== Uitstraling "Gouden balans" ===== */
   #bgfx { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden;
@@ -610,7 +634,7 @@
   .meal-row .tag.nevo svg { width: 13px; height: 13px; }
 
   /* Zwevende tabbalk */
-  @media (max-width: 700px) {
+  @media (max-width: 700px), (max-height: 500px) and (orientation: landscape) {
     body.has-tabbar .tabbar {
       left: 10px; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); padding: 7px 4px;
       border-radius: 24px; border: none; box-shadow: 0 12px 30px rgba(0, 0, 0, 0.30);
@@ -621,7 +645,7 @@
   .tabbar { --ink: var(--tab-ink); --muted: var(--tab-muted); --accent2: var(--tab-active); }
   .tab-badge { background: #D4A24A; color: #1A140C; }
   .tab:disabled { opacity: 0.4; cursor: default; }
-  @media (max-width: 700px) {
+  @media (max-width: 700px), (max-height: 500px) and (orientation: landscape) {
     body.has-tabbar.tabbar-actions .tabbar-dup { display: none !important; }
     body.has-tabbar.tabbar-actions .tab span:last-child { white-space: nowrap; }
   }
