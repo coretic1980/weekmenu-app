@@ -453,6 +453,9 @@
   .weekrow-head h2 { font-family: "Fraunces", serif; font-weight: 600; font-size: 24px; margin: 0; }
   .weekrow-head .sub { color: var(--muted); font-size: 14px; }
   .weekrow-head:hover h2 { color: var(--accent2); }
+  @media (min-width: 701px) { .mobile-only { display: none !important; } }
+  @media (max-width: 700px) { .desk-only { display: none !important; } }
+  .row-detail { display: flex; flex-direction: column; gap: 8px; width: 100%; }
   .card.day-line { flex-direction: row; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 12px 12px 14px; min-height: 56px; width: auto; min-width: 0; }
   .day-line-when { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
   .day-line-when b { font-family: "Fraunces", serif; font-weight: 600; font-size: 17px; white-space: nowrap; }
@@ -464,6 +467,12 @@
   .day-line-when { overflow: hidden; }
   .day-line-empty { font-size: 13px; color: var(--muted); }
   .plan-slot-row:has(.day-line) { gap: 6px; }
+  @media (min-width: 701px) {
+    .card.day-line { flex-direction: column; align-items: flex-start; padding: 20px 22px; gap: 10px; }
+    .card.day-line .day-line-when { flex-direction: row; }
+    .plan-slot.compact-slot { padding: 14px 16px; gap: 8px; }
+    .plan-slot-row:has(.day-line) .plan-edit-btn, .plan-slot-row:has(.compact-slot) .plan-edit-btn { width: 44px; }
+  }
   .plan-slot-row:has(.day-line) .plan-edit-btn { width: 40px; }
   @media (max-width: 420px) { .day-line-when { flex-direction: column; gap: 0; } .day-line-when span { font-size: 12px; } }
   @media (max-width: 380px) { .day-line-when b { font-size: 15.5px; } .day-line-info .tag { padding: 3px 7px; font-size: 11px; } }
@@ -4591,7 +4600,23 @@
         none.textContent = "Niets gepland";
         info.appendChild(none);
       }
+      info.classList.add("mobile-only");
       card.appendChild(info);
+
+      var deskDetail = document.createElement("div");
+      deskDetail.className = "row-detail desk-only";
+      if (totals) {
+        deskDetail.appendChild(macroTags({ kcal: totals.kcal, kh: totals.kh, eiwit: totals.eiwit, vet: totals.vet, khG: totals.khG, eiwitG: totals.eiwitG, vetG: totals.vetG, balans: totals.balans }, { hideMealType: true }));
+      } else {
+        var hintRow = document.createElement("div");
+        hintRow.className = "tagrow";
+        var ht = document.createElement("span");
+        ht.className = "tag neutral";
+        ht.textContent = "Nog niets gepland · 0 van " + PLAN_SLOTS.length + " maaltijden";
+        hintRow.appendChild(ht);
+        deskDetail.appendChild(hintRow);
+      }
+      card.appendChild(deskDetail);
 
       card.onclick = function () { goto("planday", { planWeekId: pw.id, planDayName: d }); };
       row.appendChild(card);
@@ -4677,6 +4702,7 @@
           bp.textContent = assignedDay.balans + "%";
           stats.appendChild(bp);
         }
+        stats.classList.add("mobile-only");
         top.appendChild(stats);
       }
       slot.appendChild(top);
@@ -4737,6 +4763,12 @@
         bottom.appendChild(stepper);
       }
       slot.appendChild(bottom);
+      if (assignedDay) {
+        var slotDetail = document.createElement("div");
+        slotDetail.className = "row-detail desk-only";
+        slotDetail.appendChild(macroTags(assignedDay, { hideMealType: true }));
+        slot.appendChild(slotDetail);
+      }
 
       if (assigned) {
         slot.onclick = function () { goto("day", { weekId: assigned.weekId, dayId: assigned.dayId, dayServings: assigned.servings || 1, dayBackView: "planday", dayBackWeekId: pw.id, dayBackDayName: d }); };
@@ -4994,6 +5026,7 @@
           bp.textContent = d.balans + "%";
           stats.appendChild(bp);
         }
+        stats.classList.add("mobile-only");
         top.appendChild(stats);
         row.appendChild(top);
         var sub = document.createElement("div");
@@ -5006,6 +5039,10 @@
         if (isCur) bits.push("nu ingepland");
         sub.textContent = bits.join(" · ");
         if (bits.length) row.appendChild(sub);
+        var pickDetail = document.createElement("div");
+        pickDetail.className = "row-detail desk-only";
+        pickDetail.appendChild(macroTags(d, { hideMealType: true }));
+        row.appendChild(pickDetail);
         row.onclick = function () {
           var prev = pw.slots[key];
           pw.slots[key] = { name: d.name, weekId: it.week.id, dayId: d.id, balans: d.balans };
