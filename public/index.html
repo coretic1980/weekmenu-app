@@ -548,6 +548,50 @@
   }
   @media (prefers-reduced-motion: reduce) { .tab .tab-ic { transition: none; } }
 
+  /* ===== Grote schermen: zijbalk-navigatie en meer kolommen ===== */
+  .tabbar-brand { display: none; }
+  @media (min-width: 1024px) and (min-height: 501px) {
+    body.has-tabbar .tabbar {
+      display: flex; flex-direction: column; gap: 4px; position: fixed; top: 0; bottom: 0; left: 0; right: auto; width: 236px; z-index: 40;
+      padding: calc(22px + env(safe-area-inset-top, 0px)) 14px 20px; border-radius: 0; box-shadow: none;
+      background: rgba(14, 10, 6, 0.62); border-right: 1px solid rgba(232, 197, 131, 0.14);
+      backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+      --ink: #F5EFE2; --muted: #B3A285; --tab-raised: rgba(224, 174, 85, 0.16); --accent2: #E0AE55;
+    }
+    :root[data-theme="light"] body.has-tabbar .tabbar {
+      background: rgba(255, 253, 248, 0.72); border-right-color: rgba(120, 85, 30, 0.16);
+      --ink: #1A140C; --muted: #74664F; --tab-raised: #EADFC6; --accent2: #8C6428;
+    }
+    .tabbar-brand { display: flex; align-items: center; gap: 12px; padding: 4px 8px 22px; font-family: "Fraunces", serif; font-weight: 700; font-size: 21px; color: var(--ink); }
+    body.has-tabbar .tabbar .tab { flex-direction: row; justify-content: flex-start; gap: 12px; padding: 6px 8px; font-size: 14.5px; border-radius: 12px; }
+    body.has-tabbar .tabbar .tab:hover { background: var(--tab-raised); }
+    body.has-tabbar .tabbar .tab .tab-ic { width: 38px; height: 34px; border-radius: 10px; }
+    body.has-tabbar .tabbar .tab-badge { top: -4px; right: -4px; }
+    body.has-tabbar #app { margin-left: 236px; max-width: none; }
+    body.has-tabbar header.topbar { padding-left: 32px; padding-right: 32px; }
+    body.has-tabbar main { width: 100%; max-width: 1160px; margin: 0 auto; padding: 32px 32px 64px; }
+    body.has-tabbar .home-nav-tiles, body.has-tabbar .topbar .backbtn[aria-label="Naar startscherm"] { display: none; }
+    body.has-tabbar .busybar { left: 236px; }
+    body.has-tabbar[data-view="day"] main, body.has-tabbar[data-view="guide"] main, body.has-tabbar[data-view="prefs"] main,
+    body.has-tabbar[data-view="planprep"] main, body.has-tabbar[data-view="cook"] main, body.has-tabbar[data-view="account"] main,
+    body.has-tabbar[data-view="settings"] main { max-width: 860px; }
+    body.has-tabbar .wide-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+    body.has-tabbar .wide-grid > * { margin: 0; }
+    body.has-tabbar .pickgroup, body.has-tabbar .pick-list, body.has-tabbar .plan-day { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    body.has-tabbar .topbar .brandmark { display: none; }
+    body.has-tabbar.tab-root .topbar .backbtn[aria-label="Terug"] { display: none; }
+    body.has-tabbar .home-today { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 24px; align-items: start; }
+    body.has-tabbar .home-today > .today-card:only-child { grid-column: 1 / -1; }
+    body.has-tabbar .home-today > .today-card { position: sticky; top: 96px; }
+  }
+  @media (min-width: 1440px) and (min-height: 501px) {
+    body.has-tabbar .tabbar { width: 260px; padding-left: 20px; padding-right: 20px; }
+    body.has-tabbar #app { margin-left: 260px; }
+    body.has-tabbar .busybar { left: 260px; }
+    body.has-tabbar main { max-width: 1320px; padding-left: 48px; padding-right: 48px; }
+    body.has-tabbar .wide-grid.week-grid, body.has-tabbar .pickgroup, body.has-tabbar .pick-list { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  }
+
   /* Telefoon in liggende stand: weinig hoogte, dus alles compacter; ruimte voor de notch links/rechts */
   #app { padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px); }
   @media (max-height: 500px) and (orientation: landscape) {
@@ -623,6 +667,8 @@
 
   /* Maaltijden van vandaag */
   .meal-list { display: flex; flex-direction: column; gap: 10px; }
+  .home-today { display: flex; flex-direction: column; gap: 20px; }
+  .home-today-list { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
   .meal-row { appearance: none; border: 1px solid transparent; width: 100%; border-radius: 16px; padding: 12px 14px; cursor: pointer; text-align: left;
     font-family: inherit; display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; gap: 12px; align-items: center; }
   .meal-row:hover { border-color: var(--accent2); }
@@ -2866,6 +2912,9 @@
     sub.textContent = dayName + " " + now.getDate() + " " + MONTHS_SHORT[now.getMonth()];
     main.appendChild(sub);
 
+    var wrapToday = document.createElement("div");
+    wrapToday.className = "home-today";
+    main.appendChild(wrapToday);
     var key = isoDateKey(getMonday(now));
     var pw = plannedWeeks.filter(function (w) { return w.weekStart === key; })[0];
     var agg = pw ? aggregateDayMacros(pw, dayName) : null;
@@ -2891,7 +2940,7 @@
       empty.appendChild(p);
       empty.appendChild(btn);
       card.appendChild(empty);
-      main.appendChild(card);
+      wrapToday.appendChild(card);
       return;
     }
 
@@ -2922,12 +2971,15 @@
     note.textContent = target ? "Gepland voor vandaag, in gram. Je dagdoel is een schatting op basis van je profiel en doel."
       : "Gepland voor vandaag. Vul lengte, gewicht en leeftijd in bij Ontwerpen om je dagdoel te zien.";
     card.appendChild(note);
-    main.appendChild(card);
+    wrapToday.appendChild(card);
 
+    var listCol = document.createElement("div");
+    listCol.className = "home-today-list";
+    wrapToday.appendChild(listCol);
     var lab = document.createElement("div");
     lab.className = "eyebrow";
     lab.textContent = "Vandaag";
-    main.appendChild(lab);
+    listCol.appendChild(lab);
     var list = document.createElement("div");
     list.className = "meal-list";
     PLAN_SLOTS.forEach(function (slot) {
@@ -2966,7 +3018,7 @@
       };
       list.appendChild(row);
     });
-    main.appendChild(list);
+    listCol.appendChild(list);
   }
 
   function renderWeeks() {
@@ -4300,10 +4352,13 @@
         return wrap;
     }
 
+    var weekGrid = document.createElement("div");
+    weekGrid.className = "wide-grid week-grid";
+    main.appendChild(weekGrid);
     activeWeeks
       .slice()
       .sort(function (a, b) { return a.weekStart.localeCompare(b.weekStart); })
-      .forEach(function (pw) { main.appendChild(renderPlanWeekRow(pw, false)); });
+      .forEach(function (pw) { weekGrid.appendChild(renderPlanWeekRow(pw, false)); });
 
     var addBtn = document.createElement("button");
     addBtn.className = "primary-btn";
@@ -4325,10 +4380,13 @@
         archHint.className = "archive-hint";
         archHint.textContent = "Afgelopen weken. Je kunt ze nog openen, de boodschappenlijst bekijken of als PDF exporteren.";
         main.appendChild(archHint);
+        var archGrid = document.createElement("div");
+        archGrid.className = "wide-grid week-grid";
+        main.appendChild(archGrid);
         archivedWeeks
           .slice()
           .sort(function (a, b) { return b.weekStart.localeCompare(a.weekStart); })
-          .forEach(function (pw) { main.appendChild(renderPlanWeekRow(pw, true)); });
+          .forEach(function (pw) { archGrid.appendChild(renderPlanWeekRow(pw, true)); });
       }
     }
 
@@ -4579,6 +4637,9 @@
       main.appendChild(autoErr);
     }
 
+    var dayGrid = document.createElement("div");
+    dayGrid.className = "wide-grid day-grid";
+    main.appendChild(dayGrid);
     PLAN_DAYS.forEach(function (d, i) {
       var dayDate = new Date(monday);
       dayDate.setDate(monday.getDate() + i);
@@ -4661,7 +4722,7 @@
         row.appendChild(clearDayBtn);
       }
 
-      main.appendChild(row);
+      dayGrid.appendChild(row);
     });
 
     app.appendChild(main);
@@ -8213,10 +8274,14 @@
     if (hidden) return;
     var open = openShoppingCount();
     bar.innerHTML = "";
-    var acts = Array.isArray(state.tabActions) && state.tabActions.length ? state.tabActions : null;
+    var acts = Array.isArray(state.tabActions) && state.tabActions.length && !isSidebarMode() ? state.tabActions : null;
     document.body.classList.toggle("tabbar-actions", !!acts);
     if (acts) { renderActionBar(bar, acts); return; }
     bar.style.gridTemplateColumns = "";
+    var brand = document.createElement("div");
+    brand.className = "tabbar-brand";
+    brand.innerHTML = '<span class="brandmark" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v16M7 20h10M5 8h14"/><path d="M5 8l-3 6a3 3 0 0 0 6 0zM19 8l-3 6a3 3 0 0 0 6 0z"/></svg></span><span>Balanza</span>';
+    bar.appendChild(brand);
     TABS.forEach(function (t) {
       var b = document.createElement("button");
       b.type = "button";
@@ -8231,8 +8296,19 @@
     });
   }
 
+  var SIDEBAR_MQ = "(min-width: 1024px) and (min-height: 501px)";
+  function isSidebarMode() {
+    try { return window.matchMedia(SIDEBAR_MQ).matches; } catch (e) { return false; }
+  }
+  try {
+    var sbMq = window.matchMedia(SIDEBAR_MQ);
+    var onSb = function () { renderTabbarSafe(); };
+    if (sbMq.addEventListener) sbMq.addEventListener("change", onSb); else if (sbMq.addListener) sbMq.addListener(onSb);
+  } catch (e) {}
+
   function render() {
     state.tabActions = null;
+    try { document.body.setAttribute("data-view", state.view || "weeks"); } catch (e) {}
     try {
       if (!configLoaded) { document.body.classList.remove("has-tabbar"); return renderLoading(); }
       if (authState.mode === "reset" && authState.resetToken) { document.body.classList.remove("has-tabbar"); return renderAuth(); }
