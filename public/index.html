@@ -207,6 +207,16 @@
     0%, 100% { opacity: 0.35; transform: scale(0.8); }
     50% { opacity: 1; transform: scale(1); }
   }
+  .busybar-steps { display: flex; gap: 6px; padding: 0 14px 11px; }
+  .busybar-step { flex: 1; min-width: 0; }
+  .busybar-step .bar { height: 4px; border-radius: 99px; background: var(--line); overflow: hidden; position: relative; }
+  .busybar-step .bar i { position: absolute; inset: 0; width: 0; background: var(--accent2); border-radius: 99px; transition: width .4s ease; }
+  .busybar-step.done .bar i { width: 100%; }
+  .busybar-step.active .bar i { width: 45%; animation: busystep 1.6s ease-in-out infinite; }
+  .busybar-step.skip .bar i { width: 100%; opacity: .35; }
+  @keyframes busystep { 0%, 100% { opacity: .45; } 50% { opacity: 1; } }
+  .busybar-step span { display: block; margin-top: 5px; font-size: 11px; font-weight: 600; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .busybar-step.active span, .busybar-step.done span { color: var(--ink); }
   .busybar-notice {
     display: flex; align-items: flex-start; gap: 10px;
     padding: 9px 14px 12px; border-top: 1px solid var(--line);
@@ -813,6 +823,7 @@
 <div id="busyBar" class="busybar" aria-hidden="true">
   <div class="busybar-card" role="status">
     <div id="busyText" class="busybar-text"></div>
+    <div id="busySteps" class="busybar-steps" style="display:none" aria-hidden="true"></div>
     <div class="busybar-notice">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="3"/><path d="M11 18h2"/></svg>
       <span><strong>Je kunt even naar een andere app.</strong> Kom je terug, dan pakt Balanza het weer op.</span>
@@ -1024,7 +1035,7 @@
     return new Promise(function (resolve, reject) {
       var timer = null, finished = false, inFlight = false, polls = 0, netFails = 0;
       var MAX_MS = 12 * 60 * 1000;
-      function finish(fn, val) { if (finished) return; finished = true; clearTimeout(timer); delete activeJobs[jobId]; fn(val); }
+      function finish(fn, val) { if (finished) return; finished = true; clearTimeout(timer); delete activeJobs[jobId]; if (!Object.keys(activeJobs).length) window.genProgress = null; fn(val); }
       function schedule(ms) { if (finished) return; clearTimeout(timer); timer = setTimeout(tick, ms); }
       function tick() {
         if (finished || inFlight) return;
@@ -1037,7 +1048,10 @@
           return res.json();
         }).then(function (data) {
           inFlight = false; netFails = 0;
-          if (data && data.status === "running") return schedule(pollDelay(polls));
+          if (data && data.status === "running") {
+            if (data.progress && typeof data.progress === "object") { window.genProgress = data.progress; updateBusyUI(); }
+            return schedule(pollDelay(polls));
+          }
           if (data && data.status === "done") return finish(resolve, data.result);
           var err = new Error((data && data.message) || "Genereren is niet gelukt."); err.code = (data && data.code) || "error"; finish(reject, err);
         }).catch(function (e) {
@@ -1351,10 +1365,33 @@
       if (document.body) document.body.classList.add("busy-active");
       var topMsg = busyMessages.length ? busyMessages[busyMessages.length - 1] : "Bezig…";
       if (textEl) textEl.textContent = typeof topMsg === "function" ? topMsg() : topMsg;
+      renderBusySteps();
     } else {
       el.classList.remove("active");
       if (document.body) document.body.classList.remove("busy-active");
     }
+  }
+  // Drie stappen bij het genereren: ontwerpen, narekenen met NEVO, bijstellen voor de Balans-score.
+  function renderBusySteps() {
+    var box = document.getElementById("busySteps");
+    if (!box) return;
+    var p = window.genProgress;
+    if (!p || !busyCount) { box.style.display = "none"; return; }
+    var st = p.stage;
+    var steps = [
+      ["Ontwerpen", st === "generate" ? "active" : "done"],
+      ["Narekenen (NEVO)", st === "generate" ? "" : st === "check" ? "active" : "done"],
+      [p.fixing ? "Bijstellen (" + p.fixing + ")" : "Bijstellen", st === "repair" ? "active" : st === "finishing" ? (p.round ? "done" : "skip") : ""]
+    ];
+    box.innerHTML = "";
+    steps.forEach(function (x) {
+      var d = document.createElement("div");
+      d.className = "busybar-step" + (x[1] ? " " + x[1] : "");
+      d.innerHTML = '<div class="bar"><i></i></div><span></span>';
+      d.querySelector("span").textContent = x[0];
+      box.appendChild(d);
+    });
+    box.style.display = "flex";
   }
   function busyStart(message) {
     busyCount++;
@@ -4266,7 +4303,15 @@
     var genTotal = plannedGenerationCount();
     var genCritical = criticalDishes(genTotal);
     var genBounds = estimateBounds(estimateGenerationSeconds(genTotal, false));
-    busyStart(function () { return "Gerechten worden gegenereerd… " + genRemainingText(genStart, genBounds); });
+    window.genProgress = null;
+    busyStart(function () {
+      var p = window.genProgress;
+      if (p && p.stage === "repair" && p.total) {
+        return p.ok + " van " + p.total + " gerechten klaar \u00b7 " + p.fixing + (p.fixing === 1 ? " wordt" : " worden") + " bijgesteld voor de Balans-score\u2026";
+      }
+      if (p && (p.stage === "check" || p.stage === "finishing")) return "Gerechten worden afgerond\u2026";
+      return "Gerechten worden ontworpen… " + genRemainingText(genStart, genBounds);
+    });
     startGenTicker();
     savePrefs();
     render();

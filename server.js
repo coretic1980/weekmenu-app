@@ -1442,20 +1442,50 @@ function buildRepairPrompt(dishes, goal, dietStyle) {
     "geen markdown, geen uitleg erbuiten." + nevoPromptText();
 }
 
+// Voortgang per deelopdracht (per maaltijdmoment loopt er één), zodat de app kan tonen wat er gebeurt.
+function progressTrack() {
+  var store = usageCtx.getStore();
+  if (!store) return { stage: "generate", total: 0, ok: 0, fixing: 0, round: 0 };
+  store.progress = store.progress || [];
+  var t = { stage: "generate", total: 0, ok: 0, fixing: 0, round: 0 };
+  store.progress.push(t);
+  return t;
+}
+function summarizeProgress(usage) {
+  var tracks = usage && Array.isArray(usage.progress) ? usage.progress : null;
+  if (!tracks || !tracks.length) return null;
+  var sum = { generating: 0, checking: 0, repairing: 0, total: 0, ok: 0, fixing: 0, round: 0 };
+  tracks.forEach(function (t) {
+    if (t.stage === "generate") sum.generating++; else if (t.stage === "check") sum.checking++; else if (t.stage === "repair") sum.repairing++;
+    sum.total += t.total; sum.ok += t.ok; sum.fixing += t.fixing; sum.round = Math.max(sum.round, t.round);
+  });
+  sum.stage = sum.generating ? "generate" : sum.repairing ? "repair" : sum.checking ? "check" : "finishing";
+  return sum;
+}
+
 function generateWithBalansRetry(prompt, goal, post, dietStyle) {
   prompt = adaptPromptToDiet(prompt, dietStyle);
   if (!goal && !DIET_FORBIDDEN_TEXT[dietStyle]) return callAnthropicOnce(prompt).then(function (parsed) { return post ? post(parsed) : parsed; });
   var t0 = Date.now();
+  var track = progressTrack();
+  function done(result) {
+    var list = Array.isArray(result) ? result : [result];
+    track.stage = "done"; track.total = list.length; track.fixing = 0;
+    track.ok = list.filter(function (d) { return d && !dishNeedsRepair(d, goal, dietStyle); }).length;
+    return result;
+  }
 
   // Een lijst gerechten: eerst één keer genereren, daarna alleen de afwijkers bijstellen.
   function repairRound(dishes, round) {
     var bad = [];
     dishes.forEach(function (d, i) { if (dishNeedsRepair(d, goal, dietStyle)) bad.push(i); });
-    if (!bad.length || round > BALANS_REPAIR_ROUNDS || Date.now() - t0 > BALANS_TIME_BUDGET_MS) return Promise.resolve(finalizeDiet(dishes, dietStyle));
+    track.total = dishes.length; track.ok = dishes.length - bad.length;
+    if (!bad.length || round > BALANS_REPAIR_ROUNDS || Date.now() - t0 > BALANS_TIME_BUDGET_MS) return Promise.resolve(done(finalizeDiet(dishes, dietStyle)));
+    track.stage = "repair"; track.fixing = bad.length; track.round = round;
     var subset = bad.map(function (i) { return dishes[i]; });
     return callAnthropicOnce(adaptPromptToDiet(buildRepairPrompt(subset, goal, dietStyle), dietStyle)).then(function (fixed) {
       if (post) fixed = post(fixed);
-      if (!Array.isArray(fixed)) return finalizeDiet(dishes, dietStyle);
+      if (!Array.isArray(fixed)) return done(finalizeDiet(dishes, dietStyle));
       var next = dishes.slice(), improved = 0;
       bad.forEach(function (idx, j) {
         var nd = fixed[j], od = dishes[idx];
@@ -1469,7 +1499,7 @@ function generateWithBalansRetry(prompt, goal, post, dietStyle) {
       return repairRound(next, round + 1);
     }, function (err) {
       console.warn("Bijstellen mislukt, we leveren het beste resultaat tot nu toe: " + (err && err.message));
-      return finalizeDiet(dishes, dietStyle);
+      return done(finalizeDiet(dishes, dietStyle));
     });
   }
 
@@ -1480,8 +1510,9 @@ function generateWithBalansRetry(prompt, goal, post, dietStyle) {
     var score = (goal ? minBalans(parsed, goal, dietStyle) : 100) - violations * 1000;   // overtreding weegt zwaarder dan elke balans-score
     if (score > bestScore) { bestScore = score; bestParsed = parsed; }
     if ((violations === 0 && (!goal || score >= BALANS_MIN_THRESHOLD)) || attempt >= BALANS_MAX_ATTEMPTS || Date.now() - t0 > BALANS_TIME_BUDGET_MS) {
-      return finalizeDiet(bestParsed, dietStyle);
+      return done(finalizeDiet(bestParsed, dietStyle));
     }
+    track.stage = "repair"; track.total = 1; track.ok = 0; track.fixing = 1; track.round = attempt;
     if (violations) {
       var found = dishDietViolations(parsed, dietStyle);
       currentPrompt = prompt + "\nLET OP: een vorige poging bevatte ingrediënten die niet " + dietStyle.toLowerCase() + " zijn (" +
@@ -1492,6 +1523,7 @@ function generateWithBalansRetry(prompt, goal, post, dietStyle) {
   function next() {
     attempt++;
     return callAnthropicOnce(currentPrompt).then(function (parsed) {
+      if (attempt === 1) track.stage = "check";
       if (post) parsed = post(parsed);
       if (attempt === 1 && Array.isArray(parsed)) return repairRound(parsed, 1);
       return handleSingle(parsed);
@@ -2665,6 +2697,7 @@ function startGenerateJob(o) {
   if (timer.unref) timer.unref();
   var payload = Object.assign({}, body); delete payload.async; delete payload.requestId;
   var run, usage = newUsage();
+  job.usage = usage;   // alleen in het geheugen: voor de voortgang bij het peilen
   try { run = usageCtx.run(usage, function () { return runGenerateAction(payload); }); } catch (e) { run = Promise.reject(e); }
   run.then(function (parsed) {
     clearTimeout(timer);
@@ -2691,7 +2724,7 @@ function handleGenerateJobGet(req, res, id) {
     return loadJob(id).then(function (job) {
       if (!job || job.uid !== user.uid) return sendJSON(res, 404, { code: "not_found", message: "Deze opdracht bestaat niet meer." });
       job.lastPollAt = Date.now();
-      if (job.status === "running") return sendJSON(res, 200, { status: "running", elapsedMs: Date.now() - job.createdAt });
+      if (job.status === "running") return sendJSON(res, 200, { status: "running", elapsedMs: Date.now() - job.createdAt, progress: summarizeProgress(job.usage) });
       if (job.status === "done") return sendJSON(res, 200, { status: "done", result: job.result });
       sendJSON(res, 200, { status: "error", code: job.error.code, message: job.error.message, httpStatus: job.error.status });
     });
