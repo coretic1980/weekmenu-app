@@ -333,6 +333,11 @@
   .photo-mode span { font-size: 12.5px; color: var(--muted); line-height: 1.4; }
   .photo-mode.selected { border-color: var(--accent2); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent2) 18%, transparent); }
   .photo-meals { margin: 0; }
+  .from-photo { margin: 2px 0 6px; padding: 12px 14px; border-radius: 14px; background: var(--nevo-bg); color: var(--ink); font-size: 13.5px; line-height: 1.5; }
+  .from-photo-head { display: flex; align-items: flex-start; gap: 8px; font-weight: 700; color: var(--nevo-ink); }
+  .from-photo-head svg { flex: none; margin-top: 1px; }
+  .from-photo ul { margin: 8px 0 0; padding-left: 20px; color: var(--ink); }
+  .from-photo li { margin: 3px 0; }
   .photo-note { margin: -4px 0 0; font-size: 12px; color: var(--muted); text-align: center; }
   .autofill-title { font-family: "Fraunces", serif; font-weight: 600; font-size: 20px; margin: 0; }
   .autofill-sub { font-size: 13.5px; line-height: 1.55; color: var(--muted); margin: -6px 0 0; }
@@ -4339,6 +4344,8 @@
         ingredienten: Array.isArray(d.ingredienten) ? d.ingredienten.map(String) : [],
         steps: steps,
         macroBron: d.macroBron === "nevo" ? "nevo" : "schatting", nevo: d.nevo || null,
+        herkend: typeof d.herkend === "string" ? d.herkend.trim().slice(0, 200) : undefined,
+        aanpassingen: Array.isArray(d.aanpassingen) ? d.aanpassingen.filter(function (x) { return typeof x === "string" && x.trim(); }).slice(0, 6).map(function (x) { return x.trim().slice(0, 180); }) : undefined,
         profile: currentProfileSnapshot()
       };
     });
@@ -4463,6 +4470,7 @@
       var list = extractDishArray(result);
       if (!list || !list.length) throw new Error("Onverwacht antwoordformaat.");
       var days = dishesFromGenerated(list.slice(0, 1), meals);
+      days[0].vanFoto = mode;
       return Promise.resolve(moduleOn("images") ? Promise.all(days.map(fetchImageForDish)) : null).then(function () {
         stopGenTicker(); busyEnd();
         state.generating = false;
@@ -7947,6 +7955,22 @@
     main.appendChild(macroTags(day));
     if (!day.prep) main.appendChild(nevoCreditLine(day));
 
+    if (day.vanFoto && (day.herkend || (day.aanpassingen && day.aanpassingen.length))) {
+      var fromPhoto = document.createElement("div");
+      fromPhoto.className = "from-photo";
+      var fpHead = document.createElement("div");
+      fpHead.className = "from-photo-head";
+      fpHead.innerHTML = iconSvg("camera", 18) + "<span></span>";
+      fpHead.querySelector("span").textContent = (day.vanFoto === "origineel" ? "Zoals op je foto: " : "Balanza-versie van: ") + (day.herkend || "je foto");
+      fromPhoto.appendChild(fpHead);
+      if (day.aanpassingen && day.aanpassingen.length) {
+        var ul = document.createElement("ul");
+        day.aanpassingen.forEach(function (a) { var li = document.createElement("li"); li.textContent = a; ul.appendChild(li); });
+        fromPhoto.appendChild(ul);
+      }
+      main.appendChild(fromPhoto);
+    }
+
     var servingsForView = state.dayServings || 1;
     if (servingsForView > 1) {
       var servingsNote = document.createElement("div");
@@ -8416,7 +8440,8 @@
       imageCredit: day.imageCredit || null,
       imageV: day.imageV || 0,
       fotoZoekterm: day.fotoZoekterm || "",
-      macroBron: day.macroBron === "nevo" ? "nevo" : "schatting", nevo: day.nevo || null
+      macroBron: day.macroBron === "nevo" ? "nevo" : "schatting", nevo: day.nevo || null,
+      vanFoto: day.vanFoto || undefined, herkend: day.herkend || undefined, aanpassingen: day.aanpassingen && day.aanpassingen.length ? day.aanpassingen : undefined
     };
   }
 

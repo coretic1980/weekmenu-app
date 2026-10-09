@@ -1146,12 +1146,21 @@ function buildPhotoPrompt(p, mode, mealType) {
   return "Je bent een voedingskundige chef-kok. Bekijk de foto. Er staat een gerecht op (bijv. een bord eten, een foto van een maaltijd) " +
     "of een recept (bijv. een kookboekpagina, een screenshot of een handgeschreven recept).\n" +
     "Als er GEEN gerecht en GEEN recept op de foto staat, geef dan alleen dit terug: {\"error\": \"geen_gerecht\"}\n\n" +
-    "Anders: maak er precies één recept van (per 1 persoon).\n" +
+    "Anders: maak er precies één zelf te bereiden recept van (per 1 persoon).\n" +
     "- Staat er een recept op de foto: neem de ingrediënten en hoeveelheden daaruit over en reken ze om naar 1 persoon.\n" +
-    "- Staat er een bord eten op: herken het gerecht en de zichtbare ingrediënten en schat realistische hoeveelheden in.\n" +
+    "- Staat er een bord eten of een maaltijd op: herken het gerecht en alle onderdelen (ook als het fastfood of een restaurantgerecht is) " +
+    "en schat realistische hoeveelheden in. Alles wat samen op de foto staat is één maaltijd: neem bijgerechten (bijv. friet, salade, rijst) mee " +
+    "in hetzelfde recept. Calorievrije dranken (water, thee, light/zero frisdrank) laat je weg uit de ingrediënten.\n" +
     (balanza
-      ? "- Maak een BALANZA-VERSIE: houd het herkenbaar als hetzelfde gerecht (zelfde idee, smaak en keuken), maar pas ingrediënten en " +
-        "hoeveelheden aan zodat het past bij het doel hieronder (bijv. magerder vlees, meer eiwit, minder olie of kaas, meer groente).\n" +
+      ? "- Maak een BALANZA-VERSIE die thuis te maken is. Belangrijkste regel: het moet voelen en eruitzien als HETZELFDE gerecht. Behoud de " +
+        "kenmerkende onderdelen en smaken (bijv. bij een dubbele hamburger: twee dunne burgers, sesambroodje, speciale saus, augurk, sla, kaas en " +
+        "de friet erbij; bij lasagne: lagen, tomatensaus en een gegratineerde bovenkant). Maak het gezonder met slimme ruil, niet met weglaten:\n" +
+        "  * magere eiwitbronnen (bijv. rundergehakt 5% vet, kipfilet, kalkoenfilet in plaats van spek, magere kwark of Griekse yoghurt 0% als sausbasis);\n" +
+        "  * bakken in de oven of airfryer in plaats van frituren (bijv. ovenfriet van verse aardappel met een theelepel olie);\n" +
+        "  * minder of lichtere kaas, minder olie en boter, suikerhoudende dranken weglaten;\n" +
+        "  * meer groente en vezels erbij of erin (bijv. extra sla, tomaat, rauwkost of een volkoren bol);\n" +
+        "  * een verzadigende, volwaardige portie die wel binnen de calorierichtlijn hieronder past.\n" +
+        "  Verzin geen ander gerecht en maak er geen salade of bowl van als het origineel dat niet is.\n" +
         goalInstructionText(p.goal, p.dietStyle) + "\n" +
         "- Stem de portie af op het maaltijdmoment: " + types.map(function (mt) { return mt + " (" + mealtypeGuideText(mt, p.goal) + ")"; }).join("; ") + "\n" +
         buildBodyProfileLine(p)
@@ -1163,8 +1172,12 @@ function buildPhotoPrompt(p, mode, mealType) {
     "- Uitgesloten ingrediënten (vervang ze door iets passends): " + excludeTxt + "\n" +
     "- Culinair niveau van de stappen: " + (p.level || "Home-style") + "\n" +
     INGREDIENT_SPECIFICITY_LINE +
-    "Geef de naam in het Nederlands. Geef ALLEEN geldig JSON terug: een array met EXACT 1 object, exact dit schema, geen markdown, geen uitleg erbuiten:\n" +
-    '[{"name": "gerechtnaam", "mealType": "' + types[0] + '", "kcal": 600, "kh_g": 50, "eiwit_g": 48, "vet_g": 22, ' +
+    "Geef de naam in het Nederlands en beschrijvend, zonder merknamen (bijv. \"Dubbele burger met speciale saus en ovenfriet\"). " +
+    "\"herkend\" = kort wat je op de foto ziet (mag merknamen bevatten, bijv. \"Big Mac met bacon, friet en Coca-Cola Zero\"). " +
+    (balanza ? "\"aanpassingen\" = 2 tot 5 korte zinnen over wat je hebt veranderd ten opzichte van het origineel en waarom (bijv. \"Rundergehakt 5% vet in plaats van gewone burgers: meer eiwit, minder vet\"). "
+             : "\"aanpassingen\" = een lege lijst []. ") +
+    "Geef ALLEEN geldig JSON terug: een array met EXACT 1 object, exact dit schema, geen markdown, geen uitleg erbuiten:\n" +
+    '[{"name": "gerechtnaam", "herkend": "wat er op de foto staat", "aanpassingen": ["wat er is veranderd"], "mealType": "' + types[0] + '", "kcal": 600, "kh_g": 50, "eiwit_g": 48, "vet_g": 22, ' +
     '"bereidingstijd_minuten": 30, "foto_zoekterm": "grilled salmon asparagus", "benodigdheden": "korte tekst met keukenapparatuur", "ingredienten": ' + nevoIngredientSchema() + ', ' +
     '"steps": [{"title": "korte staptitel", "content": "volledige instructie", "timer_seconds": 300}]}]\n' +
     '"mealType" moet exact één van deze waarden zijn: ' + types.join(", ") + (types.length > 1 ? " (kies het moment dat het best bij het gerecht past)" : "") + ". " +
@@ -1487,7 +1500,7 @@ function buildRepairPrompt(dishes, goal, dietStyle) {
   });
   var slim = dishes.map(function (d) {
     var o = {};
-    ["name", "mealType", "kcal", "kh_g", "eiwit_g", "vet_g", "bereidingstijd_minuten", "foto_zoekterm", "benodigdheden", "ingredienten", "steps"].forEach(function (k) { if (d[k] !== undefined) o[k] = d[k]; });
+    ["name", "herkend", "aanpassingen", "mealType", "kcal", "kh_g", "eiwit_g", "vet_g", "bereidingstijd_minuten", "foto_zoekterm", "benodigdheden", "ingredienten", "steps"].forEach(function (k) { if (d[k] !== undefined) o[k] = d[k]; });
     return o;
   });
   return "Hieronder staan " + dishes.length + " gerechten in JSON. De macro's zijn nagerekend met het NEVO-bestand" +
@@ -1495,7 +1508,8 @@ function buildRepairPrompt(dishes, goal, dietStyle) {
     lines.join("\n") + "\n\n" +
     "Stel elk gerecht bij zodat elke macro binnen 3 procentpunt van het doel komt: pas hoeveelheden aan, voeg een eiwitrijke bron toe of vervang een ingrediënt " +
     "(bijv. minder olie, kaas, noten, rijst, pasta of brood; meer van de eiwitbron). Behoud de naam (of een kleine aanpassing daarvan), het karakter, de keuken, " +
-    "het maaltijdmoment en ongeveer hetzelfde aantal kcal. Werk ingrediënten, kcal, kh_g, eiwit_g, vet_g en de bereidingsstappen bij zodat alles klopt.\n" +
+    "het maaltijdmoment en ongeveer hetzelfde aantal kcal. Werk ingrediënten, kcal, kh_g, eiwit_g, vet_g en de bereidingsstappen bij zodat alles klopt. " +
+    "Heeft een gerecht de velden \"herkend\" en \"aanpassingen\", laat \"herkend\" dan staan en werk \"aanpassingen\" bij.\n" +
     dietHardRuleText(dietStyle) +
     "Gerechten: " + JSON.stringify(slim) + "\n" +
     "Geef ALLEEN geldig JSON terug: een array van EXACT " + dishes.length + " objecten, in dezelfde volgorde en met exact hetzelfde schema als de invoer, " +
