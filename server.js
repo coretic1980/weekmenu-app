@@ -974,12 +974,17 @@ var FOTO_TERM_LINE = "\"foto_zoekterm\" is een korte Engelse zoekterm (2 tot 4 w
 var INGREDIENT_SPECIFICITY_LINE = "Elk ingrediënt moet specifiek en concreet benoemd zijn (bijv. \"1 tl oregano\" of \"2 tenen knoflook\"), " +
   "nooit een vaag verzamelwoord zoals \"kruiden\" of \"specerijen\" zonder te specificeren welke.\n";
 
-function mealtypeGuideText(mealType, goal) {
+function mealKcalRange(mealType, goal) {
   var g = MEALTYPE_GUIDE[mealType] || MEALTYPE_GUIDE["Diner"];
   var mult = GOAL_KCAL_MULTIPLIER[goal] || 1;
   var min = Math.max(80, Math.round(g.min * mult / 10) * 10);
   var max = Math.max(min + 40, Math.round(g.max * mult / 10) * 10);
-  return min + "-" + max + " kcal per portie; " + g.desc;
+  return { min: min, max: max };
+}
+function mealtypeGuideText(mealType, goal) {
+  var g = MEALTYPE_GUIDE[mealType] || MEALTYPE_GUIDE["Diner"];
+  var r = mealKcalRange(mealType, goal);
+  return r.min + "-" + r.max + " kcal per portie (harde grens, nagerekend met NEVO); " + g.desc;
 }
 
 function goalInstructionText(goal, dietStyle) {
@@ -1093,8 +1098,8 @@ function buildBodyProfileLine(p) {
   if (p.heightCm) bits.push(p.heightCm + " cm");
   if (p.weightKg) bits.push(p.weightKg + " kg");
   bits.push("activiteitsniveau: " + String(p.activityLevel || "Gemiddeld actief").toLowerCase());
-  return "- Lichaamsprofiel: " + bits.join(", ") + " — stem portiegrootte en calorieën hierop af (naast de " +
-    "maaltijdmoment-richtlijn hierboven)\n";
+  return "- Lichaamsprofiel: " + bits.join(", ") + " — houd hier rekening mee bij de keuze van ingrediënten, maar blijf " +
+    "binnen de kcal-grenzen per maaltijdmoment hierboven (het dagdoel is daarin al verwerkt)\n";
 }
 
 function buildGeneratePrompt(p) {
@@ -1131,7 +1136,7 @@ dietStyleInstructionText(p.dietStyle) +
     INGREDIENT_SPECIFICITY_LINE +
     "Geef ALLEEN geldig JSON terug: een array van EXACT " + totalCount + " objecten (" + count +
     " per maaltijdmoment), exact dit schema, geen markdown-opmaak, geen uitleg erbuiten:\n" +
-    '[{"name": "gerechtnaam", "mealType": "' + mealTypes[0] + '", "kcal": 600, "kh_g": 50, "eiwit_g": 48, "vet_g": 22, ' +
+    '[{"name": "gerechtnaam", "mealType": "' + mealTypes[0] + '", "kcal": 0, "kh_g": 0, "eiwit_g": 0, "vet_g": 0, ' +
     '"bereidingstijd_minuten": 30, "foto_zoekterm": "grilled salmon asparagus", "benodigdheden": "korte tekst met keukenapparatuur", "ingredienten": ' + nevoIngredientSchema() + ', ' +
     '"steps": [{"title": "korte staptitel", "content": "volledige instructie", "timer_seconds": 300}]}]\n' +
     '"mealType" moet exact één van deze waarden zijn: ' + mealTypes.join(", ") + ". " +
@@ -1480,7 +1485,7 @@ function minBalans(parsed, goal, dietStyle) {
   return dishes.reduce(function (min, d) { return Math.min(min, dishBalans(d, goal, dietStyle)); }, 100);
 }
 
-var BALANS_MIN_THRESHOLD = 75;
+var BALANS_MIN_THRESHOLD = 85;   // 85 = elke macro binnen 5 procentpunt van het doel
 var BALANS_MAX_ATTEMPTS = 3;
 
 function callAnthropicOnce(prompt, model, maxTokens, image) {
@@ -1532,9 +1537,29 @@ function dishMacroPcts(d) {
   if (!kcal) return null;
   return { kh: Math.round(Number(d.kh_g || 0) * 4 / kcal * 100), eiwit: Math.round(Number(d.eiwit_g || 0) * 4 / kcal * 100), vet: Math.round(Number(d.vet_g || 0) * 9 / kcal * 100) };
 }
+// Kcal na NEVO-herberekening buiten de grens van het maaltijdmoment? (iets speling: +8% boven, -15% onder)
+function dishKcalOff(d, goal) {
+  if (!goal || !d || !d.mealType || !MEALTYPE_GUIDE[d.mealType]) return null;
+  var kcal = Number(d.kcal) || 0;
+  if (!kcal) return null;
+  var r = mealKcalRange(d.mealType, goal);
+  if (kcal > r.max * 1.08) return { dir: "hoog", min: r.min, max: r.max, kcal: kcal };
+  if (kcal < r.min * 0.85) return { dir: "laag", min: r.min, max: r.max, kcal: kcal };
+  return null;
+}
+// Hoe ver een gerecht van de kcal-grens af zit (0 = binnen de grens); gebruikt om pogingen te vergelijken.
+function dishKcalPenalty(d, goal) {
+  var off = dishKcalOff(d, goal);
+  return off ? (off.dir === "hoog" ? off.kcal - off.max : off.min - off.kcal) : 0;
+}
 function dishNeedsRepair(d, goal, dietStyle) {
   if (dishDietViolations(d, dietStyle).length) return true;
-  return !!goal && dishBalans(d, goal, dietStyle) < BALANS_MIN_THRESHOLD;
+  if (!goal) return false;
+  return dishBalans(d, goal, dietStyle) < BALANS_MIN_THRESHOLD || !!dishKcalOff(d, goal);
+}
+// Eén vergelijkbaar getal per gerecht: balans, met aftrek voor kcal buiten de grens (elke 10 kcal = 1 punt).
+function dishQuality(d, goal, dietStyle) {
+  return (goal ? dishBalans(d, goal, dietStyle) : 100) - dishKcalPenalty(d, goal) / 10;
 }
 // Alleen de gerechten die afwijken worden bijgesteld (kleine, snelle aanroep) in plaats van alles opnieuw te maken.
 function buildRepairPrompt(dishes, goal, dietStyle) {
@@ -1549,6 +1574,8 @@ function buildRepairPrompt(dishes, goal, dietStyle) {
       });
     }
     var viol = dishDietViolations(d, dietStyle);
+    var ko = dishKcalOff(d, goal);
+    if (ko) bits.push("kcal te " + ko.dir + ": nu " + ko.kcal + " kcal, moet " + ko.min + "-" + ko.max + " kcal worden (porties " + (ko.dir === "hoog" ? "kleiner" : "groter") + ")");
     return (i + 1) + ". \"" + String(d.name || "gerecht") + "\"" + (pc ? ": nu " + pc.kh + "% koolhydraten, " + pc.eiwit + "% eiwit, " + pc.vet + "% vet" : "") +
       (bits.length ? " \u2014 " + bits.join(", ") : "") +
       (viol.length ? " \u2014 bevat ingrediënten die niet " + String(dietStyle).toLowerCase() + " zijn: " + viol.slice(0, 5).join(", ") : "");
@@ -1563,7 +1590,8 @@ function buildRepairPrompt(dishes, goal, dietStyle) {
     lines.join("\n") + "\n\n" +
     "Stel elk gerecht bij zodat elke macro binnen 3 procentpunt van het doel komt: pas hoeveelheden aan, voeg een eiwitrijke bron toe of vervang een ingrediënt " +
     "(bijv. minder olie, kaas, noten, rijst, pasta of brood; meer van de eiwitbron). Behoud de naam (of een kleine aanpassing daarvan), het karakter, de keuken, " +
-    "het maaltijdmoment en ongeveer hetzelfde aantal kcal. Werk ingrediënten, kcal, kh_g, eiwit_g, vet_g en de bereidingsstappen bij zodat alles klopt. " +
+    "en het maaltijdmoment. Staat er bij een gerecht \"kcal te hoog\" of \"kcal te laag\", breng het dan binnen die grens " +
+    "(schaal vooral olie, kaas, noten, rijst, pasta, brood en sauzen); anders houd je ongeveer hetzelfde aantal kcal. Werk ingrediënten, kcal, kh_g, eiwit_g, vet_g en de bereidingsstappen bij zodat alles klopt. " +
     "Heeft een gerecht de velden \"herkend\" en \"aanpassingen\", laat \"herkend\" dan staan en werk \"aanpassingen\" bij.\n" +
     dietHardRuleText(dietStyle) +
     "Gerechten: " + JSON.stringify(slim) + "\n" +
@@ -1624,7 +1652,7 @@ function generateWithBalansRetry(prompt, goal, post, dietStyle, opts) {
         if (!nd || typeof nd !== "object" || !Array.isArray(nd.ingredienten)) return;
         if (od.mealType) nd.mealType = od.mealType;
         var ov = dishDietViolations(od, dietStyle).length, nv = dishDietViolations(nd, dietStyle).length;
-        var ob = goal ? dishBalans(od, goal, dietStyle) : 100, nb = goal ? dishBalans(nd, goal, dietStyle) : 100;
+        var ob = dishQuality(od, goal, dietStyle), nb = dishQuality(nd, goal, dietStyle);
         if (nv < ov || (nv === ov && nb > ob)) { next[idx] = nd; improved++; }
       });
       console.log("Balans bijstellen ronde " + round + ": " + bad.length + " afwijkend, " + improved + " verbeterd (" + Math.round((Date.now() - t0) / 1000) + " s)");
@@ -1639,9 +1667,12 @@ function generateWithBalansRetry(prompt, goal, post, dietStyle, opts) {
   var bestParsed = null, bestScore = -Infinity, attempt = 0, currentPrompt = prompt;
   function handleSingle(parsed) {
     var violations = dietViolationCount(parsed, dietStyle);
-    var score = (goal ? minBalans(parsed, goal, dietStyle) : 100) - violations * 1000;   // overtreding weegt zwaarder dan elke balans-score
+    var list = Array.isArray(parsed) ? parsed : [parsed];
+    var quality = list.reduce(function (m, d) { return Math.min(m, dishQuality(d, goal, dietStyle)); }, 100);
+    var score = quality - violations * 1000;   // overtreding weegt zwaarder dan elke balans-score
     if (score > bestScore) { bestScore = score; bestParsed = parsed; }
-    if ((violations === 0 && (!goal || score >= BALANS_MIN_THRESHOLD)) || attempt >= BALANS_MAX_ATTEMPTS || Date.now() - t0 > BALANS_TIME_BUDGET_MS) {
+    var allOk = list.every(function (d) { return !dishNeedsRepair(d, goal, dietStyle); });
+    if ((violations === 0 && allOk) || attempt >= BALANS_MAX_ATTEMPTS || Date.now() - t0 > BALANS_TIME_BUDGET_MS) {
       return done(finalizeDiet(bestParsed, dietStyle));
     }
     track.stage = "repair"; track.total = 1; track.ok = 0; track.fixing = 1; track.round = attempt;
