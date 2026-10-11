@@ -674,6 +674,90 @@
   .comm-foot-link:disabled { text-decoration: none; cursor: default; }
   .comm-share { display: inline-flex; align-items: center; gap: 8px; justify-content: center; width: 100%; color: var(--accent2); }
   .comm-from { font-size: 13px; color: var(--muted); }
+  .lib-main { gap: 14px; }
+  .lib-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: -4px; }
+  .lib-count { font-size: 13px; color: var(--muted); }
+  .lib-select-btn { appearance: none; padding: 8px 13px; border-radius: 11px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+  .lib-select-btn.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .lib-search { display: flex; gap: 8px; }
+  .lib-search-in { flex: 1; position: relative; display: flex; align-items: center; }
+  .lib-search-in svg { position: absolute; left: 12px; color: var(--muted); pointer-events: none; }
+  .lib-search-in .textinput { padding: 11px 12px 11px 36px; font-size: 15px; }
+  .lib-filter-btn { appearance: none; flex: none; position: relative; width: 46px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); display: grid; place-items: center; cursor: pointer; }
+  .lib-filter-btn.on { border: 1.5px solid var(--accent); color: var(--accent2); }
+  .lf-badge { position: absolute; top: -6px; right: -6px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px; background: #C2410C; color: #fff; font-size: 11px; font-weight: 700; display: grid; place-items: center; }
+  .chiprow.lib-types { flex-wrap: nowrap; overflow-x: auto; margin: 0 -22px; padding: 0 22px 2px; scrollbar-width: none; }
+  .lib-types .chip { flex: none; padding: 8px 14px; min-height: 0; font-size: 13px; }
+  .lib-favs { display: flex; gap: 10px; overflow-x: auto; margin: -8px -22px 0; padding: 0 22px 4px; scrollbar-width: none; }
+  .lib-fav { appearance: none; flex: none; width: 144px; display: flex; flex-direction: column; gap: 5px; padding: 8px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface); color: inherit; font: inherit; text-align: left; cursor: pointer; }
+  .lib-fav b { font-size: 13.5px; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .lib-fav small { font-size: 11.5px; color: var(--muted); }
+  .lib-fav-thumb, .lib-thumb { position: relative; flex: none; display: grid; place-items: center; overflow: hidden; border-radius: 11px; background: var(--bg); color: var(--accent2); }
+  .lib-fav-thumb { width: 100%; height: 78px; }
+  .lib-thumb { width: 56px; height: 56px; }
+  .lib-fav-thumb img, .lib-thumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .lib-list-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: -6px; }
+  .lib-sort { appearance: none; border: 0; background: transparent; color: var(--accent2); font: inherit; font-size: 13px; font-weight: 700; padding: 6px 18px 6px 4px; cursor: pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%231F8A55' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 2px center; }
+  .lib-list { display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+  .lib-list:empty { display: none; }
+  .lib-row { display: flex; align-items: center; gap: 6px; padding: 0 4px 0 10px; border-top: 1px solid var(--line); }
+  .lib-row:first-child { border-top: 0; }
+  .lib-row.sel { background: rgba(31, 138, 85, 0.08); }
+  .lib-open { appearance: none; flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; padding: 10px 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+  .lib-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+  .lib-txt b { font-size: 14.5px; line-height: 1.25; }
+  .lib-txt small { font-size: 12px; color: var(--muted); }
+  .lib-badges { display: flex; flex-wrap: wrap; gap: 4px; }
+  .lib-badge { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 999px; background: var(--bg); color: var(--muted); }
+  .lib-badge.fav { background: #FFF1E8; color: #B4501A; }
+  .lib-badge.plan { background: rgba(31, 138, 85, 0.12); color: var(--accent2); }
+  .lib-badge.neg { background: #F3EEEE; color: #8A3B3B; }
+  .lib-badge.dup { background: #FDF3D7; color: #7A5A0B; }
+  .lib-bal { flex: none; width: 40px; height: 40px; border-radius: 50%; border: 3px solid currentColor; display: grid; place-items: center; font-size: 12.5px; font-weight: 700; }
+  .lib-bal.hi { color: #1F8A55; } .lib-bal.mid { color: #A86A12; } .lib-bal.lo { color: #9A3412; }
+  .lib-more { appearance: none; flex: none; width: 38px; height: 48px; border: 0; background: none; color: var(--muted); display: grid; place-items: center; cursor: pointer; border-radius: 10px; }
+  .lib-more:hover { color: var(--ink); }
+  .lib-ck { appearance: none; flex: none; width: 26px; height: 26px; border-radius: 8px; border: 2px solid var(--line); background: var(--surface); color: #fff; display: grid; place-items: center; cursor: pointer; }
+  .lib-ck.on { background: var(--accent2); border-color: var(--accent2); }
+  .lib-empty { display: flex; flex-direction: column; gap: 10px; align-items: center; text-align: center; padding: 30px 10px; color: var(--muted); }
+  .lib-empty b { color: var(--ink); font-size: 17px; font-family: "Fraunces", serif; }
+  .lib-empty.slim { padding: 14px 10px; }
+  .lib-selbar { position: sticky; bottom: calc(env(safe-area-inset-bottom, 0px) + 14px); z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 16px; background: var(--surface); border: 1px solid var(--line); box-shadow: 0 10px 28px rgba(15, 55, 38, 0.18); }
+  .lib-selbar span { flex: 1 1 140px; font-size: 14px; font-weight: 700; }
+  .lib-selbar .ghost-btn, .lib-selbar .primary-btn { width: auto; padding: 10px 14px; font-size: 14px; }
+  .lib-selbar .danger { color: #B42318; }
+  body.tabbar-actions .lib-selbar { display: none; }
+  .sheet-overlay { position: fixed; inset: 0; z-index: 120; background: rgba(15, 34, 25, 0.4); display: flex; align-items: flex-end; justify-content: center; opacity: 0; pointer-events: none; transition: opacity .18s ease; }
+  .sheet-overlay.active { opacity: 1; pointer-events: auto; }
+  .sheet { width: 100%; max-width: 520px; max-height: 88vh; overflow-y: auto; background: var(--surface); color: var(--ink); border-radius: 22px 22px 0 0; padding: 10px 20px calc(env(safe-area-inset-bottom, 0px) + 22px); display: flex; flex-direction: column; gap: 12px; transform: translateY(16px); transition: transform .18s ease; }
+  .sheet-overlay.active .sheet { transform: none; }
+  @media (min-width: 701px) { .sheet-overlay { align-items: center; } .sheet { border-radius: 20px; } }
+  .sheet-grip { align-self: center; width: 40px; height: 4px; border-radius: 2px; background: var(--line); }
+  .sheet-head { display: flex; flex-direction: column; gap: 2px; }
+  .sheet-head.row { flex-direction: row; align-items: center; justify-content: space-between; }
+  .sheet-head b { font-family: "Fraunces", serif; font-size: 19px; font-weight: 600; }
+  .sheet-head span { font-size: 12.5px; color: var(--muted); }
+  .sheet-actions { display: flex; flex-direction: column; }
+  .sheet-act { appearance: none; display: flex; align-items: center; gap: 12px; padding: 9px 0; border: 0; background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+  .sheet-act .sa-ic { flex: none; width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; background: var(--bg); color: var(--accent2); }
+  .sheet-act .sa-txt { display: flex; flex-direction: column; gap: 1px; }
+  .sheet-act b { font-size: 14.5px; } .sheet-act small { font-size: 12px; color: var(--muted); }
+  .sheet-act.danger { color: #B42318; } .sheet-act.danger .sa-ic { background: #FFF4EE; color: #B42318; }
+  .sheet-label { font-size: 12px; font-weight: 700; color: var(--muted); }
+  .sheet-plan { display: flex; flex-direction: column; gap: 10px; }
+  .sp-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 5px; }
+  .sp-day { appearance: none; display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 8px 0; border-radius: 12px; border: 1.5px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; cursor: pointer; }
+  .sp-day small { font-size: 10.5px; font-weight: 700; color: var(--muted); } .sp-day b { font-size: 15px; }
+  .sp-day.sel { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); } .sp-day.sel small { color: inherit; }
+  .sheet-plan .chip { padding: 8px 14px; min-height: 0; }
+  .sp-hint { font-size: 12.5px; color: var(--muted); line-height: 1.45; }
+  .sheet-toggle { appearance: none; display: flex; align-items: center; gap: 12px; padding: 11px 0; border: 0; border-bottom: 1px solid var(--line); background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+  .sheet-toggle .st-txt { flex: 1; display: flex; flex-direction: column; gap: 1px; }
+  .sheet-toggle b { font-size: 14.5px; } .sheet-toggle small { font-size: 12px; color: var(--muted); }
+  .st-track { flex: none; width: 44px; height: 26px; border-radius: 13px; background: var(--line); position: relative; transition: background .15s; }
+  .st-track i { position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.2); transition: left .15s; }
+  .st-track.on { background: var(--accent2); } .st-track.on i { left: 21px; }
   .plan-table { width: 100%; border-collapse: collapse; }
   .plan-table th, .plan-table td { padding: 10px 8px; text-align: left; border-bottom: 1px solid var(--line); font-size: 14px; vertical-align: top; }
   .plan-table th { font-family: "Fraunces", serif; font-weight: 600; font-size: 15px; }
@@ -3899,7 +3983,7 @@
     tiles.className = "tilerow home-nav-tiles";
     [["Gerechten ontwerpen", "Stel voorkeuren in en laat gebalanceerde gerechten bedenken", '<path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/>', function () { goto("prefs"); }],
      ["Plannen", "Verdeel gerechten over ontbijt, lunch, diner en snacks per dag", '<rect x="3" y="4" width="18" height="18" rx="3"/><path d="M16 2v4M8 2v4M3 10h18"/>', function () { needDishesThen(function () { goto("plan"); }); }],
-     ["Opgeslagen gerechten", "Blader door alle eerder ontworpen en gegenereerde gerechten", '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>', function () { needDishesThen(function () { goto("library"); }); }]
+     ["Gerechten", "Zoek, filter en plan je gerechten direct in", '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>', function () { needDishesThen(function () { goto("library"); }); }]
     ].forEach(function (t) {
       var b = document.createElement("button");
       b.className = "tile";
@@ -5503,9 +5587,9 @@
     { title: "Genereer gerechten", body: "Onder \u201cOntwerpen\u201d kies je per maaltijdmoment hoeveel gerechten je wilt (bijv. 2 ontbijt en 5 diner) en geef je eventueel een wens voor deze keer op: snel, budget, meal prep, iets nieuws of met wat je in huis hebt. Je vaste voorkeuren (doel, voedingsstijl, keuken, apparatuur) stel je één keer in bij \u201cMijn voorkeuren\u201d. Tik op \u201cMaak gerechten\u201d; daarna zie je je nieuwe gerechten op een rij en kun je per gerecht kiezen: bewaren, weggooien of een ander laten maken, en ze met één tik in je week zetten." },
     { title: "Gerecht van foto", body: "Zie je ergens iets lekkers, of heb je een recept uit een kookboek? Tik bij \u201cOntwerpen\u201d op \u201cGerecht van foto\u201d en maak een foto van je bord of van de receptpagina. Kies een Balanza-versie (afgestemd op je doel en voedingsstijl) of blijf zo dicht mogelijk bij het origineel. Balanza rekent de macro's na met NEVO en zet het gerecht in je lijst. Je foto wordt niet bewaard." },
     { title: "Leer Balanza je smaak", body: "Geef bij een recept een duim omhoog of omlaag. Bij je volgende gerechten houdt Balanza daar rekening mee: meer van wat je lekker vindt, minder van wat je niet lekker vindt. Je overzicht staat bij \u201cMijn voorkeuren\u201d \u2192 \u201cJouw smaak\u201d." },
-    { title: "Macro's berekend met NEVO", body: "De macro's van je gerechten worden uitgerekend met het Nederlands Voedingsstoffenbestand (NEVO) van het RIVM, niet alleen geschat: een groen \u201cNEVO-berekend\u201d label (in de app en in de PDF) laat zien wanneer dat is gelukt. Lukt het matchen van een ingredi\u00ebnt een keer niet, dan blijft de AI-schatting zichtbaar en duidelijk gelabeld. In \u201cOpgeslagen gerechten\u201d kun je oudere gerechten met \u00e9\u00e9n tik laten herberekenen." },
+    { title: "Macro's berekend met NEVO", body: "De macro's van je gerechten worden uitgerekend met het Nederlands Voedingsstoffenbestand (NEVO) van het RIVM, niet alleen geschat: een groen \u201cNEVO-berekend\u201d label (in de app en in de PDF) laat zien wanneer dat is gelukt. Lukt het matchen van een ingredi\u00ebnt een keer niet, dan blijft de AI-schatting zichtbaar en duidelijk gelabeld. Onder \u201cGerechten\u201d kun je oudere gerechten met \u00e9\u00e9n tik laten herberekenen." },
     { title: "Krijg een melding als het klaar is", body: "Ga je tijdens het genereren naar een andere app, dan werkt Balanza gewoon door en staan je gerechten klaar zodra je terugkomt. Wil je een seintje? Zet onder Instellingen \u2192 Meldingen de meldingen aan (of tik tijdens het genereren op \u201cStuur me een melding als het klaar is\u201d). Op een iPhone werkt dat als Balanza op je beginscherm staat: tik op Deel en kies \u201cZet op beginscherm\u201d." },
-    { title: "Bekijk je bibliotheek", body: "Onder \u201cOpgeslagen gerechten\u201d vind je alles wat je ooit heb ontworpen of gegenereerd, gegroepeerd per maaltijdmoment. Filter op maaltijdmoment of doel, of verwijder gerechten die je niet meer wilt." },
+    { title: "Je gerechten", body: "Onder \u201cGerechten\u201d staat alles wat je hebt ontworpen of bewaard. Zoek op naam of ingredi\u00ebnt, kies een maaltijd en gebruik de filterknop voor snel klaar, favorieten of wat nog niet is ingepland. Je favorieten (duim omhoog) staan bovenaan. Via \u22ef bij een gerecht plan je het direct in op een dag, start je de kookmodus, maak je het favoriet, deel je het of verwijder je het (met ongedaan maken). Met \u201cSelecteren\u201d kies je meerdere gerechten om in \u00e9\u00e9n keer in te plannen, als kookboek-PDF te downloaden of te verwijderen. Staat hetzelfde gerecht er vaker in, dan zie je \u201c2\u00d7\u201d en kun je de dubbelen samenvoegen." },
     { title: "Plan een week", body: "Onder \u201cPlannen\u201d kies je de huidige week of een week in de toekomst. Elke dag heeft 6 momenten: Ontbijt, Snack na ontbijt, Lunch, Snack na lunch, Diner en Snack na diner. Tik een moment aan om er een gerecht aan toe te wijzen. Afgelopen weken verhuizen vanzelf naar het archief onderaan." },
     { title: "Stel het aantal personen in", body: "Bij een ingevuld moment kun je met + en \u2212 aangeven voor hoeveel personen je kookt. Dat aantal telt automatisch mee in de boodschappenlijst en de prepdag \u2014 handig als je bijvoorbeeld voor het avondeten met het hele gezin kookt." },
     { title: "Vul een week automatisch in", body: "Liever niet elk moment los kiezen? \u201cVul week automatisch in\u201d vraagt eerst voor welke maaltijdmomenten (ontbijt, lunch, diner en/of snacks), kijkt dan wat je al hebt opgeslagen en vult daarmee aan; alleen het tekort wordt nieuw gegenereerd \u2014 dat scheelt tijd en onnodige aanroepen." },
@@ -6027,226 +6111,501 @@
     return null;
   }
 
+  // ---------- Gerechten: je eigen bibliotheek ----------
+  // Zoeken, één rij maaltijdchips, een filterknop (snel, favorieten, nog niet ingepland, verberg "niet lekker",
+  // doel, periode), sorteren, compacte rijen met favorieten bovenaan, en per gerecht een ⋯-menu (inplannen, koken,
+  // favoriet, delen, PDF, dubbelen samenvoegen, verwijderen met ongedaan maken). "Selecteren" voor meerdere tegelijk.
+  var lib = { q: "", sort: "new", quick: false, favOnly: false, notPlanned: false, hideDisliked: true };
+  var LIB_SORTS = [["new", "Nieuwste"], ["balans", "Hoogste Balans"], ["quick", "Snelst klaar"], ["eiwit", "Meeste eiwit"]];
+  var DOW_SHORT = ["zo", "ma", "di", "wo", "do", "vr", "za"];
+  function libFilterCount() {
+    return (lib.quick ? 1 : 0) + (lib.favOnly ? 1 : 0) + (lib.notPlanned ? 1 : 0) + (!lib.hideDisliked ? 0 : 0) +
+      (libraryGoalFilter !== "Alle" ? 1 : 0) + (libraryPeriodFilter !== "alle" ? 1 : 0);
+  }
+  // Waar een gerecht vanaf vandaag staat ingepland: { dishId: "wo" | "ma 19 okt" }.
+  function plannedLabels() {
+    var out = {}, today = new Date(); today.setHours(0, 0, 0, 0);
+    plannedWeeks.forEach(function (pw) {
+      Object.keys(pw.slots || {}).forEach(function (key) {
+        var a = pw.slots[key]; if (!a || !a.dayId) return;
+        var d = key.split("|")[0], date = planDayDate(pw, d);
+        if (date < today) return;
+        var cur = out[a.dayId];
+        if (cur && cur.date <= date) return;
+        var diff = Math.round((date - today) / 86400000);
+        out[a.dayId] = { date: date, label: diff === 0 ? "vandaag" : diff === 1 ? "morgen" : diff < 7 ? DOW_SHORT[date.getDay()] : DOW_SHORT[date.getDay()] + " " + date.getDate() + " " + MONTHS_SHORT[date.getMonth()] };
+      });
+    });
+    return out;
+  }
+  function dupKey(day) { return String(day.mealType || "") + "|" + String(day.name || "").trim().toLowerCase(); }
+  function libraryItems() {
+    var byType = collectExistingByType(), all = [];
+    PLAN_MEALS.forEach(function (m) { byType[m].forEach(function (it) { all.push(it); }); });
+    return all;
+  }
+  // Verwijdert gerechten (met ongedaan maken): uit de bibliotheek, uit de planning en uit de opslag.
+  function deleteDishesFromDb(ids) {
+    if (!dbCap || !userCap || !ids.length) return;
+    userCap.id().then(function (uid) {
+      if (!uid) return;
+      var ref = dbCap.doc("data/users/" + uid + "/dishes");
+      ref.get().then(function (snap) {
+        if (!snap.exists) return;
+        var current = deepClone(snap.data() || {}), changed = false;
+        PLAN_MEALS.forEach(function (m) {
+          if (!Array.isArray(current[m])) return;
+          var before = current[m].length;
+          current[m] = current[m].filter(function (d) { return ids.indexOf(d.id) === -1; });
+          if (current[m].length !== before) changed = true;
+        });
+        if (changed) ref.set(current).catch(function () {});
+      }).catch(function () {});
+    }).catch(function () {});
+  }
+  function removeDishesWithUndo(items, message) {
+    if (!items.length) return;
+    var removed = [], slotBackup = [], ids = items.map(function (it) { return it.day.id; });
+    items.forEach(function (it) {
+      var idx = it.week.days.indexOf(it.day);
+      if (idx > -1) { it.week.days.splice(idx, 1); removed.push({ week: it.week, day: it.day, idx: idx }); }
+    });
+    plannedWeeks.forEach(function (pw) {
+      Object.keys(pw.slots).forEach(function (key) {
+        if (ids.indexOf(pw.slots[key].dayId) > -1) { slotBackup.push({ pw: pw, key: key, val: pw.slots[key] }); delete pw.slots[key]; }
+      });
+    });
+    deleteDishesFromDb(ids);
+    if (slotBackup.length) savePlannedWeeks();
+    ids.forEach(function (id) { delete librarySelect.ids[id]; });
+    render();
+    showUndoToast(message || (items.length === 1 ? "“" + items[0].day.name + "” verwijderd" : items.length + " gerechten verwijderd"), function () {
+      removed.slice().reverse().forEach(function (r) { r.week.days.splice(Math.min(r.idx, r.week.days.length), 0, r.day); });
+      persistDishesToDb(removed.map(function (r) { return r.day; }));
+      slotBackup.forEach(function (b) { b.pw.slots[b.key] = b.val; });
+      if (slotBackup.length) savePlannedWeeks();
+      render();
+    });
+  }
+  // Dubbelen (zelfde naam en maaltijd): de nieuwste blijft, de planning wijst daarna naar die ene.
+  function mergeDuplicates(keepItem, others) {
+    others.forEach(function (o) {
+      plannedWeeks.forEach(function (pw) {
+        Object.keys(pw.slots).forEach(function (key) {
+          var a = pw.slots[key];
+          if (a.dayId === o.day.id) { a.dayId = keepItem.day.id; a.weekId = keepItem.week.id; a.name = keepItem.day.name; }
+        });
+      });
+    });
+    savePlannedWeeks();
+    if (others.some(function (o) { return o.day.rating === 1; }) && keepItem.day.rating !== 1) { keepItem.day.rating = 1; updateStoredDishesInDb([keepItem.day]); }
+    removeDishesWithUndo(others, others.length + (others.length === 1 ? " dubbel" : " dubbelen") + " opgeruimd");
+  }
+  // De komende 7 dagen, vanaf vandaag.
+  function next7Days() {
+    var out = [], base = new Date(); base.setHours(0, 0, 0, 0);
+    for (var i = 0; i < 7; i++) { var d = new Date(base); d.setDate(base.getDate() + i); out.push(d); }
+    return out;
+  }
+  function planTargetFor(date) {
+    var pw = openOrCreateWeek(getMonday(date));
+    return { pw: pw, d: PLAN_DAYS[(date.getDay() + 6) % 7] };
+  }
+  function slotForMoment(pw, d, moment) {
+    if (moment !== "Snack") return moment;
+    return SNACK_SLOTS.filter(function (s) { return !pw.slots[d + "|" + s]; })[0] || "Snack na lunch";
+  }
+  function assignDishTo(pw, d, slot, item) {
+    var prev = pw.slots[d + "|" + slot];
+    pw.slots[d + "|" + slot] = { name: item.day.name, weekId: item.week.id, dayId: item.day.id, balans: item.day.balans };
+    if (prev && prev.servings) pw.slots[d + "|" + slot].servings = prev.servings;
+    savePlannedWeeks();
+  }
+  // Meerdere gerechten tegelijk: elk op de eerstvolgende vrije plek van zijn moment in de komende 7 dagen.
+  function bulkPlan(items) {
+    if (requirePlus("Gerechten inplannen")) return;
+    var placed = 0, days = next7Days(), left = [];
+    items.forEach(function (it) {
+      var mt = it.day.mealType, done = false;
+      for (var i = 0; i < days.length && !done; i++) {
+        var t = planTargetFor(days[i]);
+        var slots = mt === "Snack" ? SNACK_SLOTS : [mt];
+        for (var j = 0; j < slots.length; j++) {
+          if (!t.pw.slots[t.d + "|" + slots[j]]) { t.pw.slots[t.d + "|" + slots[j]] = { name: it.day.name, weekId: it.week.id, dayId: it.day.id, balans: it.day.balans }; placed++; done = true; break; }
+        }
+      }
+      if (!done) left.push(it.day.name);
+    });
+    savePlannedWeeks();
+    librarySelect.on = false; librarySelect.ids = {};
+    showToast(placed ? placed + (placed === 1 ? " gerecht staat" : " gerechten staan") + " in je planning" + (left.length ? "; " + left.length + " paste" + (left.length === 1 ? "" : "n") + " niet meer in de komende 7 dagen." : ".") : "De komende 7 dagen zijn al vol voor deze momenten.");
+    render();
+  }
+  // Onderblad met acties voor één gerecht (en de stap "inplannen").
+  function openDishSheet(item, dupes) {
+    var ov = document.getElementById("dishSheet");
+    if (!ov) {
+      ov = document.createElement("div"); ov.id = "dishSheet"; ov.className = "sheet-overlay";
+      ov.innerHTML = '<div class="sheet" role="dialog" aria-modal="true" aria-labelledby="dishSheetTitle"><span class="sheet-grip" aria-hidden="true"></span>' +
+        '<div class="sheet-head"><b id="dishSheetTitle"></b><span id="dishSheetMeta"></span></div><div id="dishSheetBody"></div></div>';
+      document.body.appendChild(ov);
+      ov.addEventListener("click", function (e) { if (e.target === ov) closeSheet(ov); });
+      ov.addEventListener("keydown", function (e) { if (e.key === "Escape") closeSheet(ov); });
+    }
+    var day = item.day;
+    document.getElementById("dishSheetTitle").textContent = day.name;
+    document.getElementById("dishSheetMeta").textContent = day.mealType + " · " + day.kcal + " kcal · " + (day.eiwitG || Math.round(day.kcal * day.eiwit / 400)) + " g eiwit · Balans " + computeBalance(day.kh, day.eiwit, day.vet) + "%";
+    var body = document.getElementById("dishSheetBody");
+    function actionsView() {
+      body.innerHTML = "";
+      var list = document.createElement("div"); list.className = "sheet-actions";
+      function act(id, icon, label, sub, fn, danger, lockWhat) {
+        var b = document.createElement("button"); b.type = "button"; b.className = "sheet-act" + (danger ? " danger" : ""); b.id = "sa-" + id;
+        b.innerHTML = '<span class="sa-ic">' + iconSvg(icon, 18) + '</span><span class="sa-txt"><b></b><small></small></span>';
+        b.querySelector("b").textContent = label; b.querySelector("small").textContent = sub;
+        b.onclick = fn;
+        if (lockWhat) lockEl(b, lockWhat);
+        list.appendChild(b);
+      }
+      act("plan", "calendar", "Inplannen", "Kies een dag en moment", function () { if (!requirePlus("Gerechten inplannen")) planView(); }, false, "Gerechten inplannen");
+      if (day.steps && day.steps.length) act("cook", "pot", "Nu koken", "Start meteen de kookmodus", function () { closeSheet(ov); goto("cook", { weekId: item.week.id, dayId: day.id, stepIndex: 0, dayBackView: "library" }); });
+      var fav = day.rating === 1;
+      act("fav", "heart", fav ? "Geen favoriet meer" : "Favoriet", fav ? "Haalt het uit je favorieten" : "Bovenaan bij je favorieten, en Balanza leert je smaak", function () {
+        if (fav) delete day.rating; else day.rating = 1;
+        updateStoredDishesInDb([day]); closeSheet(ov); render();
+        showToast(fav ? "Niet meer bij je favorieten." : "Toegevoegd aan je favorieten.");
+      });
+      if (communityOn() && item.week.id === "cache" && !day.fromCommunity) act("share", "userplus", day.communityId ? "Community-versie bijwerken" : "Delen in de community", "Anderen kunnen het bekijken en bewaren", function () { closeSheet(ov); openPublishDialog(day); });
+      if (moduleOn("pdf")) act("pdf", "download", "Download als PDF", "Het recept om te printen of te bewaren", function () { closeSheet(ov); exportLibraryPdf([item], null, { title: day.name, subtitle: "Recept uit Balanza", file: "recept-" + day.name }); });
+      if (dupes && dupes.length) act("dupes", "check", "Dubbelen samenvoegen", (dupes.length + 1) + "× hetzelfde gerecht; de nieuwste blijft", function () { closeSheet(ov); mergeDuplicates(item, dupes); });
+      act("del", "trash", "Verwijderen", "Je kunt het daarna nog ongedaan maken", function () { closeSheet(ov); removeDishesWithUndo([item]); }, true);
+      body.appendChild(list);
+    }
+    function planView() {
+      body.innerHTML = "";
+      var days = next7Days(), pick = { i: 0, m: PLAN_MEALS.indexOf(day.mealType) > -1 ? day.mealType : "Diner" };
+      var wrap = document.createElement("div"); wrap.className = "sheet-plan";
+      var l1 = document.createElement("span"); l1.className = "sheet-label"; l1.textContent = "Welke dag?";
+      var grid = document.createElement("div"); grid.className = "sp-days";
+      var l2 = document.createElement("span"); l2.className = "sheet-label"; l2.textContent = "Moment";
+      var moms = document.createElement("div"); moms.className = "chiprow";
+      var hint = document.createElement("div"); hint.className = "sp-hint"; hint.id = "planSheetHint";
+      var go = document.createElement("button"); go.type = "button"; go.className = "primary-btn"; go.id = "planSheetGo";
+      var back = document.createElement("button"); back.type = "button"; back.className = "comm-foot-link"; back.textContent = "‹ Terug"; back.onclick = actionsView;
+      function paint() {
+        grid.innerHTML = ""; moms.innerHTML = "";
+        days.forEach(function (dt, i) {
+          var b = document.createElement("button"); b.type = "button"; b.className = "sp-day" + (pick.i === i ? " sel" : "");
+          b.setAttribute("aria-pressed", pick.i === i ? "true" : "false");
+          b.setAttribute("aria-label", (i === 0 ? "Vandaag, " : "") + PLAN_DAYS[(dt.getDay() + 6) % 7] + " " + dt.getDate() + " " + MONTHS_SHORT[dt.getMonth()]);
+          b.innerHTML = "<small></small><b></b>";
+          b.querySelector("small").textContent = i === 0 ? "vndg" : DOW_SHORT[dt.getDay()];
+          b.querySelector("b").textContent = dt.getDate();
+          b.onclick = function () { pick.i = i; paint(); };
+          grid.appendChild(b);
+        });
+        PLAN_MEALS.forEach(function (m) {
+          var c = document.createElement("button"); c.type = "button"; c.className = "chip" + (pick.m === m ? " selected" : ""); c.textContent = m;
+          c.setAttribute("aria-pressed", pick.m === m ? "true" : "false");
+          c.onclick = function () { pick.m = m; paint(); };
+          moms.appendChild(c);
+        });
+        var t = planTargetFor(days[pick.i]), slot = slotForMoment(t.pw, t.d, pick.m), cur = t.pw.slots[t.d + "|" + slot];
+        var curRes = cur ? resolveAssignedDish(cur) : null;
+        var target = dailyKcalTarget(), agg = aggregateDayMacros(t.pw, t.d), have = agg ? agg.kcal : 0;
+        var dayName = pick.i === 0 ? "vandaag" : PLAN_DAYS[(days[pick.i].getDay() + 6) % 7].toLowerCase();
+        if (curRes && curRes.day.id === day.id) hint.textContent = "Dit gerecht staat daar al.";
+        else if (curRes) hint.textContent = "Daar staat nu “" + curRes.day.name + "”; die wordt vervangen.";
+        else if (target) { var left = target - have; hint.textContent = left > 0 ? "Op " + dayName + " staat nog " + left + " kcal open; dit gerecht is " + day.kcal + " kcal." : "Op " + dayName + " zit je al aan je dagdoel."; }
+        else hint.textContent = "";
+        hint.style.display = hint.textContent ? "" : "none";
+        go.textContent = (curRes && curRes.day.id !== day.id ? "Vervang op " : "Zet op ") + dayName + " · " + pick.m.toLowerCase();
+        go.disabled = !!(curRes && curRes.day.id === day.id);
+      }
+      go.onclick = function () {
+        var t = planTargetFor(days[pick.i]), slot = slotForMoment(t.pw, t.d, pick.m);
+        assignDishTo(t.pw, t.d, slot, item);
+        closeSheet(ov);
+        showToast("“" + day.name + "” staat op " + (pick.i === 0 ? "vandaag" : PLAN_DAYS[(days[pick.i].getDay() + 6) % 7].toLowerCase()) + " (" + pick.m.toLowerCase() + ").");
+        render();
+      };
+      wrap.appendChild(l1); wrap.appendChild(grid); wrap.appendChild(l2); wrap.appendChild(moms); wrap.appendChild(hint); wrap.appendChild(go); wrap.appendChild(back);
+      body.appendChild(wrap);
+      paint();
+    }
+    actionsView();
+    ov.classList.add("active");
+    setTimeout(function () { var f = ov.querySelector(".sheet button"); if (f) f.focus(); }, 0);
+  }
+  function closeSheet(ov) { if (ov) ov.classList.remove("active"); }
+  function openLibFilters(count) {
+    var ov = document.getElementById("libFilterSheet");
+    if (!ov) {
+      ov = document.createElement("div"); ov.id = "libFilterSheet"; ov.className = "sheet-overlay";
+      ov.innerHTML = '<div class="sheet" role="dialog" aria-modal="true" aria-labelledby="libFilterTitle"><span class="sheet-grip" aria-hidden="true"></span>' +
+        '<div class="sheet-head row"><b id="libFilterTitle">Filters</b><button type="button" class="comm-foot-link" id="libFilterReset">Wissen</button></div><div id="libFilterBody"></div></div>';
+      document.body.appendChild(ov);
+      ov.addEventListener("click", function (e) { if (e.target === ov) { closeSheet(ov); render(); } });
+      ov.addEventListener("keydown", function (e) { if (e.key === "Escape") { closeSheet(ov); render(); } });
+    }
+    function paint() {
+      var body = document.getElementById("libFilterBody"); body.innerHTML = "";
+      [["quick", "Snel klaar", "Hooguit 20 minuten"], ["favOnly", "Alleen favorieten", "Gerechten met een duim omhoog"], ["notPlanned", "Nog niet ingepland", "Wat je de komende tijd nog niet eet"], ["hideDisliked", "Verberg “niet lekker”", "Gerechten met een duim omlaag"]].forEach(function (t) {
+        var on = !!lib[t[0]];
+        var b = document.createElement("button"); b.type = "button"; b.className = "sheet-toggle"; b.id = "lf-" + t[0];
+        b.setAttribute("role", "switch"); b.setAttribute("aria-checked", on ? "true" : "false");
+        b.innerHTML = '<span class="st-txt"><b></b><small></small></span><span class="st-track' + (on ? " on" : "") + '"><i></i></span>';
+        b.querySelector("b").textContent = t[1]; b.querySelector("small").textContent = t[2];
+        b.onclick = function () { lib[t[0]] = !lib[t[0]]; paint(); };
+        body.appendChild(b);
+      });
+      var gl = document.createElement("span"); gl.className = "sheet-label"; gl.textContent = "Gemaakt voor doel";
+      body.appendChild(gl);
+      var gr = document.createElement("div"); gr.className = "chiprow";
+      ["Alle"].concat(GOALS).forEach(function (g) {
+        var c = document.createElement("button"); c.type = "button"; c.className = "chip" + (libraryGoalFilter === g ? " selected" : ""); c.textContent = g === "Alle" ? "Alle" : String(g).split(" (")[0];
+        c.onclick = function () { libraryGoalFilter = g; paint(); };
+        gr.appendChild(c);
+      });
+      body.appendChild(gr);
+      var pl = document.createElement("span"); pl.className = "sheet-label"; pl.textContent = "Gemaakt";
+      body.appendChild(pl);
+      body.appendChild(periodSelect("libPeriod", libraryPeriodFilter, function (v) { libraryPeriodFilter = v; paint(); }));
+      var n = filteredLibrary().length;
+      var go = document.createElement("button"); go.type = "button"; go.className = "primary-btn"; go.id = "libFilterGo";
+      go.textContent = "Toon " + n + (n === 1 ? " gerecht" : " gerechten");
+      go.onclick = function () { closeSheet(ov); render(); };
+      body.appendChild(go);
+    }
+    document.getElementById("libFilterReset").onclick = function () { lib.quick = lib.favOnly = lib.notPlanned = false; lib.hideDisliked = true; libraryGoalFilter = "Alle"; libraryPeriodFilter = "alle"; paint(); };
+    paint();
+    ov.classList.add("active");
+  }
+  function filteredLibrary() {
+    var q = lib.q.trim().toLowerCase(), planned = plannedLabels();
+    var list = libraryItems().filter(function (it) {
+      var d = it.day;
+      if (libraryFilter !== "Alle" && d.mealType !== libraryFilter) return false;
+      if (q && (d.name + " " + (d.ingredienten || []).join(" ")).toLowerCase().indexOf(q) === -1) return false;
+      if (lib.quick && !(d.bereidingstijd && d.bereidingstijd <= 20)) return false;
+      if (lib.favOnly && d.rating !== 1) return false;
+      if (lib.notPlanned && planned[d.id]) return false;
+      if (lib.hideDisliked && d.rating === -1) return false;
+      if (libraryGoalFilter !== "Alle" && !(d.profile && d.profile.goal === libraryGoalFilter)) return false;
+      if (!matchesDishPeriod(d, libraryPeriodFilter)) return false;
+      return true;
+    });
+    function ts(it) { var c = dishCreatedAt(it.day); return c ? c.getTime() : dishTimestamp(it); }
+    var bal = function (it) { return computeBalance(it.day.kh, it.day.eiwit, it.day.vet) || 0; };
+    if (lib.sort === "balans") list.sort(function (a, b) { return bal(b) - bal(a); });
+    else if (lib.sort === "quick") list.sort(function (a, b) { return (a.day.bereidingstijd || 999) - (b.day.bereidingstijd || 999); });
+    else if (lib.sort === "eiwit") list.sort(function (a, b) { return (b.day.eiwitG || 0) - (a.day.eiwitG || 0); });
+    else list.sort(function (a, b) { return ts(b) - ts(a); });
+    return list;
+  }
+  function dishThumb(day, cls) {
+    var wrap = document.createElement("span"); wrap.className = cls || "lib-thumb";
+    wrap.innerHTML = '<span class="lt-ph" aria-hidden="true">' + '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">' + TAB_ICONS.gerechten + "</svg></span>";
+    var img = document.createElement("img"); img.alt = ""; img.loading = "lazy"; img.style.display = "none";
+    wrap.appendChild(img);
+    loadDishImageInto(day, img);
+    return wrap;
+  }
   function renderLibrary() {
     var app = document.getElementById("app");
     app.innerHTML = "";
-    app.appendChild(renderTopbar("Opgeslagen gerechten", true, function () { goto("weeks"); }));
-    var main = document.createElement("main");
+    var all = libraryItems();
+    var favCount = all.filter(function (it) { return it.day.rating === 1; }).length;
+    var head = renderTopbar("Gerechten", true, function () { goto("weeks"); });
+    app.appendChild(head);
+    var main = document.createElement("main"); main.className = "lib-main";
     var gsw = gerechtenSwitch("library");
     if (gsw) main.appendChild(gsw);
 
-    var byType = collectExistingByType();
-    var total = PLAN_MEALS.reduce(function (sum, m) { return sum + byType[m].length; }, 0);
-    var filterOptions = ["Alle"].concat(PLAN_MEALS);
-    var goalFilterOptions = ["Alle"].concat(GOALS);
-    var shownTypes = libraryFilter === "Alle" ? PLAN_MEALS : [libraryFilter];
-
-    function matchesGoalFilter(item) {
-      if (!matchesDishPeriod(item.day, libraryPeriodFilter)) return false;
-      return libraryGoalFilter === "Alle" || (item.day.profile && item.day.profile.goal === libraryGoalFilter);
+    var top = document.createElement("div"); top.className = "lib-top";
+    var sub = document.createElement("span"); sub.className = "lib-count"; sub.id = "libCount";
+    sub.textContent = all.length + (all.length === 1 ? " gerecht" : " gerechten") + (favCount ? " · " + favCount + " favoriet" : "");
+    top.appendChild(sub);
+    if (all.length) {
+      var selBtn = document.createElement("button"); selBtn.type = "button"; selBtn.id = "libSelectBtn";
+      selBtn.className = "lib-select-btn" + (librarySelect.on ? " on" : "");
+      selBtn.setAttribute("aria-pressed", librarySelect.on ? "true" : "false");
+      selBtn.textContent = librarySelect.on ? "Klaar" : "Selecteren";
+      selBtn.onclick = function () { librarySelect.on = !librarySelect.on; librarySelect.ids = {}; render(); };
+      top.appendChild(selBtn);
     }
-    function filteredItems(m) {
-      return byType[m].filter(matchesGoalFilter).sort(function (x, y) {
-        var a = dishCreatedAt(x.day), b = dishCreatedAt(y.day);
-        return (b ? b.getTime() : 0) - (a ? a.getTime() : 0);
-      });
+    main.appendChild(top);
+
+    if (!all.length) {
+      var em = document.createElement("div"); em.className = "lib-empty";
+      em.innerHTML = "<b>Nog geen gerechten</b><span>Ontwerp gerechten op jouw doel en smaak, of kijk wat andere Balanza-koks delen.</span>";
+      var e1 = document.createElement("button"); e1.type = "button"; e1.className = "primary-btn"; e1.textContent = "Gerechten ontwerpen"; e1.onclick = function () { goto("prefs", { tab: "ontwerpen" }); };
+      em.appendChild(e1);
+      if (communityOn()) { var e2 = document.createElement("button"); e2.type = "button"; e2.className = "ghost-btn"; e2.textContent = "Naar de community"; e2.onclick = function () { goto("community"); }; em.appendChild(e2); }
+      main.appendChild(em);
+      app.appendChild(main);
+      return;
     }
-    var shownTotal = shownTypes.reduce(function (sum, m) { return sum + filteredItems(m).length; }, 0);
 
-    var filterRow = document.createElement("div");
-    filterRow.className = "chiprow";
-    filterOptions.forEach(function (opt) {
-      var chip = document.createElement("button");
-      chip.className = "chip" + (libraryFilter === opt ? " selected" : "");
-      chip.textContent = opt;
-      chip.onclick = function () { libraryFilter = opt; render(); };
-      filterRow.appendChild(chip);
+    // zoeken + filterknop
+    var sr = document.createElement("div"); sr.className = "lib-search";
+    var sw = document.createElement("div"); sw.className = "lib-search-in";
+    sw.innerHTML = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>';
+    var inp = document.createElement("input"); inp.type = "search"; inp.id = "libSearch"; inp.className = "textinput";
+    inp.placeholder = "Zoek op gerecht of ingrediënt"; inp.value = lib.q; inp.setAttribute("aria-label", "Zoek in je gerechten");
+    var tmr = null;
+    inp.oninput = function () { clearTimeout(tmr); tmr = setTimeout(function () { lib.q = inp.value; render(); var s = document.getElementById("libSearch"); if (s) { s.focus(); s.setSelectionRange(s.value.length, s.value.length); } }, 220); };
+    sw.appendChild(inp); sr.appendChild(sw);
+    var fc = libFilterCount();
+    var fb = document.createElement("button"); fb.type = "button"; fb.id = "libFilterBtn"; fb.className = "lib-filter-btn" + (fc ? " on" : "");
+    fb.setAttribute("aria-label", "Filters" + (fc ? ", " + fc + " actief" : ""));
+    fb.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4"/></svg>' + (fc ? '<span class="lf-badge">' + fc + "</span>" : "");
+    fb.onclick = function () { openLibFilters(); };
+    sr.appendChild(fb);
+    main.appendChild(sr);
+
+    var chips = document.createElement("div"); chips.className = "chiprow lib-types";
+    ["Alle"].concat(PLAN_MEALS).forEach(function (t) {
+      var c = document.createElement("button"); c.type = "button"; c.className = "chip" + (libraryFilter === t ? " selected" : ""); c.textContent = t;
+      c.setAttribute("aria-pressed", libraryFilter === t ? "true" : "false");
+      c.onclick = function () { libraryFilter = t; render(); };
+      chips.appendChild(c);
     });
-    main.appendChild(filterRow);
+    main.appendChild(chips);
 
-    var goalFilterRow = document.createElement("div");
-    goalFilterRow.className = "chiprow";
-    goalFilterOptions.forEach(function (opt) {
-      var chip = document.createElement("button");
-      chip.className = "chip" + (libraryGoalFilter === opt ? " selected" : "");
-      chip.textContent = opt;
-      chip.onclick = function () { libraryGoalFilter = opt; render(); };
-      goalFilterRow.appendChild(chip);
-    });
-    main.appendChild(goalFilterRow);
+    var list = filteredLibrary(), planned = plannedLabels();
+    var plain = !lib.q.trim() && libraryFilter === "Alle" && !fc && !librarySelect.on;
+    // dubbelen: zelfde naam en maaltijd; alleen de nieuwste tonen
+    var groups = {}, shown = [];
+    list.forEach(function (it) { var k = dupKey(it.day); if (!groups[k]) { groups[k] = []; shown.push(it); } groups[k].push(it); });
+    if (librarySelect.on) shown = list;
 
-    var periodRow = document.createElement("div");
-    periodRow.className = "chiprow";
-    periodRow.appendChild(periodSelect("libPeriod", libraryPeriodFilter, function (v) { libraryPeriodFilter = v; render(); }));
-    main.appendChild(periodRow);
-
-    var eyebrow = document.createElement("div");
-    eyebrow.className = "eyebrow";
-    eyebrow.textContent = shownTotal + (shownTotal === 1 ? " gerecht" : " gerechten") +
-      (libraryFilter === "Alle" ? " in je bibliotheek" : " onder " + libraryFilter) +
-      (libraryGoalFilter === "Alle" ? "" : " · " + libraryGoalFilter);
-    main.appendChild(eyebrow);
-
-    if (total) {
-      var clearAllBtn = document.createElement("button");
-      clearAllBtn.className = "ghost-btn";
-      clearAllBtn.textContent = "Wis alles";
-      clearAllBtn.onclick = function () { clearAllStoredDishes(); };
-      if (moduleOn("pdf") && shownTotal) {
-        var visibleItems = [];
-        shownTypes.forEach(function (m) { filteredItems(m).forEach(function (it) { visibleItems.push(it); }); });
-        var selectedItems = visibleItems.filter(function (it) { return librarySelect.ids[it.day.id]; });
-        var bar = document.createElement("div");
-        bar.className = "lib-cookbook" + (librarySelect.on ? " is-on" : "");
-        if (!librarySelect.on) {
-          var startSel = document.createElement("button");
-          startSel.className = "primary-btn";
-          startSel.textContent = "Kookboek samenstellen (PDF)";
-          startSel.onclick = function () { librarySelect.on = true; librarySelect.ids = {}; render(); };
-          bar.appendChild(startSel);
-        } else {
-          var info = document.createElement("div");
-          info.className = "lib-cookbook-info";
-          info.textContent = selectedItems.length ? selectedItems.length + " van " + visibleItems.length + " geselecteerd" : "Tik op de gerechten voor je kookboek";
-          bar.appendChild(info);
-          var row1 = document.createElement("div");
-          row1.className = "lib-cookbook-actions";
-          var allBtn = document.createElement("button");
-          allBtn.className = "ghost-btn";
-          var allSelected = selectedItems.length === visibleItems.length;
-          allBtn.textContent = allSelected ? "Niets selecteren" : "Alles selecteren";
-          allBtn.onclick = function () {
-            if (allSelected) librarySelect.ids = {}; else visibleItems.forEach(function (it) { librarySelect.ids[it.day.id] = true; });
-            render();
-          };
-          var cancelSel = document.createElement("button");
-          cancelSel.className = "ghost-btn";
-          cancelSel.textContent = "Annuleren";
-          cancelSel.onclick = function () { librarySelect.on = false; librarySelect.ids = {}; render(); };
-          var dlBtn = document.createElement("button");
-          dlBtn.className = "primary-btn";
-          dlBtn.id = "libPdfBtn";
-          dlBtn.disabled = !selectedItems.length;
-          dlBtn.textContent = selectedItems.length ? "Download kookboek (" + selectedItems.length + ")" : "Download kookboek";
-          dlBtn.dataset.label = dlBtn.textContent;
-          dlBtn.onclick = function () {
-            exportLibraryPdf(selectedItems, dlBtn, selectedItems.length === 1 ? { title: selectedItems[0].day.name, subtitle: "Recept uit Balanza", file: "recept-" + selectedItems[0].day.name } : null);
-          };
-          row1.appendChild(allBtn);
-          row1.appendChild(cancelSel);
-          row1.appendChild(dlBtn);
-          bar.appendChild(row1);
-          bar.classList.add("tabbar-dup-keep");
-          state.tabActions = [
-            { id: "auto", label: allSelected ? "Geen" : "Alles", title: allBtn.textContent, icon: '<path d="M4 12l5 5L20 6"/>', onClick: function () { allBtn.onclick(); } },
-            { id: "pdf", label: selectedItems.length ? "Download (" + selectedItems.length + ")" : "Download", title: "Download kookboek", disabled: !selectedItems.length, onClick: function () { dlBtn.onclick(); } },
-            { id: "terug", label: "Klaar", title: "Selecteren stoppen", icon: '<path d="M18 6L6 18M6 6l12 12"/>', onClick: function () { cancelSel.onclick(); } }
-          ];
-        }
-        main.appendChild(bar);
-      }
-      main.appendChild(clearAllBtn);
-
-      var nevoTodo = 0, nevoSeen = {};
-      WEEKS.forEach(function (w) { (w.days || []).forEach(function (d) { if (!d.prep && Array.isArray(d.ingredienten) && d.macroBron !== "nevo" && !nevoSeen[d.id]) { nevoSeen[d.id] = true; nevoTodo++; } }); });
-      if (nevoTodo > 0) {
-        var recalcBtn = document.createElement("button");
-        recalcBtn.className = "ghost-btn"; recalcBtn.id = "nevoRecalcBtn";
-        recalcBtn.disabled = !!state.nevoRecalc;
-        recalcBtn.textContent = state.nevoRecalc ? "Macro's worden herberekend\u2026" :
-          "Herbereken macro's met NEVO (" + nevoTodo + (nevoTodo === 1 ? " gerecht)" : " gerechten)");
-        recalcBtn.onclick = function () { recalcLibraryWithNevo(); };
-        main.appendChild(recalcBtn);
+    if (plain) {
+      var favs = shown.filter(function (it) { return it.day.rating === 1; });
+      if (favs.length) {
+        var fl = document.createElement("div"); fl.className = "section-label"; fl.textContent = "Je favorieten"; main.appendChild(fl);
+        var fr = document.createElement("div"); fr.className = "lib-favs"; fr.id = "libFavs";
+        favs.slice(0, 12).forEach(function (it) {
+          var b = document.createElement("button"); b.type = "button"; b.className = "lib-fav";
+          b.appendChild(dishThumb(it.day, "lib-fav-thumb"));
+          var nm = document.createElement("b"); nm.textContent = it.day.name; b.appendChild(nm);
+          var mt = document.createElement("small"); mt.textContent = it.day.kcal + " kcal · Balans " + computeBalance(it.day.kh, it.day.eiwit, it.day.vet) + "%"; b.appendChild(mt);
+          b.onclick = function () { goto("day", { weekId: it.week.id, dayId: it.day.id, dayServings: null, dayBackView: "library", dayBackWeekId: null, dayBackDayName: null }); };
+          fr.appendChild(b);
+        });
+        main.appendChild(fr);
       }
     }
 
-    if (!shownTotal) {
-      var hint = document.createElement("div");
-      hint.className = "empty-hint";
-      hint.textContent = total ? "Geen gerechten voor dit filter." : "Nog geen gerechten opgeslagen — ontwerp of genereer er een paar.";
-      main.appendChild(hint);
+    var lh = document.createElement("div"); lh.className = "lib-list-head";
+    var lt = document.createElement("span"); lt.className = "section-label"; lt.style.margin = "0";
+    lt.textContent = plain ? "Alle gerechten" : shown.length + (shown.length === 1 ? " gerecht" : " gerechten");
+    lh.appendChild(lt);
+    var sortSel = document.createElement("select"); sortSel.id = "libSort"; sortSel.className = "lib-sort"; sortSel.setAttribute("aria-label", "Sorteren");
+    LIB_SORTS.forEach(function (o) { var op = document.createElement("option"); op.value = o[0]; op.textContent = o[1]; if (lib.sort === o[0]) op.selected = true; sortSel.appendChild(op); });
+    sortSel.onchange = function () { lib.sort = sortSel.value; render(); };
+    lh.appendChild(sortSel);
+    main.appendChild(lh);
+
+    var box = document.createElement("div"); box.className = "lib-list"; box.id = "libList";
+    shown.forEach(function (it) {
+      var d = it.day, sel = !!librarySelect.ids[d.id], dups = librarySelect.on ? [] : groups[dupKey(d)].filter(function (x) { return x !== it; });
+      var row = document.createElement("div"); row.className = "lib-row" + (sel ? " sel" : "");
+      if (librarySelect.on) {
+        var ck = document.createElement("button"); ck.type = "button"; ck.className = "lib-ck" + (sel ? " on" : "");
+        ck.setAttribute("aria-pressed", sel ? "true" : "false"); ck.setAttribute("aria-label", "Selecteer " + d.name);
+        ck.innerHTML = sel ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>' : "";
+        ck.onclick = function () { if (librarySelect.ids[d.id]) delete librarySelect.ids[d.id]; else librarySelect.ids[d.id] = true; render(); };
+        row.appendChild(ck);
+      }
+      var open = document.createElement("button"); open.type = "button"; open.className = "lib-open";
+      open.appendChild(dishThumb(d));
+      var txt = document.createElement("span"); txt.className = "lib-txt";
+      var nm = document.createElement("b"); nm.textContent = d.name; txt.appendChild(nm);
+      var meta = document.createElement("small");
+      meta.textContent = [d.mealType, d.kcal + " kcal", (d.eiwitG || Math.round(d.kcal * d.eiwit / 400)) + " g eiwit", d.bereidingstijd ? d.bereidingstijd + " min" : ""].filter(Boolean).join(" · ");
+      txt.appendChild(meta);
+      var badges = [];
+      if (d.rating === 1) badges.push(["♥ Favoriet", "fav"]);
+      if (d.rating === -1) badges.push(["Niet lekker", "neg"]);
+      if (planned[d.id]) badges.push(["Ingepland " + planned[d.id].label, "plan"]);
+      if (d.vanFoto) badges.push(["Van foto", ""]);
+      if (d.fromCommunity) badges.push(["Community", ""]);
+      if (d.communityId) badges.push(["Gedeeld", ""]);
+      if (dups.length) badges.push([(dups.length + 1) + "×", "dup"]);
+      if (badges.length) {
+        var bw = document.createElement("span"); bw.className = "lib-badges";
+        badges.forEach(function (b) { var s = document.createElement("span"); s.className = "lib-badge " + b[1]; s.textContent = b[0]; bw.appendChild(s); });
+        txt.appendChild(bw);
+      }
+      open.appendChild(txt);
+      var bal = computeBalance(d.kh, d.eiwit, d.vet) || 0;
+      var ring = document.createElement("span"); ring.className = "lib-bal " + (bal >= 80 ? "hi" : bal >= 60 ? "mid" : "lo");
+      ring.textContent = bal; ring.setAttribute("aria-label", "Balans " + bal + " procent"); ring.title = "Balans-score";
+      open.appendChild(ring);
+      open.onclick = librarySelect.on
+        ? function () { if (librarySelect.ids[d.id]) delete librarySelect.ids[d.id]; else librarySelect.ids[d.id] = true; render(); }
+        : function () { goto("day", { weekId: it.week.id, dayId: d.id, dayServings: null, dayBackView: "library", dayBackWeekId: null, dayBackDayName: null }); };
+      row.appendChild(open);
+      if (!librarySelect.on) {
+        var more = document.createElement("button"); more.type = "button"; more.className = "lib-more"; more.id = "libMore-" + d.id;
+        more.setAttribute("aria-label", "Acties voor " + d.name);
+        more.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg>';
+        more.onclick = function () { openDishSheet(it, dups); };
+        row.appendChild(more);
+      }
+      box.appendChild(row);
+    });
+    main.appendChild(box);
+    if (!shown.length) {
+      var none = document.createElement("div"); none.className = "lib-empty slim";
+      none.innerHTML = "<span>Niets gevonden met deze zoekterm of filters.</span>";
+      var rs = document.createElement("button"); rs.type = "button"; rs.className = "ghost-btn"; rs.id = "libResetBtn"; rs.textContent = "Filters wissen";
+      rs.onclick = function () { lib.q = ""; libraryFilter = "Alle"; lib.quick = lib.favOnly = lib.notPlanned = false; lib.hideDisliked = true; libraryGoalFilter = "Alle"; libraryPeriodFilter = "alle"; render(); };
+      none.appendChild(rs);
+      main.appendChild(none);
     }
 
-    shownTypes.forEach(function (m) {
-      var items = filteredItems(m);
-      if (!items.length) return;
+    // NEVO-herberekening voor oude gerechten (onderaan, zelden nodig)
+    var nevoTodo = 0, nevoSeen = {};
+    WEEKS.forEach(function (w) { (w.days || []).forEach(function (x) { if (!x.prep && Array.isArray(x.ingredienten) && x.macroBron !== "nevo" && !nevoSeen[x.id]) { nevoSeen[x.id] = true; nevoTodo++; } }); });
+    if (nevoTodo > 0 && !librarySelect.on) {
+      var recalcBtn = document.createElement("button");
+      recalcBtn.className = "ghost-btn"; recalcBtn.id = "nevoRecalcBtn";
+      recalcBtn.disabled = !!state.nevoRecalc;
+      recalcBtn.textContent = state.nevoRecalc ? "Macro's worden herberekend…" : "Herbereken macro's met NEVO (" + nevoTodo + (nevoTodo === 1 ? " gerecht)" : " gerechten)");
+      recalcBtn.onclick = function () { recalcLibraryWithNevo(); };
+      main.appendChild(recalcBtn);
+    }
 
-      var label = document.createElement("div");
-      label.className = "section-label";
-      label.textContent = m + " (" + items.length + ")";
-      main.appendChild(label);
-
-      var group = document.createElement("div");
-      group.className = "pickgroup";
-      items.forEach(function (item) {
-        var row = document.createElement("div");
-        row.className = "plan-slot-row";
-
-        var card = document.createElement("button");
-        card.className = "card";
-        card.style.flex = "1";
-        var thumb = document.createElement("img");
-        thumb.className = "dish-thumb";
-        thumb.style.display = "none";
-        thumb.alt = item.day.name;
-        card.appendChild(thumb);
-        loadDishImageInto(item.day, thumb);
-        var h2 = document.createElement("h2");
-        h2.textContent = item.day.name;
-        card.appendChild(h2);
-        var madeTxt = formatDishDate(item.day);
-        if (madeTxt) {
-          var made = document.createElement("div");
-          made.className = "dish-made";
-          made.textContent = "Gegenereerd op " + madeTxt.replace(/ (\d{2}:\d{2})$/, " om $1");
-          card.appendChild(made);
-        }
-        card.appendChild(macroTags(item.day, { hideMealType: true }));
-        var isSel = !!librarySelect.ids[item.day.id];
-        if (librarySelect.on) {
-          row.classList.add("lib-selectable");
-          if (isSel) row.classList.add("is-selected");
-          card.setAttribute("aria-pressed", isSel ? "true" : "false");
-          var check = document.createElement("span");
-          check.className = "lib-check";
-          check.setAttribute("aria-hidden", "true");
-          check.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>';
-          card.insertBefore(check, card.firstChild);
-          card.onclick = function () {
-            if (librarySelect.ids[item.day.id]) delete librarySelect.ids[item.day.id]; else librarySelect.ids[item.day.id] = true;
-            render();
-          };
-        } else {
-          card.onclick = function () { goto("day", { weekId: item.week.id, dayId: item.day.id, dayServings: null, dayBackView: "library", dayBackWeekId: null, dayBackDayName: null }); };
-        }
-        row.appendChild(card);
-
-        var pdfOneBtn = document.createElement("button");
-        pdfOneBtn.className = "tile-icon";
-        pdfOneBtn.setAttribute("aria-label", "Download " + item.day.name + " als PDF");
-        pdfOneBtn.title = "Download als PDF";
-        pdfOneBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M12 11v6M9.5 14.5 12 17l2.5-2.5"/></svg>';
-        pdfOneBtn.onclick = function () { exportLibraryPdf([item], null, { title: item.day.name, subtitle: "Recept uit Balanza", file: "recept-" + item.day.name }); };
-
-        var delBtn = document.createElement("button");
-        delBtn.className = "tile-icon tile-icon-danger";
-        delBtn.setAttribute("aria-label", "Verwijder gerecht");
-        delBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>';
-        delBtn.onclick = function () { deleteOneStoredDish(item); };
-        if (!librarySelect.on) {
-          var libActs = document.createElement("div"); libActs.className = "tile-actions";
-          if (moduleOn("pdf")) libActs.appendChild(pdfOneBtn);
-          libActs.appendChild(delBtn); row.appendChild(libActs);
-          row.classList.add("tile-row", moduleOn("pdf") ? "tile-row-2" : "tile-row-1");
-        }
-
-        group.appendChild(row);
-      });
-      main.appendChild(group);
-    });
-
+    // Selecteren: balk met acties (onderin op de telefoon via de actiebalk, op brede schermen als knoppen)
+    if (librarySelect.on) {
+      var picked = shown.filter(function (it) { return librarySelect.ids[it.day.id]; });
+      var allOn = picked.length === shown.length && shown.length > 0;
+      function toggleAll() { if (allOn) librarySelect.ids = {}; else shown.forEach(function (it) { librarySelect.ids[it.day.id] = true; }); render(); }
+      function doPdf() { if (picked.length) exportLibraryPdf(picked, null, picked.length === 1 ? { title: picked[0].day.name, subtitle: "Recept uit Balanza", file: "recept-" + picked[0].day.name } : null); }
+      function doDel() { if (!picked.length) return; librarySelect.on = false; removeDishesWithUndo(picked); }
+      var bar = document.createElement("div"); bar.className = "lib-selbar"; bar.id = "libSelBar";
+      var info = document.createElement("span"); info.textContent = picked.length ? picked.length + " geselecteerd" : "Tik gerechten aan";
+      bar.appendChild(info);
+      function bb(label, fn, cls, dis, id) { var b = document.createElement("button"); b.type = "button"; b.className = cls; b.textContent = label; b.disabled = !!dis; b.onclick = fn; if (id) b.id = id; bar.appendChild(b); return b; }
+      bb(allOn ? "Niets" : "Alles", toggleAll, "ghost-btn");
+      var pb = bb("Inplannen", function () { bulkPlan(picked); }, "primary-btn", !picked.length, "libBulkPlan");
+      if (picked.length) lockEl(pb, "Gerechten inplannen");
+      if (moduleOn("pdf")) bb("Kookboek (PDF)", doPdf, "ghost-btn", !picked.length, "libBulkPdf");
+      bb("Verwijderen", doDel, "ghost-btn danger", !picked.length, "libBulkDel");
+      main.appendChild(bar);
+      var acts = [
+        { id: "auto", label: allOn ? "Niets" : "Alles", title: allOn ? "Niets selecteren" : "Alles selecteren", icon: '<path d="M4 12l5 5L20 6"/>', onClick: toggleAll },
+        { id: "week", label: "Inplannen", title: "Geselecteerde gerechten inplannen", disabled: !picked.length, onClick: function () { bulkPlan(picked); }, locked: readOnlyMode() ? "Gerechten inplannen" : null }
+      ];
+      if (moduleOn("pdf")) acts.push({ id: "pdf", label: "Kookboek", title: "Kookboek (PDF)", disabled: !picked.length, onClick: doPdf });
+      acts.push({ id: "wis", label: "Verwijder", title: "Geselecteerde gerechten verwijderen", disabled: !picked.length, onClick: doDel });
+      state.tabActions = acts;
+    }
     app.appendChild(main);
   }
+
 
   function renderPlan() {
     var app = document.getElementById("app");
