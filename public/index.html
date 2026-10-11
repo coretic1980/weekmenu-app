@@ -509,6 +509,8 @@
   .sr-add { padding: 8px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--accent); font: inherit; font-size: 13.5px; font-weight: 700; cursor: pointer; }
   .sr-item { display: flex; align-items: center; gap: 8px; border-top: 1px solid var(--line); padding-top: 8px; }
   .sr-open { flex: 1; min-width: 0; text-align: left; border: 0; background: none; color: var(--ink); font: inherit; font-size: 14px; cursor: pointer; padding: 2px 0; }
+  .sr-when { flex: none; width: 82px; font-size: 12.5px; font-weight: 600; color: var(--muted); }
+  .sr-add-slot { margin-left: auto; padding: 6px 12px; }
   .sr-x { flex: none; width: 32px; height: 32px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); font-size: 18px; cursor: pointer; }
   .plan-acts { display: flex; gap: 8px; margin-top: 16px; }
   .plan-acts > * { flex: 1; }
@@ -7285,28 +7287,32 @@
     filledSnacks.forEach(function (s) { var r = resolveAssignedDish(pw.slots[d + "|" + s]); if (r) snackKcal += r.day.kcal; });
     sh.innerHTML = "<span><b>Snacks</b><small></small></span>";
     sh.querySelector("small").textContent = filledSnacks.length ? filledSnacks.length + (filledSnacks.length === 1 ? " snack" : " snacks") + " · " + snackKcal + " kcal" : "Geen snacks gepland";
-    var free = SNACK_SLOTS.filter(function (s) { return !pw.slots[d + "|" + s]; });
-    if (free.length) {
-      var add = document.createElement("button"); add.type = "button"; add.className = "sr-add"; add.id = "addSnackBtn"; add.textContent = "+ Snack";
-      add.onclick = function () {
-        var pick = free.indexOf("Snack na lunch") > -1 ? "Snack na lunch" : free[0];
-        goto("planpick", { pickFilter: null, planWeekId: pw.id, planSlotKey: d + "|" + pick });
-      };
-      lockEl(add, "Een snack inplannen");
-      sh.appendChild(add);
-    }
     snackBox.appendChild(sh);
-    filledSnacks.forEach(function (s) {
-      var a = pw.slots[d + "|" + s], r = resolveAssignedDish(a);
-      if (!r) return;
+    // Elk snackmoment (na ontbijt, na lunch, na diner) een eigen regel, zodat je zelf kiest waar de snack komt.
+    var snackPast = isPastDay(pw, d);
+    SNACK_SLOTS.forEach(function (s, n) {
+      var a = pw.slots[d + "|" + s], r = a ? resolveAssignedDish(a) : null;
       var row = document.createElement("div"); row.className = "sr-item";
-      var o = document.createElement("button"); o.type = "button"; o.className = "sr-open";
-      o.textContent = r.day.name + " · " + r.day.kcal + " kcal";
-      o.onclick = function () { goto("day", { weekId: r.week.id, dayId: r.day.id, dayServings: a.servings || 1, dayBackView: "planweek", dayBackWeekId: pw.id, dayBackDayName: d }); };
-      var x = document.createElement("button"); x.type = "button"; x.className = "sr-x"; x.setAttribute("aria-label", "Snack wissen: " + r.day.name); x.textContent = "×";
-      x.onclick = function () { removeSlot(pw, d + "|" + s); };
-      lockEl(x, "Je planning aanpassen");
-      row.appendChild(o); row.appendChild(x); snackBox.appendChild(row);
+      var lbl = document.createElement("span"); lbl.className = "sr-when"; lbl.textContent = s.replace("Snack na ", "Na ");
+      row.appendChild(lbl);
+      if (a && r) {
+        var o = document.createElement("button"); o.type = "button"; o.className = "sr-open";
+        o.textContent = r.day.name + " · " + r.day.kcal + " kcal";
+        o.onclick = function () { goto("day", { weekId: r.week.id, dayId: r.day.id, dayServings: a.servings || 1, dayBackView: "planweek", dayBackWeekId: pw.id, dayBackDayName: d }); };
+        var x = document.createElement("button"); x.type = "button"; x.className = "sr-x"; x.setAttribute("aria-label", "Snack wissen: " + r.day.name); x.textContent = "×";
+        x.onclick = function () { removeSlot(pw, d + "|" + s); };
+        lockEl(x, "Je planning aanpassen");
+        row.appendChild(o); row.appendChild(x);
+      } else {
+        var add = document.createElement("button"); add.type = "button"; add.className = "sr-add sr-add-slot";
+        if (n === 0) add.id = "addSnackBtn";
+        add.textContent = snackPast ? "Toch invullen" : "+ Snack";
+        add.setAttribute("aria-label", "Snack inplannen " + s.replace("Snack ", "").toLowerCase());
+        add.onclick = function () { goto("planpick", { pickFilter: null, planWeekId: pw.id, planSlotKey: d + "|" + s }); };
+        lockEl(add, "Een snack inplannen");
+        row.appendChild(add);
+      }
+      snackBox.appendChild(row);
     });
     main.appendChild(snackBox);
 
