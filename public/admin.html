@@ -374,7 +374,7 @@
   // =====================================================================================
   // Toestand, navigatie en het grote geheel
   // =====================================================================================
-  var TABS = [["overzicht", "Overzicht"], ["gebruikers", "Gebruikers"], ["activiteit", "Activiteit"], ["lijsten", "Gedeelde lijsten"], ["instellingen", "Instellingen"], ["audit", "Auditlog"], ["systeem", "Systeem"]];
+  var TABS = [["overzicht", "Overzicht"], ["gebruikers", "Gebruikers"], ["activiteit", "Activiteit"], ["lijsten", "Gedeelde lijsten"], ["community", "Community"], ["instellingen", "Instellingen"], ["audit", "Auditlog"], ["systeem", "Systeem"]];
   var meta = { settings: null };   // instellingen incl. beschrijvingen van modules en keuzelijsten (één keer opgehaald)
   var viewSeq = 0;                 // verouderde antwoorden negeren als je alweer ergens anders bent
   var refreshTimer = null;
@@ -382,6 +382,7 @@
   var L = { q: "", type: "", status: "", action: "", uid: "", ip: "", from: "", to: "", minMs: "", page: 1, pageSize: 50, auto: false };
   var A = { q: "", action: "", from: "", to: "", page: 1, pageSize: 50 };
   var S = { q: "", status: "", page: 1, pageSize: 25 };
+  var C = { q: "", status: "", page: 1, pageSize: 25 };
 
   function signOutLocal(message) {
     token = null; try { sessionStorage.removeItem(TOKEN_KEY); } catch (e) {}
@@ -443,7 +444,7 @@
     var pill = byId("statusPill"); if (!pill || !meta.settings) return;
     var s = meta.settings.settings;
     if (s.maintenance.enabled) { pill.textContent = "Onderhoudsmodus"; pill.className = "badge warn"; }
-    else { pill.textContent = s.authRequired ? "Inloggen verplicht" : "Inloggen niet verplicht"; pill.className = "badge"; }
+    else { pill.textContent = s.authRequired || (s.billing && s.billing.trialEnabled) ? "Inloggen verplicht" : "Inloggen niet verplicht"; pill.className = "badge"; }
   }
   function startRefresh() {
     clearInterval(refreshTimer);
@@ -1085,6 +1086,79 @@
         })));
         results.appendChild(pager(d, function (p) { S.page = p; load(); }, ["lijst", "lijsten"]));
       }).catch(function (e) { if (!e.silent && my === seq) { clear(results); results.appendChild(errorBox("Kon de lijsten niet laden: " + e.message)); } });
+    }
+    reloadHook = load;
+    return load();
+  };
+
+
+  // =====================================================================================
+  // Community: gedeelde recepten, meldingen en moderatie
+  // =====================================================================================
+  function openCommunityDetail(id, after) {
+    api("/api/admin/community/" + encodeURIComponent(id)).then(function (d) {
+      var dish = d.dish || {};
+      function act(action, msg) {
+        return api("/api/admin/community/" + encodeURIComponent(id) + "/" + action, { method: "POST", body: {} }).then(function () { toast(msg); closeModal(); if (after) after(); }).catch(function (e) { if (!e.silent) toast(e.message, "bad"); });
+      }
+      var close = h("button", { class: "ghost", text: "Sluiten" }); close.onclick = closeModal;
+      var hide = h("button", { class: "ghost", id: "commHideBtn", text: d.hidden ? "Goedkeuren en tonen" : "Verbergen" });
+      hide.onclick = function () { act(d.hidden ? "unhide" : "hide", d.hidden ? "Recept is weer zichtbaar." : "Recept is verborgen."); };
+      var block = h("button", { class: "ghost", id: "commBlockBtn", text: d.authorBlocked ? "Auteur weer laten delen" : "Auteur blokkeren voor delen" });
+      block.onclick = function () {
+        if (d.authorBlocked) return act("unblock-author", "Deze gebruiker kan weer delen.");
+        confirmDialog({ title: "Auteur blokkeren", confirmLabel: "Blokkeren", message: "Deze gebruiker kan daarna geen recepten meer delen of bijwerken. Bestaande recepten blijven staan tot je ze verbergt of verwijdert." }).then(function (ok) { if (ok) act("block-author", "Gebruiker kan niet meer delen."); });
+      };
+      var del = h("button", { class: "danger", id: "commDeleteBtn", text: "Verwijderen" });
+      del.onclick = function () {
+        confirmDialog({ title: "Recept verwijderen", danger: true, confirmLabel: "Verwijderen", message: "Het recept verdwijnt uit de community. Wie het al bewaarde, houdt zijn eigen kopie." }).then(function (ok) { if (ok) act("delete", "Recept verwijderd."); });
+      };
+      var owner = (function () { var b = h("button", { class: "link", text: shortUid(d.ownerUid) }); b.onclick = function () { closeModal(); navigate("#/gebruikers/" + encodeURIComponent(d.ownerUid)); }; return b; })();
+      var reports = d.reports.length ? table([th("Reden"), th("Wanneer"), th("Door")], d.reports.map(function (r) { return h("tr", {}, h("td", { text: r.reason || "—" }), h("td", { class: "nowrap", text: fmtDate(r.at) }), h("td", { text: shortUid(r.uid) })); })) : h("div", { class: "muted", text: "Geen meldingen." });
+      openModal(dish.name || "Recept", [
+        h("dl", { class: "kv", style: { marginBottom: "12px" } },
+          h("dt", { text: "Gedeeld als" }), h("dd", { text: d.authorName || "—" }), h("dt", { text: "Gebruiker" }), h("dd", {}, owner, d.authorBlocked ? " " : null, d.authorBlocked ? badge("geblokkeerd voor delen", "warn") : null),
+          h("dt", { text: "Gedeeld op" }), h("dd", { text: fmtDate(d.createdAt) }), h("dt", { text: "Status" }), h("dd", {}, d.hidden ? badge("Verborgen", "warn") : badge("Zichtbaar", "good")),
+          h("dt", { text: "Waardering" }), h("dd", { text: d.likes + " × lekker · " + d.saves + " × bewaard" }),
+          h("dt", { text: "Maaltijd" }), h("dd", { text: (dish.mealType || "") + " · " + Math.round(dish.kcal || 0) + " kcal" })),
+        h("h3", { text: "Meldingen" }), reports,
+        h("h3", { text: "Ingrediënten" }), h("ul", {}, (dish.ingredienten || []).map(function (x) { return h("li", { text: x }); })),
+        h("h3", { text: "Bereiding" }), h("ol", {}, (dish.steps || []).map(function (x) { return h("li", { text: x.content }); }))
+      ], [del, block, hide, close], true);
+    }).catch(function (e) { if (!e.silent) toast(e.message, "bad"); });
+  }
+
+  VIEWS.community = function (view, route, ctx) {
+    var seq = 0;
+    var results = h("div", { id: "commResults" });
+    var q = h("input", { type: "search", id: "cQ", class: "grow", placeholder: "Zoek op recept, auteur of e-mail…", "aria-label": "Zoeken in de community" }); q.value = C.q;
+    q.oninput = debounce(function () { C.q = q.value.trim(); C.page = 1; load(); }, 300);
+    var statusSel = select([["", "Alle recepten"], ["reported", "Gemeld"], ["hidden", "Verborgen"]], C.status, function (v) { C.status = v; C.page = 1; load(); }, "Status"); statusSel.id = "cStatus";
+    var counts = h("div", { class: "hint", id: "commCounts" });
+    view.appendChild(h("div", { class: "page-head" }, h("h2", { text: "Community" })));
+    view.appendChild(h("div", { class: "hint", style: { marginTop: "-6px", marginBottom: "10px" }, text: "Recepten staan direct online. Na 3 meldingen van verschillende gebruikers wordt een recept automatisch verborgen tot je het bekijkt. Aan/uit zetten doe je bij Instellingen > Onderdelen." }));
+    view.appendChild(h("div", { class: "toolbar" }, q, statusSel));
+    view.appendChild(counts);
+    view.appendChild(results);
+    function load() {
+      var my = ++seq;
+      return api("/api/admin/community" + qs({ q: C.q, status: C.status, page: C.page, pageSize: C.pageSize })).then(function (d) {
+        if (my !== seq || !ctx.alive()) return;
+        if (d.page !== C.page) C.page = d.page;
+        counts.textContent = plural(d.reportedCount, "recept", "recepten") + " met meldingen · " + plural(d.hiddenCount, "verborgen recept", "verborgen recepten");
+        clear(results);
+        if (!d.recipes.length) { results.appendChild(empty(C.q || C.status ? "Geen recepten gevonden met deze filters." : "Er zijn nog geen recepten gedeeld.")); return; }
+        results.appendChild(table([th("Recept"), th("Auteur"), th("Waardering"), th("Gedeeld"), th("Status")], d.recipes.map(function (r) {
+          var tr = h("tr", { class: "clickable commRow" + (r.hidden ? " off" : "") }, h("td", {}, h("strong", { text: r.name }), h("span", { class: "sub", text: r.mealType + " · " + Math.round(r.kcal) + " kcal" })),
+            h("td", { text: r.authorName || "—" }, h("span", { class: "sub", text: r.ownerEmail || shortUid(r.ownerUid) })),
+            h("td", { text: r.likes + " ♥ · " + r.saves + " bewaard" }),
+            h("td", { class: "nowrap", text: relTime(r.createdAt) }),
+            h("td", {}, r.hidden ? badge("Verborgen", "warn") : badge("Zichtbaar", "good"), r.reports ? " " : null, r.reports ? badge(plural(r.reports, "melding", "meldingen"), "bad") : null));
+          tr.onclick = function () { openCommunityDetail(r.id, load); };
+          return tr;
+        })));
+        results.appendChild(pager(d, function (p) { C.page = p; load(); }, ["recept", "recepten"]));
+      }).catch(function (e) { if (!e.silent && my === seq) { clear(results); results.appendChild(errorBox("Kon de community niet laden: " + e.message)); } });
     }
     reloadHook = load;
     return load();

@@ -154,6 +154,7 @@ var MODULE_DEFS = [
   { key: "sharing", label: "Boodschappenlijst delen", desc: "Nieuwe lijsten delen en bijwerken (WhatsApp/link). Bestaande gedeelde lijsten blijven te lezen en af te vinken.", enforced: "server" },
   { key: "bring", label: "Importeren in Bring!", desc: "De Bring!-import en de pagina's die Bring! ophaalt.", enforced: "server" },
   { key: "pdf", label: "PDF-export", desc: "Het exporteren als PDF. Dit gebeurt in de app zelf: uitzetten verbergt de knoppen.", enforced: "app" },
+  { key: "community", label: "Community", desc: "Recepten delen met andere gebruikers, bekijken, bewaren en melden.", enforced: "server" },
   { key: "registration", label: "Nieuwe accounts (registreren)", desc: "Zelf een account aanmaken. Uit: alleen jij maakt accounts aan; inloggen blijft werken.", enforced: "server" },
   { key: "passwordReset", label: "Wachtwoord vergeten", desc: "De wachtwoord-vergeten-mail en de resetlink.", enforced: "server" }
 ];
@@ -4685,7 +4686,7 @@ function deleteUserEverywhere(user) {
       var prov = acc.exists && acc.value && acc.value.uid === uid && acc.value.providers ? acc.value.providers : {};
       return Promise.all(Object.keys(prov).map(function (k) { return dbDeleteDoc("auth/oauth/" + k + "_" + String(prov[k]).replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 200)); }));
     }).catch(function () {});
-  }).then(function () { return dbGetDoc("listsIndex/" + uid); }).then(function (r) {
+  }).then(function () { return deleteCommunityOf(uid); }).then(function () { return dbGetDoc("listsIndex/" + uid); }).then(function (r) {
     var tokens = r.exists && r.value && Array.isArray(r.value.tokens) ? r.value.tokens : [];
     return Promise.all(tokens.map(function (t) { return dbDeleteDoc("lists/" + t); }));
   }).then(function () {
@@ -5142,6 +5143,12 @@ function handleAdminApi(req, res, url) {
     else if (sub === "export" && method === "GET") run = function () { return handleAdminUserExport(req, res, uid); };
     else if (sub && method === "POST") run = function () { return handleAdminUserAction(req, res, uid, sub); };
   }
+  else if (method === "GET" && p === "/api/admin/community") run = function () { return handleAdminCommunity(req, res, url); };
+  else if ((m = p.match(/^\/api\/admin\/community\/([A-Za-z0-9_-]{6,30})(?:\/([a-z-]+))?$/))) {
+    var cid = m[1], cact = m[2];
+    if (!cact && method === "GET") run = function () { return handleAdminCommunityDetail(req, res, cid); };
+    else if (cact && method === "POST") run = function () { return handleAdminCommunityAction(req, res, cid, cact); };
+  }
   else if (method === "GET" && p === "/api/admin/lists") run = function () { return handleAdminLists(req, res, url); };
   else if (method === "POST" && p === "/api/admin/lists/cleanup") run = function () { return handleAdminListCleanup(req, res); };
   else if ((m = p.match(/^\/api\/admin\/lists\/([A-Za-z0-9_-]{22})(?:\/(delete))?$/))) {
@@ -5154,6 +5161,256 @@ function handleAdminApi(req, res, url) {
     if (res.headersSent) { try { res.end(); } catch (e) {} return; }
     sendJSON(res, err && err.status ? err.status : 500, { code: err && err.code ? err.code : "error", message: err && err.status ? err.message : "Er ging iets mis: " + (err && err.message ? err.message : "onbekende fout") });
   });
+}
+
+// ---------- Community: recepten met elkaar delen ----------
+// Een gepubliceerd recept is een kopie (community/r/<id>): de eigenaar kan zijn eigen gerecht daarna gewoon aanpassen
+// of verwijderen zonder dat de community-versie meeverandert. Opnieuw delen werkt de community-versie bij.
+// Moderatie: recepten staan direct online; iedereen kan melden. Bij COMMUNITY_HIDE_REPORTS meldingen van verschillende
+// gebruikers verdwijnt een recept vanzelf tot de beheerder ernaar kijkt. De beheerder kan verbergen, verwijderen en
+// iemand blokkeren voor publiceren.
+var COMMUNITY_PREFIX = "community/r/";
+var COMMUNITY_HIDE_REPORTS = 3;
+var COMMUNITY_MEALTYPES = ["Ontbijt", "Lunch", "Diner", "Snack"];
+var communityPublishLimiter = makeHourlyLimiter(20), communityActLimiter = makeHourlyLimiter(600);
+var communityCache = { at: 0, rows: null };
+var communityLocks = new Map();
+function withCommunityLock(id, fn) {
+  var prev = communityLocks.get(id) || Promise.resolve();
+  var next = prev.then(fn, fn);
+  var tail = next.then(function () {}, function () {});
+  communityLocks.set(id, tail);
+  tail.then(function () { if (communityLocks.get(id) === tail) communityLocks.delete(id); });
+  return next;
+}
+function communityInvalidate() { communityCache = { at: 0, rows: null }; }
+function communityAll() {
+  if (communityCache.rows && Date.now() - communityCache.at < 15000) return Promise.resolve(communityCache.rows);
+  return dbListDocs(COMMUNITY_PREFIX).then(function (docs) {
+    var rows = docs.filter(function (d) { return d.value && d.value.dish; }).map(function (d) { return d.value; });
+    communityCache = { at: Date.now(), rows: rows };
+    return rows;
+  });
+}
+function cleanCommunityDish(d) {
+  if (!d || typeof d !== "object") return null;
+  var name = cleanText(d.name, 120);
+  var ingr = Array.isArray(d.ingredienten) ? d.ingredienten.map(function (x) { return cleanText(x, 200); }).filter(Boolean).slice(0, 40) : [];
+  var steps = Array.isArray(d.steps) ? d.steps.map(function (s) {
+    if (!s || typeof s !== "object") return null;
+    var st = { title: cleanText(s.title, 80) || "Stap", content: cleanNote(s.content, 1500) };
+    var t = Number(s.timer); if (isFinite(t) && t > 0 && t <= 6 * 3600) st.timer = Math.round(t);
+    return st.content ? st : null;
+  }).filter(Boolean).slice(0, 30) : [];
+  if (!name || ingr.length < 2 || !steps.length) return null;
+  function num(v, max) { var n = Number(v); return isFinite(n) && n >= 0 && n <= max ? Math.round(n * 10) / 10 : 0; }
+  var credit = d.imageCredit && typeof d.imageCredit === "object" ? { name: cleanText(d.imageCredit.name, 80), link: /^https:\/\//.test(String(d.imageCredit.link || "")) ? String(d.imageCredit.link).slice(0, 300) : "" } : null;
+  return {
+    name: name, mealType: COMMUNITY_MEALTYPES.indexOf(d.mealType) > -1 ? d.mealType : "Diner",
+    kcal: num(d.kcal, 5000), kh: num(d.kh, 100), eiwit: num(d.eiwit, 100), vet: num(d.vet, 100),
+    khG: num(d.khG, 1000), eiwitG: num(d.eiwitG, 1000), vetG: num(d.vetG, 1000), balans: num(d.balans, 100),
+    bereidingstijd: num(d.bereidingstijd, 600), benodigdheden: cleanText(d.benodigdheden, 300),
+    ingredienten: ingr, steps: steps, fotoZoekterm: cleanText(d.fotoZoekterm, 80),
+    imageUrl: /^https:\/\/images\.unsplash\.com\//.test(String(d.imageUrl || "")) ? String(d.imageUrl).slice(0, 500) : "",
+    imageCredit: credit && credit.name ? credit : null,
+    macroBron: d.macroBron === "nevo" ? "nevo" : "schatting",
+    goal: cleanText(d.goal, 60), dietStyle: cleanText(d.dietStyle, 40)
+  };
+}
+function communitySummary(r, uid) {
+  return {
+    id: r.id, name: r.dish.name, mealType: r.dish.mealType, kcal: r.dish.kcal, eiwitG: r.dish.eiwitG, balans: r.dish.balans,
+    bereidingstijd: r.dish.bereidingstijd, imageUrl: r.dish.imageUrl || "", fotoZoekterm: r.dish.fotoZoekterm || "",
+    dietStyle: r.dish.dietStyle || "", goal: r.dish.goal || "", macroBron: r.dish.macroBron,
+    authorName: r.authorName || "Balanza-kok", likes: r.likeCount || 0, saves: r.saveCount || 0,
+    liked: !!(uid && r.likes && r.likes[uid]), mine: !!(uid && r.ownerUid === uid), createdAt: new Date(r.createdAt).toISOString()
+  };
+}
+function communityContext(req, res, needAccount) {
+  if (!communityActLimiter(clientIp(req))) { sendJSON(res, 429, { code: "rate_limited", message: "Te veel verzoeken. Probeer het later opnieuw." }); return Promise.resolve(null); }
+  return getSettings().then(function (s) {
+    if (!effectiveModules(s).community) { sendJSON(res, 503, moduleOffBody("community", s)); return null; }
+    return resolveUser(req).then(function (user) {
+      if (!user) { sendUnauthorized(res); return null; }
+      if (needAccount && !user.email) { sendJSON(res, 403, { code: "account_required", message: "Maak eerst een account aan om recepten te delen." }); return null; }
+      return { user: user, settings: s };
+    });
+  });
+}
+function handleCommunityList(req, res, url) {
+  return communityContext(req, res, false).then(function (ctx) {
+    if (!ctx) return;
+    var q = url.searchParams, uid = ctx.user.uid;
+    var text = cleanText(q.get("q"), 80).toLowerCase(), type = q.get("type") || "", sort = q.get("sort") === "popular" ? "popular" : "new";
+    var mine = q.get("mine") === "1", diet = cleanText(q.get("diet"), 40);
+    var offset = Math.max(0, Math.min(10000, parseInt(q.get("offset"), 10) || 0)), limit = 20;
+    return communityAll().then(function (rows) {
+      var list = rows.filter(function (r) {
+        if (mine) return r.ownerUid === uid;
+        if (r.hidden && r.ownerUid !== uid) return false;
+        if (type && r.dish.mealType !== type) return false;
+        if (diet && r.dish.dietStyle !== diet) return false;
+        if (text && (r.dish.name + " " + r.dish.ingredienten.join(" ") + " " + (r.authorName || "")).toLowerCase().indexOf(text) === -1) return false;
+        return true;
+      });
+      var now = Date.now();
+      function score(r) { var ageDays = (now - r.createdAt) / DAY_MS; return ((r.likeCount || 0) * 2 + (r.saveCount || 0) * 3 + 1) / Math.pow(ageDays + 2, 0.8); }
+      list.sort(sort === "popular" ? function (a, b) { return score(b) - score(a); } : function (a, b) { return b.createdAt - a.createdAt; });
+      sendJSON(res, 200, { items: list.slice(offset, offset + limit).map(function (r) { var s = communitySummary(r, uid); s.hidden = !!r.hidden; return s; }), total: list.length, offset: offset, limit: limit });
+    });
+  }).catch(function () { sendJSON(res, 500, { code: "error", message: "De community kon niet worden geladen." }); });
+}
+function handleCommunityGet(req, res, id) {
+  return communityContext(req, res, false).then(function (ctx) {
+    if (!ctx) return;
+    return dbGetDoc(COMMUNITY_PREFIX + id).then(function (r) {
+      var rec = r.exists ? r.value : null;
+      if (!rec || (rec.hidden && rec.ownerUid !== ctx.user.uid)) return sendJSON(res, 404, { code: "not_found", message: "Dit recept staat niet (meer) in de community." });
+      var out = communitySummary(rec, ctx.user.uid);
+      out.dish = rec.dish; out.hidden = !!rec.hidden;
+      out.reported = !!(rec.reports || []).some(function (x) { return x.uid === ctx.user.uid; });
+      sendJSON(res, 200, out);
+    });
+  }).catch(function () { sendJSON(res, 500, { code: "error", message: "Dit recept kon niet worden geladen." }); });
+}
+function handleCommunityPublish(req, res) {
+  return communityContext(req, res, true).then(function (ctx) {
+    if (!ctx) return;
+    var uid = ctx.user.uid;
+    if (!communityPublishLimiter(uid)) return sendJSON(res, 429, { code: "rate_limited", message: "Je hebt het afgelopen uur al veel recepten gedeeld. Probeer het later opnieuw." });
+    return Promise.all([readBody(req), dbGetDoc("adminMeta/" + uid)]).then(function (r) {
+      var body = r[0] || {}, meta = r[1].exists ? r[1].value : null;
+      if (meta && meta.communityBlocked) return sendJSON(res, 403, { code: "blocked", message: "Je kunt op dit moment geen recepten delen in de community." });
+      var dish = cleanCommunityDish(body.dish);
+      if (!dish) return sendJSON(res, 400, { code: "bad_request", message: "Dit gerecht mist een naam, ingrediënten of bereiding en kan niet worden gedeeld." });
+      var author = cleanText(body.authorName, 30) || "Balanza-kok";
+      var sourceId = cleanText(body.sourceDishId, 80);
+      return communityAll().then(function (rows) {
+        var existing = sourceId ? rows.filter(function (x) { return x.ownerUid === uid && x.sourceDishId === sourceId; })[0] : null;
+        var id = existing ? existing.id : crypto.randomBytes(9).toString("base64").replace(/\+/g, "-").replace(/\//g, "_");
+        return withCommunityLock(id, function () {
+          return dbGetDoc(COMMUNITY_PREFIX + id).then(function (cur) {
+            var now = Date.now(), base = cur.exists && cur.value ? cur.value : { id: id, ownerUid: uid, createdAt: now, likes: {}, likeCount: 0, saves: {}, saveCount: 0, reports: [] };
+            if (base.ownerUid !== uid) throw HttpError(403, "forbidden", "Dit is niet jouw recept.");
+            base.dish = dish; base.authorName = author; base.sourceDishId = sourceId; base.updatedAt = now;
+            return dbSetDoc(COMMUNITY_PREFIX + id, base).then(function () {
+              communityInvalidate();
+              logEvent("community", existing ? "update" : "publish", true, 200, { uid: uid, id: id, name: dish.name, ip: clientIp(req) });
+              sendJSON(res, 200, { id: id, updated: !!existing });
+            });
+          });
+        });
+      });
+    });
+  }).catch(function (err) {
+    if (res.headersSent) return;
+    sendJSON(res, err && err.status ? err.status : 400, { code: err && err.code ? err.code : "bad_request", message: err && err.status ? err.message : "Delen is niet gelukt." });
+  });
+}
+function handleCommunityAction(req, res, id, action) {
+  return communityContext(req, res, action === "report" || action === "delete").then(function (ctx) {
+    if (!ctx) return;
+    var uid = ctx.user.uid;
+    return readBody(req).catch(function () { return {}; }).then(function (body) {
+      return withCommunityLock(id, function () {
+        return dbGetDoc(COMMUNITY_PREFIX + id).then(function (r) {
+          var rec = r.exists ? r.value : null;
+          if (!rec) throw HttpError(404, "not_found", "Dit recept staat niet (meer) in de community.");
+          if (action === "delete") {
+            if (rec.ownerUid !== uid) throw HttpError(403, "forbidden", "Alleen wie het recept deelde, kan het verwijderen.");
+            return dbDeleteDoc(COMMUNITY_PREFIX + id).then(function () { communityInvalidate(); sendJSON(res, 200, { ok: true }); });
+          }
+          if (rec.hidden && rec.ownerUid !== uid) throw HttpError(404, "not_found", "Dit recept staat niet (meer) in de community.");
+          rec.likes = rec.likes || {}; rec.saves = rec.saves || {}; rec.reports = rec.reports || [];
+          if (action === "like") {
+            var on = body && typeof body.on === "boolean" ? body.on : !rec.likes[uid];
+            if (on) rec.likes[uid] = 1; else delete rec.likes[uid];
+            rec.likeCount = Object.keys(rec.likes).length;
+          } else if (action === "saved") {
+            rec.saves[uid] = 1; rec.saveCount = Object.keys(rec.saves).length;
+          } else if (action === "report") {
+            if (rec.ownerUid === uid) throw HttpError(400, "bad_request", "Je kunt je eigen recept niet melden.");
+            if (!rec.reports.some(function (x) { return x.uid === uid; })) {
+              rec.reports.push({ uid: uid, reason: cleanText(body && body.reason, 300), at: Date.now() });
+              if (rec.reports.length >= COMMUNITY_HIDE_REPORTS && !rec.reviewedAt) rec.hidden = true;
+              logEvent("community", "report", true, 200, { uid: uid, id: id, name: rec.dish.name, ip: clientIp(req) });
+            }
+          } else throw HttpError(404, "not_found", "Onbekende actie.");
+          return dbSetDoc(COMMUNITY_PREFIX + id, rec).then(function () {
+            communityInvalidate();
+            sendJSON(res, 200, communitySummary(rec, uid));
+          });
+        });
+      });
+    });
+  }).catch(function (err) {
+    if (res.headersSent) return;
+    sendJSON(res, err && err.status ? err.status : 500, { code: err && err.code ? err.code : "error", message: err && err.status ? err.message : "Er ging iets mis." });
+  });
+}
+function deleteCommunityOf(uid) {
+  return dbListDocs(COMMUNITY_PREFIX).then(function (docs) {
+    return Promise.all(docs.filter(function (d) { return d.value && d.value.ownerUid === uid; }).map(function (d) { return dbDeleteDoc(d.path); }));
+  }).then(communityInvalidate).catch(function () {});
+}
+// Beheer
+function handleAdminCommunity(req, res, url) {
+  var q = url.searchParams;
+  return Promise.all([communityAll(), loadUserSummaries()]).then(function (r) {
+    var owners = {};
+    r[1].forEach(function (u) { owners[u.uid] = u; });
+    var text = (q.get("q") || "").trim().toLowerCase(), status = q.get("status") || "";
+    var rows = r[0].map(function (rec) {
+      var o = owners[rec.ownerUid] || {};
+      return { id: rec.id, name: rec.dish.name, mealType: rec.dish.mealType, kcal: rec.dish.kcal, authorName: rec.authorName, ownerUid: rec.ownerUid, ownerEmail: o.email || null,
+        likes: rec.likeCount || 0, saves: rec.saveCount || 0, reports: (rec.reports || []).length, hidden: !!rec.hidden,
+        createdAt: new Date(rec.createdAt).toISOString(), updatedAt: new Date(rec.updatedAt || rec.createdAt).toISOString() };
+    }).filter(function (x) {
+      if (status === "reported" && !x.reports) return false;
+      if (status === "hidden" && !x.hidden) return false;
+      if (text && [x.name, x.authorName, x.ownerEmail, x.ownerUid, x.id].join(" ").toLowerCase().indexOf(text) === -1) return false;
+      return true;
+    });
+    rows.sort(function (a, b) { return (b.reports - a.reports) || (Date.parse(b.createdAt) - Date.parse(a.createdAt)); });
+    var pg = paginate(rows, q, 25);
+    sendJSON(res, 200, { recipes: pg.rows, total: pg.total, page: pg.page, pageSize: pg.pageSize, pages: pg.pages,
+      reportedCount: r[0].filter(function (x) { return (x.reports || []).length; }).length, hiddenCount: r[0].filter(function (x) { return x.hidden; }).length });
+  });
+}
+function handleAdminCommunityDetail(req, res, id) {
+  return dbGetDoc(COMMUNITY_PREFIX + id).then(function (r) {
+    if (!r.exists || !r.value) throw HttpError(404, "not_found", "Recept niet gevonden.");
+    var rec = r.value;
+    return dbGetDoc("adminMeta/" + rec.ownerUid).then(function (m) {
+      sendJSON(res, 200, { id: rec.id, dish: rec.dish, authorName: rec.authorName, ownerUid: rec.ownerUid, hidden: !!rec.hidden, likes: rec.likeCount || 0, saves: rec.saveCount || 0,
+        reports: (rec.reports || []).map(function (x) { return { uid: x.uid, reason: x.reason, at: new Date(x.at).toISOString() }; }),
+        createdAt: new Date(rec.createdAt).toISOString(), authorBlocked: !!(m.exists && m.value && m.value.communityBlocked) });
+    });
+  });
+}
+function handleAdminCommunityAction(req, res, id, action) {
+  return requireBody(req).then(function () {
+    return withCommunityLock(id, function () {
+      return dbGetDoc(COMMUNITY_PREFIX + id).then(function (r) {
+        if (!r.exists || !r.value) throw HttpError(404, "not_found", "Recept niet gevonden.");
+        var rec = r.value;
+        if (action === "delete") return dbDeleteDoc(COMMUNITY_PREFIX + id).then(function () { auditLog(req, "community.verwijderen", rec.ownerUid, { id: id, naam: rec.dish.name }); return { ok: true }; });
+        if (action === "hide" || action === "unhide") {
+          rec.hidden = action === "hide"; rec.reviewedAt = Date.now();
+          if (action === "unhide") rec.reports = [];
+          return dbSetDoc(COMMUNITY_PREFIX + id, rec).then(function () { auditLog(req, "community." + (action === "hide" ? "verbergen" : "goedkeuren"), rec.ownerUid, { id: id, naam: rec.dish.name }); return { ok: true }; });
+        }
+        if (action === "block-author" || action === "unblock-author") {
+          return dbGetDoc("adminMeta/" + rec.ownerUid).then(function (m) {
+            var meta = m.exists && m.value ? m.value : {};
+            meta.communityBlocked = action === "block-author";
+            return dbSetDoc("adminMeta/" + rec.ownerUid, meta).then(function () { auditLog(req, "community." + (meta.communityBlocked ? "blokkeren" : "deblokkeren"), rec.ownerUid, { id: id }); return { ok: true }; });
+          });
+        }
+        throw HttpError(404, "not_found", "Onbekende actie.");
+      });
+    });
+  }).then(function (out) { communityInvalidate(); sendJSON(res, 200, out); });
 }
 
 function handleConfig(req, res) {
@@ -5281,6 +5538,11 @@ var server = http.createServer(function (req, res) {
   if (jobMatch) return handleGenerateJobGet(req, res, jobMatch[1]);
   if (req.method === "GET" && url.pathname === "/api/usage") return handleUsageGet(req, res);
   if (req.method === "GET" && url.pathname === "/api/billing") return handleBillingGet(req, res);
+  if (url.pathname === "/api/community" && req.method === "GET") return handleCommunityList(req, res, url);
+  if (url.pathname === "/api/community" && req.method === "POST") return handleCommunityPublish(req, res);
+  var cm = url.pathname.match(/^\/api\/community\/([A-Za-z0-9_-]{6,30})(?:\/(like|saved|report|delete))?$/);
+  if (cm && req.method === "GET" && !cm[2]) return handleCommunityGet(req, res, cm[1]);
+  if (cm && req.method === "POST" && cm[2]) return handleCommunityAction(req, res, cm[1], cm[2]);
   if (req.method === "POST" && url.pathname === "/api/billing/checkout") return handleBillingCheckout(req, res);
   if (req.method === "POST" && url.pathname === "/api/billing/cancel") return handleBillingCancel(req, res);
   if (req.method === "POST" && url.pathname === "/api/billing/webhook") return handleBillingWebhook(req, res);

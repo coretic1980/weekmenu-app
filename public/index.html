@@ -644,6 +644,36 @@
   .plus-ben-card .pbc-head b { font-family: "Fraunces", serif; font-size: 19px; font-weight: 600; }
   .plus-ben-card .pbc-head span { font-size: 13px; color: var(--muted); }
   .plus-prompt #plusPromptList { margin: -4px 0 18px; }
+  .gerecht-switch .chip { padding: 9px 12px; min-height: 0; }
+  .comm-intro { margin: -6px 0 0; font-size: 14px; line-height: 1.55; color: var(--muted); }
+  .comm-filters .chip, .comm-sorts .chip { padding: 7px 13px; min-height: 0; font-size: 13px; }
+  .comm-list { display: grid; grid-template-columns: 1fr; gap: 12px; }
+  @media (min-width: 701px) { .comm-list { grid-template-columns: 1fr 1fr; } }
+  .comm-card { appearance: none; display: flex; gap: 12px; align-items: stretch; width: 100%; padding: 10px; text-align: left; font: inherit; color: inherit; cursor: pointer;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 2px 12px rgba(20, 16, 8, 0.05); position: relative; }
+  .comm-card:hover { border-color: var(--accent2); }
+  .comm-card.is-hidden { opacity: .6; }
+  .comm-img, .comm-ph { flex: none; width: 92px; height: 92px; border-radius: 10px; object-fit: cover; background: var(--bg); }
+  .comm-ph { display: grid; place-items: center; color: var(--accent2); }
+  .comm-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; padding: 2px 0; }
+  .comm-type { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+  .comm-name { font-size: 15.5px; line-height: 1.3; }
+  .comm-meta, .comm-stats { font-size: 12.5px; color: var(--muted); }
+  .comm-box { display: flex; flex-direction: column; gap: 12px; padding: 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+  .comm-box.slim { padding: 0; border: none; background: none; gap: 6px; }
+  .comm-box-head { display: flex; gap: 10px; align-items: center; }
+  .comm-box-head > span:last-child { display: flex; flex-direction: column; gap: 1px; }
+  .comm-box-head b { font-size: 14.5px; }
+  .comm-box-head small { font-size: 12.5px; color: var(--muted); }
+  .comm-avatar { flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--accent); color: var(--accent-ink); font-weight: 700; }
+  .comm-acts { display: flex; gap: 10px; }
+  .comm-acts .primary-btn { flex: 1; width: auto; padding: 13px 16px; }
+  .comm-acts .comm-like { flex: none; }
+  .comm-like.on { color: #C2410C; border-color: #F2B48F; background: #FFF4EC; }
+  .comm-foot-link { appearance: none; background: none; border: none; padding: 0; font: inherit; font-size: 12.5px; color: var(--muted); text-decoration: underline; cursor: pointer; align-self: flex-start; }
+  .comm-foot-link:disabled { text-decoration: none; cursor: default; }
+  .comm-share { display: inline-flex; align-items: center; gap: 8px; justify-content: center; width: 100%; color: var(--accent2); }
+  .comm-from { font-size: 13px; color: var(--muted); }
   .plan-table { width: 100%; border-collapse: collapse; }
   .plan-table th, .plan-table td { padding: 10px 8px; text-align: left; border-bottom: 1px solid var(--line); font-size: 14px; vertical-align: top; }
   .plan-table th { font-family: "Fraunces", serif; font-weight: 600; font-size: 15px; }
@@ -1943,7 +1973,7 @@
     withImages: true
   };
 
-  function findWeek(id) { return WEEKS.filter(function (w) { return w.id === id; })[0]; }
+  function findWeek(id) { if (id === "community") return COMMUNITY_WEEK; return WEEKS.filter(function (w) { return w.id === id; })[0]; }
   function findDay(week, id) { return week.days.filter(function (d) { return d.id === id; })[0]; }
 
   function extractDishArray(result) {
@@ -3892,7 +3922,7 @@
   }
 
   // ---------- Startscherm: eigen indeling ----------
-  var HOME_DEFAULT_ORDER = ["vandaag", "week", "foto", "recent", "boodschappen", "uitleg", "genereren", "volgendeweek", "tip"];
+  var HOME_DEFAULT_ORDER = ["vandaag", "week", "foto", "recent", "community", "boodschappen", "uitleg", "genereren", "volgendeweek", "tip"];
   var HOME_DEFAULT_HIDDEN = ["genereren", "volgendeweek", "tip"];
   function homeLayout() {
     var hl = prefs.homeLayout && typeof prefs.homeLayout === "object" ? prefs.homeLayout : null;
@@ -3965,11 +3995,15 @@
           prefs.count + "× " + mt.join(", ").toLowerCase() + " · " + String(prefs.goal || "Onderhoud").split(" (")[0] + (prefs.dietStyle ? " · " + prefs.dietStyle.toLowerCase() : ""),
           startGenerateFlow, state.generating || quotaBlocked());
       } },
+    community: { label: "Community", desc: "Recepten van andere Balanza-koks ontdekken en bewaren", available: function () { return communityOn(); },
+      render: function (main) {
+        homeActionCard(main, "homeCommunityBtn", iconSvg("heart", 22), "Community", "Ontdek recepten van andere Balanza-koks en deel je eigen favorieten.", function () { goto("community"); });
+      } },
     boodschappen: { label: "Boodschappenlijst", desc: "Hoeveel boodschappen er nog open staan", available: function () { return true; },
       render: function (main) {
         var n = openShoppingCount();
         var pwk = currentWeekPlan();
-        homeActionCard(main, "homeShoppingBtn", '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>',
+        homeActionCard(main, "homeShoppingBtn", '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10h18l-1.6 8.4a2 2 0 0 1-2 1.6H6.6a2 2 0 0 1-2-1.6z"/><path d="M8 10l3-6M16 10l-3-6"/><path d="M9 13.5v3M12 13.5v3M15 13.5v3"/></svg>',
           "Boodschappenlijst", pwk && Object.keys(pwk.slots || {}).length ? (n ? n + (n === 1 ? " boodschap staat" : " boodschappen staan") + " nog open deze week" : "Alles afgevinkt voor deze week") : "Plan eerst je week, dan staat je lijst hier klaar",
           function () { onTab("lijst"); });
       } },
@@ -5482,6 +5516,7 @@
     { title: "Start het kookproces", body: "Vanuit een receptdetail start je de stap-voor-stap kookmodus, met een voortgangsbalk en een timer bij stappen die wachttijd hebben (koken, bakken, grillen, oven, sudderen)." },
     { title: "Exporteer als PDF", body: "Zowel een boodschappenlijst als een compleet weekmenu kun je exporteren als PDF, opgemaakt als een echt kookboek \u2014 met omslagpagina, inhoudsopgave en een gerecht dat nooit halverwege afbreekt over een pagina." },
     { title: "Bewaar je gegevens met een account", body: "Zonder account staan je gerechten en planning alleen op dit apparaat. Kies in het menu (je avatar rechtsboven) \u201cAccount aanmaken\u201d om ze te bewaren en op elk apparaat te gebruiken; wat je al hebt gaat mee. Onder Instellingen kun je ook je wachtwoord of e-mailadres wijzigen, je gegevens downloaden en het account verwijderen." },
+    { title: "Community", body: "Onder \u201cGerechten\u201d vind je naast je eigen gerechten ook de community: recepten van andere Balanza-koks, met dezelfde NEVO-macro\u2019s. Zoek op gerecht of ingredi\u00ebnt, filter op maaltijd, en tik op \u201cBewaar in mijn gerechten\u201d om er een eigen kopie van te maken die je kunt inplannen. Zelf iets delen? Open een van je gerechten en tik op \u201cDelen in de community\u201d. Je kiest zelf onder welke naam het verschijnt en je kunt het altijd weer weghalen. Klopt er iets niet aan een recept, tik dan op \u201cRecept melden\u201d." },
     { ifBilling: true, title: "Balanza Plus", body: "Naast je avatar rechtsboven en in het accountmenu zie je een label met je huidige abonnement: Gratis of Plus. Tik op \u201cAbonnement vergelijken\u201d (in het accountmenu of in Mijn profiel) om te zien wat elk niveau biedt en om over te stappen \u2014 Plus geeft in ieder geval meer nieuwe gerechten per maand. Je betaalt met iDEAL of kaart en kunt op elk moment opzeggen: Plus blijft dan actief tot het einde van de betaalde periode." },
     { title: "Begin opnieuw", body: "Via je avatar rechtsboven (het accountmenu) kies je \u201cReset app \u2014 begin opnieuw\u201d: dit wist al je opgeslagen gerechten, voorkeuren en planning in \u00e9\u00e9n keer, mocht je helemaal fris willen beginnen." }
   ];
@@ -5688,11 +5723,317 @@
     app.appendChild(main);
   }
 
+  // ---------- Community: recepten van andere Balanza-gebruikers ----------
+  // De lijst komt van /api/community. Een geopend recept wordt een tijdelijke "week" (id "community") zodat het
+  // gewone receptscherm en de kookmodus er gewoon mee werken. Bewaren maakt een eigen kopie in je gerechten.
+  var COMMUNITY_TYPES = ["Alle", "Ontbijt", "Lunch", "Diner", "Snack"];
+  var community = { items: [], total: 0, q: "", type: "Alle", sort: "new", loading: false, error: null, loadedKey: null, busy: {} };
+  var COMMUNITY_WEEK = { id: "community", title: "Community", days: [] };
+  function communityOn() { return moduleOn("community"); }
+  function communityFetch(path, opts) {
+    opts = opts || {};
+    return fetch(path, { method: opts.method || "GET", headers: Object.assign({ "Content-Type": "application/json" }, authHeaders()), body: opts.body ? JSON.stringify(opts.body) : undefined }).then(function (res) {
+      return res.json().catch(function () { return {}; }).then(function (data) {
+        if (!res.ok) { var e = new Error(data.message || "Er ging iets mis. Probeer het opnieuw."); e.code = data.code; e.status = res.status; throw e; }
+        return data;
+      });
+    });
+  }
+  function communityKey() { return [community.q, community.type, community.sort].join("|"); }
+  function loadCommunity(more) {
+    var key = communityKey();
+    if (community.loading) return;
+    community.loading = true; community.error = null;
+    var offset = more ? community.items.length : 0;
+    var qs = "?sort=" + (community.sort === "popular" ? "popular" : "new") + (community.sort === "mine" ? "&mine=1" : "") +
+      (community.type !== "Alle" ? "&type=" + encodeURIComponent(community.type) : "") + (community.q ? "&q=" + encodeURIComponent(community.q) : "") + "&offset=" + offset;
+    communityFetch("/api/community" + qs).then(function (d) {
+      community.loading = false;
+      if (key !== communityKey()) { loadCommunity(); return; }
+      community.items = more ? community.items.concat(d.items) : d.items;
+      community.total = d.total; community.loadedKey = key;
+      if (state.view === "community") render();
+    }).catch(function (e) {
+      community.loading = false; community.error = e.message; community.loadedKey = key;
+      if (state.view === "community") render();
+    });
+  }
+  // Maakt van een community-recept een "gerecht" voor het receptscherm.
+  function communityDayFrom(rec) {
+    var d = rec.dish || {};
+    var day = {
+      id: "c_" + rec.id, label: d.mealType, name: d.name, mealType: d.mealType,
+      kcal: d.kcal, kh: d.kh, eiwit: d.eiwit, vet: d.vet, khG: d.khG, eiwitG: d.eiwitG, vetG: d.vetG, balans: d.balans,
+      bereidingstijd: d.bereidingstijd, benodigdheden: d.benodigdheden || "", ingredienten: d.ingredienten || [], steps: d.steps || [],
+      fotoZoekterm: d.fotoZoekterm || "", imageUrl: d.imageUrl || undefined, imageCredit: d.imageCredit || null,
+      macroBron: d.macroBron, community: { id: rec.id, authorName: rec.authorName, likes: rec.likes, liked: rec.liked, saves: rec.saves, mine: rec.mine, reported: rec.reported, hidden: rec.hidden, goal: d.goal, dietStyle: d.dietStyle }
+    };
+    COMMUNITY_WEEK.days = COMMUNITY_WEEK.days.filter(function (x) { return x.id !== day.id; }).concat([day]).slice(-30);
+    return day;
+  }
+  function openCommunityRecipe(id) {
+    if (community.busy["open" + id]) return;
+    community.busy["open" + id] = true;
+    communityFetch("/api/community/" + encodeURIComponent(id)).then(function (rec) {
+      community.busy["open" + id] = false;
+      var day = communityDayFrom(rec);
+      goto("day", { weekId: "community", dayId: day.id, dayServings: null, dayBackView: "community", dayBackWeekId: null, dayBackDayName: null });
+    }).catch(function (e) { community.busy["open" + id] = false; showToast(e.message); });
+  }
+  function savedCopyOf(communityId) {
+    var c = findWeek("cache");
+    return c ? c.days.filter(function (d) { return d.fromCommunity && d.fromCommunity.id === communityId; })[0] || null : null;
+  }
+  function saveCommunityDay(day) {
+    var c = day.community;
+    if (savedCopyOf(c.id)) { showToast("Dit recept staat al in je gerechten."); return; }
+    var copy = {
+      id: "gen" + Date.now() + "_c", label: day.mealType, name: day.name, mealType: day.mealType,
+      kcal: day.kcal, kh: day.kh, eiwit: day.eiwit, vet: day.vet, khG: day.khG, eiwitG: day.eiwitG, vetG: day.vetG, balans: day.balans,
+      bereidingstijd: day.bereidingstijd, benodigdheden: day.benodigdheden, ingredienten: day.ingredienten.slice(), steps: day.steps.map(function (s) { return Object.assign({}, s); }),
+      fotoZoekterm: day.fotoZoekterm, imageUrl: day.imageUrl, imageCredit: day.imageCredit, macroBron: day.macroBron,
+      profile: currentProfileSnapshot(), fromCommunity: { id: c.id, authorName: c.authorName }
+    };
+    addToCacheLibrary([copy]);
+    persistDishesToDb([copy]);
+    communityFetch("/api/community/" + encodeURIComponent(c.id) + "/saved", { method: "POST", body: {} }).then(function (s) {
+      c.saves = s.saves;
+      community.items.forEach(function (it) { if (it.id === c.id) it.saves = s.saves; });
+      render();
+    }).catch(function () {});
+    showToast("“" + day.name + "” staat nu in je gerechten. Je kunt het inplannen zoals elk ander gerecht.");
+    render();
+  }
+  function toggleCommunityLike(day) {
+    var c = day.community;
+    var on = !c.liked;
+    c.liked = on; c.likes = Math.max(0, (c.likes || 0) + (on ? 1 : -1));
+    render();
+    communityFetch("/api/community/" + encodeURIComponent(c.id) + "/like", { method: "POST", body: { on: on } }).then(function (s) {
+      c.liked = s.liked; c.likes = s.likes;
+      community.items.forEach(function (it) { if (it.id === c.id) { it.liked = s.liked; it.likes = s.likes; } });
+      if (state.view === "day") render();
+    }).catch(function (e) { c.liked = !on; c.likes = Math.max(0, (c.likes || 0) + (on ? -1 : 1)); showToast(e.message); render(); });
+  }
+  function reportCommunityDay(day) {
+    var c = day.community;
+    var ov = document.getElementById("reportOverlay");
+    if (!ov) {
+      ov = document.createElement("div"); ov.id = "reportOverlay"; ov.className = "confirm-overlay";
+      ov.setAttribute("role", "dialog"); ov.setAttribute("aria-modal", "true"); ov.setAttribute("aria-labelledby", "reportTitle");
+      ov.innerHTML = '<div class="confirm-box"><h2 id="reportTitle" class="autofill-title">Recept melden</h2>' +
+        '<p class="share-note" style="margin:0 0 10px">Wat klopt er niet? Na een paar meldingen verdwijnt het recept tot de beheerder ernaar kijkt.</p>' +
+        '<div class="chiprow" id="reportReasons"></div>' +
+        '<div class="confirm-actions" style="margin-top:16px"><button type="button" class="ghost-btn" id="reportCancel">Annuleren</button><button type="button" class="primary-btn" id="reportGo" disabled>Melden</button></div></div>';
+      document.body.appendChild(ov);
+    }
+    var reason = "";
+    var wrap = document.getElementById("reportReasons"); wrap.innerHTML = "";
+    ["Ongepast of beledigend", "Geen echt recept / spam", "Gevaarlijk of onjuist", "Iemand anders z'n recept"].forEach(function (r) {
+      var b = document.createElement("button"); b.type = "button"; b.className = "chip"; b.textContent = r;
+      b.onclick = function () { reason = r; Array.prototype.forEach.call(wrap.children, function (x) { x.classList.toggle("selected", x === b); }); document.getElementById("reportGo").disabled = false; };
+      wrap.appendChild(b);
+    });
+    function close() { ov.classList.remove("active"); }
+    document.getElementById("reportCancel").onclick = close;
+    ov.onclick = function (e) { if (e.target === ov) close(); };
+    document.getElementById("reportGo").onclick = function () {
+      close();
+      communityFetch("/api/community/" + encodeURIComponent(c.id) + "/report", { method: "POST", body: { reason: reason } }).then(function () {
+        c.reported = true; showToast("Bedankt, je melding is doorgegeven."); render();
+      }).catch(function (e) { showToast(e.message); });
+    };
+    ov.classList.add("active");
+  }
+  function deleteCommunityDay(day) {
+    var c = day.community;
+    askConfirm("“" + day.name + "” uit de community halen? Je eigen gerecht blijft gewoon staan.", function () {
+      communityFetch("/api/community/" + encodeURIComponent(c.id) + "/delete", { method: "POST", body: {} }).then(function () {
+        var own = findWeek("cache"); if (own) own.days.forEach(function (d) { if (d.communityId === c.id) { delete d.communityId; updateStoredDishesInDb([d]); } });
+        community.items = community.items.filter(function (it) { return it.id !== c.id; });
+        showToast("Je recept staat niet meer in de community."); goto("community");
+      }).catch(function (e) { showToast(e.message); });
+    }, "Verwijderen", "Annuleren");
+  }
+  // Je eigen gerecht delen: naam kiezen waaronder het verschijnt, dan publiceren (of bijwerken als het al gedeeld is).
+  function openPublishDialog(day) {
+    if (!window.authToken) { showToast("Maak eerst een account aan om recepten te delen."); upgradeState.error = null; goto("upgrade"); return; }
+    var ov = document.getElementById("publishOverlay");
+    if (!ov) {
+      ov = document.createElement("div"); ov.id = "publishOverlay"; ov.className = "confirm-overlay";
+      ov.setAttribute("role", "dialog"); ov.setAttribute("aria-modal", "true"); ov.setAttribute("aria-labelledby", "publishTitle");
+      ov.innerHTML = '<div class="confirm-box"><h2 id="publishTitle" class="autofill-title"></h2>' +
+        '<p class="share-note" id="publishText" style="margin:0 0 12px"></p>' +
+        '<label class="field-label" for="publishName">Je naam bij het recept</label>' +
+        '<input class="textinput" id="publishName" maxlength="30" placeholder="Bijv. Dave">' +
+        '<p class="field-hint" style="margin:6px 0 0">Je e-mailadres wordt nooit getoond.</p>' +
+        '<div class="confirm-actions" style="margin-top:16px"><button type="button" class="ghost-btn" id="publishCancel">Annuleren</button><button type="button" class="primary-btn" id="publishGo"></button></div></div>';
+      document.body.appendChild(ov);
+    }
+    var update = !!day.communityId;
+    document.getElementById("publishTitle").textContent = update ? "Community-versie bijwerken" : "Delen in de community";
+    document.getElementById("publishText").textContent = update
+      ? "De community-versie krijgt de huidige naam, ingrediënten en bereiding van dit gerecht."
+      : "“" + day.name + "” wordt zichtbaar voor alle Balanza-gebruikers. Zij kunnen het bekijken, koken en bewaren. Je kunt het altijd weer weghalen.";
+    var nameIn = document.getElementById("publishName");
+    nameIn.value = prefs.communityName || String(prefs.name || "").trim();
+    var go = document.getElementById("publishGo");
+    go.textContent = update ? "Bijwerken" : "Delen"; go.disabled = false;
+    function close() { ov.classList.remove("active"); }
+    document.getElementById("publishCancel").onclick = close;
+    ov.onclick = function (e) { if (e.target === ov) close(); };
+    go.onclick = function () {
+      var author = nameIn.value.trim().slice(0, 30);
+      go.disabled = true; go.textContent = "Even geduld…";
+      var dish = dishToPlainObject(day);
+      dish.goal = day.profile && day.profile.goal ? String(day.profile.goal).split(" (")[0] : String(prefs.goal || "").split(" (")[0];
+      dish.dietStyle = day.profile && day.profile.dietStyle ? day.profile.dietStyle : prefs.dietStyle || "";
+      communityFetch("/api/community", { method: "POST", body: { dish: dish, authorName: author, sourceDishId: day.id } }).then(function (r) {
+        close();
+        day.communityId = r.id; updateStoredDishesInDb([day]);
+        if (author && author !== prefs.communityName) { prefs.communityName = author; savePrefs(); }
+        community.loadedKey = null;
+        showToast(r.updated ? "De community-versie is bijgewerkt." : "Gedeeld! Je recept staat nu in de community.");
+        render();
+      }).catch(function (e) { go.disabled = false; go.textContent = update ? "Bijwerken" : "Delen"; showToast(e.message); });
+    };
+    ov.classList.add("active");
+    setTimeout(function () { nameIn.focus(); }, 0);
+  }
+  // Schakelaar bovenaan Gerechten: je eigen bibliotheek of de community.
+  function gerechtenSwitch(active) {
+    if (!communityOn()) return null;
+    var row = document.createElement("div"); row.className = "segrow gerecht-switch"; row.setAttribute("role", "tablist");
+    [["library", "Mijn gerechten"], ["community", "Community"]].forEach(function (t) {
+      var b = document.createElement("button"); b.type = "button"; b.className = "chip" + (active === t[0] ? " selected" : ""); b.id = "gsw-" + t[0];
+      b.setAttribute("role", "tab"); b.setAttribute("aria-selected", active === t[0] ? "true" : "false"); b.textContent = t[1];
+      b.onclick = function () { if (active !== t[0]) goto(t[0]); };
+      row.appendChild(b);
+    });
+    return row;
+  }
+  function renderCommunity() {
+    if (!communityOn()) { goto("library"); return; }
+    var app = document.getElementById("app");
+    app.innerHTML = "";
+    app.appendChild(renderTopbar("Community", true, function () { goto("weeks"); }));
+    var main = document.createElement("main");
+    main.appendChild(gerechtenSwitch("community"));
+    var intro = document.createElement("p"); intro.className = "comm-intro";
+    intro.textContent = "Recepten van andere Balanza-koks, met dezelfde NEVO-macro's. Bewaar wat je lekker lijkt en plan het in je week. Zelf iets delen? Open een van je gerechten en tik op “Delen in de community”.";
+    main.appendChild(intro);
+    var search = document.createElement("input"); search.type = "search"; search.className = "textinput"; search.id = "commSearch";
+    search.placeholder = "Zoek op gerecht, ingrediënt of kok"; search.value = community.q; search.setAttribute("aria-label", "Zoeken in de community");
+    var t = null;
+    search.oninput = function () { clearTimeout(t); t = setTimeout(function () { community.q = search.value.trim(); community.items = []; loadCommunity(); render(); setTimeout(function () { var s = document.getElementById("commSearch"); if (s) { s.focus(); s.setSelectionRange(s.value.length, s.value.length); } }, 0); }, 350); };
+    main.appendChild(search);
+    var chips = document.createElement("div"); chips.className = "chiprow comm-filters";
+    COMMUNITY_TYPES.forEach(function (ty) {
+      var b = document.createElement("button"); b.type = "button"; b.className = "chip" + (community.type === ty ? " selected" : ""); b.textContent = ty;
+      b.onclick = function () { community.type = ty; community.items = []; loadCommunity(); render(); };
+      chips.appendChild(b);
+    });
+    main.appendChild(chips);
+    var sorts = document.createElement("div"); sorts.className = "chiprow comm-sorts";
+    [["new", "Nieuwste"], ["popular", "Populair"], ["mine", "Door mij gedeeld"]].forEach(function (so) {
+      var b = document.createElement("button"); b.type = "button"; b.className = "chip" + (community.sort === so[0] ? " selected" : ""); b.id = "commSort-" + so[0]; b.textContent = so[1];
+      b.onclick = function () { community.sort = so[0]; community.items = []; loadCommunity(); render(); };
+      sorts.appendChild(b);
+    });
+    main.appendChild(sorts);
+    if (community.loadedKey !== communityKey() && !community.loading) loadCommunity();
+    if (community.error) { var er = document.createElement("div"); er.className = "errorbox"; er.textContent = community.error; main.appendChild(er); }
+    var list = document.createElement("div"); list.className = "comm-list"; list.id = "commList";
+    community.items.forEach(function (it) {
+      var card = document.createElement("button"); card.type = "button"; card.className = "comm-card" + (it.hidden ? " is-hidden" : ""); card.id = "comm-" + it.id;
+      var img = document.createElement("img"); img.className = "comm-img"; img.alt = ""; img.style.display = "none";
+      var ph = document.createElement("span"); ph.className = "comm-ph"; ph.innerHTML = iconSvg("heart", 22);
+      var body = document.createElement("span"); body.className = "comm-body";
+      body.innerHTML = '<span class="comm-type"></span><b class="comm-name"></b><span class="comm-meta"></span><span class="comm-stats"></span>';
+      body.querySelector(".comm-type").textContent = it.mealType + (it.dietStyle && it.dietStyle !== "Omnivoor" ? " · " + it.dietStyle : "") + (it.hidden ? " · verborgen" : "");
+      body.querySelector(".comm-name").textContent = it.name;
+      body.querySelector(".comm-meta").textContent = Math.round(it.kcal) + " kcal · " + Math.round(it.eiwitG || 0) + " g eiwit · Balans " + Math.round(it.balans || 0) + "%";
+      body.querySelector(".comm-stats").textContent = "door " + it.authorName + " · ♥ " + (it.likes || 0) + " · " + (it.saves || 0) + "× bewaard";
+      card.appendChild(img); card.appendChild(ph); card.appendChild(body);
+      img.onload = function () { ph.style.display = "none"; };
+      loadDishImageInto({ id: "cimg_" + it.id, name: it.name, imageUrl: it.imageUrl || undefined, fotoZoekterm: it.fotoZoekterm, mealType: null }, img);
+      card.onclick = function () { openCommunityRecipe(it.id); };
+      list.appendChild(card);
+    });
+    main.appendChild(list);
+    if (community.loading) { var ld = document.createElement("div"); ld.className = "empty-hint"; ld.textContent = "Even geduld…"; ld.style.padding = "20px 0"; main.appendChild(ld); }
+    else if (!community.items.length && !community.error) {
+      var em = document.createElement("div"); em.className = "empty-hint"; em.id = "commEmpty";
+      em.textContent = community.sort === "mine" ? "Je hebt nog niets gedeeld. Open een van je gerechten en tik op “Delen in de community”." :
+        community.q || community.type !== "Alle" ? "Geen recepten gevonden. Probeer een ander woord of filter." : "Nog geen recepten in de community. Wees de eerste: deel een van je gerechten!";
+      main.appendChild(em);
+    } else if (community.items.length < community.total) {
+      var more = document.createElement("button"); more.type = "button"; more.className = "ghost-btn"; more.id = "commMore"; more.textContent = "Meer recepten";
+      more.onclick = function () { loadCommunity(true); render(); };
+      main.appendChild(more);
+    }
+    app.appendChild(main);
+  }
+  // Blok op het receptscherm: bij een community-recept (bewaren, lekker, melden) en bij je eigen gerecht (delen).
+  function communityRecipeBlock(week, day) {
+    if (!communityOn() || day.prep) return null;
+    var box = document.createElement("div"); box.className = "comm-box"; box.id = "commBox";
+    if (week.id === "community" && day.community) {
+      var c = day.community, saved = savedCopyOf(c.id);
+      var head = document.createElement("div"); head.className = "comm-box-head";
+      head.innerHTML = '<span class="comm-avatar" aria-hidden="true"></span><span><b></b><small></small></span>';
+      head.querySelector(".comm-avatar").textContent = String(c.authorName || "B").charAt(0).toUpperCase();
+      head.querySelector("b").textContent = "Gedeeld door " + c.authorName + (c.mine ? " (jij)" : "");
+      head.querySelector("small").textContent = "♥ " + (c.likes || 0) + " · " + (c.saves || 0) + "× bewaard" + (c.goal ? " · gemaakt voor " + c.goal.toLowerCase() : "") + (c.hidden ? " · tijdelijk verborgen" : "");
+      box.appendChild(head);
+      var acts = document.createElement("div"); acts.className = "comm-acts";
+      var save = document.createElement("button"); save.type = "button"; save.className = "primary-btn"; save.id = "commSaveBtn";
+      save.textContent = saved ? "✓ In je gerechten" : "Bewaar in mijn gerechten";
+      save.onclick = function () { if (saved) goto("day", { weekId: "cache", dayId: saved.id, dayBackView: "library" }); else saveCommunityDay(day); };
+      acts.appendChild(save);
+      var like = document.createElement("button"); like.type = "button"; like.className = "ghost-btn comm-like" + (c.liked ? " on" : ""); like.id = "commLikeBtn";
+      like.setAttribute("aria-pressed", c.liked ? "true" : "false"); like.textContent = (c.liked ? "♥ " : "♡ ") + "Lekker";
+      like.onclick = function () { toggleCommunityLike(day); };
+      acts.appendChild(like);
+      box.appendChild(acts);
+      var foot = document.createElement("button"); foot.type = "button"; foot.className = "comm-foot-link";
+      if (c.mine) { foot.textContent = "Uit de community halen"; foot.id = "commDeleteBtn"; foot.onclick = function () { deleteCommunityDay(day); }; }
+      else if (c.reported) { foot.textContent = "Je hebt dit recept gemeld"; foot.disabled = true; }
+      else { foot.textContent = "Recept melden"; foot.id = "commReportBtn"; foot.onclick = function () { reportCommunityDay(day); }; }
+      box.appendChild(foot);
+      return box;
+    }
+    if (week.id === "cache") {
+      if (day.fromCommunity) {
+        var from = document.createElement("div"); from.className = "comm-from";
+        from.textContent = "Uit de community, gedeeld door " + (day.fromCommunity.authorName || "een Balanza-kok");
+        box.appendChild(from);
+        box.classList.add("slim");
+        return box;
+      }
+      var share = document.createElement("button"); share.type = "button"; share.className = "ghost-btn comm-share"; share.id = "commShareBtn";
+      share.innerHTML = iconSvg("heart", 18) + "<span></span>";
+      share.querySelector("span").textContent = day.communityId ? "Community-versie bijwerken" : "Delen in de community";
+      share.onclick = function () { openPublishDialog(day); };
+      box.classList.add("slim");
+      box.appendChild(share);
+      if (day.communityId) {
+        var view = document.createElement("button"); view.type = "button"; view.className = "comm-foot-link"; view.textContent = "Bekijk in de community";
+        view.onclick = function () { openCommunityRecipe(day.communityId); };
+        box.appendChild(view);
+      }
+      return box;
+    }
+    return null;
+  }
+
   function renderLibrary() {
     var app = document.getElementById("app");
     app.innerHTML = "";
     app.appendChild(renderTopbar("Opgeslagen gerechten", true, function () { goto("weeks"); }));
     var main = document.createElement("main");
+    var gsw = gerechtenSwitch("library");
+    if (gsw) main.appendChild(gsw);
 
     var byType = collectExistingByType();
     var total = PLAN_MEALS.reduce(function (sum, m) { return sum + byType[m].length; }, 0);
@@ -9201,6 +9542,8 @@
       backFn = function () { goto("genresult"); };
     } else if (state.dayBackView === "library") {
       backFn = function () { goto("library"); };
+    } else if (state.dayBackView === "community" || week.id === "community") {
+      backFn = function () { goto("community"); };
     } else if (state.dayBackView === "weeks") {
       backFn = function () { goto("weeks"); };
     } else {
@@ -9260,6 +9603,9 @@
       cookTop.onclick = function () { goto("cook", { weekId: week.id, dayId: day.id, stepIndex: 0 }); };
       main.appendChild(cookTop);
     }
+
+    var commBlock = communityRecipeBlock(week, day);
+    if (commBlock) main.appendChild(commBlock);
 
     // Smaak leren: duim omhoog of omlaag
     if (!day.prep && week.id === "cache") {
@@ -9330,7 +9676,7 @@
     });
     main.appendChild(ol);
 
-    if (!day.prep) {
+    if (!day.prep && week.id !== "community") {
       var vLabel = document.createElement("div");
       vLabel.className = "section-label";
       vLabel.textContent = "Varianten";
@@ -9705,7 +10051,8 @@
         mealCounts: prefs.mealCounts && typeof prefs.mealCounts === "object" ? prefs.mealCounts : null,
         withImages: prefs.withImages !== false,
         homeLayout: prefs.homeLayout && typeof prefs.homeLayout === "object" ? prefs.homeLayout : null,
-        pantry: Array.isArray(prefs.pantry) ? prefs.pantry.slice(-300) : []
+        pantry: Array.isArray(prefs.pantry) ? prefs.pantry.slice(-300) : [],
+        communityName: String(prefs.communityName || "").trim().slice(0, 30)
       }).catch(function () {});
     }).catch(function () {});
   }
@@ -9760,7 +10107,8 @@
       fotoZoekterm: day.fotoZoekterm || "",
       macroBron: day.macroBron === "nevo" ? "nevo" : "schatting", nevo: day.nevo || null,
       rating: day.rating === 1 || day.rating === -1 ? day.rating : undefined,
-      vanFoto: day.vanFoto || undefined, herkend: day.herkend || undefined, aanpassingen: day.aanpassingen && day.aanpassingen.length ? day.aanpassingen : undefined
+      vanFoto: day.vanFoto || undefined, herkend: day.herkend || undefined, aanpassingen: day.aanpassingen && day.aanpassingen.length ? day.aanpassingen : undefined,
+      communityId: day.communityId || undefined, fromCommunity: day.fromCommunity || undefined
     };
   }
 
@@ -10058,7 +10406,7 @@
               return;
             }
             var pdata = psnap.data() || {};
-            ["name", "bringListLink", "cuisines", "flavors", "level", "dietStyle", "familyMode", "equipment", "exclude", "count", "mealTypes", "gender", "heightCm", "weightKg", "age", "activityLevel", "goal", "homeLayout", "mealCounts", "withImages", "pantry"].forEach(function (k) {
+            ["name", "bringListLink", "cuisines", "flavors", "level", "dietStyle", "familyMode", "equipment", "exclude", "count", "mealTypes", "gender", "heightCm", "weightKg", "age", "activityLevel", "goal", "homeLayout", "mealCounts", "withImages", "pantry", "communityName"].forEach(function (k) {
               if (pdata[k] !== undefined) prefs[k] = deepClone(pdata[k]);
             });
             render();
@@ -10221,8 +10569,8 @@
   };
   var TABS = [["start", "Start"], ["ontwerpen", "Ontwerpen"], ["plannen", "Plannen"], ["gerechten", "Gerechten"], ["lijst", "Lijst"]];
   var TAB_OF_VIEW = { weeks: "start", guide: "start", prefs: "ontwerpen", myprefs: "ontwerpen", genresult: "ontwerpen", plan: "plannen", planadd: "plannen", planweek: "plannen",
-    planday: "plannen", planprep: "plannen", planpick: "plannen", library: "gerechten" };
-  var TAB_ROOT_VIEWS = { weeks: true, prefs: true, plan: true, library: true };
+    planday: "plannen", planprep: "plannen", planpick: "plannen", library: "gerechten", community: "gerechten" };
+  var TAB_ROOT_VIEWS = { weeks: true, prefs: true, plan: true, library: true, community: true };
 
   function currentWeekPlan() {
     var key = isoDateKey(getMonday(new Date()));
@@ -10258,7 +10606,11 @@
     if (id === "start") goto("weeks", { tab: "start" });
     else if (id === "ontwerpen") goto("prefs", { tab: "ontwerpen" });
     else if (id === "plannen") needDishesThen(function () { goto("plan", { tab: "plannen" }); });
-    else if (id === "gerechten") needDishesThen(function () { goto("library", { tab: "gerechten" }); });
+    else if (id === "gerechten") {
+      // Nog geen eigen gerechten: dan meteen de community laten zien, daar valt al wat te ontdekken.
+      if (!hasAnyDishes() && communityOn()) goto("community", { tab: "gerechten" });
+      else needDishesThen(function () { goto("library", { tab: "gerechten" }); });
+    }
     else if (id === "lijst") needDishesThen(function () {
       var pw = currentWeekPlan() || addOrOpenPlannedWeek(getMonday(new Date()));
       goto("planshopping", { tab: "lijst", planWeekId: pw.id });
@@ -10350,6 +10702,7 @@
       if (!window.authToken && window.authRequired) { document.body.classList.remove("has-tabbar"); return renderAuth(); }
       if (state.view === "weeks") renderWeeks();
       else if (state.view === "library") renderLibrary();
+      else if (state.view === "community") renderCommunity();
       else if (state.view === "guide") renderGuide();
       else if (state.view === "plans") renderPlans();
       else if (state.view === "wizard") renderWizard();
