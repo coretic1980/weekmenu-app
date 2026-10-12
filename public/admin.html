@@ -115,7 +115,107 @@
   .kv { display: grid; grid-template-columns: max-content 1fr; gap: 6px 18px; }
   .kv dt { color: var(--muted); } .kv dd { margin: 0; word-break: break-word; }
 
-  .chart { width: 100%; height: auto; display: block; }
+  /* telefoon: compacte kop, tabbladen als menu, tabellen als kaarten */
+  .menu-btn { display: none; }
+  @media (max-width: 640px) {
+    .top-row { padding: 10px 16px; gap: 10px; }
+    .brand-sub, #statusPill { display: none; }
+    .top-actions button { padding: 7px 11px; font-size: 12.5px; }
+    .menu-btn { display: inline-flex; flex: 1; justify-content: flex-start; padding: 8px 12px; font-weight: 600; }
+    nav.tabs { display: none; flex-direction: column; padding: 4px 8px 10px; gap: 0; }
+    nav.tabs.open { display: flex; }
+    nav.tabs button { text-align: left; border-bottom: 0; border-left: 2px solid transparent; padding: 10px 12px; }
+    nav.tabs button.active { border-left-color: var(--accent); background: var(--surface); }
+    main { padding: 16px 16px 60px; }
+    .page-head h2 { font-size: 16px; }
+    .card { padding: 14px; }
+    .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .stat { padding: 12px; } .stat .num { font-size: 22px; } .kpis .stat .num { font-size: 22px; }
+    .funnel { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .two { gap: 0; }
+    .toolbar > * { flex: 1 1 140px; }
+    .module { flex-wrap: wrap; }
+    .kv { grid-template-columns: 1fr; gap: 0; } .kv dd { margin-bottom: 8px; }
+    .table-wrap.cardable { border: 0; overflow: visible; }
+    .cardable table, .cardable tbody, .cardable tr, .cardable td { display: block; width: 100%; }
+    .cardable thead { display: none; }
+    .cardable tr { position: relative; border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; margin-bottom: 8px; background: var(--surface); }
+    .cardable td { border: 0; padding: 4px 0; display: flex; gap: 10px; justify-content: space-between; align-items: baseline; text-align: right; }
+    .cardable td::before { content: attr(data-label); color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; text-align: left; flex: none; }
+    .cardable td .cell-val { display: block; min-width: 0; text-align: right; overflow-wrap: anywhere; }
+    .cardable tr:has(td.no-label) td:nth-child(2) { padding-right: 30px; }
+    .cardable td.no-label { position: absolute; top: 8px; right: 12px; width: auto; padding: 0; }
+    .cardable td.no-label::before { content: none; }
+    .cardable td .sub { display: block; }
+    .cardable td.err { max-width: none; }
+    .user-layout .user-aside .card { display: grid; grid-template-columns: 1fr 1fr; }
+    .user-layout .user-aside .bar { grid-column: 1 / -1; margin-top: -4px; }
+  }
+  /* instellingen */
+  .settings-layout { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 16px; align-items: start; }
+  .settings-nav { position: sticky; top: 104px; display: flex; flex-direction: column; gap: 2px; }
+  .snav { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; text-align: left; background: transparent; color: var(--ink); border: 1px solid transparent; border-radius: 10px; padding: 9px 12px; font-weight: 500; }
+  .snav:hover { background: var(--surface); }
+  .snav.active { background: var(--surface); border-color: var(--line); box-shadow: inset 3px 0 0 var(--accent); }
+  .snav-status { font-size: 12px; color: var(--muted); font-weight: 400; }
+  .snav-status.warn { color: var(--warn); }
+  @media (max-width: 900px) {
+    .settings-layout { grid-template-columns: minmax(0, 1fr); }
+    .settings-nav { position: static; flex-direction: row; overflow-x: auto; gap: 6px; padding-bottom: 4px; scrollbar-width: none; }
+    .settings-nav::-webkit-scrollbar { display: none; }
+    .snav { flex: none; border-color: var(--line); padding: 7px 12px; }
+    .snav.active { box-shadow: inset 0 -2px 0 var(--accent); }
+  }
+  /* gebruikers */
+  .more-filters { margin-bottom: 4px; }
+  .chip-warn:not(.on) { border-color: var(--warn); color: var(--warn); }
+  .user-layout { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 16px; align-items: start; }
+  .user-aside { position: sticky; top: 104px; }
+  .user-aside .card { display: flex; flex-direction: column; gap: 12px; }
+  .user-aside .bar { margin-top: -6px; }
+  .sum-row { display: flex; flex-direction: column; gap: 1px; }
+  .sum-row strong { font-size: 15px; font-weight: 600; }
+  .sum-row .sub { color: var(--muted); font-size: 12.5px; }
+  .subtabs { display: flex; gap: 4px; overflow-x: auto; margin-bottom: 12px; border-bottom: 1px solid var(--line); -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+  .subtabs::-webkit-scrollbar { display: none; }
+  .subtab { background: transparent; color: var(--muted); border: 0; border-bottom: 2px solid transparent; border-radius: 0; padding: 8px 12px; font-weight: 500; white-space: nowrap; }
+  .subtab:hover { color: var(--ink); }
+  .subtab.active { color: var(--ink); border-bottom-color: var(--accent); }
+  .subtab.danger-tab { color: var(--bad); } .subtab.danger-tab.active { border-bottom-color: var(--bad); }
+  .danger-zone { border-color: var(--bad); }
+  .danger-zone .card-head h3 { color: var(--bad); }
+  .danger-row { display: flex; gap: 14px; align-items: center; justify-content: space-between; flex-wrap: wrap; padding: 12px 0; border-top: 1px solid var(--line); }
+  .card-head + .danger-row { border-top: 0; padding-top: 0; }
+  .danger-row .name { font-weight: 600; } .danger-row .desc { color: var(--muted); font-size: 13px; }
+  .danger-row > .row, .danger-row > button { flex: 0 1 auto; }
+  .danger-row select { width: auto; }
+  .user-main { min-width: 0; }
+  @media (max-width: 900px) { .user-layout { grid-template-columns: minmax(0, 1fr); } .user-aside { position: static; } }
+  /* overzicht: aandacht, geld, trechter */
+  .todo { display: flex; flex-direction: column; }
+  .todo-row { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: transparent; color: var(--ink); border: 0; border-top: 1px solid var(--line); border-radius: 0; padding: 11px 2px; font-weight: 400; }
+  .todo-row:first-child { border-top: 0; padding-top: 2px; }
+  .todo-row:hover .todo-go { color: var(--accent); }
+  .todo-row .dot { flex: none; margin: 0; }
+  .todo-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+  .todo-txt .sub { color: var(--muted); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .todo-go { color: var(--muted); font-size: 20px; line-height: 1; }
+  .kpis .stat .num { font-size: 30px; }
+  .grid.kpis, #statGrid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  @media (max-width: 1000px) { .grid.kpis, #statGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .funnel { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+  .fstep { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; background: var(--surface2); border: 1px solid var(--line); color: var(--ink); border-radius: 10px; padding: 12px 14px; font-weight: 400; }
+  .fstep:hover { border-color: var(--muted); }
+  .fstep .label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+  .fstep .num { font-family: "Fraunces", Georgia, serif; font-size: 26px; line-height: 1.15; }
+  .fstep .sub { font-size: 12px; color: var(--muted); }
+  .fstep.good .num { color: var(--good); } .fstep.warn .num { color: var(--warn); }
+  details.tech { margin-top: 6px; }
+  details.tech > summary { list-style: none; padding: 12px 2px; color: var(--ink); font-weight: 600; border-top: 1px solid var(--line); }
+  details.tech > summary::-webkit-details-marker { display: none; }
+  details.tech > summary::before { content: "▸ "; color: var(--muted); }
+  details.tech[open] > summary::before { content: "▾ "; }
+  .chart { width: 100%; height: auto; display: block; max-height: 220px; }
   .chart text { fill: var(--muted); font-size: 10px; }
   .chart .bar-ok { fill: var(--accent); } .chart .bar-err { fill: var(--bad); } .chart .axis { stroke: var(--line); }
   .legend { display: flex; gap: 14px; font-size: 12px; color: var(--muted); margin-top: 6px; }
@@ -247,6 +347,17 @@
     if (s < 86400 * 14) return Math.round(s / 86400) + " dagen geleden";
     return fmtDate(iso);
   }
+  function relFuture(iso) {
+    var t = iso ? Date.parse(iso) : NaN; if (isNaN(t)) return "—";
+    var s = Math.round((t - Date.now()) / 1000);
+    if (s <= 0) return "verlopen";
+    if (s < 3600) return "over " + Math.max(1, Math.round(s / 60)) + " min";
+    if (s < 86400) return "over " + Math.round(s / 3600) + " uur";
+    var d = Math.round(s / 86400); return "over " + d + (d === 1 ? " dag" : " dagen");
+  }
+  // Kleine voorkeuren van deze beheerder (welk paneel open staat); mag ontbreken.
+  function prefGet(k) { try { return localStorage.getItem("balanza_admin_" + k); } catch (e) { return null; } }
+  function prefSet(k, v) { try { localStorage.setItem("balanza_admin_" + k, v); } catch (e) {} }
   function fmtEur(cents) { return "\u20ac" + (Number(cents) / 100).toFixed(2).replace(".", ","); }
   function eurToCents(raw) { var m = /^\s*(\d{1,4})(?:[.,](\d{1,2}))?\s*$/.exec(String(raw)); return m ? Number(m[1]) * 100 + Number(((m[2] || "") + "00").slice(0, 2)) : null; }
   function fmtUsd(n) { n = Number(n) || 0; return "$" + (n === 0 ? "0,00" : n < 0.1 ? n.toFixed(4).replace(/0$/, "") : n < 10 ? n.toFixed(3) : n.toFixed(2)).replace(".", ","); }
@@ -269,7 +380,7 @@
     return el;
   }
   function badge(text, kind) { return h("span", { class: "badge" + (kind ? " " + kind : ""), text: text }); }
-  function field(label, input, hint) { return h("label", { class: "field" }, h("span", { text: label }), input, hint ? h("div", { class: "hint", text: hint }) : null); }
+  function field(label, input, hint) { return h("label", { class: "field" }, h("span", { text: label }), input, hint ? h("div", { class: "hint" }, hint) : null); }
   function errorBox(msg) { return h("div", { class: "errorbox", role: "alert", text: msg }); }
   function spinner(text) { return h("div", { class: "spin", text: text || "Laden…" }); }
   function empty(text) { return h("div", { class: "empty", text: text }); }
@@ -301,7 +412,19 @@
     opts = opts || {};
     var thead = h("thead", {}, h("tr", {}, headers.map(function (x) { return x; })));
     var tbody = h("tbody", {}, rows);
-    return h("div", { class: "table-wrap" }, h("table", {}, thead, tbody));
+    // Op een smal scherm wordt elke rij een kaartje; het kolomlabel staat dan voor de waarde.
+    var labels = headers.map(function (x) { return x.querySelector && x.querySelector("input") ? "" : (x.textContent || "").replace(/[↑↓]/g, "").trim(); });
+    (rows || []).forEach(function (tr) {
+      if (!tr || !tr.children) return;
+      Array.prototype.forEach.call(tr.children, function (td, i) {
+        if (!labels[i]) { td.className = (td.className ? td.className + " " : "") + "no-label"; return; }
+        td.setAttribute("data-label", labels[i]);
+        var val = h("span", { class: "cell-val" });
+        while (td.firstChild) val.appendChild(td.firstChild);
+        td.appendChild(val);
+      });
+    });
+    return h("div", { class: "table-wrap" + (opts.cards === false ? "" : " cardable") }, h("table", {}, thead, tbody));
   }
   function th(label, cls) { return h("th", { class: cls || "", text: label }); }
 
@@ -343,17 +466,26 @@
   }
 
   // ---- staafgrafiek (SVG); reeksen worden gestapeld ----
-  function barChart(rows, series, labelEvery) {
-    var W = 640, H = 170, pl = 30, pb = 22, pt = 8, pr = 6;
-    var max = 1;
+  // Een "mooie" bovengrens (1, 2, 5 × 10^n), zodat de as-labels nooit dubbel of krom zijn.
+  function niceTop(max, isInt) {
+    if (!(max > 0)) return isInt ? 2 : 1;
+    var p = Math.pow(10, Math.floor(Math.log10(max))), steps = [1, 2, 2.5, 5, 10];
+    for (var i = 0; i < steps.length; i++) { var t = steps[i] * p; if (t >= max) { return isInt ? Math.max(2, Math.ceil(t / 2) * 2) : t; } }
+    return 10 * p;
+  }
+  function barChart(rows, series, labelEvery, opts) {
+    opts = opts || {};
+    var fmt = opts.fmt || function (v) { return String(Math.round(v)); };
+    var W = 640, H = 170, pl = opts.fmt ? 46 : 30, pb = 22, pt = 8, pr = 6;
+    var max = 0;
     rows.forEach(function (r) { max = Math.max(max, r.values.reduce(function (a, b) { return a + b; }, 0)); });
-    var top = max <= 4 ? max : Math.ceil(max / 4) * 4;
+    var top = niceTop(max, !opts.fmt);
     var bw = (W - pl - pr) / rows.length;
-    var root = svg("svg", { viewBox: "0 0 " + W + " " + H, class: "chart", role: "img", "aria-label": "Staafgrafiek" });
+    var root = svg("svg", { viewBox: "0 0 " + W + " " + H, class: "chart", role: "img", "aria-label": opts.label || "Staafgrafiek" });
     [0, 0.5, 1].forEach(function (f) {
       var y = pt + (H - pt - pb) * (1 - f);
       root.appendChild(svg("line", { x1: pl, x2: W - pr, y1: y, y2: y, class: "axis" }));
-      root.appendChild(svg("text", { x: pl - 4, y: y + 3, "text-anchor": "end" }, String(Math.round(top * f))));
+      root.appendChild(svg("text", { x: pl - 4, y: y + 3, "text-anchor": "end" }, fmt(top * f)));
     });
     rows.forEach(function (r, i) {
       var y = H - pb, x = pl + i * bw + bw * 0.15, w = bw * 0.7;
@@ -362,7 +494,7 @@
         var ht = (H - pt - pb) * v / top;
         y -= ht;
         var rect = svg("rect", { x: x, y: y, width: w, height: ht, class: series[si].cls, rx: 2 });
-        rect.appendChild(svg("title", {}, r.label + ": " + v + " " + series[si].name));
+        rect.appendChild(svg("title", {}, r.label + ": " + (opts.fmt ? fmt(v) : v) + " " + series[si].name));
         root.appendChild(rect);
       });
       if (i % (labelEvery || 2) === 0 || i === rows.length - 1) root.appendChild(svg("text", { x: x + w / 2, y: H - 6, "text-anchor": "middle" }, r.label));
@@ -378,8 +510,10 @@
   var meta = { settings: null };   // instellingen incl. beschrijvingen van modules en keuzelijsten (één keer opgehaald)
   var viewSeq = 0;                 // verouderde antwoorden negeren als je alweer ergens anders bent
   var refreshTimer = null;
-  var U = { q: "", type: "", status: "", goal: "", diet: "", active: "", created: "", sort: "lastSeen", dir: "", page: 1, pageSize: 25, sel: {} };
+  var U = { q: "", type: "", status: "", plan: "", goal: "", diet: "", active: "", created: "", sort: "lastSeen", dir: "", page: 1, pageSize: 25, sel: {} };
   var L = { q: "", type: "", status: "", action: "", uid: "", ip: "", from: "", to: "", minMs: "", page: 1, pageSize: 50, auto: false };
+  function resetUserFilters() { U.q = ""; U.type = ""; U.status = ""; U.plan = ""; U.goal = ""; U.diet = ""; U.active = ""; U.created = ""; U.sort = "lastSeen"; U.dir = ""; U.page = 1; }
+  function resetLogFilters() { L.q = ""; L.type = ""; L.status = ""; L.action = ""; L.uid = ""; L.ip = ""; L.from = ""; L.to = ""; L.minMs = ""; L.page = 1; }
   var A = { q: "", action: "", from: "", to: "", page: 1, pageSize: 50 };
   var S = { q: "", status: "", page: 1, pageSize: 25 };
   var C = { q: "", status: "", page: 1, pageSize: 25 };
@@ -433,10 +567,13 @@
     var nav = h("nav", { class: "tabs", role: "tablist", id: "tabs" });
     TABS.forEach(function (t) {
       var b = h("button", { text: t[1], id: "tab-" + t[0], role: "tab" });
-      b.onclick = function () { navigate("#/" + t[0]); };
+      b.onclick = function () { closeMenu(); navigate("#/" + t[0]); };
       nav.appendChild(b);
     });
-    root.appendChild(h("header", { class: "top" }, h("div", { class: "top-row" }, h("div", { class: "brand" }, h("h1", { text: "Balanza" }), h("span", { class: "muted", text: "Beheer" })), h("div", { class: "row" }, status, logout)), nav));
+    // Op de telefoon: één knop met de naam van het huidige scherm, die de tabbladen als menu openklapt.
+    var menuBtn = h("button", { type: "button", class: "ghost menu-btn", id: "menuBtn", "aria-expanded": "false", "aria-controls": "tabs" });
+    menuBtn.onclick = function () { var open = !nav.classList.contains("open"); nav.classList.toggle("open", open); menuBtn.setAttribute("aria-expanded", open ? "true" : "false"); };
+    root.appendChild(h("header", { class: "top" }, h("div", { class: "top-row" }, h("div", { class: "brand" }, h("h1", { text: "Balanza" }), h("span", { class: "muted brand-sub", text: "Beheer" })), menuBtn, h("div", { class: "row top-actions" }, status, logout)), nav));
     root.appendChild(h("main", { id: "view" }));
     updateStatusPill();
   }
@@ -446,6 +583,7 @@
     if (s.maintenance.enabled) { pill.textContent = "Onderhoudsmodus"; pill.className = "badge warn"; }
     else { pill.textContent = s.authRequired || (s.billing && s.billing.trialEnabled) ? "Inloggen verplicht" : "Inloggen niet verplicht"; pill.className = "badge"; }
   }
+  function closeMenu() { var n = byId("tabs"), m = byId("menuBtn"); if (n) n.classList.remove("open"); if (m) m.setAttribute("aria-expanded", "false"); }
   function startRefresh() {
     clearInterval(refreshTimer);
     refreshTimer = setInterval(function () {
@@ -464,6 +602,8 @@
       b.className = t[0] === r.tab ? "active" : "";
       b.setAttribute("aria-selected", t[0] === r.tab ? "true" : "false");
     });
+    var mb = byId("menuBtn"); if (mb) mb.textContent = "☰  " + TABS.filter(function (t) { return t[0] === r.tab; })[0][1];
+    closeMenu();
     var view = byId("view"); if (!view) return;
     var my = ++viewSeq;
     reloadHook = null;
@@ -507,24 +647,66 @@
       view.appendChild(h("div", { class: "notebox warn row between", id: "maintenanceBanner" }, h("span", { text: "De onderhoudsmodus staat aan: genereren, delen en registreren zijn voor gebruikers uitgeschakeld." }), off));
     }
     var problems = sys.checks.filter(function (c) { return !c.ok && !c.optional; });
-    if (problems.length) {
-      view.appendChild(h("div", { class: "notebox warn", id: "healthWarnings" }, h("strong", { text: plural(problems.length, "aandachtspunt", "aandachtspunten") + ": " }),
-        problems.map(function (p, i) { return h("span", {}, i ? " · " : "", p.label + " — " + p.detail); }), " ", (function () { var b = h("button", { class: "link", text: "Naar Systeem" }); b.onclick = function () { navigate("#/systeem"); }; return b; })()));
-    }
 
-    var u = st.users, rq = st.requests, us = st.usage;
+    var u = st.users, rq = st.requests, us = st.usage, b = st.business || {}, fn = b.funnel || {};
     var pct = us.cap > 0 ? Math.min(100, Math.round(us.today / us.cap * 100)) : 100;
     var usageBar = h("div", { class: "bar" + (pct >= 100 ? " bad" : pct >= 80 ? " warn" : "") }, h("div", { style: { width: pct + "%" } }));
+
+    // ---- vraagt aandacht ----
+    function goUsers(plan) { return function () { resetUserFilters(); U.plan = plan; navigate("#/gebruikers"); }; }
+    function goUser(uid) { return function () { navigate("#/gebruikers/" + encodeURIComponent(uid)); }; }
+    var todo = [];
+    if (problems.length) todo.push({ kind: "bad", title: plural(problems.length, "systeempunt", "systeempunten") + (problems.length === 1 ? " vraagt" : " vragen") + " aandacht", sub: problems.map(function (p) { return p.label; }).join(" · "), go: function () { navigate("#/systeem"); } });
+    if (b.pastDueCount) todo.push({ kind: "bad", title: plural(b.pastDueCount, "betaling", "betalingen") + " mislukt", sub: b.pastDue.map(function (x) { return x.name || x.email; }).join(", "), go: goUsers("pastdue") });
+    if (b.endingCount) todo.push({ kind: "warn", title: plural(b.endingCount, "proef loopt", "proeven lopen") + " binnen 2 dagen af", sub: b.endingSoon.map(function (x) { return (x.name || x.email) + " (" + relFuture(x.trialEndsAt) + ")"; }).join(", "), go: goUsers("ending") });
+    if (st.community && (st.community.reported || st.community.hidden)) todo.push({ kind: "warn", title: "Community: " + [st.community.reported ? plural(st.community.reported, "gemeld recept", "gemelde recepten") : null, st.community.hidden ? plural(st.community.hidden, "verborgen recept", "verborgen recepten") : null].filter(Boolean).join(" · "), sub: "Bekijk en keur goed of verwijder", go: function () { C.status = st.community.reported ? "reported" : "hidden"; C.page = 1; navigate("#/community"); } });
+    if (rq.errorsToday && rq.errorRate >= 10) todo.push({ kind: rq.errorRate >= 25 ? "bad" : "warn", title: plural(rq.errorsToday, "fout", "fouten") + " vandaag (" + String(rq.errorRate).replace(".", ",") + "%)", sub: rq.recentErrors[0] ? rq.recentErrors[0].error || "" : "", go: function () { resetLogFilters(); L.status = "error"; navigate("#/activiteit"); } });
+    if (us.cap && pct >= 80) todo.push({ kind: pct >= 100 ? "bad" : "warn", title: "Daglimiet voor genereren " + (pct >= 100 ? "bereikt" : "bijna bereikt") + " (" + us.today + " / " + us.cap + ")", sub: "Verhoog de limiet als dit normaal gebruik is", go: function () { navigate("#/instellingen/limieten"); } });
+    if (fn.plusPaid === 0 && b.trialEnabled && !b.billingLive) todo.push({ kind: "warn", title: "Proefmodel staat aan, maar abonnementen nog niet", sub: "Na de proef kan niemand Plus nemen", go: function () { navigate("#/instellingen/verdienmodel"); } });
+    view.appendChild(card("Vraagt aandacht", todo.length ? h("div", { class: "todo", id: "todoList" }, todo.map(function (t) {
+      var row = h("button", { type: "button", class: "todo-row " + t.kind }, h("span", { class: "dot " + t.kind }), h("span", { class: "todo-txt" }, h("strong", { text: t.title }), t.sub ? h("span", { class: "sub", text: t.sub }) : null), h("span", { class: "todo-go", "aria-hidden": "true", text: "›" }));
+      row.onclick = t.go; return row;
+    })) : h("div", { class: "muted", id: "todoList", text: "Niets dat aandacht vraagt." })));
+
+    // ---- geld ----
+    var aiEurCents = Math.round(st.ai.month.costUsd * (b.usdToEur || 0.92) * 100);
+    var mrrKnown = b.billingEnabled;
+    var margin = (b.mrrCents || 0) - aiEurCents;
+    view.appendChild(h("div", { class: "grid kpis", id: "moneyGrid" },
+      stat("Terugkerende omzet (MRR)", mrrKnown ? fmtEur(b.mrrCents) : "—", mrrKnown ? plural(b.subscriptions.monthly, "maandabonnement", "maandabonnementen") + " · " + plural(b.subscriptions.yearly, "jaarabonnement", "jaarabonnementen") : "Abonnementen staan uit"),
+      stat("AI-kosten deze maand", "≈ " + fmtEur(aiEurCents), fmtUsd(st.ai.month.costUsd) + " · " + (st.ai.perDish != null ? fmtUsd(st.ai.perDish) + " per gerecht" : "nog geen gerechten")),
+      stat("Marge deze maand", mrrKnown ? (margin < 0 ? "−" : "") + fmtEur(Math.abs(margin)) : "—", mrrKnown ? "MRR min AI-kosten (excl. btw, hosting en Mollie)" : "Pas zinvol met abonnementen", mrrKnown && margin < 0 ? "bad" : ""),
+      stat("Conversie proef → Plus", fn.conversionPct == null ? "—" : String(fn.conversionPct).replace(".", ",") + "%", fn.conversionPct == null ? "Nog geen proef afgelopen" : fn.plusPaid + " van " + (fn.plusPaid + fn.expired) + " na de proef")));
+
+    // ---- trechter ----
+    function step(label, n, sub, plan, kind) {
+      var el = h("button", { type: "button", class: "fstep" + (kind ? " " + kind : "") }, h("span", { class: "label", text: label }), h("span", { class: "num", text: String(n) }), sub ? h("span", { class: "sub", text: sub }) : null);
+      el.onclick = goUsers(plan); return el;
+    }
+    var funnel = b.trialEnabled
+      ? [step("Nog niet gestart", fn.trialWait, "proef start bij eerste gebruik", "trial"), step("In proef", fn.trial, b.endingCount ? b.endingCount + " loopt binnen 2 dagen af" : "", "trial"), step("Proef voorbij", fn.expired, "zonder Plus", "expired", fn.expired ? "warn" : ""), step("Plus", fn.plusPaid + fn.plusGift, fn.plusPaid + " betaald · " + fn.plusGift + " cadeau" + (fn.canceled ? " · " + fn.canceled + " opgezegd" : ""), "plus", "good")]
+      : [step("Gratis", fn.free, "zonder proefmodel", "free"), step("Plus", fn.plusPaid + fn.plusGift, fn.plusPaid + " betaald · " + fn.plusGift + " cadeau", "plus", "good")];
+    view.appendChild(card(b.trialEnabled ? "Van proef naar Plus" : "Abonnementen", h("div", { class: "funnel", id: "funnel" }, funnel),
+      b.trialEnabled ? null : h("div", { class: "hint", text: "Het proefmodel staat uit. Zet het aan onder Instellingen › Verdienmodel om de trechter te volgen." })));
+
+    // ---- gebruik ----
     view.appendChild(h("div", { class: "grid", id: "statGrid" },
       stat("Gebruikers", u.total, plural(u.accounts, "account", "accounts") + " · " + u.anon + " anoniem" + (u.disabled ? " · " + u.disabled + " geblokkeerd" : "")),
       stat("Actief", u.active24h, "24 uur · " + u.active7d + " in 7 dagen · " + u.active30d + " in 30 dagen"),
       stat("Nieuwe accounts", u.new7d, "7 dagen · " + u.new30d + " in 30 dagen"),
-      stat("Generaties vandaag", us.today + " / " + us.cap, us.cap === 0 ? "Genereren staat op limiet 0" : pct + "% van de daglimiet", pct >= 100 ? "bad" : pct >= 80 ? "warn" : "", us.cap ? usageBar : null),
+      stat("Generaties vandaag", us.today + " / " + us.cap, us.cap === 0 ? "Genereren staat op limiet 0" : pct + "% van de daglimiet", pct >= 100 ? "bad" : pct >= 80 ? "warn" : "", us.cap ? usageBar : null)));
+
+    // ---- techniek (ingeklapt) ----
+    var tech = h("details", { class: "tech", id: "techDetails" }, h("summary", {}, h("span", { text: "Techniek en AI-verbruik" }), h("span", { class: "muted small", text: " · " + plural(rq.today, "verzoek", "verzoeken") + " vandaag, " + plural(rq.errorsToday, "fout", "fouten") })));
+    tech.open = prefGet("techOpen") === "1";
+    tech.ontoggle = function () { prefSet("techOpen", tech.open ? "1" : "0"); };
+    view.appendChild(tech);
+    view = tech;
+    view.appendChild(h("div", { class: "grid" },
       stat("Fouten vandaag", rq.errorsToday, "van " + plural(rq.today, "verzoek", "verzoeken") + " (" + String(rq.errorRate).replace(".", ",") + "%)", rq.errorsToday && rq.errorRate >= 25 ? "bad" : rq.errorsToday ? "warn" : ""),
       stat("Reactietijd", fmtMs(rq.avgDurationMs), "gemiddeld · 95%: " + fmtMs(rq.p95DurationMs)),
       stat("Inloggen vandaag", st.auth.loginsToday, st.auth.failedLoginsToday + " mislukt · " + st.auth.registrationsToday + " nieuw", st.auth.failedLoginsToday >= 10 ? "warn" : ""),
-      stat("Gedeelde lijsten", st.lists.active, st.lists.total - st.lists.active ? (st.lists.total - st.lists.active) + " verlopen" : "geen verlopen"),
-      stat("AI-kosten deze maand", fmtUsd(st.ai.month.costUsd), fmtUsd(st.ai.today.costUsd) + " vandaag · " + (st.ai.perDish != null ? fmtUsd(st.ai.perDish) + " per gerecht" : "nog geen gerechten"))));
+      stat("Gedeelde lijsten", st.lists.active, st.lists.total - st.lists.active ? (st.lists.total - st.lists.active) + " verlopen" : "geen verlopen")));
 
     var chart1 = card("AI-aanvragen per dag", barChart(rq.perDay.map(function (d) { return { label: fmtDay(d.day), values: [d.total - d.errors, d.errors] }; }), [{ name: "gelukt", cls: "bar-ok" }, { name: "fout", cls: "bar-err" }]),
       legend([["gelukt", "var(--accent)"], ["fout", "var(--bad)"]]), st.logCapped ? h("div", { class: "hint", text: "Het logboek bewaart de laatste " + sys.info.logCap.toLocaleString("nl-NL") + " regels; oudere dagen kunnen onvolledig zijn." }) : null);
@@ -544,7 +726,7 @@
       h("div", { class: "hint", text: "Berekend uit het aantal tokens dat Anthropic per aanroep meldt, tegen de prijs hierboven (pas aan met PRICE_IN_PER_M en PRICE_OUT_PER_M). Het is een schatting: de factuur van Anthropic is leidend." }));
     costCard.id = "costCard";
     view.appendChild(costCard);
-    view.appendChild(card("AI-kosten per dag", barChart(ai.perDay.map(function (d) { return { label: fmtDay(d.day), values: [d.costUsd] }; }), [{ name: "kosten in dollars", cls: "bar-ok" }])));
+    var costChart = card("AI-kosten per dag", barChart(ai.perDay.map(function (d) { return { label: fmtDay(d.day), values: [d.costUsd] }; }), [{ name: "kosten", cls: "bar-ok" }], 2, { fmt: function (v) { return "$" + (v >= 10 ? Math.round(v) : v.toFixed(2)).toString().replace(".", ","); }, label: "AI-kosten per dag" }));
 
     var acts = Object.keys(rq.byAction).sort(function (a, b) { return rq.byAction[b] - rq.byAction[a]; });
     var actCard = card("Vandaag per actie", acts.length ? h("dl", { class: "kv" }, acts.map(function (a) { return [h("dt", { text: a }), h("dd", { text: String(rq.byAction[a]) })]; })) : h("div", { class: "muted", text: "Nog geen verzoeken vandaag." }));
@@ -552,12 +734,13 @@
       return h("tr", {}, h("td", { class: "nowrap", text: relTime(l.ts) }), h("td", { text: l.action || "—" }), h("td", { class: "err", text: l.error || ("status " + l.status) }));
     });
     var allErr = h("button", { class: "link", text: "Alle fouten in de activiteit" });
-    allErr.onclick = function () { L.status = "error"; L.type = ""; L.action = ""; L.page = 1; navigate("#/activiteit"); };
+    allErr.onclick = function () { resetLogFilters(); L.status = "error"; navigate("#/activiteit"); };
     var errCard = card("Laatste fouten", errRows.length ? table([th("Wanneer"), th("Actie"), th("Melding")], errRows) : h("div", { class: "muted", text: "Geen fouten. Mooi." }), errRows.length ? h("div", { style: { marginTop: "8px" } }, allErr) : null);
-    view.appendChild(h("div", { class: "two" }, actCard, errCard));
+    view.appendChild(h("div", { class: "two" }, costChart, actCard));
+    view.appendChild(errCard);
 
     var mgo = h("button", { class: "link", text: "Beheer onderdelen" });
-    mgo.onclick = function () { navigate("#/instellingen"); };
+    mgo.onclick = function () { navigate("#/instellingen/onderdelen"); };
     view.appendChild(card("Onderdelen", h("div", { class: "chips", id: "moduleChips" }, cfg.moduleDefs.map(function (d) {
       var on = cfg.effectiveModules[d.key];
       return h("span", { class: "badge " + (on ? "good" : "bad"), text: (on ? "● " : "○ ") + d.label });
@@ -569,7 +752,21 @@
   // =====================================================================================
   function goalOptions() { return [["", "Alle doelen"]].concat(meta.settings.prefOptions.goals.map(function (g) { return [g, g]; })); }
   function dietOptions() { return [["", "Alle diëten"]].concat(meta.settings.prefOptions.diets.map(function (g) { return [g, g]; })); }
-  var SORTS = [["lastSeen", "Laatst actief"], ["created", "Aangemaakt"], ["lastLogin", "Laatste login"], ["name", "Naam"], ["email", "E-mail"], ["dishes", "Aantal gerechten"], ["weeks", "Aantal weken"], ["logins", "Aantal logins"]];
+  var SORTS = [["lastSeen", "Laatst actief"], ["created", "Aangemaakt"], ["lastLogin", "Laatste login"], ["name", "Naam"], ["email", "E-mail"], ["dishes", "Aantal gerechten"], ["weeks", "Aantal weken"], ["logins", "Aantal logins"], ["trialEnd", "Einde proef"]];
+  function defaultDir(key) { return key === "name" || key === "email" || key === "trialEnd" ? "asc" : "desc"; }
+  // Het abonnement van een gebruiker als één badge, plus een korte toelichting.
+  function planBadge(u) {
+    if (u.disabled) return badge("Geblokkeerd", "bad");
+    if (u.pastDue) return badge("Betaling mislukt", "bad");
+    switch (u.plan) {
+      case "plus": return badge(u.plusSource === "cadeau" ? "Plus · cadeau" : u.canceled ? "Plus · opgezegd" : "Plus", "good");
+      case "trial": return badge("Proef · " + relFuture(u.trialEndsAt).replace("over ", "nog "), u.trialEndsAt && Date.parse(u.trialEndsAt) - Date.now() <= 2 * 864e5 ? "warn" : "accent");
+      case "trial-wait": return badge("Proef nog niet gestart", "accent");
+      case "expired": return badge("Proef voorbij", "warn");
+      case "anon": return badge("Anoniem");
+      default: return badge("Gratis");
+    }
+  }
 
   VIEWS.gebruikers = function (view, route, ctx) { return route.id ? userDetail(view, route.id, ctx) : usersList(view, ctx); };
 
@@ -588,27 +785,38 @@
     var createdSel = sel("fCreated", [["", "Elke aanmaakdatum"], ["7d", "Nieuw in 7 dagen"], ["30d", "Nieuw in 30 dagen"]], "created", "Aangemaakt");
     var sortSel = sel("fSort", SORTS, "sort", "Sorteren op");
     var dirBtn = h("button", { class: "ghost", id: "fDir", title: "Sorteervolgorde omdraaien" });
-    function dirLabel() { var asc = (U.dir || (U.sort === "name" || U.sort === "email" ? "asc" : "desc")) === "asc"; dirBtn.textContent = asc ? "↑ Oplopend" : "↓ Aflopend"; }
-    dirBtn.onclick = function () { var asc = (U.dir || (U.sort === "name" || U.sort === "email" ? "asc" : "desc")) === "asc"; U.dir = asc ? "desc" : "asc"; U.page = 1; dirLabel(); load(); };
+    function dirLabel() { var asc = (U.dir || defaultDir(U.sort)) === "asc"; dirBtn.textContent = asc ? "↑ Oplopend" : "↓ Aflopend"; }
+    dirBtn.onclick = function () { var asc = (U.dir || defaultDir(U.sort)) === "asc"; U.dir = asc ? "desc" : "asc"; U.page = 1; dirLabel(); load(); };
     sortSel.onchange = function () { U.sort = sortSel.value; U.dir = ""; U.page = 1; dirLabel(); load(); };
     dirLabel();
     var clearBtn = h("button", { class: "ghost", id: "fClear", text: "Filters wissen" });
-    clearBtn.onclick = function () { U.q = ""; U.type = ""; U.status = ""; U.goal = ""; U.diet = ""; U.active = ""; U.created = ""; U.sort = "lastSeen"; U.dir = ""; U.page = 1; render(); };
+    clearBtn.onclick = function () { resetUserFilters(); render(); };
     var newBtn = h("button", { id: "newUserBtn", text: "+ Nieuwe gebruiker" });
     newBtn.onclick = function () { createUserModal(function () { load(); }); };
+    var extraOn = !!(U.type || U.status || U.goal || U.diet || U.active || U.created);
+    var moreBtn = h("button", { class: "ghost", id: "fMore", type: "button", "aria-expanded": "false" });
+    var more = h("div", { class: "more-filters", id: "moreFilters" }, h("div", { class: "toolbar" }, typeSel, statusSel, goalSel, dietSel, activeSel, createdSel), h("div", { class: "toolbar" }, h("span", { class: "muted small", text: "Sorteren op" }), sortSel, dirBtn, clearBtn));
+    function paintMore(open) { more.classList.toggle("hidden", !open); moreBtn.setAttribute("aria-expanded", open ? "true" : "false"); moreBtn.textContent = (open ? "Minder filters" : "Meer filters") + (extraOn ? " •" : ""); }
+    var moreOpen = extraOn || prefGet("moreUserFilters") === "1";
+    moreBtn.onclick = function () { moreOpen = !moreOpen; prefSet("moreUserFilters", moreOpen ? "1" : "0"); paintMore(moreOpen); };
+    paintMore(moreOpen);
 
     view.appendChild(h("div", { class: "page-head" }, h("h2", { text: "Gebruikers" }), newBtn));
-    view.appendChild(h("div", { class: "toolbar" }, search, typeSel, statusSel, goalSel, dietSel));
-    view.appendChild(h("div", { class: "toolbar" }, activeSel, createdSel, sortSel, dirBtn, clearBtn));
+    view.appendChild(h("div", { class: "toolbar" }, search, moreBtn));
+    view.appendChild(more);
     view.appendChild(counts); view.appendChild(h("div", { style: { height: "10px" } })); view.appendChild(bulk); view.appendChild(results);
 
     function selected() { return Object.keys(U.sel); }
     function drawCounts(c) {
       clear(counts);
-      [["Alle", c.all, "", ""], ["Accounts", c.accounts, "account", ""], ["Anoniem", c.anon, "anon", ""], ["Geblokkeerd", c.disabled, "", "disabled"]].forEach(function (x) {
-        var on = x[2] ? U.type === x[2] && !U.status : x[3] ? U.status === x[3] && !U.type : !U.type && !U.status;
-        var b = h("button", { class: "chip" + (on ? " on" : ""), text: x[0] + " (" + x[1] + ")" });
-        b.onclick = function () { U.type = x[2]; U.status = x[3]; U.page = 1; typeSel.value = U.type; statusSel.value = U.status; load(); };
+      var p = c.plans || {};
+      var chips = [["Alle", c.all, "", ""], ["In proef", p.trial, "trial", ""], ["Proef loopt af", p.ending, "ending", ""], ["Proef voorbij", p.expired, "expired", ""], ["Plus", p.plus, "plus", ""],
+        ["Gratis", p.free, "free", ""], ["Anoniem", p.anon, "anon", ""], ["Betaling mislukt", p.pastdue, "pastdue", ""], ["Geblokkeerd", c.disabled, "", "disabled"]];
+      chips.forEach(function (x) {
+        if (x[0] !== "Alle" && !x[1] && !(x[2] && U.plan === x[2]) && !(x[3] && U.status === x[3])) return;   // lege groepen niet tonen
+        var on = x[2] ? U.plan === x[2] : x[3] ? U.status === x[3] && !U.plan : !U.plan && !U.status && !U.type;
+        var b = h("button", { class: "chip" + (on ? " on" : "") + (x[2] === "pastdue" || x[2] === "ending" ? " chip-warn" : ""), text: x[0] + " (" + (x[1] || 0) + ")" });
+        b.onclick = function () { U.plan = x[2]; U.status = x[3]; if (!x[2] && !x[3]) U.type = ""; U.page = 1; typeSel.value = U.type; statusSel.value = U.status; load(); };
         counts.appendChild(b);
       });
     }
@@ -634,8 +842,8 @@
       });
     }
     function sortHead(label, key) {
-      var b = h("button", { text: label + (U.sort === key ? ((U.dir || (key === "name" || key === "email" ? "asc" : "desc")) === "asc" ? " ↑" : " ↓") : "") });
-      b.onclick = function () { if (U.sort === key) U.dir = (U.dir || (key === "name" || key === "email" ? "asc" : "desc")) === "asc" ? "desc" : "asc"; else { U.sort = key; U.dir = ""; } sortSel.value = U.sort; dirLabel(); U.page = 1; load(); };
+      var b = h("button", { text: label + (U.sort === key ? ((U.dir || defaultDir(key)) === "asc" ? " ↑" : " ↓") : "") });
+      b.onclick = function () { if (U.sort === key) U.dir = (U.dir || defaultDir(key)) === "asc" ? "desc" : "asc"; else { U.sort = key; U.dir = ""; } sortSel.value = U.sort; dirLabel(); U.page = 1; load(); };
       return h("th", {}, b);
     }
     function draw(d) {
@@ -650,21 +858,20 @@
         var tr = h("tr", { class: "clickable userRow" + (u.disabled ? " off" : "") },
           h("td", {}, cb),
           h("td", {}, h("strong", { text: u.name || (u.email ? u.email.split("@")[0] : "Anoniem") }), h("span", { class: "sub", text: u.email || shortUid(u.uid) })),
-          h("td", {}, badge(u.type === "account" ? "Account" : "Anoniem", u.type === "account" ? "accent" : ""), u.createdBy === "admin" ? " " : null, u.createdBy === "admin" ? badge("door beheerder") : null, u.upgradedFrom ? " " : null, u.upgradedFrom ? badge("eerst anoniem") : null),
+          h("td", {}, planBadge(u)),
           h("td", { text: u.goal || "—" }),
           h("td", { class: "nowrap", text: u.dishCount + " gerechten" }, h("span", { class: "sub", text: plural(u.plannedWeekCount, "week", "weken") })),
           h("td", { class: "nowrap", text: relTime(u.lastSeenAt) }, u.location ? h("span", { class: "sub", text: [u.location.city, u.location.country].filter(Boolean).join(", ") }) : null),
-          h("td", { class: "nowrap", text: u.createdAt ? fmtDate(u.createdAt).replace(/, \d\d:\d\d$/, "") : "—" }),
-          h("td", {}, u.disabled ? badge("Geblokkeerd", "bad") : badge("Actief", "good")));
+          h("td", { class: "nowrap", text: u.createdAt ? fmtDate(u.createdAt).replace(/, \d\d:\d\d$/, "") : "—" }, u.createdBy === "admin" ? h("span", { class: "sub", text: "door beheerder" }) : u.upgradedFrom ? h("span", { class: "sub", text: "eerst anoniem" }) : null));
         tr.onclick = function () { navigate("#/gebruikers/" + encodeURIComponent(u.uid)); };
         return tr;
       });
-      results.appendChild(table([h("th", {}, all), sortHead("Gebruiker", "name"), th("Soort"), th("Doel"), sortHead("Gerechten", "dishes"), sortHead("Laatst actief", "lastSeen"), sortHead("Aangemaakt", "created"), th("Status")], rows));
+      results.appendChild(table([h("th", {}, all), sortHead("Gebruiker", "name"), sortHead("Plan", "trialEnd"), th("Doel"), sortHead("Gerechten", "dishes"), sortHead("Laatst actief", "lastSeen"), sortHead("Aangemaakt", "created")], rows, { cards: true }));
       results.appendChild(pager(d, function (p) { U.page = p; load(); }, ["gebruiker", "gebruikers"]));
     }
     function load() {
       var my = ++seq;
-      return api("/api/admin/users" + qs({ q: U.q, type: U.type, status: U.status, goal: U.goal, diet: U.diet, active: U.active, created: U.created, sort: U.sort, dir: U.dir, page: U.page, pageSize: U.pageSize })).then(function (d) {
+      return api("/api/admin/users" + qs({ q: U.q, type: U.type, status: U.status, plan: U.plan, goal: U.goal, diet: U.diet, active: U.active, created: U.created, sort: U.sort, dir: U.dir, page: U.page, pageSize: U.pageSize })).then(function (d) {
         if (my !== seq || !ctx.alive()) return;
         if (d.page !== U.page) U.page = d.page;
         draw(d);
@@ -717,7 +924,9 @@
   // =====================================================================================
   // Gebruikers: één gebruiker
   // =====================================================================================
+  var lastUserUid = null;
   function userDetail(view, uid, ctx) {
+    if (uid !== lastUserUid) { userTab = "account"; lastUserUid = uid; }
     var back = h("button", { class: "ghost small", id: "backBtn", text: "‹ Alle gebruikers" });
     back.onclick = function () { navigate("#/gebruikers"); };
     return api("/api/admin/users/" + encodeURIComponent(uid)).then(function (d) {
@@ -738,9 +947,10 @@
     }
     function btn(label, cls, id, fn) { var b = h("button", { class: cls || "", text: label, id: id }); b.onclick = fn; return b; }
 
+    var panes = { account: h("div"), abonnement: h("div"), voorkeuren: h("div"), gegevens: h("div"), activiteit: h("div"), gevaar: h("div") };
     view.appendChild(h("div", { class: "page-head" },
       h("div", { class: "row" }, back, h("h2", { id: "userTitle", text: u.name || u.email || "Anoniem" })),
-      h("div", { class: "row" }, badge(isAcc ? "Account" : "Anoniem", "accent"), u.createdBy === "admin" ? badge("door beheerder aangemaakt") : null, u.upgradedFrom ? badge("eerst anoniem") : null, u.disabled ? badge("Geblokkeerd", "bad") : badge("Actief", "good"))));
+      h("div", { class: "row" }, planBadge(u), u.disabled ? null : badge(isAcc ? "Account" : "Anoniem"))));
     if (u.disabled) view.appendChild(h("div", { class: "notebox warn", id: "blockedNote" }, "Geblokkeerd sinds " + fmtDate(u.disabledAt) + (u.disabledReason ? " — reden: " + u.disabledReason : "") + ". Deze gebruiker kan niet inloggen of de app gebruiken."));
 
     // ---- account ----
@@ -773,7 +983,7 @@
       if (patch.email) confirmDialog({ title: "E-mailadres wijzigen", message: "De gebruiker wordt overal uitgelogd en logt daarna in met het nieuwe adres. Zijn gegevens blijven bewaard.", confirmLabel: "Wijzigen" }).then(function (ok) { if (ok) go(); });
       else go();
     });
-    view.appendChild(card("Account", kv, h("div", { style: { height: "12px" } }),
+    panes.account.appendChild(card("Account", kv, h("div", { style: { height: "12px" } }),
       h("div", { class: "form-grid" }, isAcc ? field("E-mailadres", emailIn) : null, field("Naam", nameIn)),
       field("Notitie (alleen voor beheerders)", noteIn), saveAcc));
 
@@ -787,6 +997,9 @@
         if (daysIn.value.trim() === "" || !isFinite(n) || Math.floor(n) !== n || n < 1 || n > 3650) return toast("Vul een aantal dagen in tussen 1 en 3650.", "bad");
         run(api(base + "/billing-grant", { method: "POST", body: { days: n } }), "Plus is voor " + n + " dagen toegevoegd.", function () { reload(); });
       });
+      var bset = meta.settings.settings.billing || {};
+      var giftWorks = bset.enabled || bset.trialEnabled;   // de server telt een cadeau alleen mee met abonnementen of het proefmodel aan
+      if (!giftWorks) { grant.disabled = true; daysIn.disabled = true; }
       var actions = [grant];
       if (bl.grantUntil) actions.push(btn("Cadeau intrekken", "ghost", "revokePlusBtn", function () {
         confirmDialog({ title: "Cadeau intrekken", message: "De gebruiker heeft daarna geen Plus meer via dit cadeau.", confirmLabel: "Intrekken" }).then(function (ok) { if (ok) run(api(base + "/billing-revoke", { method: "POST", body: {} }), "Cadeau ingetrokken.", function () { reload(); }); });
@@ -794,7 +1007,7 @@
       if (bl.status === "active" || bl.status === "past_due") actions.push(btn("Abonnement opzeggen", "ghost", "adminCancelSubBtn", function () {
         confirmDialog({ title: "Abonnement opzeggen", message: "Er wordt niet meer afgeschreven. De gebruiker houdt Plus tot het einde van de betaalde periode. Terugbetalen doe je zelf in het Mollie-dashboard.", confirmLabel: "Opzeggen" }).then(function (ok) { if (ok) run(api(base + "/billing-cancel", { method: "POST", body: {} }), "Abonnement opgezegd.", function () { reload(); }); });
       }));
-      view.appendChild(card("Abonnement",
+      panes.abonnement.appendChild(card("Abonnement",
         h("dl", { class: "kv", id: "billingFacts" },
           h("dt", { text: "Plus" }), h("dd", { text: bl.plusActive ? "ja" : "nee" }),
           h("dt", { text: "Status" }), h("dd", { text: stLabel[bl.status] || bl.status }),
@@ -807,7 +1020,8 @@
           bl.subscriptionError ? [h("dt", { text: "Let op" }), h("dd", { class: "err", text: "Betaald, maar het abonnement kon nog niet worden aangemaakt: " + bl.subscriptionError + ". De app probeert het opnieuw zodra de gebruiker hem opent." })] : null),
         bl.history.length ? table([th("Wanneer"), th("Wat"), th("Bedrag")], bl.history.map(function (x) { return h("tr", {}, h("td", { class: "nowrap", text: relTime(x.ts) }), h("td", { text: x.status + (x.id ? " (" + x.id + ")" : "") }), h("td", { class: "num", text: x.cents ? fmtEur(x.cents) : "\u2014" })); })) : null,
         h("div", { style: { height: "12px" } }),
-        field("Plus cadeau geven (dagen)", daysIn, "Handig voor testers en de eerste gebruikers. Het telt op bij wat er nog over is en werkt alleen als abonnementen aan staan."),
+        giftWorks ? null : h("div", { class: "notebox warn", id: "giftOffNote" }, "Een cadeau heeft nu geen effect: abonnementen en het proefmodel staan allebei uit. ", (function () { var l = h("button", { class: "link", type: "button", text: "Naar Verdienmodel" }); l.onclick = function () { navigate("#/instellingen/verdienmodel"); }; return l; })()),
+        field("Plus cadeau geven (dagen)", daysIn, "Handig voor testers en de eerste gebruikers. Het telt op bij wat er nog over is."),
         h("div", { class: "row", id: "billingActions" }, actions)));
     }
 
@@ -823,7 +1037,7 @@
         if (next === qt.own) return toast("Er is niets gewijzigd.");
         run(api(base, { method: "POST", body: { dishCap: next } }), next === null ? "Eigen limiet weggehaald: de algemene limiet geldt weer." : "Eigen limiet opgeslagen.", function () { reload(); });
       });
-      view.appendChild(card("Verbruik deze maand",
+      panes.abonnement.appendChild(card("Verbruik deze maand",
         h("dl", { class: "kv", id: "quotaFacts" },
           h("dt", { text: "Nieuwe gerechten" }), h("dd", { text: qt.cap > 0 ? qt.dishes + " van " + qt.cap : qt.dishes + " (onbeperkt)" }),
           h("dt", { text: "Geldende limiet" }), h("dd", { text: (qt.cap > 0 ? qt.cap + " per maand" : "onbeperkt") + (qt.own !== null ? " · eigen limiet" : " · algemene limiet") }),
@@ -860,7 +1074,7 @@
           openModal("Resetlink", [h("p", { style: { marginTop: "0" }, text: status + " De link is " + r.expiresInMinutes + " minuten geldig en werkt één keer." }), secretRow(r.link, "resetLinkValue")], [close]);
         }).catch(function (e) { if (!e.silent) toast(e.message, "bad"); });
       });
-      view.appendChild(card("Wachtwoord", h("div", { class: "row" }, h("div", { style: { flex: "1 1 260px" } }, newPw), setPw),
+      panes.account.appendChild(card("Wachtwoord", h("div", { class: "row" }, h("div", { style: { flex: "1 1 260px" } }, newPw), setPw),
         h("div", { class: "row", style: { marginTop: "12px" } }, genPw, linkBtn, h("label", { class: "row small" }, mail, h("span", { text: "resetlink ook mailen" }))),
         h("div", { class: "hint", text: "Je kunt een wachtwoord nooit terugzien; alleen vervangen. Het instellen of laten maken van een wachtwoord logt de gebruiker overal uit." })));
     }
@@ -898,14 +1112,14 @@
       if (!Object.keys(patch).length) return toast("Er is niets gewijzigd.");
       run(api(base, { method: "POST", body: { prefs: patch } }), null, function (r) { toast("Voorkeuren opgeslagen (" + r.changes.length + " " + (r.changes.length === 1 ? "veld" : "velden") + "). De gebruiker ziet dit bij de volgende keer openen."); reload(); });
     });
-    view.appendChild(card("Voorkeuren en profiel",
+    panes.voorkeuren.appendChild(card("Voorkeuren en profiel",
       h("div", { class: "form-grid" }, txt("name", "Naam", 40), sel("goal", "Doel", opts.goals), sel("dietStyle", "Dieet", opts.diets), txt("level", "Kookniveau", 40), txt("activityLevel", "Activiteitsniveau", 40), txt("gender", "Geslacht", 20),
         txt("age", "Leeftijd", 3, "number"), txt("heightCm", "Lengte (cm)", 3, "number"), txt("weightKg", "Gewicht (kg)", 5, "number"), txt("count", "Gerechten per keer (1–14)", 2, "number")),
       txt("exclude", "Wil niet eten (uitsluiten)", 300), h("div", { class: "form-grid" }, lst("cuisines", "Keukens"), lst("flavors", "Smaken"), lst("equipment", "Keukenapparatuur")),
       h("div", { class: "muted small", text: "Maaltijdsoorten" }), h("div", { class: "row", style: { margin: "6px 0 14px" } }, mealBoxes.map(function (x) { return x.node; })), savePrefs,
       h("div", { class: "hint", text: d.prefs ? "Alleen gewijzigde velden worden opgeslagen; de rest blijft zoals de gebruiker het had." : "Deze gebruiker heeft nog geen voorkeuren opgeslagen; alles wat je invult wordt nieuw." })));
 
-    // ---- toegang en acties ----
+    // ---- toegang (gewone acties) en de gevarenzone ----
     var reason = h("input", { type: "text", id: "blockReason", placeholder: "Reden (alleen voor jou)", maxLength: 200 });
     var actions = [];
     if (u.disabled) actions.push(btn("Deblokkeren", "", "enableBtn", function () { run(api(base + "/enable", { method: "POST", body: {} }), "Gebruiker gedeblokkeerd."); }));
@@ -913,35 +1127,37 @@
       run(api(base + "/disable", { method: "POST", body: { reason: reason.value } }), "Gebruiker geblokkeerd.");
     })));
     var clearWhat = select([["dishes", "Gerechten"], ["plannedWeeks", "Weekplanning"], ["prefs", "Voorkeuren"], ["all", "Alles hierboven"]], "dishes", function () {}, "Wat wissen"); clearWhat.id = "clearWhat";
-    view.appendChild(card("Toegang en acties",
-      h("div", { class: "muted small", text: u.disabled ? "Een geblokkeerde gebruiker kan niet inloggen en zijn sessies werken niet meer." : "Blokkeren stopt inloggen en alle lopende sessies; de gegevens blijven bewaard." }), h("div", { style: { height: "8px" } }), actions,
-      h("hr", { style: { border: "none", borderTop: "1px solid var(--line)", margin: "16px 0" } }),
-      h("div", { class: "row" },
-        btn("Overal uitloggen", "ghost", "userLogoutBtn", function () { run(api(base + "/logout", { method: "POST", body: {} }), "Alle sessies van deze gebruiker zijn beëindigd.", function () {}); }),
-        btn("Gegevens exporteren (JSON)", "ghost", "exportBtn", function () { downloadFile(base + "/export", "balanza-" + u.uid + ".json").then(function () { toast("Export gedownload."); }).catch(function (e) { if (!e.silent) toast(e.message, "bad"); }); })),
-      h("hr", { style: { border: "none", borderTop: "1px solid var(--line)", margin: "16px 0" } }),
-      h("div", { class: "row" }, h("span", { class: "muted", text: "Gegevens wissen:" }), clearWhat, btn("Wissen", "danger", "clearBtn", function () {
+    panes.account.appendChild(card("Toegang",
+      h("div", { class: "muted small", text: "Stopt alle lopende sessies; de gebruiker kan daarna gewoon opnieuw inloggen." }), h("div", { style: { height: "8px" } }),
+      h("div", { class: "row" }, btn("Overal uitloggen", "ghost", "userLogoutBtn", function () { run(api(base + "/logout", { method: "POST", body: {} }), "Alle sessies van deze gebruiker zijn beëindigd.", function () {}); }))));
+    panes.gegevens.insertBefore(card("Exporteren", h("div", { class: "muted small", text: "Alle gegevens van deze gebruiker als JSON-bestand, bijvoorbeeld voor een inzageverzoek." }), h("div", { style: { height: "8px" } }),
+      btn("Gegevens exporteren (JSON)", "ghost", "exportBtn", function () { downloadFile(base + "/export", "balanza-" + u.uid + ".json").then(function () { toast("Export gedownload."); }).catch(function (e) { if (!e.silent) toast(e.message, "bad"); }); })), panes.gegevens.firstChild);
+    var danger = card("Gevarenzone",
+      h("div", { class: "danger-row" }, h("div", {}, h("div", { class: "name", text: u.disabled ? "Deblokkeren" : "Blokkeren" }), h("div", { class: "desc", text: u.disabled ? "De gebruiker kan weer inloggen." : "Stopt inloggen en alle lopende sessies; de gegevens blijven bewaard." })), actions),
+      h("div", { class: "danger-row" }, h("div", {}, h("div", { class: "name", text: "Gegevens wissen" }), h("div", { class: "desc", text: "Het account blijft bestaan." })), h("div", { class: "row" }, clearWhat, btn("Wissen", "danger", "clearBtn", function () {
         var what = clearWhat.value;
         confirmDialog({ title: "Gegevens wissen", danger: true, confirmLabel: "Wissen", message: what === "all" ? "Gerechten, weekplanning én voorkeuren van deze gebruiker worden gewist. Het account blijft bestaan." : "Dit onderdeel van de gegevens van deze gebruiker wordt gewist. Het account blijft bestaan." }).then(function (ok) {
           if (ok) run(api(base + "/clear-data", { method: "POST", body: { what: what } }), "Gegevens gewist.");
         });
-      })),
-      h("hr", { style: { border: "none", borderTop: "1px solid var(--line)", margin: "16px 0" } }),
-      btn("Gebruiker verwijderen…", "danger", "deleteBtn", function () {
-        var expected = u.email || u.uid;
-        confirmDialog({ title: "Gebruiker verwijderen", danger: true, confirmLabel: "Definitief verwijderen", typeToConfirm: expected,
-          message: "Het account, alle gegevens (gerechten, planning, voorkeuren) en alle gedeelde lijsten van deze gebruiker worden gewist. Dit kan niet ongedaan worden gemaakt. Overweeg eerst te exporteren of te blokkeren." }).then(function (typed) {
-          if (!typed) return;
-          run(api(base + "/delete", { method: "POST", body: { confirm: typed } }), "Gebruiker verwijderd.", function () { navigate("#/gebruikers"); });
-        });
-      })));
+      }))),
+      h("div", { class: "danger-row" }, h("div", {}, h("div", { class: "name", text: "Gebruiker verwijderen" }), h("div", { class: "desc", text: "Account, gegevens en gedeelde lijsten. Kan niet ongedaan worden gemaakt." })),
+        btn("Verwijderen…", "danger", "deleteBtn", function () {
+          var expected = u.email || u.uid;
+          confirmDialog({ title: "Gebruiker verwijderen", danger: true, confirmLabel: "Definitief verwijderen", typeToConfirm: expected,
+            message: "Het account, alle gegevens (gerechten, planning, voorkeuren) en alle gedeelde lijsten van deze gebruiker worden gewist. Dit kan niet ongedaan worden gemaakt. Overweeg eerst te exporteren of te blokkeren." }).then(function (typed) {
+            if (!typed) return;
+            run(api(base + "/delete", { method: "POST", body: { confirm: typed } }), "Gebruiker verwijderd.", function () { navigate("#/gebruikers"); });
+          });
+        })));
+    danger.classList.add("danger-zone"); danger.id = "dangerZone";
+    panes.gevaar.appendChild(danger);
 
     // ---- gegevens ----
     var dishes = d.dishes && typeof d.dishes === "object" ? d.dishes : {};
     var mealRows = Object.keys(dishes).filter(function (k) { return Array.isArray(dishes[k]); }).map(function (k) { return h("tr", {}, h("td", { text: k }), h("td", { text: String(dishes[k].length) })); });
     var weeks = d.plannedWeeks && Array.isArray(d.plannedWeeks.list) ? d.plannedWeeks.list : (Array.isArray(d.plannedWeeks) ? d.plannedWeeks : []);
     function jsonBlock(title, value) { return h("details", { style: { marginTop: "10px" } }, h("summary", { text: title }), h("pre", { text: JSON.stringify(value, null, 2) })); }
-    view.appendChild(card("Gegevens van de gebruiker", mealRows.length ? table([th("Maaltijdsoort"), th("Opgeslagen gerechten")], mealRows) : h("div", { class: "muted", text: "Nog geen opgeslagen gerechten." }),
+    panes.gegevens.appendChild(card("Gegevens van de gebruiker", mealRows.length ? table([th("Maaltijdsoort"), th("Opgeslagen gerechten")], mealRows) : h("div", { class: "muted", text: "Nog geen opgeslagen gerechten." }),
       h("div", { class: "muted", style: { marginTop: "10px" }, text: plural(weeks.length, "ingeplande week", "ingeplande weken") + "." }),
       d.prefs ? jsonBlock("Ruwe voorkeuren (JSON)", d.prefs) : null, d.dishes ? jsonBlock("Ruwe gerechten (JSON)", d.dishes) : null));
 
@@ -951,14 +1167,50 @@
       tr.onclick = function () { openListDetail(l.token, reload); };
       return tr;
     });
-    view.appendChild(card("Gedeelde lijsten", listRows.length ? table([th("Titel"), th("Producten"), th("Bijgewerkt"), th("Status")], listRows) : h("div", { class: "muted", text: "Deze gebruiker deelt geen lijsten." })));
+    panes.gegevens.appendChild(card("Gedeelde lijsten", listRows.length ? table([th("Titel"), th("Producten"), th("Bijgewerkt"), th("Status")], listRows) : h("div", { class: "muted", text: "Deze gebruiker deelt geen lijsten." })));
 
     // ---- recente activiteit ----
     var allLogs = h("button", { class: "link", text: "Alles in het logboek", id: "userAllLogs" });
     allLogs.onclick = function () { L.uid = u.uid; L.q = ""; L.type = ""; L.status = ""; L.action = ""; L.page = 1; navigate("#/activiteit"); };
     var logRows = d.logs.slice(0, 12).map(function (l) { return logRow(l, true); });
-    view.appendChild(card("Recente activiteit", logRows.length ? table([th("Wanneer"), th("Soort"), th("Actie"), th("Uitkomst"), th("Duur"), th("Melding")], logRows) : h("div", { class: "muted", text: "Nog geen activiteit in het logboek." }), logRows.length ? h("div", { style: { marginTop: "8px" } }, allLogs) : null));
+    panes.activiteit.appendChild(card("Recente activiteit", logRows.length ? table([th("Wanneer"), th("Soort"), th("Actie"), th("Uitkomst"), th("Duur"), th("Melding")], logRows) : h("div", { class: "muted", text: "Nog geen activiteit in het logboek." }), logRows.length ? h("div", { style: { marginTop: "8px" } }, allLogs) : null));
+
+    // ---- samenvatting links ----
+    var qt2 = d.quota, planLine = { plus: u.plusSource === "cadeau" ? "Plus (cadeau)" : "Plus", trial: "In proef", "trial-wait": "Proef nog niet gestart", expired: "Proef voorbij, geen Plus", free: "Gratis", anon: "Anoniem" }[u.plan] || "—";
+    var planDetail = u.plan === "trial" ? "Eindigt " + fmtDate(u.trialEndsAt) + " (" + relFuture(u.trialEndsAt) + ")"
+      : u.plan === "trial-wait" ? "Start bij het eerste gebruik" : u.plan === "plus" && u.plusSource === "cadeau" && u.grantUntil ? "Cadeau tot " + fmtDate(u.grantUntil).replace(/, \d\d:\d\d$/, "")
+      : u.plan === "plus" && bl && bl.periodEnd ? (u.canceled ? "Opgezegd, loopt tot " : "Verlengt op ") + fmtDate(bl.periodEnd).replace(/, \d\d:\d\d$/, "") : "";
+    var usePct = qt2 && qt2.cap > 0 ? Math.min(100, Math.round(qt2.dishes / qt2.cap * 100)) : 0;
+    function sumRow(label, value, sub) { return h("div", { class: "sum-row" }, h("span", { class: "muted small", text: label }), h("strong", { text: value }), sub ? h("span", { class: "sub", text: sub }) : null); }
+    var aside = h("aside", { class: "user-aside" }, card(null,
+      sumRow("Plan", planLine, planDetail),
+      qt2 ? sumRow("Nieuwe gerechten deze maand", qt2.cap > 0 ? qt2.dishes + " van " + qt2.cap : qt2.dishes + " (onbeperkt)", fmtUsd(qt2.costUsd) + " AI-kosten") : null,
+      qt2 && qt2.cap > 0 ? h("div", { class: "bar" + (usePct >= 100 ? " bad" : usePct >= 80 ? " warn" : "") }, h("div", { style: { width: usePct + "%" } })) : null,
+      sumRow("Opgeslagen", plural(u.dishCount, "gerecht", "gerechten"), plural(u.plannedWeekCount, "ingeplande week", "ingeplande weken")),
+      sumRow("Laatst actief", relTime(u.lastSeenAt), where || null),
+      isAcc ? sumRow("Aangemaakt", u.createdAt ? fmtDate(u.createdAt).replace(/, \d\d:\d\d$/, "") : "—", u.createdBy === "admin" ? "door beheerder" : u.upgradedFrom ? "eerst anoniem" : null) : null,
+      u.note ? sumRow("Notitie", u.note) : null));
+
+    // ---- tabbladen rechts ----
+    var TABS_U = [["account", "Account"], ["abonnement", isAcc ? "Abonnement" : "Verbruik"], ["voorkeuren", "Voorkeuren"], ["gegevens", "Gegevens"], ["activiteit", "Activiteit"], ["gevaar", "Gevarenzone"]];
+    if (!panes[userTab]) userTab = "account";
+    var tabBar = h("div", { class: "subtabs", role: "tablist", id: "userTabs" });
+    var paneWrap = h("div", { class: "user-panes" });
+    function showTab(key) {
+      userTab = key;
+      Array.prototype.forEach.call(tabBar.children, function (b) { var on = b.getAttribute("data-key") === key; b.className = "subtab" + (on ? " active" : "") + (b.getAttribute("data-key") === "gevaar" ? " danger-tab" : ""); b.setAttribute("aria-selected", on ? "true" : "false"); });
+      clear(paneWrap).appendChild(panes[key]);
+    }
+    TABS_U.forEach(function (t) {
+      if (!panes[t[0]].childNodes.length) return;
+      var b = h("button", { type: "button", role: "tab", id: "utab-" + t[0], text: t[1] }); b.setAttribute("data-key", t[0]);
+      b.onclick = function () { showTab(t[0]); };
+      tabBar.appendChild(b);
+    });
+    view.appendChild(h("div", { class: "user-layout" }, aside, h("div", { class: "user-main" }, tabBar, paneWrap)));
+    showTab(userTab);
   }
+  var userTab = "account";   // onthoudt het tabblad als de pagina na een actie opnieuw wordt opgebouwd
 
   // =====================================================================================
   // Activiteit (logboek)
@@ -1170,11 +1422,17 @@
   VIEWS.instellingen = function (view, route, ctx) {
     return api("/api/admin/settings").then(function (cfg) {
       meta.settings = cfg; updateStatusPill();
-      if (ctx.alive()) drawSettings(view, cfg);
+      if (ctx.alive()) drawSettings(view, cfg, route.id);
     }).catch(function (e) { if (!e.silent) view.appendChild(errorBox("Kon de instellingen niet laden: " + e.message)); });
   };
-  function drawSettings(view, cfg) {
+  function drawSettings(view, cfg, section) {
     var s = cfg.settings, defs = {};
+    var SECTIONS = [["toegang", "Toegang"], ["onderdelen", "Onderdelen"], ["limieten", "Limieten"], ["verdienmodel", "Verdienmodel"], ["communicatie", "Onderhoud en mededeling"]];
+    var secs = {}; SECTIONS.forEach(function (x) { secs[x[0]] = []; });
+    function put(key, node) { secs[key].push(node); }
+    if (!secs[section]) section = prefGet("settingsSection") || "toegang";
+    if (!secs[section]) section = "toegang";
+    prefSet("settingsSection", section);
     cfg.moduleDefs.forEach(function (d) { defs[d.key] = d; });
     function apply(patch, okMsg) {
       return setSettings(patch).then(function () { toast(okMsg || "Opgeslagen."); render(true); }).catch(function (e) { if (!e.silent) toast(e.message, "bad"); render(true); });
@@ -1182,7 +1440,7 @@
     view.appendChild(h("div", { class: "page-head" }, h("h2", { text: "Instellingen" }), h("span", { class: "muted small", text: "Wijzigingen gelden direct, zonder herstart." })));
 
     // toegang
-    view.appendChild(card("Toegang", h("div", { class: "module", style: { padding: "0" } },
+    put("toegang", card("Toegang", h("div", { class: "module", style: { padding: "0" } },
       h("div", {}, h("div", { class: "name", text: "Inloggen verplicht" }), h("div", { class: "desc", text: s.authRequired ? "Alleen mensen met een account kunnen de app gebruiken." : "Iedereen kan de app gebruiken zonder account (anoniem, alleen op dat apparaat). Wie wil kan een account maken." })),
       switchBtn(s.authRequired, function (on) {
         if (!on) return apply({ authRequired: false }, "Inloggen is niet meer verplicht.");
@@ -1205,13 +1463,13 @@
       }
       return h("div", { class: "module", id: "row-" + d.key }, h("div", {}, h("div", { class: "name" }, d.label + " ", badge(d.enforced === "server" ? "server" : "alleen in de app"), byMaintenance ? " " : null, byMaintenance ? badge("uit door onderhoudsmodus", "warn") : null), h("div", { class: "desc", text: d.desc })), h("div", { class: "module-right" }, right));
     });
-    view.appendChild(card("Onderdelen aan of uit", h("div", { class: "hint", style: { marginTop: "-4px", marginBottom: "4px" }, text: "Uitgezette onderdelen verdwijnen uit de app en de server weigert ze. Gebruikers zien een duidelijke melding." }), modRows));
+    put("onderdelen", card("Onderdelen aan of uit", h("div", { class: "hint", style: { marginTop: "-4px", marginBottom: "4px" }, text: "Uitgezette onderdelen verdwijnen uit de app en de server weigert ze. Gebruikers zien een duidelijke melding." }), modRows));
 
     // limieten
     var limIn = {};
     var limRows = cfg.limitDefs.map(function (d) {
       var el = h("input", { type: "number", id: "lim-" + d.key, min: d.min, max: d.max, step: 1, "aria-label": d.label }); el.value = String(s.limits[d.key]); limIn[d.key] = el;
-      var reset = h("button", { class: "link", text: "standaard (" + d.def + ")" }); reset.onclick = function () { el.value = String(d.def); };
+      var reset = h("button", { class: "link", type: "button", text: "standaard (" + d.def + ")" }); reset.onclick = function (e) { if (e && e.preventDefault) e.preventDefault(); el.value = String(d.def); };
       return field(d.label, el, [d.min + " t/m " + d.max.toLocaleString("nl-NL") + ". Zet op 0 om het helemaal te blokkeren. ", reset]);
     });
     var saveLim = h("button", { id: "saveLimitsBtn", text: "Limieten opslaan" });
@@ -1226,7 +1484,7 @@
       if (!patch.limits) return toast("Er is niets gewijzigd.");
       apply(patch, "Limieten opgeslagen.");
     };
-    view.appendChild(card("Limieten", h("div", { class: "hint", style: { marginTop: "-4px", marginBottom: "10px" }, text: "Beschermt je AI-tegoed. Standaardwaarden komen uit de omgevingsvariabelen van de server." }), h("div", { class: "form-grid" }, limRows), saveLim));
+    put("limieten", card("Limieten", h("div", { class: "hint", style: { marginTop: "-4px", marginBottom: "10px" }, text: "Beschermt je AI-tegoed. Standaardwaarden komen uit de omgevingsvariabelen van de server." }), h("div", { class: "form-grid" }, limRows), saveLim));
 
     // abonnementen (Balanza Plus)
     var env = cfg.billingEnv || {}, bs = s.billing;
@@ -1258,8 +1516,8 @@
       confirmDialog({ title: "Abonnementen aanzetten", confirmLabel: "Aanzetten", message: (env.mode === "live" ? "Je gebruikt een LIVE-sleutel: klanten kunnen vanaf nu echt betalen. Weet je zeker dat je voorwaarden, privacyverklaring en factuurafhandeling op orde zijn?" : "Je gebruikt een testsleutel: er wordt niet echt afgeschreven. Zo kun je alles uitproberen.") + " Gebruikers zien daarna in Mijn profiel een kaart om Plus te nemen." }).then(function (ok) { if (ok) apply({ billing: { enabled: true } }, "Abonnementen staan aan."); });
     }, "Abonnementen (Balanza Plus)");
     billSw.id = "billingSwitch";
-    view.appendChild(card("Abonnementen (Balanza Plus)",
-      h("div", { class: "hint", style: { marginTop: "-4px", marginBottom: "10px" }, text: "Voorbereid en standaard uit. Zolang het uit staat is er in de app niets van te zien en verandert er niets voor gebruikers. Plus geeft een hogere limiet voor nieuwe gerechten per maand." }),
+    put("verdienmodel", card("Abonnementen (Balanza Plus)",
+      h("div", { class: "hint", style: { marginTop: "-4px", marginBottom: "10px" }, text: bs.enabled ? "Gebruikers zien in Mijn profiel een kaart om Plus te nemen. Plus geeft een hogere limiet voor nieuwe gerechten per maand." : "Staat uit: in de app is er niets van te zien en verandert er niets voor gebruikers. Plus geeft een hogere limiet voor nieuwe gerechten per maand." }),
       h("div", { class: "module", style: { padding: "0 0 12px" } }, h("div", {}, h("div", { class: "name", text: bs.enabled ? "Staat aan" : "Staat uit" }), h("div", { class: "desc", text: envOk ? "Klaar voor gebruik." : "Nog niet klaar: zie hieronder wat er in de omgeving ontbreekt." })), billSw),
       envLines,
       h("div", { style: { height: "12px" } }),
@@ -1281,7 +1539,7 @@
       confirmDialog({ title: "Proefmodel aanzetten", confirmLabel: "Aanzetten", message: "Vanaf nu is een account verplicht: anonieme bezoekers komen op de welkomstpagina. Elk account krijgt " + (bs.trialDays || 7) + " dagen alle functies, gerekend vanaf het eerste gebruik na het aanzetten (ook bestaande accounts). Daarna kan zonder Plus alleen nog bekeken en gebruikt worden wat er al is; ontwerpen en plannen staan grijs." + (bs.enabled && envOk ? "" : " Let op: abonnementen staan nog niet aan, dus na de proef kan nog niemand Plus nemen.") }).then(function (ok) { if (ok) apply({ billing: { trialEnabled: true } }, "Proefmodel staat aan."); });
     }, "Proefmodel");
     trialSw.id = "trialSwitch";
-    view.appendChild(card("Proefperiode",
+    put("verdienmodel", card("Proefperiode",
       h("div", { class: "hint", style: { marginTop: "-4px", marginBottom: "10px" }, text: "Nieuwe accounts krijgen eerst een aantal dagen alle functies (zoals Plus). Daarna kan zonder Plus alleen nog worden bekeken en gebruikt wat er al is: gerechten, recepten, kookmodus, planning en boodschappenlijst. Ontwerpen en de planning wijzigen kan dan alleen met Plus. Anoniem gebruik is in dit model niet mogelijk. Een cadeau-Plus (per gebruiker) telt ook als Plus." }),
       h("div", { class: "module", style: { padding: "0 0 12px" } }, h("div", {}, h("div", { class: "name", text: bs.trialEnabled ? "Staat aan" : "Staat uit" }), h("div", { class: "desc", text: bs.trialEnabled && !(bs.enabled && envOk) ? "Abonnementen staan nog uit: na de proef kan nog niemand Plus nemen." : "Proef van " + (bs.trialDays || 7) + " dagen per account." })), trialSw),
       h("div", { class: "form-grid" }, field("Aantal proefdagen", trialDaysIn, "1 t/m 60. Geldt ook voor lopende proeven (de einddatum schuift mee).")),
@@ -1292,7 +1550,7 @@
     var offLabels = cfg.maintenanceOffModules.map(function (k) { return defs[k].label.toLowerCase(); }).join(", ");
     var mSave = h("button", { class: "ghost", id: "saveMaintMsgBtn", text: "Melding opslaan" });
     mSave.onclick = function () { apply({ maintenance: { message: mMsg.value } }, "Melding opgeslagen."); };
-    view.appendChild(card("Onderhoudsmodus", h("div", { class: "module", style: { padding: "0 0 12px" } },
+    put("communicatie", card("Onderhoudsmodus", h("div", { class: "module", style: { padding: "0 0 12px" } },
       h("div", {}, h("div", { class: "name", text: s.maintenance.enabled ? "Staat aan" : "Staat uit" }), h("div", { class: "desc", text: "Zet tijdelijk uit: " + offLabels + ". Foto’s, PDF en wachtwoord-reset blijven werken. Gebruikers zien bovenin de app jouw melding." })),
       switchBtn(s.maintenance.enabled, function (on) {
         if (!on) return apply({ maintenance: { enabled: false } }, "Onderhoudsmodus staat uit.");
@@ -1310,14 +1568,33 @@
       if (s.announcement.enabled && !aMsg.value.trim()) return toast("Vul een tekst in, of zet de mededeling uit.", "bad");
       apply({ announcement: { message: aMsg.value, level: aLevel.value } }, "Mededeling opgeslagen.");
     };
-    view.appendChild(card("Mededeling aan alle gebruikers", h("div", { class: "module", style: { padding: "0 0 12px" } },
+    put("communicatie", card("Mededeling aan alle gebruikers", h("div", { class: "module", style: { padding: "0 0 12px" } },
       h("div", {}, h("div", { class: "name", text: s.announcement.enabled ? "Wordt getoond" : "Wordt niet getoond" }), h("div", { class: "desc", text: "Een balk bovenin de app. Gebruikers kunnen hem wegklikken (per bericht, tot ze de app sluiten)." })),
       switchBtn(s.announcement.enabled, function (on) {
         if (on && !aMsg.value.trim()) return toast("Schrijf eerst een tekst en sla die op.", "bad");
         apply({ announcement: { enabled: on, message: aMsg.value, level: aLevel.value } }, on ? "Mededeling wordt getoond." : "Mededeling staat uit.");
       }, "Mededeling tonen")), field("Tekst", aMsg), field("Soort", aLevel), h("div", { class: "muted small", text: "Zo ziet het eruit:" }), preview, aSave));
 
-    view.appendChild(h("div", { class: "hint", text: "Het beheerderswachtwoord wijzig je in Render (omgevingsvariabele ADMIN_PASSWORD); daarna word je hier uitgelogd." }));
+    put("toegang", h("div", { class: "hint", text: "Het beheerderswachtwoord wijzig je in Render (omgevingsvariabele ADMIN_PASSWORD); daarna word je hier uitgelogd." }));
+    secs.verdienmodel.reverse();   // eerst de proef (die bepaalt het model), dan de abonnementen
+
+    // Per sectie een korte status in het menu, zodat je ziet wat er aan staat zonder te klikken.
+    var offCount = cfg.moduleDefs.filter(function (d) { return !cfg.effectiveModules[d.key]; }).length;
+    var status = {
+      toegang: s.authRequired || s.billing.trialEnabled ? "Inloggen verplicht" : "Open",
+      onderdelen: offCount ? offCount + " uit" : "Alles aan",
+      limieten: s.limits.dailyGenerateCap + " per dag",
+      verdienmodel: [s.billing.trialEnabled ? "Proef aan" : "Proef uit", s.billing.enabled ? "Plus aan" : "Plus uit"].join(" · "),
+      communicatie: s.maintenance.enabled ? "Onderhoud aan" : s.announcement.enabled ? "Mededeling aan" : "Niets actief"
+    };
+    var warnKeys = { communicatie: s.maintenance.enabled, onderdelen: offCount > 0 };
+    var nav = h("nav", { class: "settings-nav", id: "settingsNav", "aria-label": "Onderdelen van de instellingen" }, SECTIONS.map(function (x) {
+      var b = h("button", { type: "button", class: "snav" + (x[0] === section ? " active" : ""), id: "snav-" + x[0], "aria-current": x[0] === section ? "page" : null },
+        h("span", { text: x[1] }), h("span", { class: "snav-status" + (warnKeys[x[0]] ? " warn" : ""), text: status[x[0]] }));
+      b.onclick = function () { navigate("#/instellingen/" + x[0]); };
+      return b;
+    }));
+    view.appendChild(h("div", { class: "settings-layout" }, nav, h("div", { class: "settings-main", id: "settingsMain" }, secs[section])));
   }
 
   // =====================================================================================

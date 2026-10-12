@@ -4348,13 +4348,36 @@ function latestTimestamp(a, b) {
   if (!isFinite(ta) && !isFinite(tb)) return null;
   return (isFinite(ta) && (!isFinite(tb) || ta >= tb)) ? a : b;
 }
-// Bouwt het overzicht van één gebruiker (leest de vier documenten van die gebruiker).
-function buildSummary(account, blocked, noteDoc) {
+// Het abonnement van een gebruiker zoals de beheerder het wil zien. Alleen lezen: anders dan getUserPlanInfo start
+// dit nooit een proef, zodat het openen van de beheerpagina niets aan de gebruikers verandert.
+// plan: "plus" | "trial" | "trial-wait" (proefmodel aan, account nog niet actief geweest) | "expired" | "free" | "anon"
+function adminPlanState(doc, s, isAccount, now) {
+  doc = doc || null;
+  var out = { plan: "free", plusSource: null, trialEndsAt: null, status: doc ? doc.status || "none" : "none",
+    interval: doc && doc.interval || null, priceCents: doc && doc.priceCents || null,
+    recurring: !!(doc && doc.status === "active" && doc.subscriptionId), pastDue: !!(doc && doc.status === "past_due"),
+    canceled: !!(doc && doc.status === "canceled"), grantUntil: doc && doc.grantUntil > now ? new Date(doc.grantUntil).toISOString() : null };
+  if (!isAccount) { out.plan = "anon"; return out; }
+  var gift = !!(doc && doc.grantUntil > now);
+  var plusOk = plusActiveDoc(doc, now) && (billingLive(s) || (s.billing.trialEnabled && gift));
+  if (plusOk) { out.plan = "plus"; out.plusSource = ["active", "canceled", "past_due"].indexOf(out.status) > -1 && doc.currentPeriodEnd + BILLING_GRACE_MS > now ? "abonnement" : "cadeau"; return out; }
+  if (!s.billing.trialEnabled) return out;
+  if (!doc || !doc.trialStart) { out.plan = "trial-wait"; return out; }
+  var end = trialEndsAt(doc, s);
+  out.trialEndsAt = end ? new Date(end).toISOString() : null;
+  out.plan = end && now < end ? "trial" : "expired";
+  return out;
+}
+
+// Bouwt het overzicht van één gebruiker (leest de documenten van die gebruiker).
+function buildSummary(account, blocked, noteDoc, settings) {
   var uid = account.uid;
   return Promise.all([
     dbGetDoc("data/users/" + uid + "/prefs"), dbGetDoc("data/users/" + uid + "/dishes"),
-    dbGetDoc("data/users/" + uid + "/plannedWeeks"), dbGetDoc("data/users/" + uid + "/meta")
+    dbGetDoc("data/users/" + uid + "/plannedWeeks"), dbGetDoc("data/users/" + uid + "/meta"),
+    dbGetDoc("billing/" + uid)
   ]).then(function (res) {
+    var billing = adminPlanState(res[4].exists ? res[4].value : null, settings, !!account.email, Date.now());
     var prefs = res[0].exists && res[0].value && typeof res[0].value === "object" ? res[0].value : null;
     var dishes = res[1].exists ? res[1].value : null;
     var weeks = res[2].exists ? res[2].value : null;
@@ -4383,18 +4406,21 @@ function buildSummary(account, blocked, noteDoc) {
       disabled: !!blocked.uids[uid],
       disabledAt: blocked.uids[uid] ? blocked.uids[uid].at || null : null,
       disabledReason: blocked.uids[uid] ? blocked.uids[uid].reason || "" : "",
-      note: noteDoc && noteDoc.note ? noteDoc.note : ""
+      note: noteDoc && noteDoc.note ? noteDoc.note : "",
+      plan: billing.plan, plusSource: billing.plusSource, trialEndsAt: billing.trialEndsAt, billingStatus: billing.status,
+      interval: billing.interval, priceCents: billing.priceCents, recurring: billing.recurring, pastDue: billing.pastDue,
+      canceled: billing.canceled, grantUntil: billing.grantUntil
     };
   });
 }
 // Het overzicht van iedereen; wordt 15 seconden onthouden zodat zoeken en bladeren de opslag niet belast.
 function loadUserSummaries() {
   if (summariesCache.value && Date.now() < summariesCache.expiry) return Promise.resolve(summariesCache.value);
-  return Promise.all([dbListUserIds(), getBlocked(), dbListDocs("adminMeta/")]).then(function (r) {
-    var blocked = r[1], notes = {};
+  return Promise.all([dbListUserIds(), getBlocked(), dbListDocs("adminMeta/"), getSettings()]).then(function (r) {
+    var blocked = r[1], notes = {}, settings = r[3];
     r[2].forEach(function (d) { notes[d.path.slice("adminMeta/".length)] = d.value; });
     var accounts = r[0].filter(function (a) { return a && a.uid; });
-    return mapLimit(accounts, 20, function (account) { return buildSummary(account, blocked, notes[account.uid]); });
+    return mapLimit(accounts, 20, function (account) { return buildSummary(account, blocked, notes[account.uid], settings); });
   }).then(function (list) {
     summariesCache = { value: list, expiry: Date.now() + 15000 };
     return list;
@@ -4402,9 +4428,9 @@ function loadUserSummaries() {
 }
 // Eén gebruiker, altijd vers (voor detail, wijzigen en acties).
 function loadSummaryFresh(uid) {
-  return Promise.all([dbListUserIds(), getBlocked(), dbGetDoc("adminMeta/" + uid)]).then(function (r) {
+  return Promise.all([dbListUserIds(), getBlocked(), dbGetDoc("adminMeta/" + uid), getSettings()]).then(function (r) {
     var account = r[0].filter(function (a) { return a && a.uid === uid; })[0];
-    return account ? buildSummary(account, r[1], r[2].exists ? r[2].value : null) : null;
+    return account ? buildSummary(account, r[1], r[2].exists ? r[2].value : null, r[3]) : null;
   });
 }
 function findSummary(uid) {
@@ -4424,7 +4450,7 @@ function withLocation(u) {
 function filterUsers(list, q) {
   var text = (q.get("q") || "").trim().toLowerCase();
   var type = q.get("type") || "all", status = q.get("status") || "all";
-  var goal = q.get("goal") || "", diet = q.get("diet") || "", active = q.get("active") || "", created = q.get("created") || "";
+  var goal = q.get("goal") || "", diet = q.get("diet") || "", active = q.get("active") || "", created = q.get("created") || "", plan = q.get("plan") || "";
   var now = Date.now();
   function within(ts, days) { var t = ts ? Date.parse(ts) : NaN; return isFinite(t) && now - t <= days * DAY_MS; }
   return list.filter(function (u) {
@@ -4440,6 +4466,12 @@ function filterUsers(list, q) {
     if (active === "inactive30" && within(u.lastSeenAt, 30)) return false;
     if (created === "7d" && !within(u.createdAt, 7)) return false;
     if (created === "30d" && !within(u.createdAt, 30)) return false;
+    if (plan) {
+      if (plan === "trial" && u.plan !== "trial" && u.plan !== "trial-wait") return false;
+      if (plan === "ending" && !(u.plan === "trial" && u.trialEndsAt && Date.parse(u.trialEndsAt) - now <= 2 * DAY_MS)) return false;
+      if (plan === "pastdue" && !u.pastDue) return false;
+      if (["plus", "expired", "free", "anon"].indexOf(plan) > -1 && u.plan !== plan) return false;
+    }
     if (text) {
       var hay = [u.email, u.name, u.uid, u.note, u.lastIp, u.goal, u.dietStyle].join(" ").toLowerCase();
       if (hay.indexOf(text) === -1) return false;
@@ -4451,8 +4483,8 @@ function sortUsers(rows, q) {
   var sort = q.get("sort") || "lastSeen";
   var textCols = { name: "name", email: "email" };
   var numCols = { dishes: "dishCount", weeks: "plannedWeekCount", logins: "loginCount" };
-  var dateCols = { lastSeen: "lastSeenAt", created: "createdAt", lastLogin: "lastLoginAt" };
-  var dir = q.get("dir") || (textCols[sort] ? "asc" : "desc");
+  var dateCols = { lastSeen: "lastSeenAt", created: "createdAt", lastLogin: "lastLoginAt", trialEnd: "trialEndsAt" };
+  var dir = q.get("dir") || (textCols[sort] || sort === "trialEnd" ? "asc" : "desc");
   var mul = dir === "asc" ? 1 : -1;
   rows.sort(function (a, b) {
     var x, y;
@@ -4460,9 +4492,47 @@ function sortUsers(rows, q) {
     if (numCols[sort]) { x = a[numCols[sort]] || 0; y = b[numCols[sort]] || 0; return (x - y) * mul; }
     var col = dateCols[sort] || "lastSeenAt";
     x = a[col] ? Date.parse(a[col]) : 0; y = b[col] ? Date.parse(b[col]) : 0;
+    if (sort === "trialEnd" && (!x || !y) && x !== y) return x ? -1 : 1;   // zonder proefdatum altijd onderaan
     return (x - y) * mul;
   });
   return rows;
+}
+
+function planCounts(list) {
+  var c = { plus: 0, trial: 0, expired: 0, free: 0, anon: 0, ending: 0, pastdue: 0 }, now = Date.now();
+  list.forEach(function (u) {
+    if (u.plan === "trial" || u.plan === "trial-wait") c.trial++; else if (c[u.plan] !== undefined) c[u.plan]++;
+    if (u.plan === "trial" && u.trialEndsAt && Date.parse(u.trialEndsAt) - now <= 2 * DAY_MS) c.ending++;
+    if (u.pastDue) c.pastdue++;
+  });
+  return c;
+}
+// Bedrijfscijfers voor het overzicht: de trechter proef → Plus, terugkerende omzet en wat aandacht vraagt.
+var USD_TO_EUR = Number(process.env.USD_TO_EUR) > 0 ? Number(process.env.USD_TO_EUR) : 0.92;
+function businessSummary(list, s) {
+  var now = Date.now(), accounts = list.filter(function (u) { return u.type === "account" && !u.disabled; });
+  var c = planCounts(accounts);
+  var paid = accounts.filter(function (u) { return u.plan === "plus" && u.plusSource === "abonnement"; });
+  var gift = accounts.filter(function (u) { return u.plan === "plus" && u.plusSource === "cadeau"; });
+  var mrr = 0, monthly = 0, yearly = 0;
+  accounts.forEach(function (u) {
+    if (!u.recurring || !u.priceCents) return;
+    if (u.interval === "year") { yearly++; mrr += u.priceCents / 12; } else { monthly++; mrr += u.priceCents; }
+  });
+  var decided = paid.length + c.expired;   // accounts waarvan de proef voorbij is: werden ze Plus of niet
+  function brief(u) { return { uid: u.uid, email: u.email, name: u.name, trialEndsAt: u.trialEndsAt, lastSeenAt: u.lastSeenAt }; }
+  return {
+    trialEnabled: !!s.billing.trialEnabled, billingEnabled: !!s.billing.enabled, billingLive: billingLive(s), usdToEur: USD_TO_EUR,
+    funnel: { accounts: accounts.length, trialWait: accounts.filter(function (u) { return u.plan === "trial-wait"; }).length,
+      trial: accounts.filter(function (u) { return u.plan === "trial"; }).length, expired: c.expired, free: c.free,
+      plusPaid: paid.length, plusGift: gift.length, canceled: paid.filter(function (u) { return u.canceled; }).length,
+      conversionPct: decided ? Math.round(paid.length / decided * 1000) / 10 : null },
+    mrrCents: Math.round(mrr), subscriptions: { monthly: monthly, yearly: yearly },
+    endingSoon: accounts.filter(function (u) { return u.plan === "trial" && u.trialEndsAt && Date.parse(u.trialEndsAt) - now <= 2 * DAY_MS; })
+      .sort(function (a, b) { return Date.parse(a.trialEndsAt) - Date.parse(b.trialEndsAt); }).slice(0, 8).map(brief),
+    pastDue: accounts.filter(function (u) { return u.pastDue; }).slice(0, 8).map(brief),
+    pastDueCount: c.pastdue, endingCount: c.ending
+  };
 }
 
 function handleAdminUserList(req, res, url) {
@@ -4479,7 +4549,8 @@ function handleAdminUserList(req, res, url) {
           all: list.length,
           accounts: list.filter(function (u) { return u.type === "account"; }).length,
           anon: list.filter(function (u) { return u.type === "anon"; }).length,
-          disabled: list.filter(function (u) { return u.disabled; }).length
+          disabled: list.filter(function (u) { return u.disabled; }).length,
+          plans: planCounts(list)
         },
         facets: { goals: Object.keys(goals).sort(), diets: Object.keys(diets).sort() }
       });
@@ -4974,7 +5045,8 @@ function aiCostSummary(docs, days14) {
   return out;
 }
 function handleAdminStats(req, res) {
-  return Promise.all([loadUserSummaries(), getUsageToday(), getUsageHistory(14), getRecentLogs(LOG_CAP), dbListDocs("lists/"), getSettings(), dbListDocs("tokenUsage/")]).then(function (r) {
+  return Promise.all([loadUserSummaries(), getUsageToday(), getUsageHistory(14), getRecentLogs(LOG_CAP), dbListDocs("lists/"), getSettings(), dbListDocs("tokenUsage/"),
+    communityAll().catch(function () { return []; })]).then(function (r) {
     var users = r[0], logs = r[3].map(cleanLogRow), now = Date.now();
     function within(ts, days) { var t = ts ? Date.parse(ts) : NaN; return isFinite(t) && now - t <= days * DAY_MS; }
     var accounts = users.filter(function (u) { return u.type === "account"; });
@@ -5014,7 +5086,9 @@ function handleAdminStats(req, res) {
       },
       lists: { total: lists.length, active: lists.filter(function (d) { return !(d.value && d.value.expiresAt && d.value.expiresAt < now); }).length },
       logCapped: logs.length >= LOG_CAP,
-      maintenance: r[5].maintenance.enabled
+      maintenance: r[5].maintenance.enabled,
+      business: businessSummary(users, r[5]),
+      community: { reported: r[7].filter(function (x) { return (x.reports || []).length && !x.hidden; }).length, hidden: r[7].filter(function (x) { return x.hidden; }).length }
     });
   });
 }
