@@ -4,7 +4,7 @@
 // request fails (e.g. briefly offline). Bump CACHE_NAME whenever you want to
 // force-invalidate old cached assets after a deploy.
 
-var CACHE_NAME = "weekmenu-shell-v9";
+var CACHE_NAME = "weekmenu-shell-v10";
 var SHELL_FILES = [
   "/",
   "/manifest.json",
@@ -51,14 +51,16 @@ self.addEventListener("fetch", function (event) {
       })
       .catch(function () {
         return caches.match(event.request).then(function (cached) {
-          return cached || caches.match("/");
+          // Alleen een pagina valt terug op de app; een script of plaatje krijgt nooit HTML terug.
+          return cached || (event.request.mode === "navigate" ? caches.match("/") : Response.error());
         });
       })
   );
 });
 
 // ---------- Meldingen (Web Push) ----------
-// De server stuurt een versleutelde melding als een opdracht klaar is terwijl de gebruiker weg is.
+// De server stuurt een versleutelde melding als een opdracht klaar is terwijl de gebruiker weg is, als het tijd is om te
+// plannen of als er nieuwe community-recepten zijn die passen. "url" bepaalt welk scherm opent.
 self.addEventListener("push", function (event) {
   var data = {};
   try { data = event.data ? event.data.json() : {}; } catch (e) { try { data = { body: event.data.text() }; } catch (e2) { data = {}; } }
@@ -79,7 +81,12 @@ self.addEventListener("notificationclick", function (event) {
   var target = (event.notification.data && event.notification.data.url) || "/";
   event.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(function (list) {
     for (var i = 0; i < list.length; i++) {
-      if (list[i] && typeof list[i].focus === "function") return list[i].focus();   // de app is al open: daarheen (de app haalt het resultaat zelf op)
+      var c = list[i];
+      if (c && typeof c.focus === "function") {
+        // De app is al open: daarheen, en vertel welk scherm hoort bij deze melding (plannen, community).
+        if (target !== "/" && typeof c.postMessage === "function") c.postMessage({ type: "balanza-open", url: target });
+        return c.focus();
+      }
     }
     if (self.clients.openWindow) return self.clients.openWindow(target);
   }));

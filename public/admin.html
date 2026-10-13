@@ -696,6 +696,18 @@
       stat("Nieuwe accounts", u.new7d, "7 dagen · " + u.new30d + " in 30 dagen"),
       stat("Generaties vandaag", us.today + " / " + us.cap, us.cap === 0 ? "Genereren staat op limiet 0" : pct + "% van de daglimiet", pct >= 100 ? "bad" : pct >= 80 ? "warn" : "", us.cap ? usageBar : null)));
 
+    // ---- meldingen ----
+    var nt = st.notify;
+    if (nt) {
+      var kinds = [["remind-week", "Plan je week"], ["remind-today", "Diner van vandaag"], ["community-digest", "Nieuwe recepten"], ["notify", "Gerechten klaar"]];
+      var nRows = kinds.map(function (k) { var x = nt.last7d[k[0]] || { sent: 0, failed: 0 }; return h("tr", {}, h("td", { text: k[1] }), h("td", { class: "num", text: String(x.sent) }), h("td", { class: "num", text: x.failed ? String(x.failed) : "—" })); });
+      var toLog = h("button", { class: "link", type: "button", text: "Meldingen in het logboek" });
+      toLog.onclick = function () { resetLogFilters(); L.type = "push"; navigate("#/activiteit"); };
+      view.appendChild(card("Meldingen",
+        h("div", { class: "muted small", id: "notifyFacts", style: { marginBottom: "10px" }, text: plural(nt.usersWithPush, "gebruiker heeft", "gebruikers hebben") + " meldingen aan op een toestel · laatste ronde " + (nt.lastTickAt ? relTime(nt.lastTickAt) + " (" + (nt.lastTickSource === "cron" ? "cron" : "server") + ")" : "nog niet gedraaid") }),
+        table([th("Soort (7 dagen)"), th("Afgeleverd"), th("Mislukt")], nRows), h("div", { style: { marginTop: "8px" } }, toLog)));
+    }
+
     // ---- techniek (ingeklapt) ----
     var tech = h("details", { class: "tech", id: "techDetails" }, h("summary", {}, h("span", { text: "Techniek en AI-verbruik" }), h("span", { class: "muted small", text: " · " + plural(rq.today, "verzoek", "verzoeken") + " vandaag, " + plural(rq.errorsToday, "fout", "fouten") })));
     tech.open = prefGet("techOpen") === "1";
@@ -1216,7 +1228,7 @@
   // Activiteit (logboek)
   // =====================================================================================
   var TYPE_LABELS = { generate: "AI", tips: "Tips", auth: "Account", push: "Melding", billing: "Betaling" };
-  var LOG_ACTION_LABELS = { login: "Inloggen", register: "Registreren", upgrade: "Anoniem omgezet naar account", "password-change": "Wachtwoord gewijzigd (door gebruiker)", notify: "Pushmelding verstuurd", webhook: "Betaalmelding (Mollie)", "email-change": "E-mailadres gewijzigd (door gebruiker)", "logout-others": "Op andere apparaten uitgelogd", "self-delete": "Account zelf verwijderd", export: "Gegevens gedownload", "reset-request": "Reset aangevraagd", "reset-done": "Wachtwoord gereset" };
+  var LOG_ACTION_LABELS = { login: "Inloggen", register: "Registreren", upgrade: "Anoniem omgezet naar account", "password-change": "Wachtwoord gewijzigd (door gebruiker)", notify: "Melding: gerechten klaar", "remind-week": "Melding: plan je week", "remind-today": "Melding: diner van vandaag", "community-digest": "Melding: nieuwe recepten", webhook: "Betaalmelding (Mollie)", "email-change": "E-mailadres gewijzigd (door gebruiker)", "logout-others": "Op andere apparaten uitgelogd", "self-delete": "Account zelf verwijderd", export: "Gegevens gedownload", "reset-request": "Reset aangevraagd", "reset-done": "Wachtwoord gereset" };
   function logRow(l, compact) {
     var who = null;
     if (!compact) {
@@ -1241,7 +1253,7 @@
       el.oninput = debounce(function () { L[key] = el.value.trim(); L.page = 1; load(); }, 350); return el;
     }
     var q = bind("lQ", "q", "Zoek in actie, melding, IP, gebruiker…", "grow", "search");
-    var typeSel = select([["", "Alle soorten"], ["generate", "AI (genereren)"], ["tips", "Tips"], ["auth", "Account (inloggen)"], ["push", "Meldingen (push)"]], L.type, function (v) { L.type = v; L.page = 1; load(); }, "Soort"); typeSel.id = "lType";
+    var typeSel = select([["", "Alle soorten"], ["generate", "AI (genereren)"], ["tips", "Tips"], ["auth", "Account (inloggen)"], ["push", "Meldingen (push)"], ["billing", "Betalingen"]], L.type, function (v) { L.type = v; L.page = 1; load(); }, "Soort"); typeSel.id = "lType";
     var statusSel = select([["", "Alle uitkomsten"], ["ok", "Gelukt"], ["error", "Fouten"]], L.status, function (v) { L.status = v; L.page = 1; load(); }, "Uitkomst"); statusSel.id = "lStatus";
     var uidIn = bind("lUid", "uid", "Gebruikers-ID", "", "text"), ipIn = bind("lIp", "ip", "IP-adres", "", "text");
     var fromIn = h("input", { type: "date", id: "lFrom", "aria-label": "Vanaf datum" }); fromIn.value = L.from; fromIn.onchange = function () { L.from = fromIn.value; L.page = 1; load(); };

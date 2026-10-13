@@ -820,6 +820,11 @@
   .acc-card h2 { font-family: "Fraunces", serif; font-weight: 600; font-size: 18px; margin: 0; }
   .acc-row { display: flex; gap: 14px; align-items: center; }
   .acc-sub { color: var(--muted); font-size: 14px; overflow-wrap: anywhere; }
+  .notify-opts { flex-direction: column; border-top: 1px solid var(--line); }
+  .notify-opts .sheet-toggle { width: 100%; }
+  .notify-when { display: flex; gap: 8px; padding: 10px 0 12px; border-bottom: 1px solid var(--line); }
+  .notify-when select, .notify-when input { font: inherit; font-size: 14px; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
+  .notify-when select { flex: 1; min-width: 0; } .notify-when .notify-time { flex: 0 0 auto; width: 110px; }
   .acc-stats { color: var(--muted); font-size: 13.5px; }
   .acc-btn { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; }
   .acc-btn svg { flex: none; }
@@ -3152,6 +3157,100 @@
     }).catch(function () {});
   }
 
+  // ---- Welke meldingen (planherinneringen, community) ----
+  var NOTIFY_DAYS = [[0, "zondag"], [1, "maandag"], [2, "dinsdag"], [3, "woensdag"], [4, "donderdag"], [5, "vrijdag"], [6, "zaterdag"]];
+  function renderNotifyOptions(box) {
+    box.innerHTML = '<div class="acc-sub">Even kijken\u2026</div>';
+    var np = null, saveTimer = null;
+    function save(patch) {
+      Object.keys(patch).forEach(function (k) { np[k] = patch[k]; });
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(function () {
+        fetch("/api/notify/prefs", { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, authHeaders()), body: JSON.stringify({ prefs: np }) })
+          .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+          .then(function (d) { np = d.prefs; showToast("Opgeslagen."); })
+          .catch(function () { showToast("Opslaan lukte niet. Probeer het opnieuw."); });
+      }, 400);
+    }
+    function toggle(id, title, sub, on, onTap) {
+      var b = document.createElement("button"); b.type = "button"; b.className = "sheet-toggle"; b.id = id;
+      b.setAttribute("role", "switch"); b.setAttribute("aria-checked", on ? "true" : "false");
+      b.innerHTML = '<span class="st-txt"><b></b><small></small></span><span class="st-track' + (on ? " on" : "") + '"><i></i></span>';
+      b.querySelector("b").textContent = title; b.querySelector("small").textContent = sub;
+      b.onclick = onTap;
+      return b;
+    }
+    function timeInput(id, value, label, onChange) {
+      var t = document.createElement("input"); t.type = "time"; t.id = id; t.value = value; t.step = 300; t.className = "notify-time"; t.setAttribute("aria-label", label);
+      t.onchange = function () { if (/^\d\d:\d\d$/.test(t.value)) onChange(t.value); };
+      return t;
+    }
+    function paint() {
+      box.innerHTML = "";
+      var dayName = NOTIFY_DAYS[np.planWeekDay][1];
+      box.appendChild(toggle("notifyWeek", "Plan je week", "Op " + dayName + " om " + np.planWeekTime + " als je volgende week nog (grotendeels) leeg is", np.planWeek, function () { save({ planWeek: !np.planWeek }); paint(); }));
+      if (np.planWeek) {
+        var row = document.createElement("div"); row.className = "notify-when";
+        var sel = document.createElement("select"); sel.id = "notifyWeekDay"; sel.setAttribute("aria-label", "Dag voor de weekherinnering");
+        NOTIFY_DAYS.forEach(function (d) { var o = document.createElement("option"); o.value = String(d[0]); o.textContent = d[1][0].toUpperCase() + d[1].slice(1); if (d[0] === np.planWeekDay) o.selected = true; sel.appendChild(o); });
+        sel.onchange = function () { save({ planWeekDay: Number(sel.value) }); paint(); };
+        row.appendChild(sel); row.appendChild(timeInput("notifyWeekTime", np.planWeekTime, "Tijd voor de weekherinnering", function (v) { save({ planWeekTime: v }); paint(); }));
+        box.appendChild(row);
+      }
+      box.appendChild(toggle("notifyToday", "Diner van vandaag", "Om " + np.planTodayTime + " als er voor vanavond nog niets gepland staat", np.planToday, function () { save({ planToday: !np.planToday }); paint(); }));
+      if (np.planToday) {
+        var row2 = document.createElement("div"); row2.className = "notify-when";
+        row2.appendChild(timeInput("notifyTodayTime", np.planTodayTime, "Tijd voor de dagherinnering", function (v) { save({ planTodayTime: v }); paint(); }));
+        box.appendChild(row2);
+      }
+      if (communityOn()) box.appendChild(toggle("notifyCommunity", "Nieuwe recepten in de community", "Hooguit één keer per dag, rond 17:00, en alleen recepten die passen bij je voedingsstijl, doel en wat je niet eet", np.community, function () { save({ community: !np.community }); paint(); }));
+    }
+    fetch("/api/notify/prefs", { headers: authHeaders() }).then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+      .then(function (d) { np = d.prefs; paint(); })
+      .catch(function () { box.innerHTML = '<div class="acc-sub">Je meldingsvoorkeuren konden niet worden geladen.</div>'; });
+  }
+
+  // ---- Openen vanuit een melding: /?open=plan&week=2026-10-19&day=Maandag of /?open=community[&id=…] ----
+  var plansReady = null, plansReadyResolve = null;
+  plansReady = new Promise(function (resolve) { plansReadyResolve = resolve; });
+  function openFromLink(q) {
+    if (!q || !q.open) return;
+    if (q.open === "community" && communityOn()) {
+      if (q.id && /^[A-Za-z0-9_-]{6,30}$/.test(q.id) && typeof openCommunityRecipe === "function") openCommunityRecipe(q.id);
+      else goto("community");
+      return;
+    }
+    if (q.open === "plan") {
+      // Eerst de planning binnen hebben, anders maken we een lege week aan naast de echte.
+      Promise.race([plansReady, new Promise(function (r) { setTimeout(r, 6000); })]).then(function () {
+        needDishesThen(function () {
+          var monday = /^\d{4}-\d{2}-\d{2}$/.test(q.week || "") ? new Date(q.week + "T00:00:00") : defaultPlanMonday();
+          var w = openOrCreateWeek(monday);
+          if (q.day && PLAN_DAYS.indexOf(q.day) > -1) { state.planDayName = q.day; state.planDayFor = w.id; } else state.planDayName = null;
+          goto("planweek", { planWeekId: w.id });
+          // In de weekweergave: de gevraagde dag in beeld brengen (in de dagweergave staat hij al open).
+          if (q.day) setTimeout(function () { var el = document.getElementById("wk-" + q.day); if (el && el.scrollIntoView) el.scrollIntoView({ block: "start", behavior: "smooth" }); }, 120);
+        });
+      });
+    }
+  }
+  function linkParams(search) {
+    var q = {};
+    try { var p = new URLSearchParams(search || ""); ["open", "week", "day", "id"].forEach(function (k) { var v = p.get(k); if (v) q[k] = v.slice(0, 40); }); } catch (e) {}
+    return q;
+  }
+  function handleStartLink() {
+    var q = linkParams(location.search);
+    if (!q.open) return;
+    try { history.replaceState(null, "", location.pathname); } catch (e) {}
+    setTimeout(function () { openFromLink(q); }, 50);
+  }
+  // De app staat al open: de service worker geeft de link door in plaats van een nieuw venster te openen.
+  if ("serviceWorker" in navigator) navigator.serviceWorker.addEventListener("message", function (e) {
+    var d = e && e.data;
+    if (d && d.type === "balanza-open" && typeof d.url === "string" && d.url.charAt(0) === "/") openFromLink(linkParams(d.url.split("?")[1] || ""));
+  });
+
   // ---- Mijn profiel ----
   function renderAccount() {
     var app = document.getElementById("app");
@@ -3245,11 +3344,16 @@
     pushCard.appendChild(pushText);
     var pushBtn = accButton(pushCard, "settingsPushBtn", "bell", "Meldingen aanzetten", function () {});
     pushBtn.style.display = "none";
+    var notifyBox = document.createElement("div"); notifyBox.className = "notify-opts"; notifyBox.id = "notifyOpts"; notifyBox.style.display = "none";
+    pushCard.insertBefore(notifyBox, pushBtn);
+    var notifyLoaded = false;
     function paintPush(st) {
       if (state.view !== "settings") return;
+      notifyBox.style.display = st === "on" ? "flex" : "none";
+      if (st === "on" && !notifyLoaded) { notifyLoaded = true; renderNotifyOptions(notifyBox); }
       var texts = {
-        on: "Aan: je krijgt een melding als je gerechten klaar zijn terwijl je in een andere app zit.",
-        off: "Krijg een melding als je gerechten klaar zijn, ook als je even in een andere app zit.",
+        on: "Aan op dit toestel. Kies hieronder waarvoor je een seintje wilt; als je gerechten klaar zijn krijg je er altijd een.",
+        off: "Krijg een seintje als je gerechten klaar zijn, als het tijd is om te plannen of als er nieuwe recepten zijn die bij je passen.",
         denied: "Meldingen staan geblokkeerd voor Balanza. Zet ze aan in de instellingen van je toestel of browser.",
         "ios-install": "Op een iPhone werken meldingen alleen als Balanza op je beginscherm staat: tik op Deel, kies \u201cZet op beginscherm\u201d en open Balanza vanaf je beginscherm.",
         unsupported: "Dit toestel of deze browser ondersteunt geen meldingen."
@@ -10894,7 +10998,7 @@
 
           var planRef = db.doc("data/users/" + uid + "/plannedWeeks");
           planRef.get().then(function (plansnap) {
-            if (!plansnap.exists) return;
+            if (!plansnap.exists) { if (plansReadyResolve) plansReadyResolve(); return; }
             var pldata = plansnap.data() || {};
             var list = Array.isArray(pldata.list) ? pldata.list : [];
             list.forEach(function (item) {
@@ -10910,7 +11014,8 @@
               });
             });
             if (list.length) render();
-          }).catch(function () {});
+            if (plansReadyResolve) plansReadyResolve();
+          }).catch(function () { if (plansReadyResolve) plansReadyResolve(); });
 
           var ref = db.doc("data/users/" + uid + "/dishes");
           ref.get().then(function (snap) {
@@ -11389,6 +11494,7 @@
       configLoaded = true;
       if (window.authToken || !window.authRequired) { initPersistence(); recoverPendingJobs(); syncPush(); if (window.appTrial) refreshQuota(); }
       render();
+      if (window.authToken || !window.authRequired) handleStartLink();
       if (window.appBilling && (window.authToken || !window.authRequired)) { handleBillingReturn(); refreshBilling().then(render); }
     });
   }

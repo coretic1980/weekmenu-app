@@ -1858,10 +1858,10 @@ function countWeeks(v) { return v && Array.isArray(v.list) ? v.list.length : (Ar
 // Wat er onder een anoniem ID staat (zonder iets te wijzigen).
 function readAnonData(anon) {
   return Promise.all(UPGRADE_SUBPATHS.map(function (s) { return dbGetDoc("data/users/" + anon + "/" + s); }).concat([
-    dbGetDoc("data/users/" + anon + "/meta"), dbGetDoc("adminMeta/" + anon), dbGetDoc("listsIndex/" + anon), dbGetDoc("push/" + anon), dbGetDoc("quota/" + anon)
+    dbGetDoc("data/users/" + anon + "/meta"), dbGetDoc("adminMeta/" + anon), dbGetDoc("listsIndex/" + anon), dbGetDoc("push/" + anon), dbGetDoc("quota/" + anon), dbGetDoc("notify/" + anon)
   ])).then(function (r) {
     var tokens = r[5].exists && r[5].value && Array.isArray(r[5].value.tokens) ? r[5].value.tokens : [];
-    return { prefs: r[0], dishes: r[1], plannedWeeks: r[2], meta: r[3], adminMeta: r[4], tokens: tokens, push: r[6], quota: r[7] };
+    return { prefs: r[0], dishes: r[1], plannedWeeks: r[2], meta: r[3], adminMeta: r[4], tokens: tokens, push: r[6], quota: r[7], notify: r[8] };
   });
 }
 function anonSummary(d) {
@@ -1874,6 +1874,7 @@ function copyAnonData(anon, uid, d, email, resume) {
   UPGRADE_SUBPATHS.forEach(function (s) { if (d[s].exists) writes.push(dbSetDoc("data/users/" + uid + "/" + s, d[s].value)); });
   if (d.adminMeta.exists) writes.push(dbSetDoc("adminMeta/" + uid, d.adminMeta.value));
   if (d.push && d.push.exists) writes.push(dbSetDoc("push/" + uid, d.push.value));
+  if (d.notify && d.notify.exists) writes.push(dbSetDoc("notify/" + uid, d.notify.value));
   if (d.quota && d.quota.exists) writes.push(dbSetDoc("quota/" + uid, d.quota.value));
   var m = d.meta.exists && d.meta.value ? d.meta.value : {};
   // Bij een herhaalde aanvraag (bron al opgeruimd) laten we het bestaande "laatst gezien" met rust.
@@ -1895,13 +1896,13 @@ function copyAnonData(anon, uid, d, email, resume) {
   return Promise.all(writes).then(function () { return listWork; });
 }
 function removeCopies(uid, tokens, anon) {
-  var paths = UPGRADE_SUBPATHS.map(function (s) { return "data/users/" + uid + "/" + s; }).concat(["data/users/" + uid + "/meta", "adminMeta/" + uid, "listsIndex/" + uid, "push/" + uid, "quota/" + uid]);
+  var paths = UPGRADE_SUBPATHS.map(function (s) { return "data/users/" + uid + "/" + s; }).concat(["data/users/" + uid + "/meta", "adminMeta/" + uid, "listsIndex/" + uid, "push/" + uid, "quota/" + uid, "notify/" + uid]);
   return Promise.all(paths.map(dbDeleteDoc).concat((tokens || []).map(function (t) {
     return dbGetDoc("lists/" + t).then(function (r) { return r.exists && r.value ? dbSetDoc("lists/" + t, Object.assign({}, r.value, { ownerUid: anon })) : null; });
   }))).catch(function () {});
 }
 function cleanupAnon(anon) {
-  var paths = UPGRADE_SUBPATHS.map(function (s) { return "data/users/" + anon + "/" + s; }).concat(["data/users/" + anon + "/meta", "adminMeta/" + anon, "listsIndex/" + anon, "push/" + anon, "quota/" + anon]);
+  var paths = UPGRADE_SUBPATHS.map(function (s) { return "data/users/" + anon + "/" + s; }).concat(["data/users/" + anon + "/meta", "adminMeta/" + anon, "listsIndex/" + anon, "push/" + anon, "quota/" + anon, "notify/" + anon]);
   return Promise.all(paths.map(dbDeleteDoc)).then(function () {
     return updateBlocked(function (b) { delete b.uids[anon]; delete b.invalidBefore[anon]; });
   }).then(function () { invalidateSummaries(); });
@@ -3038,7 +3039,7 @@ function sendWebPush(sub, payload, host) {
     }).then(function (r) { clearTimeout(t); return r.status; }, function (e) { clearTimeout(t); throw e; });
   });
 }
-function notifyUser(uid, payload, host) {
+function notifyUser(uid, payload, host, kind) {
   return dbGetDoc("push/" + uid).then(function (r) {
     var subs = r.exists && r.value && Array.isArray(r.value.subs) ? r.value.subs : [];
     if (!subs.length) return { sent: 0 };
@@ -3047,7 +3048,7 @@ function notifyUser(uid, payload, host) {
     })).then(function (results) {
       var sent = results.filter(function (x) { return x.status >= 200 && x.status < 300; }).length;
       var dead = results.filter(function (x) { return [400, 401, 403, 404, 410].indexOf(x.status) > -1; }).map(function (x) { return x.s.endpoint; });
-      logEvent("push", "notify", sent > 0, sent > 0 ? 200 : (results[0] ? results[0].status : 0), { uid: uid, sent: sent, failed: results.length - sent, error: sent > 0 ? undefined : "Melding niet afgeleverd" });
+      logEvent("push", kind || "notify", sent > 0, sent > 0 ? 200 : (results[0] ? results[0].status : 0), { uid: uid, sent: sent, failed: results.length - sent, error: sent > 0 ? undefined : "Melding niet afgeleverd" });
       if (!dead.length) return { sent: sent, removed: 0 };
       return dbSetDoc("push/" + uid, { subs: subs.filter(function (s) { return dead.indexOf(s.endpoint) === -1; }) }).then(function () { return { sent: sent, removed: dead.length }; });
     });
@@ -3061,6 +3062,168 @@ function notifyJobFinished(job) {
   notifyUser(job.uid, job.status === "done"
     ? { title: "Balanza", body: "Je gerechten zijn klaar. Tik om ze te bekijken.", url: "/", tag: "balanza-generate" }
     : { title: "Balanza", body: "Het genereren is niet gelukt. Tik om het opnieuw te proberen.", url: "/", tag: "balanza-generate" }, job.host);
+}
+
+// ---------- Geplande meldingen: planherinneringen en nieuwe community-recepten ----------
+// Per gebruiker één document notify/<uid>: { prefs: {...}, state: {...} }. Geen document = de standaardwaarden hieronder.
+// Alles staat standaard aan, maar er gaat alleen iets naar wie meldingen op een toestel heeft aangezet (push/<uid>).
+// Elke paar minuten kijkt de server (en/of een externe cron via /api/cron/notify) wie er nu een melding moet krijgen.
+// Tijden zijn Nederlandse tijd; een melding gaat binnen 3 uur na het gekozen tijdstip de deur uit, anders slaan we hem over.
+var NOTIFY_TZ = "Europe/Amsterdam";
+var NOTIFY_DEFAULTS = { planWeek: true, planWeekDay: 0, planWeekTime: "19:00", planToday: true, planTodayTime: "09:00", community: true };
+var NOTIFY_WINDOW_MIN = 180;
+var COMMUNITY_DIGEST_TIME = "17:00";
+var COMMUNITY_MATCH_BALANS = 80;   // iets ruimer dan voor eigen gerechten: een recept van een ander is gemaakt voor zijn doel   // dan zoek je inspiratie voor het avondeten
+var NOTIFY_TICK_MS = 5 * 60 * 1000;
+var CRON_SECRET = process.env.CRON_SECRET || "";
+var WEEKDAY_NAMES = ["zondag", "maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag"];
+var notifyStats = { lastTickAt: null, lastTickMs: 0, lastTickSent: 0, lastTickSource: null, running: false };
+
+function validHHMM(v) { return typeof v === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(v); }
+function hhmmToMin(v) { return Number(v.slice(0, 2)) * 60 + Number(v.slice(3, 5)); }
+function cleanNotifyPrefs(p) {
+  var out = Object.assign({}, NOTIFY_DEFAULTS);
+  if (!p || typeof p !== "object") return out;
+  ["planWeek", "planToday", "community"].forEach(function (k) { if (typeof p[k] === "boolean") out[k] = p[k]; });
+  if (Number.isInteger(p.planWeekDay) && p.planWeekDay >= 0 && p.planWeekDay <= 6) out.planWeekDay = p.planWeekDay;
+  if (validHHMM(p.planWeekTime)) out.planWeekTime = p.planWeekTime;
+  if (validHHMM(p.planTodayTime)) out.planTodayTime = p.planTodayTime;
+  return out;
+}
+// Datum en tijd zoals in Nederland, los van de tijdzone van de server.
+var notifyFmt = new Intl.DateTimeFormat("en-GB", { timeZone: NOTIFY_TZ, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", weekday: "short", hourCycle: "h23" });
+function localNow(ms) {
+  var parts = {};
+  notifyFmt.formatToParts(new Date(ms)).forEach(function (x) { parts[x.type] = x.value; });
+  var wd = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(parts.weekday);
+  return { date: parts.year + "-" + parts.month + "-" + parts.day, weekday: wd, minutes: Number(parts.hour) * 60 + Number(parts.minute) };
+}
+function addDaysKey(key, n) { var d = new Date(key + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
+// De eerstvolgende maandag ná vandaag (op maandag zelf: volgende week; de herinnering gaat over de week die nog komt).
+function nextMondayKey(today) { var wd = new Date(today + "T12:00:00Z").getUTCDay(); return addDaysKey(today, ((8 - wd) % 7) || 7); }
+function mondayOfKey(today) { var wd = new Date(today + "T12:00:00Z").getUTCDay(); return addDaysKey(today, -((wd + 6) % 7)); }
+function inWindow(nowMin, target) { var t = hhmmToMin(target); return nowMin >= t && nowMin < t + NOTIFY_WINDOW_MIN; }
+var PLAN_DAY_NAMES = ["Maandag", "Dinsdag", "Woensdag", "Donderdag", "Vrijdag", "Zaterdag", "Zondag"];
+function weekList(doc) { return doc && Array.isArray(doc.list) ? doc.list : Array.isArray(doc) ? doc : []; }
+function dinnersPlanned(weeks, mondayKey) {
+  var w = weeks.filter(function (x) { return x && x.weekStart === mondayKey; })[0];
+  var slots = w && w.slots && typeof w.slots === "object" ? w.slots : {};
+  return PLAN_DAY_NAMES.filter(function (d) { return slots[d + "|Diner"]; }).length;
+}
+function fmtDayMonth(key) { var d = new Date(key + "T12:00:00Z"); return d.getUTCDate() + " " + ["jan", "feb", "mrt", "apr", "mei", "jun", "jul", "aug", "sep", "okt", "nov", "dec"][d.getUTCMonth()]; }
+
+// Past een community-recept bij deze gebruiker? Voedingsstijl, uitgesloten ingrediënten, maaltijdmoment en balans voor zijn doel.
+function communityMatches(rec, prefs) {
+  var d = rec.dish || {};
+  prefs = prefs || {};
+  if (Array.isArray(prefs.mealTypes) && prefs.mealTypes.length && prefs.mealTypes.indexOf(d.mealType) === -1) return false;
+  if (prefs.dietStyle && dishDietViolations(d, prefs.dietStyle).length) return false;
+  var excl = String(prefs.exclude || "").toLowerCase().split(/[,;\n]+/).map(function (x) { return x.trim(); }).filter(function (x) { return x.length >= 3; });
+  if (excl.length) {
+    var hay = (d.name + " " + (d.ingredienten || []).join(" ")).toLowerCase();
+    if (excl.some(function (x) { return hay.indexOf(x) > -1; })) return false;
+  }
+  if (prefs.goal && d.kcal) { if (computeBalanceServer(d.kh || 0, d.eiwit || 0, d.vet || 0, prefs.goal, prefs.dietStyle) < COMMUNITY_MATCH_BALANS) return false; }
+  return true;
+}
+
+function notifyHost() {
+  var base = process.env.PUBLIC_BASE_URL || "";
+  try { return base ? new URL(base).host : null; } catch (e) { return null; }
+}
+// Bepaalt voor één gebruiker welke melding(en) nu weg moeten en verstuurt ze. Geeft het aantal verstuurde meldingen.
+function notifyTickUser(uid, ctx) {
+  return Promise.all([dbGetDoc("notify/" + uid), dbGetDoc("data/users/" + uid + "/prefs"), dbGetDoc("data/users/" + uid + "/plannedWeeks"), dbGetDoc("billing/" + uid)]).then(function (r) {
+    var doc = r[0].exists && r[0].value ? r[0].value : {};
+    var np = cleanNotifyPrefs(doc.prefs), st = Object.assign({}, doc.state || {});
+    var prefs = r[1].exists && r[1].value ? r[1].value : {};
+    var weeks = weekList(r[2].exists ? r[2].value : null);
+    var plan = adminPlanState(r[3].exists ? r[3].value : null, ctx.settings, !!ctx.accounts[uid], ctx.now).plan;
+    var canPlan = plan !== "expired";   // na de proef zonder Plus kan iemand niet plannen: dan ook niet aansporen
+    var now = ctx.local, jobs = [], changed = false;
+    var mealTypes = Array.isArray(prefs.mealTypes) && prefs.mealTypes.length ? prefs.mealTypes : ["Diner"];
+
+    // 1. Weekplanning
+    if (np.planWeek && canPlan && mealTypes.indexOf("Diner") > -1 && now.weekday === np.planWeekDay && inWindow(now.minutes, np.planWeekTime) && st.weekSentOn !== now.date) {
+      var mon = nextMondayKey(now.date), planned = dinnersPlanned(weeks, mon);
+      st.weekSentOn = now.date; changed = true;
+      if (planned <= 4) jobs.push({ kind: "remind-week", payload: { title: "Plan je week", tag: "balanza-week",
+        body: planned === 0 ? "Je week vanaf maandag " + fmtDayMonth(mon) + " is nog leeg. Zullen we hem samen invullen?" : "Nog " + (7 - planned) + " avonden zonder diner in de week vanaf " + fmtDayMonth(mon) + ". Tik om ze in te vullen.",
+        url: "/?open=plan&week=" + mon } });
+    }
+    // 2. Vandaag nog geen diner
+    if (np.planToday && canPlan && mealTypes.indexOf("Diner") > -1 && inWindow(now.minutes, np.planTodayTime) && st.todaySentOn !== now.date) {
+      var monToday = mondayOfKey(now.date), dayName = PLAN_DAY_NAMES[(now.weekday + 6) % 7];
+      var w = weeks.filter(function (x) { return x && x.weekStart === monToday; })[0];
+      st.todaySentOn = now.date; changed = true;
+      if (!(w && w.slots && w.slots[dayName + "|Diner"])) jobs.push({ kind: "remind-today", payload: { title: "Wat eten we vanavond?", tag: "balanza-today",
+        body: "Je hebt voor vanavond nog geen diner gepland. Tik voor een gerecht dat past bij je dag.", url: "/?open=plan&week=" + monToday + "&day=" + dayName } });
+    }
+    // 3. Nieuwe community-recepten die passen (hooguit één bundel per dag)
+    if (np.community && ctx.communityOn) {
+      if (!st.communitySeenUntil) { st.communitySeenUntil = ctx.now; changed = true; }   // eerste keer: geen stapel oude recepten
+      else if (inWindow(now.minutes, COMMUNITY_DIGEST_TIME) && st.communitySentOn !== now.date) {
+        var fresh = ctx.community.filter(function (c) { return !c.hidden && c.ownerUid !== uid && c.createdAt > st.communitySeenUntil && c.createdAt <= ctx.now && communityMatches(c, prefs); })
+          .sort(function (a, b) { return ((b.likeCount || 0) + (b.saveCount || 0)) - ((a.likeCount || 0) + (a.saveCount || 0)) || b.createdAt - a.createdAt; });
+        st.communitySentOn = now.date; st.communitySeenUntil = ctx.now; changed = true;
+        if (fresh.length) jobs.push({ kind: "community-digest", payload: { title: fresh.length === 1 ? "Nieuw recept dat bij je past" : fresh.length + " nieuwe recepten die bij je passen", tag: "balanza-community",
+          body: fresh.length === 1 ? "“" + fresh[0].dish.name + "” staat in de community. Tik om het te bekijken." : "Waaronder “" + fresh[0].dish.name + "”. Tik om ze te bekijken in de community.",
+          url: fresh.length === 1 ? "/?open=community&id=" + fresh[0].id : "/?open=community" } });
+      }
+    }
+    var save = changed ? dbSetDoc("notify/" + uid, { prefs: doc.prefs || null, state: st }) : Promise.resolve();
+    return save.then(function () {
+      return Promise.all(jobs.map(function (j) { return notifyUser(uid, j.payload, ctx.host, j.kind).then(function (x) { return x.sent > 0 ? 1 : 0; }); }));
+    }).then(function (n) { return n.reduce(function (a, b) { return a + b; }, 0); });
+  }).catch(function (e) { console.warn("Melding voor " + uid + " mislukt: " + (e && e.message)); return 0; });
+}
+function runNotifyTick(source, atMs) {
+  if (notifyStats.running) return Promise.resolve({ skipped: true });
+  notifyStats.running = true;
+  var t0 = Date.now(), now = atMs || Date.now();
+  return Promise.all([dbListDocs("push/"), dbListUserIds(), getBlocked(), getSettings(), communityAll().catch(function () { return []; })]).then(function (r) {
+    var accounts = {}; r[1].forEach(function (a) { if (a && a.uid && a.email) accounts[a.uid] = true; });
+    var ctx = { now: now, local: localNow(now), settings: r[3], accounts: accounts, community: r[4], communityOn: !!effectiveModules(r[3]).community, host: notifyHost() };
+    var uids = r[0].filter(function (d) { return d.value && Array.isArray(d.value.subs) && d.value.subs.length; }).map(function (d) { return d.path.slice("push/".length); })
+      .filter(function (uid) { return !r[2].uids[uid]; });
+    return mapLimit(uids, 10, function (uid) { return notifyTickUser(uid, ctx); }).then(function (counts) {
+      var sent = counts.reduce(function (a, b) { return a + b; }, 0);
+      notifyStats = { lastTickAt: new Date().toISOString(), lastTickMs: Date.now() - t0, lastTickSent: sent, lastTickSource: source, running: false, users: uids.length };
+      if (sent) console.log("Meldingen: " + sent + " verstuurd (" + source + ", " + uids.length + " gebruikers met meldingen)");
+      return { sent: sent, users: uids.length };
+    });
+  }).catch(function (e) { notifyStats.running = false; console.warn("Meldingsronde mislukt: " + (e && e.message)); return { error: true }; });
+}
+setTimeout(function () { runNotifyTick("server"); }, 30000);
+var notifyTimer = setInterval(function () { runNotifyTick("server"); }, NOTIFY_TICK_MS);
+if (notifyTimer.unref) notifyTimer.unref();
+
+// Externe cron (bijv. cron-job.org of een Render Cron Job), voor als de server slaapt: POST met Authorization: Bearer <CRON_SECRET>.
+function handleCronNotify(req, res) {
+  var auth = String(req.headers["authorization"] || "");
+  var given = auth.indexOf("Bearer ") === 0 ? auth.slice(7) : "";
+  var ok = CRON_SECRET.length >= 16 && given.length === CRON_SECRET.length && crypto.timingSafeEqual(Buffer.from(given), Buffer.from(CRON_SECRET));
+  if (!ok) return sendJSON(res, 401, { code: "unauthorized", message: "Ongeldige of ontbrekende CRON_SECRET." });
+  // Alleen voor tests (NOTIFY_TEST_CLOCK=1): de ronde draaien alsof het een ander tijdstip is.
+  var at = null;
+  if (process.env.NOTIFY_TEST_CLOCK === "1") { try { at = Number(new URL(req.url, "http://x").searchParams.get("at")) || null; } catch (e) { at = null; } }
+  return runNotifyTick("cron", at).then(function (r) { sendJSON(res, 200, Object.assign({ ok: true }, r)); });
+}
+// De gebruiker leest en wijzigt zijn eigen meldingsvoorkeuren.
+function handleNotifyPrefs(req, res) {
+  if (!pushSubscribeAllowed(clientIp(req))) return sendJSON(res, 429, { code: "rate_limited", message: "Te veel verzoeken. Probeer het later opnieuw." });
+  return resolveUser(req).then(function (user) {
+    if (!user) return sendUnauthorized(res);
+    var key = "notify/" + user.uid;
+    if (req.method === "GET") return dbGetDoc(key).then(function (r) { sendJSON(res, 200, { prefs: cleanNotifyPrefs(r.exists && r.value ? r.value.prefs : null) }); });
+    return readBody(req).then(function (body) {
+      return dbGetDoc(key).then(function (r) {
+        var doc = r.exists && r.value ? r.value : {};
+        var next = cleanNotifyPrefs(Object.assign({}, cleanNotifyPrefs(doc.prefs), body && body.prefs && typeof body.prefs === "object" ? body.prefs : {}));
+        return dbSetDoc(key, { prefs: next, state: doc.state || {} }).then(function () { sendJSON(res, 200, { prefs: next }); });
+      });
+    });
+  }).catch(function () { sendJSON(res, 400, { code: "bad_request", message: "Ongeldige aanvraag." }); });
 }
 
 function handlePushKey(req, res) {
@@ -4792,7 +4955,7 @@ function deleteUserEverywhere(user) {
     var tokens = r.exists && r.value && Array.isArray(r.value.tokens) ? r.value.tokens : [];
     return Promise.all(tokens.map(function (t) { return dbDeleteDoc("lists/" + t); }));
   }).then(function () {
-    var paths = ["data/users/" + uid + "/prefs", "data/users/" + uid + "/dishes", "data/users/" + uid + "/plannedWeeks", "data/users/" + uid + "/meta", "listsIndex/" + uid, "adminMeta/" + uid, "push/" + uid, "quota/" + uid, "billing/" + uid];
+    var paths = ["data/users/" + uid + "/prefs", "data/users/" + uid + "/dishes", "data/users/" + uid + "/plannedWeeks", "data/users/" + uid + "/meta", "listsIndex/" + uid, "adminMeta/" + uid, "push/" + uid, "quota/" + uid, "billing/" + uid, "notify/" + uid];
     if (user.email) paths.push("auth/users/" + user.email);
     return Promise.all(paths.map(dbDeleteDoc));
   }).then(function () {
@@ -5046,7 +5209,7 @@ function aiCostSummary(docs, days14) {
 }
 function handleAdminStats(req, res) {
   return Promise.all([loadUserSummaries(), getUsageToday(), getUsageHistory(14), getRecentLogs(LOG_CAP), dbListDocs("lists/"), getSettings(), dbListDocs("tokenUsage/"),
-    communityAll().catch(function () { return []; })]).then(function (r) {
+    communityAll().catch(function () { return []; }), dbListDocs("push/").catch(function () { return []; })]).then(function (r) {
     var users = r[0], logs = r[3].map(cleanLogRow), now = Date.now();
     function within(ts, days) { var t = ts ? Date.parse(ts) : NaN; return isFinite(t) && now - t <= days * DAY_MS; }
     var accounts = users.filter(function (u) { return u.type === "account"; });
@@ -5088,6 +5251,12 @@ function handleAdminStats(req, res) {
       logCapped: logs.length >= LOG_CAP,
       maintenance: r[5].maintenance.enabled,
       business: businessSummary(users, r[5]),
+      notify: (function () {
+        var week = logs.filter(function (l) { return l.type === "push" && l.ts && now - Date.parse(l.ts) <= 7 * DAY_MS; });
+        var by = {}; week.forEach(function (l) { var k = l.action || "notify"; by[k] = by[k] || { sent: 0, failed: 0 }; if (l.ok) by[k].sent++; else by[k].failed++; });
+        return { usersWithPush: r[8].filter(function (d) { return d.value && Array.isArray(d.value.subs) && d.value.subs.length; }).length, last7d: by,
+          lastTickAt: notifyStats.lastTickAt, lastTickSource: notifyStats.lastTickSource, cronConfigured: CRON_SECRET.length >= 16 };
+      })(),
       community: { reported: r[7].filter(function (x) { return (x.reports || []).length && !x.hidden; }).length, hidden: r[7].filter(function (x) { return x.hidden; }).length }
     });
   });
@@ -5107,6 +5276,9 @@ function handleAdminSystem(req, res) {
       { key: "adminPassword", label: "Beheerderswachtwoord", ok: ADMIN_PASSWORD.length >= 12, detail: ADMIN_PASSWORD.length >= 12 ? "sterk genoeg" : "korter dan 12 tekens: kies een langer wachtwoord (ADMIN_PASSWORD)" },
       { key: "sessionSecret", label: "Sessiegeheim (SESSION_SECRET)", ok: !!process.env.SESSION_SECRET, detail: process.env.SESSION_SECRET ? "vast ingesteld" : "niet ingesteld: iedereen wordt uitgelogd bij een herstart" },
       { key: "unsplash", label: "Foto's (UNSPLASH_ACCESS_KEY)", ok: !!UNSPLASH_ACCESS_KEY, optional: true, detail: UNSPLASH_ACCESS_KEY ? "ingesteld" : "niet ingesteld: gerechten krijgen geen foto" },
+      { key: "notifyCron", label: "Externe cron voor meldingen", ok: CRON_SECRET.length >= 16, optional: true,
+        detail: (CRON_SECRET.length >= 16 ? "CRON_SECRET is ingesteld: een cron kan POST /api/cron/notify aanroepen." : "niet ingesteld; alleen nodig als de server kan slapen (zet CRON_SECRET, minstens 16 tekens, en laat elke 5 à 15 minuten POST /api/cron/notify aanroepen).") +
+          (notifyStats.lastTickAt ? " Laatste ronde: " + notifyStats.lastTickAt.replace("T", " ").slice(0, 16) + " UTC via " + (notifyStats.lastTickSource === "cron" ? "cron" : "de server") + "." : "") },
       { key: "webPush", label: "Meldingen (Web Push)", ok: pushInfo.ok && (pushInfo.source === "env" || mongoConnected), optional: true, detail: !pushInfo.ok ? "niet beschikbaar: " + pushInfo.error : pushInfo.source === "env" ? "sleutels uit de omgeving (VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY)" : mongoConnected ? "sleutels bewaard in de database" : "sleutels staan alleen in het lokale bestand en verdwijnen bij een herstart: stel VAPID_PUBLIC_KEY en VAPID_PRIVATE_KEY in" },
       { key: "billing", label: "Betalingen (Mollie)", ok: benv.keyPresent && benv.baseOk, optional: !billingEnabled, detail: !benv.keyPresent ? "MOLLIE_API_KEY staat niet ingesteld" + (billingEnabled ? "" : " (abonnementen staan uit)") : !benv.baseOk ? "PUBLIC_BASE_URL ontbreekt of is ongeldig (verwacht https://jouw-adres, zonder slash); Mollie heeft dat nodig voor de webhook" : (benv.mode === "live" ? "LIVE-sleutel" : benv.mode === "test" ? "testsleutel: er wordt niet echt afgeschreven" : "sleutel met een onbekend formaat") + " · webhook: " + benv.webhookUrl + (billingEnabled ? " · abonnementen staan aan" : " · abonnementen staan uit") },
       { key: "oauthApple", label: "Inloggen met Apple (APPLE_CLIENT_ID)", ok: OAUTH_PROVIDERS.apple.enabled(), optional: true, detail: OAUTH_PROVIDERS.apple.enabled() ? "ingesteld · terugkeer-URL: " + (PUBLIC_BASE_URL || "<jouw adres>") + "/api/auth/oauth/apple/callback" : "niet ingesteld: de Apple-knop is verborgen" },
@@ -5654,6 +5826,8 @@ var server = http.createServer(function (req, res) {
   if (req.method === "GET" && url.pathname === "/api/push/key") return handlePushKey(req, res);
   if (req.method === "POST" && url.pathname === "/api/push/subscribe") return handlePushSubscribe(req, res);
   if (req.method === "POST" && url.pathname === "/api/push/unsubscribe") return handlePushUnsubscribe(req, res);
+  if ((req.method === "GET" || req.method === "POST") && url.pathname === "/api/notify/prefs") return handleNotifyPrefs(req, res);
+  if (req.method === "POST" && url.pathname === "/api/cron/notify") return handleCronNotify(req, res);
   if (req.method === "POST" && url.pathname === "/api/tips") return handleTips(req, res);
   if (req.method === "POST" && url.pathname === "/api/auth/register") return guardedRegister(req, res);
   if (req.method === "POST" && url.pathname === "/api/auth/upgrade") return guardedUpgrade(req, res);

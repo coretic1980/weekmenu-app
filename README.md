@@ -566,6 +566,31 @@ node -e "const c=require('crypto');const k=c.generateKeyPairSync('ec',{namedCurv
 **In de beheerconsole**: onder *Activiteit* staan de opdrachten (soort "AI") en de verstuurde meldingen (soort "Melding",
 met "1 van 1 toestel bereikt", zonder inhoud of sleutels). Onder *Systeem* staat de controle *Meldingen (Web Push)*.
 
+**Geplande meldingen.** Naast "je gerechten zijn klaar" stuurt de server drie soorten meldingen, alleen naar wie
+meldingen op een toestel heeft aangezet. De gebruiker kiest ze per soort onder *Instellingen → Meldingen* (standaard aan):
+
+- *Plan je week*: op een gekozen dag en tijd (standaard zondag 19:00), alleen als er in de week vanaf de komende
+  maandag 3 of meer avonden zonder diner zijn. Tik = de planner op die week.
+- *Diner van vandaag*: op een gekozen tijd (standaard 9:00), alleen als er voor vanavond nog geen diner gepland staat.
+  Tik = de planner op vandaag.
+- *Nieuwe recepten in de community*: hooguit één bundel per dag rond 17:00, met recepten die sinds de vorige keer zijn
+  gedeeld en passen bij de gebruiker: zijn voedingsstijl (geen vlees voor een vegetariër), niets uit "wil niet eten",
+  zijn maaltijdmomenten en een balans van 80 of meer voor zijn doel. Eigen recepten tellen niet mee.
+
+Wie na de proef geen Plus heeft, krijgt geen planherinneringen (plannen kan dan niet). Tijden zijn Nederlandse tijd. Een
+melding gaat binnen 3 uur na het tijdstip weg; wordt dat venster gemist (server stond uit), dan slaat hij die keer over.
+De voorkeuren staan per gebruiker in `notify/<uid>` en gaan mee bij exporteren, verwijderen en omzetten naar een account.
+
+De server kijkt elke 5 minuten zelf. **Kan je server slapen** (bijv. Render's gratis laag), zet dan `CRON_SECRET`
+(minstens 16 tekens) en laat een externe cron (bijv. cron-job.org of een Render Cron Job) elke 5 à 15 minuten aanroepen:
+
+```
+curl -X POST https://jouw-domein.nl/api/cron/notify -H "Authorization: Bearer $CRON_SECRET"
+```
+
+Dubbel versturen kan niet: per gebruiker wordt per dag bijgehouden wat al verstuurd is. De beheerconsole toont onder
+*Overzicht → Meldingen* hoeveel er de afgelopen 7 dagen per soort zijn afgeleverd, en onder *Systeem* of de cron is ingesteld.
+
 **Zichtbaar voor gebruikers.** Zodra abonnementen aan staan, ziet een gebruiker altijd welk plan hij heeft: een klein label
 ("Gratis" of "Plus") naast de avatar rechtsboven en in het accountmenu. Vanuit het accountmenu, de Plus-kaart in Mijn profiel
 en de limietmelding op het generatiescherm gaat een link "Abonnement vergelijken" naar een pagina met Gratis en Plus naast
