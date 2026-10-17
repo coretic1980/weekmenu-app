@@ -4057,7 +4057,7 @@ var ASSISTANT_VIEWS = { weeks: "Start", plan: "Plannen", library: "Gerechten", s
 var ASSISTANT_TILES = { vandaag: "Vandaag", reis: "Jouw reis", week: "Huidige week", seizoen: "Seizoen", foto: "Gerecht van foto", recent: "Recente gerechten",
   community: "Community", boodschappen: "Boodschappenlijst", uitleg: "Hoe werkt Balanza", genereren: "Snel genereren", volgendeweek: "Volgende week", tip: "Tip van de dag" };
 var ASSISTANT_COACH = { draft: "Week alvast klaarzetten", cooked: "Na het eten: was het lekker?", recap: "Weekterugblik", leftovers: "Restjes opmaken",
-  season: "Seizoen en feestdagen", journey: "Jouw reis", challenge: "Weekuitdaging", milestones: "Mijlpalen", progress: "Voortgang bijhouden" };
+  season: "Seizoen en feestdagen", journey: "Jouw reis", challenge: "Weekuitdaging", milestones: "Mijlpalen", progress: "Voortgang bijhouden", voice: "Inspreken (spraakinvoer)" };
 var ASSISTANT_NOTIFY = { planWeek: "Melding: plan je week", planToday: "Melding: diner van vandaag", community: "Melding: nieuwe recepten",
   cookedCheck: "Melding: na het eten", recap: "Melding: weekterugblik", autoWeek: "Week automatisch klaarzetten" };
 var A_CUISINES = ["Italiaans", "Aziatisch", "Mediterraan", "Midden-Oosters", "Nederlands", "Mexicaans", "Indiaas", "Thais", "Japans", "Koreaans", "Frans", "Grieks", "Spaans", "Marokkaans", "Vietnamees", "Amerikaans"];
@@ -4077,6 +4077,7 @@ function assistantGuide() {
     "- Plannen: week en dag, automatisch invullen, conceptweek die Balanza klaarzet, boodschappenlijst (delen via WhatsApp, Bring!, PDF, kostenschatting), prepdag.\n" +
     "- Varianten van een gerecht: pittiger, simpeler, fine dining, andere koolhydraatbron, ander vlees/vis of andere vleesvervanger. Gerecht van foto.\n" +
     "- Begeleiding (alles los aan/uit): week klaarzetten, na het eten (lekker of niet), weekterugblik, restjes, seizoen, Jouw reis (fases, weekuitdaging, mijlpalen, voortgang), budgetmodus.\n" +
+    "- Inspreken: een microfoonknop in de chat en bij de wens voor deze keer (spraakherkenning van de browser, Nederlands); aan/uit onder Begeleiding.\n" +
     "- Samen plannen met huisgenoten (Mijn profiel), community met recepten van anderen, meldingen, licht of donker thema, Start-scherm indelen.\n" +
     "- Plus: na de proefperiode zijn ontwerpen en plannen voor Plus. Prijzen en abonnement staan bij Mijn profiel.\n";
 }

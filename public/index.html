@@ -304,6 +304,11 @@
   .chat-actions { align-self: flex-start; width: 86%; display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--accent2); background: var(--surface); }
   .chat-act { font-size: 13.5px; }
   .chat-idea b { font-size: 14.5px; }
+  .mic-btn { flex: none; appearance: none; width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center; border: 1px solid var(--line); background: var(--surface); color: var(--accent2); cursor: pointer; }
+  .mic-btn.listening { background: #C2410C; border-color: #C2410C; color: #fff; animation: micpulse 1.2s infinite; }
+  @keyframes micpulse { 0% { box-shadow: 0 0 0 0 rgba(194,65,12,.45); } 70% { box-shadow: 0 0 0 10px rgba(194,65,12,0); } 100% { box-shadow: 0 0 0 0 rgba(194,65,12,0); } }
+  .voice-row { display: flex; gap: 8px; align-items: center; }
+  .voice-row .textinput { flex: 1; min-width: 0; margin: 0; }
   .chat-left { align-self: center; font-size: 12px; color: var(--muted); }
   .chat-form { display: flex; gap: 8px; padding: 12px 14px calc(12px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: var(--surface); }
   .chat-form .textinput { flex: 1; min-width: 0; }
@@ -5138,7 +5143,11 @@
     wishInp.placeholder = w.tags.indexOf("huis") > -1 ? "Wat heb je in huis? Bijv. kip, paprika, rijst" : "Bijv. iets met kip en paprika";
     wishInp.value = w.text || "";
     wishInp.oninput = function (e) { w.text = e.target.value; };
-    main.appendChild(wishInp);
+    if (voiceOn()) {
+      var wishRow = document.createElement("div"); wishRow.className = "voice-row";
+      wishRow.appendChild(wishInp); wishRow.appendChild(micButton(wishInp, function (v) { w.text = v; }));
+      main.appendChild(wishRow);
+    } else main.appendChild(wishInp);
 
     // Samenvatting van de voorkeuren
     var sum = document.createElement("div"); sum.className = "gen-summary";
@@ -10939,7 +10948,8 @@
     ["journey", "Jouw reis", "Fases op weg naar je doel, met één focus per fase", null],
     ["challenge", "Weekuitdaging", "Elke week kies je zelf een kleine uitdaging (of sla je over)", null],
     ["milestones", "Mijlpalen", "Een kaartje als je iets bereikt, zoals 10 keer zelf gekookt", null],
-    ["progress", "Voortgang bijhouden", "Optioneel: energie, verzadiging, kleding of gewicht, één keer per week", null]
+    ["progress", "Voortgang bijhouden", "Optioneel: energie, verzadiging, kleding of gewicht, één keer per week", null],
+    ["voice", "Inspreken", "Een microfoonknop in de chat en bij je wens; je browser zet je stem om in tekst die je eerst kunt aanpassen", null]
   ];
   function coachOn(k) { return !(prefs.coach && prefs.coach[k] === false); }
   function setCoach(k, on) {
@@ -12068,6 +12078,38 @@
   // Balanza-assistent: vragen stellen en de app laten aanpassen. Elke wijziging bevestigt de gebruiker zelf
   // (Doen / Niet nu) en is ongedaan te maken. De server bepaalt welke acties bestaan; de kaders liggen vast.
   // =====================================================================================================
+  // ---------- Inspreken (spraakinvoer via de browser, Nederlands) ----------
+  // Gebruikt de spraakherkenning van de browser zelf (geen AI-kosten). Wat je zegt komt in het tekstveld; je controleert
+  // en past het aan voordat je het verstuurt. Toestellen zonder ondersteuning zien geen knop.
+  var SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition || null;
+  function voiceOn() { return !!SpeechRec && coachOn("voice"); }
+  var activeRec = null;
+  function micButton(input, onText) {
+    var b = document.createElement("button"); b.type = "button"; b.className = "mic-btn"; b.id = (input.id || "field") + "Mic";
+    b.setAttribute("aria-label", "Inspreken"); b.title = "Inspreken";
+    b.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>';
+    b.onclick = function () {
+      if (activeRec) { try { activeRec.stop(); } catch (e) {} return; }
+      var rec; try { rec = new SpeechRec(); } catch (e) { showToast("Inspreken werkt niet op dit toestel."); return; }
+      rec.lang = "nl-NL"; rec.interimResults = true; rec.continuous = false; rec.maxAlternatives = 1;
+      var base = input.value ? input.value.replace(/\s*$/, " ") : "";
+      rec.onresult = function (ev) {
+        var txt = "";
+        for (var i = 0; i < ev.results.length; i++) txt += ev.results[i][0].transcript;
+        input.value = (base + txt).slice(0, input.maxLength > 0 ? input.maxLength : 500);
+        if (onText) onText(input.value);
+      };
+      rec.onerror = function (ev) {
+        if (ev && (ev.error === "not-allowed" || ev.error === "service-not-allowed")) showToast("Geef Balanza toestemming voor je microfoon om in te spreken.");
+        else if (ev && ev.error === "no-speech") showToast("Ik hoorde niets. Probeer het nog eens.");
+      };
+      rec.onend = function () { activeRec = null; b.classList.remove("listening"); b.setAttribute("aria-label", "Inspreken"); try { input.focus(); } catch (e) {} };
+      activeRec = rec; b.classList.add("listening"); b.setAttribute("aria-label", "Stop met inspreken");
+      try { rec.start(); } catch (e) { activeRec = null; b.classList.remove("listening"); }
+    };
+    return b;
+  }
+
   var CHAT_KEY = "balanza_chat";
   var chat = { msgs: [], busy: false, left: null };
   try { var savedChat = JSON.parse(sessionStorage.getItem(CHAT_KEY) || "null"); if (savedChat && Array.isArray(savedChat.msgs)) chat.msgs = savedChat.msgs.slice(-30); } catch (e) {}
@@ -12097,8 +12139,10 @@
       document.getElementById("chatClose").onclick = closeChat;
       ov.addEventListener("click", function (e) { if (e.target === ov) closeChat(); });
       ov.addEventListener("keydown", function (e) { if (e.key === "Escape") closeChat(); });
-      document.getElementById("chatForm").onsubmit = function (e) { e.preventDefault(); var i = document.getElementById("chatInput"); var v = i.value.trim(); if (v) { i.value = ""; sendChat(v); } };
+      document.getElementById("chatForm").onsubmit = function (e) { e.preventDefault(); if (activeRec) { try { activeRec.stop(); } catch (x) {} } var i = document.getElementById("chatInput"); var v = i.value.trim(); if (v) { i.value = ""; sendChat(v); } };
+      if (SpeechRec) { var ci = document.getElementById("chatInput"); ci.parentNode.insertBefore(micButton(ci), document.getElementById("chatSend")); }
     }
+    var cm = document.getElementById("chatInputMic"); if (cm) cm.style.display = voiceOn() ? "" : "none";
     paintChat();
     ov.classList.add("active");
     setTimeout(function () { var i = document.getElementById("chatInput"); if (i) i.focus(); }, 50);

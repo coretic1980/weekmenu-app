@@ -638,6 +638,13 @@ Gebaseerd op wat in gedragspsychologie werkt: zelf kiezen, kleine successen, zic
 - **Vrienden uitdagen**: bij de weekuitdaging een WhatsApp-bericht met een link naar /welkom.
 - De toon van *Jouw reis* staat voor 16–25 standaard op luchtig.
 
+### Inspreken (spraakinvoer)
+
+Een microfoonknop naast het tekstveld van de chat en bij "Wens voor deze keer". De spraakherkenning van de browser zet wat je
+zegt (Nederlands) om in tekst in het veld; je controleert en past het aan voordat je verstuurt. Kost geen AI. Toestellen of
+browsers zonder spraakherkenning zien geen knop. Aan/uit onder **Instellingen → Begeleiding → Inspreken**. Let op: sommige
+browsers (zoals Chrome) laten de spraak door hun eigen dienst omzetten; de browser vraagt eerst toestemming voor de microfoon.
+
 ### Balanza-assistent (chat)
 
 Een chatknop rechtsboven in de app. Gebruikers stellen vragen over de app en hun eten, of laten de app aanpassen
