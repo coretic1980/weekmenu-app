@@ -310,6 +310,10 @@
   .voice-row { display: flex; gap: 8px; align-items: center; }
   .voice-row .textinput { flex: 1; min-width: 0; margin: 0; }
   .chat-clear { appearance: none; border: 0; background: none; color: var(--muted); font: inherit; font-size: 12.5px; cursor: pointer; padding: 6px 4px; }
+  .chat-autosend { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 14px; font-size: 12.5px; color: var(--ink); background: var(--nevo-bg); border-top: 1px solid var(--line); overflow: hidden; }
+  .chat-autosend button { appearance: none; border: 0; background: none; font: inherit; font-weight: 700; color: var(--accent2); cursor: pointer; white-space: nowrap; }
+  #chatAutoSend i { position: absolute; left: 0; bottom: 0; height: 3px; background: var(--accent2); animation: autosend 2s linear forwards; }
+  @keyframes autosend { from { width: 0; } to { width: 100%; } }
   .chat-foot { font-size: 11.5px; color: var(--muted); text-align: center; padding: 0 14px 10px; background: var(--surface); }
   .chat-btn { position: relative; }
   .chat-btn.has-dot::after { content: ""; position: absolute; top: 4px; right: 4px; width: 9px; height: 9px; border-radius: 50%; background: #E3A22F; border: 2px solid var(--surface); }
@@ -10962,6 +10966,8 @@
     ["milestones", "Mijlpalen", "Een kaartje als je iets bereikt, zoals 10 keer zelf gekookt", null],
     ["progress", "Voortgang bijhouden", "Optioneel: energie, verzadiging, kleding of gewicht, één keer per week", null],
     ["opener", "Balanza begint soms een gesprekje", "Hooguit één keer per dag een klein persoonlijk berichtje bij de chatknop", null],
+    ["voiceSend", "Na inspreken vanzelf versturen", "Na een korte pauze gaat je ingesproken bericht vanzelf weg; tik op de tekst om eerst iets aan te passen", null],
+    ["voiceReply", "Antwoord voorlezen na inspreken", "Heb je iets ingesproken, dan leest Balanza het antwoord hardop voor", null],
     ["voice", "Inspreken", "Een microfoonknop in de chat en bij je wens; je browser zet je stem om in tekst die je eerst kunt aanpassen", null]
   ];
   function coachOn(k) { return !(prefs.coach && prefs.coach[k] === false); }
@@ -12101,24 +12107,25 @@
   function stopVoice(abort) { if (activeRec) activeRec.stop(abort); }
   var MIC_ICON = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>';
   var STOP_ICON = '<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2.5" fill="currentColor"/></svg>';
-  function micButton(input, onText) {
+  function micButton(input, onText, onDone) {
     var b = document.createElement("button"); b.type = "button"; b.className = "mic-btn"; b.id = (input.id || "field") + "Mic";
     b.setAttribute("aria-label", "Inspreken"); b.title = "Inspreken"; b.innerHTML = MIC_ICON;
     b.onclick = function () {
       if (activeRec) { var same = activeRec.btn === b; stopVoice(false); if (same) return; }
       var rec; try { rec = new SpeechRec(); } catch (e) { showToast("Inspreken werkt niet op dit toestel."); return; }
       rec.lang = "nl-NL"; rec.interimResults = true; rec.continuous = false; rec.maxAlternatives = 1;
-      var base = input.value ? input.value.replace(/\s*$/, " ") : "", stopped = false, silenceT = null, maxT = null, killT = null;
-      function finish() {
+      var base = input.value ? input.value.replace(/\s*$/, " ") : "", stopped = false, silenceT = null, maxT = null, killT = null, heard = false;
+      function finish(aborted) {
         if (stopped) return;
         stopped = true;
+        var doneCb = !aborted && heard && onDone;
         clearTimeout(silenceT); clearTimeout(maxT);
         if (activeRec && activeRec.rec === rec) activeRec = null;
         b.classList.remove("listening"); b.innerHTML = MIC_ICON; b.setAttribute("aria-label", "Inspreken"); b.title = "Inspreken";
-        try { input.focus(); } catch (e) {}
+        if (doneCb && input.value.trim()) onDone(input.value); else { try { input.focus(); } catch (e) {} }
       }
       var ctl = { rec: rec, btn: b, stop: function (abort) {
-        var was = stopped; finish();
+        var was = stopped; finish(abort);
         if (was) return;
         try { if (abort) rec.abort(); else rec.stop(); } catch (e) {}
         killT = setTimeout(function () { try { rec.abort(); } catch (e) {} }, 1200);   // hangt hij toch, dan hard afbreken
@@ -12128,6 +12135,7 @@
         var txt = "";
         for (var i = 0; i < ev.results.length; i++) txt += ev.results[i][0].transcript;
         input.value = (base + txt).slice(0, input.maxLength > 0 ? input.maxLength : 500);
+        heard = heard || !!txt.trim();
         if (onText) onText(input.value);
         clearTimeout(silenceT);
         silenceT = setTimeout(function () { ctl.stop(false); }, 2500);   // 2,5 seconde stil = klaar
@@ -12135,16 +12143,73 @@
       rec.onerror = function (ev) {
         if (!stopped && ev && (ev.error === "not-allowed" || ev.error === "service-not-allowed")) showToast("Geef Balanza toestemming voor je microfoon (en spraakherkenning) om in te spreken.");
         else if (!stopped && ev && ev.error === "no-speech") showToast("Ik hoorde niets. Probeer het nog eens.");
-        finish();
+        finish(!heard);
       };
-      rec.onend = function () { clearTimeout(killT); finish(); };
+      rec.onend = function () { clearTimeout(killT); finish(false); };
       activeRec = ctl;
+      stopSpeaking(); unlockSpeech();
       b.classList.add("listening"); b.innerHTML = STOP_ICON; b.setAttribute("aria-label", "Stop met inspreken"); b.title = "Stop";
       maxT = setTimeout(function () { ctl.stop(false); }, 30000);   // nooit langer dan 30 seconden
       silenceT = setTimeout(function () { ctl.stop(false); }, 8000);   // niets gezegd na 8 seconden: stoppen
       try { rec.start(); } catch (e) { finish(); }
     };
     return b;
+  }
+
+  // ---------- Voorlezen (tekst naar spraak, Nederlands) ----------
+  var Synth = window.speechSynthesis || null, speechUnlocked = false, nlVoice = null;
+  function pickNlVoice() {
+    if (!Synth) return null;
+    var vs = Synth.getVoices() || [];
+    return vs.filter(function (v) { return /^nl(-|_)NL/i.test(v.lang); })[0] || vs.filter(function (v) { return /^nl/i.test(v.lang); })[0] || null;
+  }
+  if (Synth && "onvoiceschanged" in Synth) Synth.onvoiceschanged = function () { nlVoice = pickNlVoice(); };
+  function unlockSpeech() {   // iPhone: voorlezen mag pas na een tik; die tik is het inspreken zelf
+    if (!Synth || speechUnlocked) return;
+    try { var u = new SpeechSynthesisUtterance(" "); u.volume = 0; Synth.speak(u); speechUnlocked = true; } catch (e) {}
+  }
+  function stopSpeaking() { try { if (Synth) Synth.cancel(); } catch (e) {} var sb = document.getElementById("chatSpeaking"); if (sb) sb.remove(); }
+  function speak(text) {
+    if (!Synth || !text) return;
+    stopSpeaking();
+    try {
+      var u = new SpeechSynthesisUtterance(String(text).replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, "").slice(0, 900));
+      u.lang = "nl-NL"; nlVoice = nlVoice || pickNlVoice(); if (nlVoice) u.voice = nlVoice; u.rate = 1.03;
+      u.onend = u.onerror = function () { var sb = document.getElementById("chatSpeaking"); if (sb) sb.remove(); };
+      Synth.speak(u);
+      var form = document.getElementById("chatForm");
+      if (form && !document.getElementById("chatSpeaking")) {
+        var bar = document.createElement("div"); bar.className = "chat-autosend"; bar.id = "chatSpeaking";
+        bar.innerHTML = '<span>\ud83d\udd0a Balanza leest voor\u2026</span><button type="button">Stil</button>';
+        bar.querySelector("button").onclick = stopSpeaking;
+        form.parentNode.insertBefore(bar, form);
+      }
+    } catch (e) {}
+  }
+  // Telt een bericht als ingesproken? Ja als het grotendeels nog de ingesproken woorden bevat (kleine correcties mogen).
+  function voiceMatches(voiceText, sent) {
+    if (!voiceText) return false;
+    var a = String(voiceText).toLowerCase().match(/[\p{L}\p{N}]+/gu) || [], b = String(sent).toLowerCase().match(/[\p{L}\p{N}]+/gu) || [];
+    if (!a.length || !b.length) return false;
+    var same = b.filter(function (w) { return a.indexOf(w) > -1; }).length;
+    return same / b.length >= 0.5;
+  }
+  // ---------- Na inspreken vanzelf versturen (met een korte pauze om nog aan te passen) ----------
+  var autoSendT = null;
+  function cancelAutoSend() { clearTimeout(autoSendT); autoSendT = null; var bar = document.getElementById("chatAutoSend"); if (bar) bar.remove(); }
+  function chatVoiceDone(text) {
+    chat.lastVoice = String(text || "");
+    if (!coachOn("voiceSend")) { var i0 = document.getElementById("chatInput"); if (i0) i0.focus(); return; }
+    cancelAutoSend();
+    var form = document.getElementById("chatForm"), input = document.getElementById("chatInput");
+    if (!form || !input) return;
+    var bar = document.createElement("div"); bar.className = "chat-autosend"; bar.id = "chatAutoSend";
+    bar.innerHTML = '<span>Versturen over 2 tellen \u00b7 tik op je tekst om aan te passen</span><button type="button">Nu versturen</button><i></i>';
+    bar.querySelector("button").onclick = function () { cancelAutoSend(); form.requestSubmit ? form.requestSubmit() : form.onsubmit(new Event("submit")); };
+    form.parentNode.insertBefore(bar, form);
+    var stop = function () { cancelAutoSend(); input.removeEventListener("focus", stop); input.removeEventListener("input", stop); };
+    input.addEventListener("pointerdown", stop, { once: true }); input.addEventListener("input", stop);
+    autoSendT = setTimeout(function () { cancelAutoSend(); if (input.value.trim()) { form.requestSubmit ? form.requestSubmit() : form.onsubmit(new Event("submit")); } }, 2000);
   }
 
   // ---------- Openingszinnetje: de chat begint af en toe zelf, persoonlijk en subtiel ----------
@@ -12247,15 +12312,16 @@
       document.getElementById("chatClear").onclick = function () { askConfirm("Het gesprek op dit toestel wissen?", clearChat, "Wissen", "Annuleren"); };
       ov.addEventListener("click", function (e) { if (e.target === ov) closeChat(); });
       ov.addEventListener("keydown", function (e) { if (e.key === "Escape") closeChat(); });
-      document.getElementById("chatForm").onsubmit = function (e) { e.preventDefault(); stopVoice(true); var i = document.getElementById("chatInput"); var v = i.value.trim(); if (v) { i.value = ""; sendChat(v); } };
-      if (SpeechRec) { var ci = document.getElementById("chatInput"); ci.parentNode.insertBefore(micButton(ci), document.getElementById("chatSend")); }
+      document.getElementById("chatForm").onsubmit = function (e) { if (e && e.preventDefault) e.preventDefault(); cancelAutoSend(); stopVoice(true); stopSpeaking(); var i = document.getElementById("chatInput"); var v = i.value.trim(); if (v) { i.value = ""; var spoken = voiceMatches(chat.lastVoice, v); chat.lastVoice = ""; sendChat(v, spoken); } };
+      if (SpeechRec) { var ci = document.getElementById("chatInput"); ci.parentNode.insertBefore(micButton(ci, function () { cancelAutoSend(); }, chatVoiceDone), document.getElementById("chatSend")); }
+
     }
     var cm = document.getElementById("chatInputMic"); if (cm) cm.style.display = voiceOn() ? "" : "none";
     paintChat();
     ov.classList.add("active");
     setTimeout(function () { var i = document.getElementById("chatInput"); if (i) i.focus(); }, 50);
   }
-  function closeChat() { stopVoice(true); var ov = document.getElementById("chatOverlay"); if (ov) ov.classList.remove("active"); }
+  function closeChat() { stopVoice(true); stopSpeaking(); cancelAutoSend(); var ov = document.getElementById("chatOverlay"); if (ov) ov.classList.remove("active"); }
   function paintChat() {
     var list = document.getElementById("chatList"); if (!list) return;
     list.innerHTML = "";
@@ -12302,13 +12368,14 @@
     if (row.childNodes.length) card.appendChild(row);
     return card;
   }
-  function sendChat(text) {
+  function sendChat(text, spoken) {
     if (chat.busy) return;
     chat.msgs.push({ role: "user", content: text }); chat.busy = true; saveChat(); paintChat();
     var history = chat.msgs.slice(-12).map(function (m) { return { role: m.role, content: m.content }; });
-    fetch("/api/assistant", { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, authHeaders()), body: JSON.stringify({ messages: history, context: chatContext() }) })
+    fetch("/api/assistant", { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, authHeaders()), body: JSON.stringify({ messages: history, context: chatContext(), spoken: !!spoken }) })
       .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { if (!r.ok) throw new Error(d.message || "De assistent is even niet bereikbaar."); return d; }); })
-      .then(function (d) { chat.busy = false; chat.left = typeof d.left === "number" ? d.left : null; chat.msgs.push({ role: "assistant", content: d.reply, actions: d.actions || [], suggestion: d.suggestion || null, quote: text }); saveChat(); paintChat(); })
+      .then(function (d) { chat.busy = false; chat.left = typeof d.left === "number" ? d.left : null; chat.msgs.push({ role: "assistant", content: d.reply, actions: d.actions || [], suggestion: d.suggestion || null, quote: text }); saveChat(); paintChat();
+        if (spoken && coachOn("voiceReply")) speak(d.reply + (d.actions && d.actions.length ? " Wil je dat ik het aanpas? Tik dan op Doen." : "")); })
       .catch(function (e) { chat.busy = false; chat.msgs.push({ role: "assistant", content: e.message || "Er ging iets mis. Probeer het opnieuw." }); saveChat(); paintChat(); });
   }
   // Kan iets (nog) niet? Dan mag de gebruiker er een idee van maken; dat komt bij de beheerder binnen.

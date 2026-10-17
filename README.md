@@ -645,6 +645,14 @@ zegt (Nederlands) om in tekst in het veld; je controleert en past het aan voorda
 browsers zonder spraakherkenning zien geen knop. Aan/uit onder **Instellingen → Begeleiding → Inspreken**. Let op: sommige
 browsers (zoals Chrome) laten de spraak door hun eigen dienst omzetten; de browser vraagt eerst toestemming voor de microfoon.
 
+**In de chat, na inspreken:**
+- **Vanzelf versturen**: is de herkenning klaar, dan verschijnt "Versturen over 2 tellen" met een balkje; tik je op je tekst
+  of begin je te typen, dan wacht hij zodat je kunt corrigeren. "Nu versturen" kan ook. Schakelaar: *Begeleiding → Na inspreken vanzelf versturen*.
+- **Antwoord voorlezen**: was je bericht ingesproken (kleine correcties mogen), dan leest Balanza zijn antwoord hardop voor
+  in het Nederlands (tekst-naar-spraak van het toestel, geen kosten), met een knop *Stil*. Jouw eigen woorden worden niet
+  herhaald; de assistent krijgt de opdracht direct en kort te antwoorden. Getypte berichten worden niet voorgelezen.
+  Schakelaar: *Begeleiding → Antwoord voorlezen na inspreken*.
+
 ### Balanza-assistent (chat)
 
 Een chatknop rechtsboven in de app. Gebruikers stellen vragen over de app en hun eten, of laten de app aanpassen
