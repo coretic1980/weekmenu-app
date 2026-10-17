@@ -2437,6 +2437,7 @@
   }
 
   function goto(view, extra) {
+    if (typeof stopVoice === "function") stopVoice(true);
     if (view !== "library" && view !== "day" && librarySelect.on) { librarySelect.on = false; librarySelect.ids = {}; }
     if (state.view === "genresult" && view !== "genresult" && view !== "day") commitGenDiscards();
     if (state.view === "day" && state.dayBackView === "genresult" && view !== "genresult" && view !== "cook" && view !== "day") commitGenDiscards();
@@ -12093,29 +12094,53 @@
   // en past het aan voordat je het verstuurt. Toestellen zonder ondersteuning zien geen knop.
   var SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition || null;
   function voiceOn() { return !!SpeechRec && coachOn("voice"); }
-  var activeRec = null;
+  var activeRec = null;   // { rec, btn, stop() }
+  // Stopt een lopende opname altijd direct (ook als de browser zelf niet netjes "klaar" meldt, zoals soms op iPhone).
+  function stopVoice(abort) { if (activeRec) activeRec.stop(abort); }
+  var MIC_ICON = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>';
+  var STOP_ICON = '<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2.5" fill="currentColor"/></svg>';
   function micButton(input, onText) {
     var b = document.createElement("button"); b.type = "button"; b.className = "mic-btn"; b.id = (input.id || "field") + "Mic";
-    b.setAttribute("aria-label", "Inspreken"); b.title = "Inspreken";
-    b.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>';
+    b.setAttribute("aria-label", "Inspreken"); b.title = "Inspreken"; b.innerHTML = MIC_ICON;
     b.onclick = function () {
-      if (activeRec) { try { activeRec.stop(); } catch (e) {} return; }
+      if (activeRec) { var same = activeRec.btn === b; stopVoice(false); if (same) return; }
       var rec; try { rec = new SpeechRec(); } catch (e) { showToast("Inspreken werkt niet op dit toestel."); return; }
       rec.lang = "nl-NL"; rec.interimResults = true; rec.continuous = false; rec.maxAlternatives = 1;
-      var base = input.value ? input.value.replace(/\s*$/, " ") : "";
+      var base = input.value ? input.value.replace(/\s*$/, " ") : "", stopped = false, silenceT = null, maxT = null, killT = null;
+      function finish() {
+        if (stopped) return;
+        stopped = true;
+        clearTimeout(silenceT); clearTimeout(maxT);
+        if (activeRec && activeRec.rec === rec) activeRec = null;
+        b.classList.remove("listening"); b.innerHTML = MIC_ICON; b.setAttribute("aria-label", "Inspreken"); b.title = "Inspreken";
+        try { input.focus(); } catch (e) {}
+      }
+      var ctl = { rec: rec, btn: b, stop: function (abort) {
+        var was = stopped; finish();
+        if (was) return;
+        try { if (abort) rec.abort(); else rec.stop(); } catch (e) {}
+        killT = setTimeout(function () { try { rec.abort(); } catch (e) {} }, 1200);   // hangt hij toch, dan hard afbreken
+      } };
       rec.onresult = function (ev) {
+        if (stopped) return;   // na stoppen niets meer in het veld zetten
         var txt = "";
         for (var i = 0; i < ev.results.length; i++) txt += ev.results[i][0].transcript;
         input.value = (base + txt).slice(0, input.maxLength > 0 ? input.maxLength : 500);
         if (onText) onText(input.value);
+        clearTimeout(silenceT);
+        silenceT = setTimeout(function () { ctl.stop(false); }, 2500);   // 2,5 seconde stil = klaar
       };
       rec.onerror = function (ev) {
-        if (ev && (ev.error === "not-allowed" || ev.error === "service-not-allowed")) showToast("Geef Balanza toestemming voor je microfoon om in te spreken.");
-        else if (ev && ev.error === "no-speech") showToast("Ik hoorde niets. Probeer het nog eens.");
+        if (!stopped && ev && (ev.error === "not-allowed" || ev.error === "service-not-allowed")) showToast("Geef Balanza toestemming voor je microfoon (en spraakherkenning) om in te spreken.");
+        else if (!stopped && ev && ev.error === "no-speech") showToast("Ik hoorde niets. Probeer het nog eens.");
+        finish();
       };
-      rec.onend = function () { activeRec = null; b.classList.remove("listening"); b.setAttribute("aria-label", "Inspreken"); try { input.focus(); } catch (e) {} };
-      activeRec = rec; b.classList.add("listening"); b.setAttribute("aria-label", "Stop met inspreken");
-      try { rec.start(); } catch (e) { activeRec = null; b.classList.remove("listening"); }
+      rec.onend = function () { clearTimeout(killT); finish(); };
+      activeRec = ctl;
+      b.classList.add("listening"); b.innerHTML = STOP_ICON; b.setAttribute("aria-label", "Stop met inspreken"); b.title = "Stop";
+      maxT = setTimeout(function () { ctl.stop(false); }, 30000);   // nooit langer dan 30 seconden
+      silenceT = setTimeout(function () { ctl.stop(false); }, 8000);   // niets gezegd na 8 seconden: stoppen
+      try { rec.start(); } catch (e) { finish(); }
     };
     return b;
   }
@@ -12204,7 +12229,7 @@
       document.getElementById("chatClose").onclick = closeChat;
       ov.addEventListener("click", function (e) { if (e.target === ov) closeChat(); });
       ov.addEventListener("keydown", function (e) { if (e.key === "Escape") closeChat(); });
-      document.getElementById("chatForm").onsubmit = function (e) { e.preventDefault(); if (activeRec) { try { activeRec.stop(); } catch (x) {} } var i = document.getElementById("chatInput"); var v = i.value.trim(); if (v) { i.value = ""; sendChat(v); } };
+      document.getElementById("chatForm").onsubmit = function (e) { e.preventDefault(); stopVoice(true); var i = document.getElementById("chatInput"); var v = i.value.trim(); if (v) { i.value = ""; sendChat(v); } };
       if (SpeechRec) { var ci = document.getElementById("chatInput"); ci.parentNode.insertBefore(micButton(ci), document.getElementById("chatSend")); }
     }
     var cm = document.getElementById("chatInputMic"); if (cm) cm.style.display = voiceOn() ? "" : "none";
@@ -12212,7 +12237,7 @@
     ov.classList.add("active");
     setTimeout(function () { var i = document.getElementById("chatInput"); if (i) i.focus(); }, 50);
   }
-  function closeChat() { var ov = document.getElementById("chatOverlay"); if (ov) ov.classList.remove("active"); }
+  function closeChat() { stopVoice(true); var ov = document.getElementById("chatOverlay"); if (ov) ov.classList.remove("active"); }
   function paintChat() {
     var list = document.getElementById("chatList"); if (!list) return;
     list.innerHTML = "";
