@@ -5665,6 +5665,7 @@ function sanitizePrefsPatch(patch) {
         if (!v || typeof v !== "object" || Array.isArray(v)) errors.push("Budgetmodus moet een object zijn.");
         else clean.student = { on: v.on === true, budget: STUDENT_BUDGETS.indexOf(Number(v.budget)) > -1 ? Number(v.budget) : 35, onePan: v.onePan === true, quick: v.quick !== false };
         break;
+      case "voiceName": clean.voiceName = cleanText(v, 200); break;
       case "voiceStyle":
         if (["warm", "vrouw", "man"].indexOf(v) === -1) errors.push("Onbekende stem."); else clean.voiceStyle = v;
         break;
