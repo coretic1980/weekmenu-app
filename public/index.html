@@ -66,7 +66,9 @@
     --topbar-bg: rgba(243, 247, 244, 0.82);
     --ring: #1F8A55; --bar-eiwit: #1F8A55; --bar-kh: #E3A22F; --bar-vet: #3C8DCB;
   }
-  html, body { height: 100%; }
+  /* Geen vaste hoogte op html/body: dan scrolt het document zelf en blijft position:fixed (tabbalk) op iPhone echt staan. */
+  html { min-height: 100%; }
+  body { min-height: 100vh; min-height: 100dvh; }
   html { scroll-padding-top: env(safe-area-inset-top, 0px); }
   * { box-sizing: border-box; }
   body {
@@ -76,7 +78,7 @@
     font-family: "Public Sans", sans-serif;
     -webkit-font-smoothing: antialiased;
   }
-  #app { max-width: 760px; margin: 0 auto; min-height: 100%; display: flex; flex-direction: column; }
+  #app { max-width: 760px; margin: 0 auto; min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; }
   .notice-bar { align-items: center; justify-content: center; gap: 12px; padding: calc(10px + env(safe-area-inset-top, 0px)) 16px 10px; font-size: 13px; line-height: 1.45; text-align: center; background: var(--surface); color: var(--ink); border-bottom: 1px solid var(--line); }
   .notice-bar.warning { background: #3A2A10; color: #F1D9A8; border-bottom-color: #6B4E1E; }
   :root[data-theme="light"] .tab-badge { background: #F2C14E; color: #0F2219; }
@@ -1161,6 +1163,7 @@
   @media (max-width: 700px), (max-height: 500px) and (orientation: landscape) {
     body.has-tabbar .tabbar {
       display: grid; grid-template-columns: repeat(5, 1fr); position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+      transform: translate3d(0, 0, 0); -webkit-transform: translate3d(0, 0, 0); will-change: transform; -webkit-backface-visibility: hidden; backface-visibility: hidden;
       padding: 6px 4px calc(8px + env(safe-area-inset-bottom, 0px)); background: var(--tabbar-bg); border-top: 1px solid var(--line);
       backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
     }
