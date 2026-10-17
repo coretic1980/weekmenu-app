@@ -600,6 +600,23 @@ elkaar. Staan abonnementen uit, dan is dit label en die pagina nergens te zien.
 eenmaal een echte proef: zet meldingen aan, start een generatie, ga naar de beginschermknop of een andere app, en wacht
 tot de melding komt. Doe dat ook op een iPhone met de app op het beginscherm.
 
+## Begeleiding: terugkomen en blijven
+
+Zes onderdelen die gebruikers terugbrengen. De gebruiker zet elk onderdeel zelf aan of uit onder
+**Instellingen → Begeleiding** (standaard aan). Bij de onderdelen met een melding gaat die melding mee aan of uit.
+
+| Onderdeel | Wat het doet |
+|---|---|
+| **Week alvast klaarzetten** | Op de dag van "Plan je week" (standaard zondag 19:00) vult de server de lege hoofdmaaltijden van volgende week met de eigen gerechten van de gebruiker: favorieten vaker, geen "niet lekker", niet twee dagen achter elkaar hetzelfde, restjes eerst. Dat is een **voorstel** (`draft` op de week): in de planner staat "Week goedkeuren" of "Voorstel weghalen" (met ongedaan maken). Melding: "Je week staat klaar". Kost geen AI. Op vrijdag t/m zondag staat op Start ook "Volgende week alvast klaarzetten?". Heeft iemand per maaltijdmoment minder dan 2 gerechten, dan blijft het bij de gewone herinnering. |
+| **Na het eten** | Vanaf 17:00 (en de ochtend erna) vraagt een kaart op Start: gekookt, lekker of niet lekker? Optioneel een melding (standaard 20:30). "Lekker" maakt het een favoriet (vaker ingepland), "niet lekker" haalt het uit automatisch plannen. Klaar in de kookmodus telt als gekookt. Opgeslagen op het plan-item (`cooked`, `rated`). |
+| **Weekterugblik** | Maandag t/m woensdag een kaart (en maandag 10:00 een melding) met de vorige week: maaltijden, gekookt, gemiddelde Balans, macroverdeling tegenover het doel en het gerecht van de week. In de laatste 2 dagen van de proef: "Je proefweek in cijfers" (kaart en melding om 18:00). |
+| **Samen plannen** | In *Mijn profiel*: iemand uitnodigen via een link (7 dagen geldig, `/?join=…`). Leden van een huishouden delen gerechten en weekplanning (en dus de boodschappenlijst); voorkeuren, meldingen, abonnement en verbruik blijven per persoon. De gedeelde gegevens staan bij wie het startte; de server stuurt `dishes` en `plannedWeeks` door. Eigen gegevens van een lid blijven bewaard. Vertrekken of stoppen geeft iedereen een kopie. Alleen met een account, maximaal 6 personen. De app haalt de gedeelde stand op als hij weer in beeld komt en elke minuut; tegelijk hetzelfde wijzigen: de laatste wint. Een account verwijderen haalt iemand uit het huishouden. |
+| **Restjes opmaken** | In de planner: "Op te maken". Restjes blijven 10 dagen staan (`prefs.leftovers`). Balanza stelt voor wat er van verpakkingen overblijft (bijv. 1 bak kwark van 500 g voor 150 g), toont gerechten die de restjes gebruiken, zet die bij automatisch invullen eerst en kan nieuwe gerechten maken met de wens "Restjes opmaken". De boodschappenlijst toont ook "± 350 g over". |
+| **Seizoen en feestdagen** | Een tegel op Start met groente en fruit van de maand, en in de aanloop naar Sinterklaas, Kerst, Pasen, Koningsdag, Moeder- en Vaderdag, Halloween en het barbecueseizoen een knop om daarvoor gerechten te maken. De server geeft dit door via `/api/config` (`season`) en voegt een zachte seizoensvoorkeur toe aan de opdracht voor de AI. |
+
+In de beheerconsole staan de nieuwe meldingen bij *Overzicht → Meldingen* en in het logboek (soort "Samen plannen" voor
+het huishouden). Bij een gebruiker staat of hij samen plant.
+
 ## Gerechtfoto's (optioneel)
 
 De app kan een foto bij elk gerecht tonen (in de gerechtenlijst en op het

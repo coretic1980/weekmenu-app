@@ -1268,6 +1268,62 @@ function buildBodyProfileLine(p) {
     "binnen de kcal-grenzen per maaltijdmoment hierboven (het dagdoel is daarin al verwerkt)\n";
 }
 
+// ---------- Seizoen en momenten ----------
+// Groente en fruit van het Nederlandse seizoen per maand, en momenten in het jaar waar mensen iets speciaals voor koken.
+// Wordt gebruikt in de opdracht aan de AI (zachte voorkeur) en op het startscherm (inspiratie met één tik).
+var MONTH_NAMES_NL = ["januari", "februari", "maart", "april", "mei", "juni", "juli", "augustus", "september", "oktober", "november", "december"];
+var SEASON_PRODUCE = [
+  ["boerenkool", "spruitjes", "pastinaak", "knolselderij", "rode kool", "witlof", "prei", "stoofperen"],
+  ["boerenkool", "spruitjes", "pastinaak", "witlof", "schorseneren", "rode kool", "prei", "appels"],
+  ["prei", "witlof", "spinazie", "postelein", "rabarber", "knolselderij", "pastinaak"],
+  ["asperges", "spinazie", "radijs", "rabarber", "lente-ui", "postelein", "veldsla"],
+  ["asperges", "tuinbonen", "spinazie", "radijs", "rabarber", "aardbeien", "nieuwe aardappelen"],
+  ["courgette", "tuinbonen", "doperwten", "aardbeien", "kersen", "sla", "nieuwe aardappelen", "komkommer"],
+  ["courgette", "tomaten", "sperziebonen", "paprika", "bessen", "frambozen", "maïs", "komkommer"],
+  ["tomaten", "courgette", "aubergine", "paprika", "maïs", "pruimen", "bramen", "sperziebonen"],
+  ["pompoen", "bospaddenstoelen", "venkel", "appels", "peren", "pruimen", "rode biet", "druiven"],
+  ["pompoen", "spruitjes", "rode biet", "paddenstoelen", "pastinaak", "appels", "peren", "knolselderij"],
+  ["boerenkool", "spruitjes", "pompoen", "pastinaak", "knolselderij", "rode kool", "witlof", "stoofperen"],
+  ["boerenkool", "spruitjes", "rode kool", "pastinaak", "witlof", "knolselderij", "stoofperen", "cranberry's"]
+];
+function easterDate(y) {   // Anonymous Gregorian algorithm
+  var a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3);
+  var h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
+  var month = Math.floor((h + l - 7 * m + 114) / 31), day = ((h + l - 7 * m + 114) % 31) + 1;
+  return Date.UTC(y, month - 1, day);
+}
+function nthSunday(y, month, n) { var d = new Date(Date.UTC(y, month, 1)); var first = (7 - d.getUTCDay()) % 7; return Date.UTC(y, month, 1 + first + 7 * (n - 1)); }
+// [sleutel, naam, datum (ms, UTC-middag), dagen van tevoren tonen, wens voor de AI]
+function seasonMoments(y) {
+  var D = function (m, d) { return Date.UTC(y, m, d); };
+  return [
+    ["sinterklaas", "Sinterklaas", D(11, 5), 14, "gezellig Sinterklaasavond-eten, met een knipoog naar speculaas of pepernoten"],
+    ["kerst", "Kerst", D(11, 25), 16, "feestelijk kerstdiner dat indruk maakt maar thuis goed te doen is"],
+    ["oudennieuw", "Oud en nieuw", D(11, 31), 5, "hapjes en een makkelijk diner voor oudejaarsavond"],
+    ["pasen", "Pasen", easterDate(y), 10, "uitgebreide paasbrunch en een lentediner"],
+    ["koningsdag", "Koningsdag", D(3, 27), 6, "makkelijk eten voor buiten en onderweg, met iets oranjes"],
+    ["moederdag", "Moederdag", nthSunday(y, 4, 2), 7, "een verwenontbijt of -brunch voor Moederdag"],
+    ["vaderdag", "Vaderdag", nthSunday(y, 5, 3), 7, "stevig en lekker voor Vaderdag, bijvoorbeeld van de grill"],
+    ["bbq", "Barbecueseizoen", D(6, 15), 45, "gerechten voor de barbecue, met frisse salades erbij"],
+    ["halloween", "Halloween", D(9, 31), 7, "griezelig leuk eten waar kinderen ook van smullen"]
+  ];
+}
+function seasonInfo(ms) {
+  var loc = localNow(ms || Date.now()), y = Number(loc.date.slice(0, 4)), month = Number(loc.date.slice(5, 7)) - 1;
+  var today = Date.UTC(y, month, Number(loc.date.slice(8, 10)));
+  var moment = null;
+  seasonMoments(y).concat(seasonMoments(y + 1)).forEach(function (m) {
+    var days = Math.round((m[2] - today) / 86400000);
+    if (days >= 0 && days <= m[3] && (!moment || days < moment.daysUntil)) moment = { key: m[0], label: m[1], daysUntil: days, wish: m[4] };
+  });
+  return { month: MONTH_NAMES_NL[month], produce: SEASON_PRODUCE[month].slice(), moment: moment };
+}
+function seasonInstructionText() {
+  var s = seasonInfo();
+  return "- Seizoen (" + s.month + "): gebruik waar het past groente en fruit van het seizoen, zoals " + s.produce.slice(0, 6).join(", ") +
+    " (zachte voorkeur; keuken, voedingsstijl en wensen gaan voor).\n";
+}
+
 function buildGeneratePrompt(p) {
   var cuisineTxt = (p.cuisines && p.cuisines.length) ? p.cuisines.join(", ") : "geen specifieke voorkeur";
   var flavorTxt = (p.flavors && p.flavors.length) ? p.flavors.join(", ") : "geen specifieke voorkeur";
@@ -1294,7 +1350,7 @@ dietStyleInstructionText(p.dietStyle) +
     familyModeInstructionText(p.familyMode) +
     "- Beschikbare apparatuur (mag je gebruiken, niet elk gerecht hoeft alles te gebruiken): " + equipTxt + "\n" +
     "- Uitgesloten ingrediënten: " + excludeTxt + "\n" +
-    wishInstructionText(p) + tasteInstructionText(p) +
+    wishInstructionText(p) + tasteInstructionText(p) + seasonInstructionText() +
     buildBodyProfileLine(p) +
     goalInstructionText(p.goal, p.dietStyle) +
     "Gebruik reële, haalbare porties en ingrediënten die passen " +
@@ -1395,7 +1451,9 @@ var WISH_TEXTS = {
   budget: "budgetvriendelijk: betaalbare, alledaagse ingrediënten uit een Nederlandse supermarkt, geen dure specialiteiten",
   prep: "geschikt voor meal prep: goed vooruit te koken, 3 tot 4 dagen houdbaar in de koelkast en goed op te warmen",
   nieuw: "iets nieuws: verrassende gerechten in plaats van de bekende klassiekers",
-  huis: "gebruik zoveel mogelijk de ingrediënten die de gebruiker al in huis heeft"
+  huis: "gebruik zoveel mogelijk de ingrediënten die de gebruiker al in huis heeft",
+  restjes: "maak op wat de gebruiker nog over heeft (restjes): verwerk die ingrediënten zo veel mogelijk, liefst in meerdere gerechten",
+  seizoen: "seizoensgerechten: bouw elk gerecht rond groente of fruit van het seizoen"
 };
 function wishInstructionText(p) {
   var w = p && p.wish && typeof p.wish === "object" ? p.wish : null;
@@ -1405,7 +1463,7 @@ function wishInstructionText(p) {
   if (!tags.length && !text) return "";
   var parts = tags.map(function (t) { return WISH_TEXTS[t]; });
   var out = "- WENS VAN DE GEBRUIKER VOOR DEZE KEER (volg dit zo goed mogelijk, binnen de voedingsstijl en het doel): " + parts.join("; ");
-  if (text) out += (parts.length ? "; " : "") + (tags.indexOf("huis") > -1 ? "dit heeft de gebruiker in huis: " : "toelichting van de gebruiker: ") + "\"" + text + "\"";
+  if (text) out += (parts.length ? "; " : "") + (tags.indexOf("restjes") > -1 ? "dit moet op: " : tags.indexOf("huis") > -1 ? "dit heeft de gebruiker in huis: " : "toelichting van de gebruiker: ") + "\"" + text + "\"";
   out += ".\n";
   var avoid = cleanShortList(p.avoidNames, 30, 80);
   if (tags.indexOf("nieuw") > -1 && avoid.length) out += "- Maak andere gerechten dan deze recente: " + avoid.join("; ") + ".\n";
@@ -1429,7 +1487,7 @@ function buildBackgroundGeneratePrompt(needed, p) {
   return "Je bent een voedingskundige chef-kok. Genereer in totaal " + totalCount + " macro-gebalanceerde " +
     "gerechten (per 1 persoon), verdeeld als: " + countTxt + ". Precies deze aantallen per maaltijdmoment.\n" +
     dietHardRuleText(p.dietStyle) + healthHardRuleText(p) +
-    wishInstructionText(p) + tasteInstructionText(p) +
+    wishInstructionText(p) + tasteInstructionText(p) + seasonInstructionText() +
     "- Uitgesloten ingrediënten: " + ((p.exclude && String(p.exclude).trim()) ? String(p.exclude).trim() : "geen") + "\n" +
     "- Keukenstijl: " + cuisineTxt + "\n- Smaakprofiel: " + flavorTxt + "\n- Culinair niveau: " + (p.level || "Home-style") + "\n" +
     dietStyleInstructionText(p.dietStyle) +
@@ -3243,7 +3301,9 @@ function notifyJobFinished(job) {
 // Elke paar minuten kijkt de server (en/of een externe cron via /api/cron/notify) wie er nu een melding moet krijgen.
 // Tijden zijn Nederlandse tijd; een melding gaat binnen 3 uur na het gekozen tijdstip de deur uit, anders slaan we hem over.
 var NOTIFY_TZ = "Europe/Amsterdam";
-var NOTIFY_DEFAULTS = { planWeek: true, planWeekDay: 0, planWeekTime: "19:00", planToday: true, planTodayTime: "09:00", community: true };
+var NOTIFY_DEFAULTS = { planWeek: true, planWeekDay: 0, planWeekTime: "19:00", autoWeek: true, planToday: true, planTodayTime: "09:00", community: true,
+  cookedCheck: true, cookedTime: "20:30", recap: true };
+var RECAP_TIME = "10:00", TRIAL_RECAP_TIME = "18:00";
 var NOTIFY_WINDOW_MIN = 180;
 var COMMUNITY_DIGEST_TIME = "17:00";
 var COMMUNITY_MATCH_BALANS = 80;   // iets ruimer dan voor eigen gerechten: een recept van een ander is gemaakt voor zijn doel   // dan zoek je inspiratie voor het avondeten
@@ -3257,7 +3317,8 @@ function hhmmToMin(v) { return Number(v.slice(0, 2)) * 60 + Number(v.slice(3, 5)
 function cleanNotifyPrefs(p) {
   var out = Object.assign({}, NOTIFY_DEFAULTS);
   if (!p || typeof p !== "object") return out;
-  ["planWeek", "planToday", "community"].forEach(function (k) { if (typeof p[k] === "boolean") out[k] = p[k]; });
+  ["planWeek", "autoWeek", "planToday", "community", "cookedCheck", "recap"].forEach(function (k) { if (typeof p[k] === "boolean") out[k] = p[k]; });
+  if (validHHMM(p.cookedTime)) out.cookedTime = p.cookedTime;
   if (Number.isInteger(p.planWeekDay) && p.planWeekDay >= 0 && p.planWeekDay <= 6) out.planWeekDay = p.planWeekDay;
   if (validHHMM(p.planWeekTime)) out.planWeekTime = p.planWeekTime;
   if (validHHMM(p.planTodayTime)) out.planTodayTime = p.planTodayTime;
@@ -3305,35 +3366,146 @@ function notifyHost() {
   var base = process.env.PUBLIC_BASE_URL || "";
   try { return base ? new URL(base).host : null; } catch (e) { return null; }
 }
+// ---- Conceptweek: Balanza zet de week alvast klaar met je eigen gerechten (geen AI, dus geen kosten) ----
+var DRAFT_MAIN = ["Ontbijt", "Lunch", "Diner"];
+var LEFTOVER_MAX_DAYS = 10;
+function activeLeftovers(prefs, today) {
+  var list = prefs && Array.isArray(prefs.leftovers) ? prefs.leftovers : [];
+  return list.filter(function (l) { return l && typeof l.t === "string" && l.t.trim() && (!l.at || !today || addDaysKey(String(l.at).slice(0, 10), LEFTOVER_MAX_DAYS) >= today); })
+    .map(function (l) { return l.t.trim().toLowerCase(); });
+}
+function dishUsesTerms(d, terms) {
+  if (!terms.length || !d) return 0;
+  var hay = (String(d.name || "") + " " + (Array.isArray(d.ingredienten) ? d.ingredienten.join(" ") : "")).toLowerCase();
+  return terms.filter(function (t) { return t.length >= 3 && hay.indexOf(t) > -1; }).length;
+}
+function dishTs(d) { var m = String(d && d.id || "").match(/(\d{12,14})/); return m ? Number(m[1]) : 0; }
+// Vult de lege hoofdmaaltijden van één week. Geeft { week, added, keys } of null als er te weinig gerechten zijn.
+function buildDraftWeek(weeksList, dishesDoc, prefs, mondayKey, today) {
+  var meals = (Array.isArray(prefs.mealTypes) && prefs.mealTypes.length ? prefs.mealTypes : ["Diner"]).filter(function (m) { return DRAFT_MAIN.indexOf(m) > -1; });
+  if (!meals.length) meals = ["Diner"];
+  var terms = activeLeftovers(prefs, today);
+  var pools = {};
+  meals.forEach(function (m) {
+    var arr = dishesDoc && Array.isArray(dishesDoc[m]) ? dishesDoc[m] : [];
+    var seen = {};
+    pools[m] = arr.filter(function (d) { if (!d || !d.id || d.prep || d.rating === -1 || seen[d.id]) return false; seen[d.id] = 1; return true; })
+      .map(function (d) { return { d: d, score: (d.rating === 1 ? 3 : 0) + dishUsesTerms(d, terms) * 2 + Math.random() * 1.5 + (dishTs(d) / 1e13) }; });
+  });
+  if (!pools.Diner && !meals.some(function (m) { return pools[m].length; })) return null;
+  var week = weeksList.filter(function (w) { return w && w.weekStart === mondayKey; })[0];
+  var isNew = !week;
+  if (isNew) week = { id: "pw" + Date.now() + Math.floor(Math.random() * 1000), weekStart: mondayKey, slots: {}, dynamicPrep: null };
+  week.slots = week.slots && typeof week.slots === "object" ? week.slots : {};
+  var keys = [], prev = {};
+  PLAN_DAY_NAMES.forEach(function (day) {
+    var today2 = {};
+    meals.forEach(function (m) {
+      var key = day + "|" + m;
+      if (week.slots[key]) { today2[week.slots[key].dayId] = 1; return; }
+      var pool = pools[m];
+      if (!pool || pool.length < 2) return;   // met één gerecht wordt het elke dag hetzelfde: dan liever niets
+      pool.sort(function (a, b) { return b.score - a.score; });
+      var pick = pool.filter(function (p) { return !prev[p.d.id] && !today2[p.d.id]; })[0];
+      if (!pick) return;
+      week.slots[key] = { name: pick.d.name, weekId: "cache", dayId: pick.d.id, balans: pick.d.balans };
+      pick.score -= 2.5;   // rouleren: een gerecht komt pas na een paar dagen terug
+      today2[pick.d.id] = 1; keys.push(key);
+    });
+    prev = today2;
+  });
+  if (keys.length < 3) return null;
+  week.draft = { createdAt: new Date().toISOString(), createdOn: today, keys: keys };
+  return { week: week, isNew: isNew, added: keys.length, keys: keys };
+}
+function slotsCount(w) { return w && w.slots ? Object.keys(w.slots).length : 0; }
+function recapOf(w) {
+  var slots = w && w.slots ? Object.keys(w.slots).map(function (k) { return w.slots[k]; }) : [];
+  var bal = slots.map(function (x) { return Number(x && x.balans); }).filter(function (n) { return n > 0; });
+  return { meals: slots.length, cooked: slots.filter(function (x) { return x && x.cooked === true; }).length,
+    balans: bal.length ? Math.round(bal.reduce(function (a, b) { return a + b; }, 0) / bal.length) : null };
+}
+
 // Bepaalt voor één gebruiker welke melding(en) nu weg moeten en verstuurt ze. Geeft het aantal verstuurde meldingen.
+// Zit de gebruiker in een huishouden, dan komen gerechten en planning van de eigenaar (die worden gedeeld).
 function notifyTickUser(uid, ctx) {
-  return Promise.all([dbGetDoc("notify/" + uid), dbGetDoc("data/users/" + uid + "/prefs"), dbGetDoc("data/users/" + uid + "/plannedWeeks"), dbGetDoc("billing/" + uid)]).then(function (r) {
+  return householdOf(uid).catch(function () { return null; }).then(function (hh) {
+  var dataUid = hh && hh.ownerUid ? hh.ownerUid : uid;
+  return Promise.all([dbGetDoc("notify/" + uid), dbGetDoc("data/users/" + uid + "/prefs"), dbGetDoc("data/users/" + dataUid + "/plannedWeeks"), dbGetDoc("billing/" + uid)]).then(function (r) {
     var doc = r[0].exists && r[0].value ? r[0].value : {};
     var np = cleanNotifyPrefs(doc.prefs), st = Object.assign({}, doc.state || {});
     var prefs = r[1].exists && r[1].value ? r[1].value : {};
-    var weeks = weekList(r[2].exists ? r[2].value : null);
-    var plan = adminPlanState(r[3].exists ? r[3].value : null, ctx.settings, !!ctx.accounts[uid], ctx.now).plan;
+    var weeksDoc = r[2].exists && r[2].value ? r[2].value : null;
+    var weeks = weekList(weeksDoc);
+    var ps = adminPlanState(r[3].exists ? r[3].value : null, ctx.settings, !!ctx.accounts[uid], ctx.now), plan = ps.plan;
     var canPlan = plan !== "expired";   // na de proef zonder Plus kan iemand niet plannen: dan ook niet aansporen
-    var now = ctx.local, jobs = [], changed = false;
+    var now = ctx.local, jobs = [], changed = false, extra = Promise.resolve();
     var mealTypes = Array.isArray(prefs.mealTypes) && prefs.mealTypes.length ? prefs.mealTypes : ["Diner"];
 
-    // 1. Weekplanning
+    // 1. Weekplanning: liefst zet Balanza de week alvast klaar (concept), anders een herinnering
     if (np.planWeek && canPlan && mealTypes.indexOf("Diner") > -1 && now.weekday === np.planWeekDay && inWindow(now.minutes, np.planWeekTime) && st.weekSentOn !== now.date) {
       var mon = nextMondayKey(now.date), planned = dinnersPlanned(weeks, mon);
       st.weekSentOn = now.date; changed = true;
-      if (planned <= 4) jobs.push({ kind: "remind-week", payload: { title: "Plan je week", tag: "balanza-week",
-        body: planned === 0 ? "Je week vanaf maandag " + fmtDayMonth(mon) + " is nog leeg. Zullen we hem samen invullen?" : "Nog " + (7 - planned) + " avonden zonder diner in de week vanaf " + fmtDayMonth(mon) + ". Tik om ze in te vullen.",
-        url: "/?open=plan&week=" + mon } });
+      var wk = weeks.filter(function (x) { return x && x.weekStart === mon; })[0];
+      var readyMsg = function (n) {
+        jobs.push({ kind: "week-ready", payload: { title: "Je week staat klaar", tag: "balanza-week",
+          body: n + " maaltijden staan ingepland voor de week vanaf maandag " + fmtDayMonth(mon) + ", met je eigen gerechten. Tik om te bekijken en te wisselen.",
+          url: "/?open=plan&week=" + mon } });
+      };
+      if (wk && wk.draft && wk.draft.createdOn === now.date) readyMsg(slotsCount(wk));   // een huisgenoot heeft hem net klaargezet
+      else if (planned <= 4) {
+        extra = (np.autoWeek ? dbGetDoc("data/users/" + dataUid + "/dishes") : Promise.resolve(null)).then(function (dr) {
+          var built = dr && dr.exists ? buildDraftWeek(weeks, dr.value, prefs, mon, now.date) : null;
+          if (built) {
+            if (built.isNew) weeks.push(built.week);
+            readyMsg(slotsCount(built.week));
+            return dbSetDoc("data/users/" + dataUid + "/plannedWeeks", Object.assign({}, weeksDoc && !Array.isArray(weeksDoc) ? weeksDoc : {}, { list: weeks }));
+          }
+          jobs.push({ kind: "remind-week", payload: { title: "Plan je week", tag: "balanza-week",
+            body: planned === 0 ? "Je week vanaf maandag " + fmtDayMonth(mon) + " is nog leeg. Zullen we hem samen invullen?" : "Nog " + (7 - planned) + " avonden zonder diner in de week vanaf " + fmtDayMonth(mon) + ". Tik om ze in te vullen.",
+            url: "/?open=plan&week=" + mon } });
+        });
+      }
     }
     // 2. Vandaag nog geen diner
+    var monToday = mondayOfKey(now.date), dayName = PLAN_DAY_NAMES[(now.weekday + 6) % 7];
+    var wToday = weeks.filter(function (x) { return x && x.weekStart === monToday; })[0];
     if (np.planToday && canPlan && mealTypes.indexOf("Diner") > -1 && inWindow(now.minutes, np.planTodayTime) && st.todaySentOn !== now.date) {
-      var monToday = mondayOfKey(now.date), dayName = PLAN_DAY_NAMES[(now.weekday + 6) % 7];
-      var w = weeks.filter(function (x) { return x && x.weekStart === monToday; })[0];
       st.todaySentOn = now.date; changed = true;
-      if (!(w && w.slots && w.slots[dayName + "|Diner"])) jobs.push({ kind: "remind-today", payload: { title: "Wat eten we vanavond?", tag: "balanza-today",
+      if (!(wToday && wToday.slots && wToday.slots[dayName + "|Diner"])) jobs.push({ kind: "remind-today", payload: { title: "Wat eten we vanavond?", tag: "balanza-today",
         body: "Je hebt voor vanavond nog geen diner gepland. Tik voor een gerecht dat past bij je dag.", url: "/?open=plan&week=" + monToday + "&day=" + dayName } });
     }
-    // 3. Nieuwe community-recepten die passen (hooguit één bundel per dag)
+    // 3. Na het eten: gekookt, en was het lekker? (voedt de smaakgeschiedenis)
+    if (np.cookedCheck && inWindow(now.minutes, np.cookedTime) && st.cookedSentOn !== now.date) {
+      var dinner = wToday && wToday.slots ? wToday.slots[dayName + "|Diner"] : null;
+      if (dinner && dinner.name && dinner.cooked === undefined) {
+        st.cookedSentOn = now.date; changed = true;
+        jobs.push({ kind: "cooked-check", payload: { title: "Hoe was " + String(dinner.name).slice(0, 60) + "?", tag: "balanza-cooked",
+          body: "Gekookt en lekker? Eén tik, dan leert Balanza je smaak en worden je volgende weken nog beter.",
+          url: "/?open=cooked&week=" + monToday + "&day=" + dayName } });
+      }
+    }
+    // 4. Maandag: je week in cijfers
+    if (np.recap && now.weekday === 1 && inWindow(now.minutes, RECAP_TIME) && st.recapSentOn !== now.date) {
+      st.recapSentOn = now.date; changed = true;
+      var lastMon = addDaysKey(monToday, -7);
+      var rc = recapOf(weeks.filter(function (x) { return x && x.weekStart === lastMon; })[0]);
+      if (rc.meals >= 3) jobs.push({ kind: "recap", payload: { title: "Je week in cijfers", tag: "balanza-recap",
+        body: rc.meals + " maaltijden" + (rc.cooked ? ", " + rc.cooked + " gekookt" : "") + (rc.balans ? ", gemiddelde Balans " + rc.balans + "%" : "") + ". Tik voor je terugblik.",
+        url: "/?open=recap&week=" + lastMon } });
+    }
+    // 5. Bijna aan het eind van de proef: laat zien wat je bereikt hebt
+    if (plan === "trial" && ps.trialEndsAt && !st.trialRecapSent && inWindow(now.minutes, TRIAL_RECAP_TIME)) {
+      var hoursLeft = (Date.parse(ps.trialEndsAt) - ctx.now) / 3600000;
+      if (hoursLeft > 12 && hoursLeft <= 48) {
+        st.trialRecapSent = now.date; changed = true;
+        var all = weeks.reduce(function (acc, w) { var x = recapOf(w); acc.meals += x.meals; acc.cooked += x.cooked; return acc; }, { meals: 0, cooked: 0 });
+        jobs.push({ kind: "trial-recap", payload: { title: "Je proefweek in cijfers", tag: "balanza-recap",
+          body: all.meals ? all.meals + " maaltijden gepland" + (all.cooked ? " en " + all.cooked + " gekookt" : "") + ". Bekijk wat je bereikt hebt." : "Bekijk wat je deze week met Balanza hebt gedaan.",
+          url: "/?open=recap&trial=1" } });
+      }
+    }
+    // 6. Nieuwe community-recepten die passen (hooguit één bundel per dag)
     if (np.community && ctx.communityOn) {
       if (!st.communitySeenUntil) { st.communitySeenUntil = ctx.now; changed = true; }   // eerste keer: geen stapel oude recepten
       else if (inWindow(now.minutes, COMMUNITY_DIGEST_TIME) && st.communitySentOn !== now.date) {
@@ -3346,9 +3518,10 @@ function notifyTickUser(uid, ctx) {
       }
     }
     var save = changed ? dbSetDoc("notify/" + uid, { prefs: doc.prefs || null, state: st }) : Promise.resolve();
-    return save.then(function () {
+    return Promise.all([save, extra]).then(function () {
       return Promise.all(jobs.map(function (j) { return notifyUser(uid, j.payload, ctx.host, j.kind).then(function (x) { return x.sent > 0 ? 1 : 0; }); }));
     }).then(function (n) { return n.reduce(function (a, b) { return a + b; }, 0); });
+  });
   }).catch(function (e) { console.warn("Melding voor " + uid + " mislukt: " + (e && e.message)); return 0; });
 }
 function runNotifyTick(source, atMs) {
@@ -3557,12 +3730,148 @@ function handleResetPassword(req, res) {
   });
 }
 
+// ---------- Huishouden: samen plannen ----------
+// Een huishouden deelt gerechten en weekplanning (en dus de boodschappenlijst). Voorkeuren, meldingen, abonnement en
+// verbruik blijven per persoon. De gedeelde gegevens staan bij de eigenaar (data/users/<eigenaar>/...); leden lezen en
+// schrijven die via de server. Hun eigen gerechten en planning blijven onaangeroerd bewaard en komen terug als ze vertrekken.
+//   household/<hid>   { id, ownerUid, members: [uid], createdAt }
+//   hhof/<uid>        { hid }
+//   hhinvite/<token>  { hid, createdBy, expiresAt }
+var HOUSEHOLD_SHARED = ["dishes", "plannedWeeks"];
+var HOUSEHOLD_MAX = 6;
+var HOUSEHOLD_INVITE_TTL = 7 * 24 * 3600 * 1000;
+function householdOf(uid) {
+  return dbGetDoc("hhof/" + uid).then(function (r) {
+    var hid = r.exists && r.value && r.value.hid;
+    if (!hid) return null;
+    return dbGetDoc("household/" + hid).then(function (h) {
+      var v = h.exists && h.value ? h.value : null;
+      return v && Array.isArray(v.members) && v.members.indexOf(uid) > -1 ? v : null;
+    });
+  });
+}
+// Van wie zijn de gegevens voor dit onderdeel? Gedeelde onderdelen komen van de eigenaar van het huishouden.
+function dataOwnerUid(uid, subpath) {
+  if (HOUSEHOLD_SHARED.indexOf(subpath) === -1 || /^anon_/.test(uid)) return Promise.resolve(uid);
+  return householdOf(uid).then(function (h) { return h && h.ownerUid ? h.ownerUid : uid; }, function () { return uid; });
+}
+function householdName(uid) {
+  return Promise.all([dbGetDoc("data/users/" + uid + "/prefs"), dbGetDoc("data/users/" + uid + "/meta")]).then(function (r) {
+    var p = r[0].exists && r[0].value ? r[0].value : {}, m = r[1].exists && r[1].value ? r[1].value : {};
+    var n = typeof p.name === "string" && p.name.trim() ? p.name.trim().slice(0, 40) : "";
+    return n || (m.email ? String(m.email).split("@")[0] : "Lid");
+  }).catch(function () { return "Lid"; });
+}
+function householdView(h, uid) {
+  if (!h) return Promise.resolve(null);
+  return Promise.all(h.members.map(householdName)).then(function (names) {
+    return { id: h.id, owner: h.ownerUid === uid, max: HOUSEHOLD_MAX,
+      members: h.members.map(function (m, i) { return { name: names[i], owner: m === h.ownerUid, me: m === uid }; }) };
+  });
+}
+function handleHousehold(req, res, action) {
+  return resolveUser(req).then(function (user) {
+    if (!user) return sendUnauthorized(res);
+    if (!user.email) return sendJSON(res, 403, { code: "account_required", message: "Samen plannen kan alleen met een account. Maak eerst een account aan." });
+    var uid = user.uid;
+    if (req.method === "POST" && !pushSubscribeAllowed(clientIp(req))) return sendJSON(res, 429, { code: "rate_limited", message: "Te veel verzoeken. Probeer het later opnieuw." });
+    if (req.method === "GET") return householdOf(uid).then(function (h) { return householdView(h, uid); }).then(function (v) { sendJSON(res, 200, { household: v }); });
+    return readBody(req).then(function (body) {
+      body = body || {};
+      if (action === "invite") {
+        return householdOf(uid).then(function (h) {
+          if (h && h.members.length >= HOUSEHOLD_MAX) throw HttpError(400, "full", "Je huishouden is vol (maximaal " + HOUSEHOLD_MAX + " personen).");
+          var make = h ? Promise.resolve(h) : (function () {
+            var nh = { id: crypto.randomBytes(9).toString("base64url"), ownerUid: uid, members: [uid], createdAt: new Date().toISOString() };
+            return Promise.all([dbSetDoc("household/" + nh.id, nh), dbSetDoc("hhof/" + uid, { hid: nh.id })]).then(function () { return nh; });
+          })();
+          return make.then(function (hh) {
+            var token = crypto.randomBytes(16).toString("base64url");
+            return dbSetDoc("hhinvite/" + token, { hid: hh.id, createdBy: uid, expiresAt: Date.now() + HOUSEHOLD_INVITE_TTL }).then(function () {
+              logEvent("household", "invite", true, 200, { uid: uid });
+              var base = (process.env.PUBLIC_BASE_URL || "").replace(/\/+$/, "");
+              sendJSON(res, 200, { token: token, link: (base || "") + "/?join=" + token, expiresInDays: 7 });
+            });
+          });
+        });
+      }
+      if (action === "join") {
+        var token = typeof body.token === "string" && /^[A-Za-z0-9_-]{16,40}$/.test(body.token) ? body.token : "";
+        if (!token) throw HttpError(400, "bad_request", "Deze uitnodiging is ongeldig.");
+        return Promise.all([dbGetDoc("hhinvite/" + token), householdOf(uid)]).then(function (r) {
+          var inv = r[0].exists && r[0].value ? r[0].value : null;
+          if (!inv || inv.expiresAt < Date.now()) throw HttpError(400, "expired", "Deze uitnodiging is verlopen of al gebruikt. Vraag een nieuwe link.");
+          if (r[1] && r[1].id === inv.hid) return householdView(r[1], uid).then(function (v) { sendJSON(res, 200, { household: v, already: true }); });
+          if (r[1]) throw HttpError(400, "in_household", "Je zit al in een huishouden. Verlaat dat eerst via Mijn profiel.");
+          return dbGetDoc("household/" + inv.hid).then(function (hr) {
+            var h = hr.exists && hr.value ? hr.value : null;
+            if (!h) throw HttpError(400, "expired", "Dit huishouden bestaat niet meer.");
+            if (h.members.length >= HOUSEHOLD_MAX) throw HttpError(400, "full", "Dit huishouden is vol.");
+            h.members.push(uid);
+            return Promise.all([dbSetDoc("household/" + h.id, h), dbSetDoc("hhof/" + uid, { hid: h.id }), dbDeleteDoc("hhinvite/" + token)]).then(function () {
+              logEvent("household", "join", true, 200, { uid: uid });
+              invalidateSummaries();
+              return householdView(h, uid);
+            }).then(function (v) { sendJSON(res, 200, { household: v }); });
+          });
+        });
+      }
+      if (action === "leave") {
+        // Een lid vertrekt (met een kopie van de gedeelde gerechten en planning als het dat wil). Vertrekt de eigenaar,
+        // dan wordt het huishouden opgeheven en krijgen alle leden een kopie, zodat niemand ineens met lege handen staat.
+        var keepCopy = body.keepCopy !== false;
+        return householdOf(uid).then(function (h) {
+          if (!h) return sendJSON(res, 200, { household: null });
+          var leaving = h.ownerUid === uid ? h.members.filter(function (m) { return m !== uid; }) : [uid];
+          return Promise.all(HOUSEHOLD_SHARED.map(function (s) { return dbGetDoc("data/users/" + h.ownerUid + "/" + s); })).then(function (shared) {
+            var copies = [];
+            if (keepCopy || h.ownerUid === uid) leaving.forEach(function (m) {
+              HOUSEHOLD_SHARED.forEach(function (s, i) { if (shared[i].exists) copies.push(dbSetDoc("data/users/" + m + "/" + s, shared[i].value)); });
+            });
+            var ops = copies.concat(leaving.map(function (m) { return dbDeleteDoc("hhof/" + m); }));
+            if (h.ownerUid === uid) ops.push(dbDeleteDoc("household/" + h.id), dbDeleteDoc("hhof/" + uid));
+            else { h.members = h.members.filter(function (m) { return m !== uid; }); ops.push(dbSetDoc("household/" + h.id, h)); }
+            return Promise.all(ops);
+          }).then(function () {
+            logEvent("household", h.ownerUid === uid ? "disband" : "leave", true, 200, { uid: uid });
+            invalidateSummaries();
+            sendJSON(res, 200, { household: null });
+          });
+        });
+      }
+      throw HttpError(404, "not_found", "Onbekende actie.");
+    });
+  }).catch(function (e) {
+    if (e && e.status) return sendJSON(res, e.status, { code: e.code, message: e.message });
+    sendJSON(res, 500, { code: "error", message: "Er ging iets mis. Probeer het opnieuw." });
+  });
+}
+// Bij het verwijderen van een account: uit het huishouden (en als eigenaar: opheffen, leden krijgen een kopie).
+function removeFromHousehold(uid) {
+  return householdOf(uid).then(function (h) {
+    if (!h) return dbDeleteDoc("hhof/" + uid);
+    if (h.ownerUid !== uid) {
+      h.members = h.members.filter(function (m) { return m !== uid; });
+      return Promise.all([dbSetDoc("household/" + h.id, h), dbDeleteDoc("hhof/" + uid)]);
+    }
+    var others = h.members.filter(function (m) { return m !== uid; });
+    return Promise.all(HOUSEHOLD_SHARED.map(function (s) { return dbGetDoc("data/users/" + uid + "/" + s); })).then(function (shared) {
+      var ops = [dbDeleteDoc("household/" + h.id), dbDeleteDoc("hhof/" + uid)];
+      others.forEach(function (m) {
+        ops.push(dbDeleteDoc("hhof/" + m));
+        HOUSEHOLD_SHARED.forEach(function (s, i) { if (shared[i].exists) ops.push(dbSetDoc("data/users/" + m + "/" + s, shared[i].value)); });
+      });
+      return Promise.all(ops);
+    });
+  }).catch(function () {});
+}
+
 function handleDbGet(req, res, query) {
   var subpath = query.get("subpath");
   if (ALLOWED_SUBPATHS.indexOf(subpath) === -1) return sendJSON(res, 400, { message: "Ongeldig subpath." });
   resolveUser(req).then(function (user) {
     if (!user) return sendUnauthorized(res);
-    return dbGetDoc("data/users/" + user.uid + "/" + subpath).then(function (result) {
+    return dataOwnerUid(user.uid, subpath).then(function (owner) { return dbGetDoc("data/users/" + owner + "/" + subpath); }).then(function (result) {
       sendJSON(res, 200, result);
     });
   }).catch(function (err) {
@@ -3577,9 +3886,9 @@ function handleDbSet(req, res) {
       var subpath = body && body.subpath;
       if (ALLOWED_SUBPATHS.indexOf(subpath) === -1) return sendJSON(res, 400, { message: "Ongeldig subpath." });
       var ip = clientIp(req);
-      var fullPath = "data/users/" + user.uid + "/" + subpath;
       var trackIp = dbSetDoc("data/users/" + user.uid + "/meta", { lastIp: ip, lastSeenAt: new Date().toISOString(), email: user.email }).catch(function () {});
-      return Promise.all([dbSetDoc(fullPath, body.value), trackIp]).then(function () {
+      var write = dataOwnerUid(user.uid, subpath).then(function (owner) { return dbSetDoc("data/users/" + owner + "/" + subpath, body.value); });
+      return Promise.all([write, trackIp]).then(function () {
         sendJSON(res, 200, { ok: true });
       });
     });
@@ -4713,8 +5022,9 @@ function buildSummary(account, blocked, noteDoc, settings) {
   return Promise.all([
     dbGetDoc("data/users/" + uid + "/prefs"), dbGetDoc("data/users/" + uid + "/dishes"),
     dbGetDoc("data/users/" + uid + "/plannedWeeks"), dbGetDoc("data/users/" + uid + "/meta"),
-    dbGetDoc("billing/" + uid)
+    dbGetDoc("billing/" + uid), householdOf(uid).catch(function () { return null; })
   ]).then(function (res) {
+    var hh = res[5];
     var billing = adminPlanState(res[4].exists ? res[4].value : null, settings, !!account.email, Date.now());
     var prefs = res[0].exists && res[0].value && typeof res[0].value === "object" ? res[0].value : null;
     var dishes = res[1].exists ? res[1].value : null;
@@ -4732,6 +5042,7 @@ function buildSummary(account, blocked, noteDoc, settings) {
       goal: prefs ? prefs.goal || null : null,
       dietStyle: prefs ? prefs.dietStyle || null : null,
       health: prefs ? healthWithExclude(prefs.health, prefs.exclude) : [],
+      household: hh && hh.members && hh.members.length > 1 ? { size: hh.members.length, owner: hh.ownerUid === uid } : null,
       level: prefs ? prefs.level || null : null,
       dishCount: dishCount,
       plannedWeekCount: weekList.length,
@@ -4923,6 +5234,14 @@ function sanitizePrefsPatch(patch) {
       case "familyMode": clean.familyMode = v === true; break;
       case "health":
         if (!Array.isArray(v) || v.some(function (x) { return HEALTH_KEYS.indexOf(x) === -1; })) errors.push("Onbekende gezondheidsvoorkeur."); else clean.health = cleanHealth(v);
+        break;
+      case "coach":
+        if (!v || typeof v !== "object" || Array.isArray(v)) errors.push("Begeleiding moet een object zijn.");
+        else { clean.coach = {}; Object.keys(v).slice(0, 20).forEach(function (k) { if (/^[a-z]{2,20}$/.test(k) && typeof v[k] === "boolean") clean.coach[k] = v[k]; }); }
+        break;
+      case "leftovers":
+        if (!Array.isArray(v) || v.length > 20) errors.push("Restjes moet een lijst van maximaal 20 items zijn.");
+        else clean.leftovers = v.filter(function (x) { return x && typeof x.t === "string" && x.t.trim(); }).map(function (x) { return { t: cleanText(x.t, 40), at: /^\d{4}-\d{2}-\d{2}$/.test(x.at) ? x.at : todayKey() }; });
         break;
       case "cheeseMode":
         if (v !== "hardekaas" && v !== "geen") errors.push("Kaaskeuze moet hardekaas of geen zijn."); else clean.cheeseMode = v;
@@ -5137,7 +5456,7 @@ function deleteUserEverywhere(user) {
       var prov = acc.exists && acc.value && acc.value.uid === uid && acc.value.providers ? acc.value.providers : {};
       return Promise.all(Object.keys(prov).map(function (k) { return dbDeleteDoc("auth/oauth/" + k + "_" + String(prov[k]).replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 200)); }));
     }).catch(function () {});
-  }).then(function () { return deleteCommunityOf(uid); }).then(function () { return dbGetDoc("listsIndex/" + uid); }).then(function (r) {
+  }).then(function () { return removeFromHousehold(uid); }).then(function () { return deleteCommunityOf(uid); }).then(function () { return dbGetDoc("listsIndex/" + uid); }).then(function (r) {
     var tokens = r.exists && r.value && Array.isArray(r.value.tokens) ? r.value.tokens : [];
     return Promise.all(tokens.map(function (t) { return dbDeleteDoc("lists/" + t); }));
   }).then(function () {
@@ -5893,7 +6212,8 @@ function handleConfig(req, res) {
       canonicalOrigin: canonicalOrigin(),
       legacyOrigins: canonicalOrigin() ? legacyOrigins() : [],
       maintenance: s.maintenance.enabled ? { enabled: true, message: s.maintenance.message || "De app is tijdelijk in onderhoud." } : { enabled: false },
-      announcement: s.announcement.enabled && s.announcement.message ? { enabled: true, message: s.announcement.message, level: s.announcement.level } : { enabled: false }
+      announcement: s.announcement.enabled && s.announcement.message ? { enabled: true, message: s.announcement.message, level: s.announcement.level } : { enabled: false },
+      season: seasonInfo()
     });
   });
 }
@@ -6016,6 +6336,8 @@ var server = http.createServer(function (req, res) {
   if (req.method === "POST" && url.pathname === "/api/push/subscribe") return handlePushSubscribe(req, res);
   if (req.method === "POST" && url.pathname === "/api/push/unsubscribe") return handlePushUnsubscribe(req, res);
   if ((req.method === "GET" || req.method === "POST") && url.pathname === "/api/notify/prefs") return handleNotifyPrefs(req, res);
+  var hhMatch = url.pathname.match(/^\/api\/household(?:\/(invite|join|leave))?$/);
+  if (hhMatch && ((req.method === "GET" && !hhMatch[1]) || (req.method === "POST" && hhMatch[1]))) return handleHousehold(req, res, hhMatch[1]);
   if (req.method === "POST" && url.pathname === "/api/cron/notify") return handleCronNotify(req, res);
   if (req.method === "POST" && url.pathname === "/api/tips") return handleTips(req, res);
   if (req.method === "POST" && url.pathname === "/api/auth/register") return guardedRegister(req, res);

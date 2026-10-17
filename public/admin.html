@@ -699,7 +699,7 @@
     // ---- meldingen ----
     var nt = st.notify;
     if (nt) {
-      var kinds = [["remind-week", "Plan je week"], ["remind-today", "Diner van vandaag"], ["community-digest", "Nieuwe recepten"], ["notify", "Gerechten klaar"]];
+      var kinds = [["remind-week", "Plan je week"], ["remind-today", "Diner van vandaag"], ["community-digest", "Nieuwe recepten"], ["week-ready", "Week klaargezet"], ["cooked-check", "Na het eten"], ["recap", "Weekterugblik"], ["trial-recap", "Proefweek in cijfers"], ["notify", "Gerechten klaar"]];
       var nRows = kinds.map(function (k) { var x = nt.last7d[k[0]] || { sent: 0, failed: 0 }; return h("tr", {}, h("td", { text: k[1] }), h("td", { class: "num", text: String(x.sent) }), h("td", { class: "num", text: x.failed ? String(x.failed) : "—" })); });
       var toLog = h("button", { class: "link", type: "button", text: "Meldingen in het logboek" });
       toLog.onclick = function () { resetLogFilters(); L.type = "push"; navigate("#/activiteit"); };
@@ -873,7 +873,7 @@
           h("td", {}, cb),
           h("td", {}, h("strong", { text: u.name || (u.email ? u.email.split("@")[0] : "Anoniem") }), h("span", { class: "sub", text: u.email || shortUid(u.uid) })),
           h("td", {}, planBadge(u)),
-          h("td", { text: u.goal || "—" }, (u.dietStyle || (u.health && u.health.length)) ? h("span", { class: "sub", text: [u.dietStyle].concat((u.health || []).map(healthLabel)).filter(Boolean).join(" · ") }) : null),
+          h("td", { text: u.goal || "—" }, (u.dietStyle || (u.health && u.health.length) || u.household) ? h("span", { class: "sub", text: [u.dietStyle].concat((u.health || []).map(healthLabel)).concat(u.household ? ["samen met " + (u.household.size - 1)] : []).filter(Boolean).join(" · ") }) : null),
           h("td", { class: "nowrap", text: u.dishCount + " gerechten" }, h("span", { class: "sub", text: plural(u.plannedWeekCount, "week", "weken") })),
           h("td", { class: "nowrap", text: relTime(u.lastSeenAt) }, u.location ? h("span", { class: "sub", text: [u.location.city, u.location.country].filter(Boolean).join(", ") }) : null),
           h("td", { class: "nowrap", text: u.createdAt ? fmtDate(u.createdAt).replace(/, \d\d:\d\d$/, "") : "—" }, u.createdBy === "admin" ? h("span", { class: "sub", text: "door beheerder" }) : u.upgradedFrom ? h("span", { class: "sub", text: "eerst anoniem" }) : null));
@@ -981,7 +981,8 @@
         h("dt", { text: "Laatste login" }), h("dd", { text: u.lastLoginAt ? fmtDate(u.lastLoginAt) + " (" + relTime(u.lastLoginAt) + ")" : "nooit" }),
         h("dt", { text: "Aantal logins" }), h("dd", { text: String(u.loginCount) })] : null,
       h("dt", { text: "Laatst actief" }), h("dd", { text: u.lastSeenAt ? fmtDate(u.lastSeenAt) + " (" + relTime(u.lastSeenAt) + ")" : "nooit" }),
-      h("dt", { text: "Laatste IP-adres" }), h("dd", { text: (u.lastIp || "—") + (where ? " · " + where : "") }));
+      h("dt", { text: "Laatste IP-adres" }), h("dd", { text: (u.lastIp || "—") + (where ? " · " + where : "") }),
+      h("dt", { text: "Samen plannen" }), h("dd", { text: u.household ? "Huishouden van " + u.household.size + " personen" + (u.household.owner ? " (gestart door deze gebruiker; gerechten en planning staan bij hem)" : " (gerechten en planning komen van de starter)") : "Nee" }));
     var saveAcc = btn("Opslaan", "", "saveAccountBtn", function () {
       var patch = {};
       if (emailIn && emailIn.value.trim().toLowerCase() !== (u.email || "")) patch.email = emailIn.value;
@@ -1246,7 +1247,7 @@
   // Activiteit (logboek)
   // =====================================================================================
   var TYPE_LABELS = { generate: "AI", tips: "Tips", auth: "Account", push: "Melding", billing: "Betaling" };
-  var LOG_ACTION_LABELS = { login: "Inloggen", register: "Registreren", upgrade: "Anoniem omgezet naar account", "password-change": "Wachtwoord gewijzigd (door gebruiker)", notify: "Melding: gerechten klaar", "remind-week": "Melding: plan je week", "remind-today": "Melding: diner van vandaag", "community-digest": "Melding: nieuwe recepten", webhook: "Betaalmelding (Mollie)", "email-change": "E-mailadres gewijzigd (door gebruiker)", "logout-others": "Op andere apparaten uitgelogd", "self-delete": "Account zelf verwijderd", export: "Gegevens gedownload", "reset-request": "Reset aangevraagd", "reset-done": "Wachtwoord gereset" };
+  var LOG_ACTION_LABELS = { login: "Inloggen", register: "Registreren", upgrade: "Anoniem omgezet naar account", "password-change": "Wachtwoord gewijzigd (door gebruiker)", notify: "Melding: gerechten klaar", "remind-week": "Melding: plan je week", "remind-today": "Melding: diner van vandaag", "community-digest": "Melding: nieuwe recepten", "week-ready": "Melding: week klaargezet", "cooked-check": "Melding: na het eten", recap: "Melding: weekterugblik", "trial-recap": "Melding: proefweek in cijfers", invite: "Huishouden: uitnodiging gemaakt", join: "Huishouden: lid geworden", leave: "Huishouden: vertrokken", disband: "Huishouden: gestopt", webhook: "Betaalmelding (Mollie)", "email-change": "E-mailadres gewijzigd (door gebruiker)", "logout-others": "Op andere apparaten uitgelogd", "self-delete": "Account zelf verwijderd", export: "Gegevens gedownload", "reset-request": "Reset aangevraagd", "reset-done": "Wachtwoord gereset" };
   function logRow(l, compact) {
     var who = null;
     if (!compact) {
@@ -1271,7 +1272,7 @@
       el.oninput = debounce(function () { L[key] = el.value.trim(); L.page = 1; load(); }, 350); return el;
     }
     var q = bind("lQ", "q", "Zoek in actie, melding, IP, gebruiker…", "grow", "search");
-    var typeSel = select([["", "Alle soorten"], ["generate", "AI (genereren)"], ["tips", "Tips"], ["auth", "Account (inloggen)"], ["push", "Meldingen (push)"], ["billing", "Betalingen"]], L.type, function (v) { L.type = v; L.page = 1; load(); }, "Soort"); typeSel.id = "lType";
+    var typeSel = select([["", "Alle soorten"], ["generate", "AI (genereren)"], ["tips", "Tips"], ["auth", "Account (inloggen)"], ["push", "Meldingen (push)"], ["household", "Samen plannen"], ["billing", "Betalingen"]], L.type, function (v) { L.type = v; L.page = 1; load(); }, "Soort"); typeSel.id = "lType";
     var statusSel = select([["", "Alle uitkomsten"], ["ok", "Gelukt"], ["error", "Fouten"]], L.status, function (v) { L.status = v; L.page = 1; load(); }, "Uitkomst"); statusSel.id = "lStatus";
     var uidIn = bind("lUid", "uid", "Gebruikers-ID", "", "text"), ipIn = bind("lIp", "ip", "IP-adres", "", "text");
     var fromIn = h("input", { type: "date", id: "lFrom", "aria-label": "Vanaf datum" }); fromIn.value = L.from; fromIn.onchange = function () { L.from = fromIn.value; L.page = 1; load(); };

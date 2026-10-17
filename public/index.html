@@ -219,6 +219,40 @@
   .trial-banner .tb-txt span { font-size: 12.5px; color: var(--muted); line-height: 1.4; }
   .trial-banner .tb-go { flex: none; font-size: 13px; font-weight: 700; color: var(--accent2); white-space: nowrap; }
   .trial-banner.expired { border-color: #E3A22F; background: #FFF8EA; }
+  .nudge-stack { display: flex; flex-direction: column; gap: 12px; }
+  .nudge-card { display: flex; flex-direction: column; gap: 12px; padding: 14px 16px; border-radius: 16px; border: 1px solid var(--line); background: var(--surface); box-shadow: var(--card-shadow); }
+  .nudge-card.accent { border-color: var(--accent2); }
+  .nudge-card.soft { background: var(--bg); }
+  .nudge-head { display: flex; align-items: flex-start; gap: 12px; }
+  .nudge-ic { flex: none; width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; background: var(--nevo-bg); color: var(--nevo-ink); font-size: 19px; }
+  .nudge-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+  .nudge-txt b { font-size: 15px; line-height: 1.3; }
+  .nudge-txt span { font-size: 13px; color: var(--muted); line-height: 1.45; }
+  .nudge-x { flex: none; appearance: none; border: 0; background: none; color: var(--muted); font-size: 22px; line-height: 1; cursor: pointer; padding: 2px 4px; }
+  .nudge-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+  .nudge-actions .primary-btn, .nudge-actions .ghost-btn { width: auto; flex: 0 1 auto; padding: 9px 14px; font-size: 13.5px; text-decoration: none; text-align: center; }
+  .leftover-body { display: flex; flex-direction: column; gap: 10px; }
+  .leftover-add { display: flex; gap: 8px; }
+  .leftover-add .textinput { flex: 1; min-width: 0; }
+  .leftover-add .ghost-btn { width: auto; flex: none; padding: 9px 14px; font-size: 13.5px; }
+  .leftover-dish { appearance: none; display: flex; flex-direction: column; gap: 2px; text-align: left; font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; cursor: pointer; }
+  .leftover-dish b { font-size: 14px; }
+  .leftover-dish span { font-size: 12.5px; color: var(--muted); }
+  .leftover-link { align-self: flex-start; }
+  .recap-title { font-family: "Fraunces", serif; font-weight: 600; font-size: 22px; line-height: 1.3; margin: 0; }
+  .recap-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .recap-stat { display: flex; flex-direction: column; gap: 2px; padding: 14px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface); }
+  .recap-stat b { font-family: "Fraunces", serif; font-size: 26px; font-weight: 600; }
+  .recap-stat span { font-size: 12.5px; color: var(--muted); line-height: 1.35; }
+  .recap-macros { cursor: default; gap: 12px; }
+  .rm-row { display: grid; grid-template-columns: 92px 1fr; gap: 4px 10px; align-items: center; font-size: 13px; }
+  .rm-bar { position: relative; height: 8px; border-radius: 99px; background: var(--bg); overflow: visible; }
+  .rm-bar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 99px; }
+  .rm-bar em { position: absolute; top: -3px; width: 2px; height: 14px; background: var(--ink); opacity: .6; }
+  .rm-v { grid-column: 2; font-size: 12px; color: var(--muted); }
+  .hh-members { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 2px; }
+  .hh-member { font-size: 14px; padding: 8px 12px; border-radius: 10px; background: var(--bg); border: 1px solid var(--line); }
+  .hh-invite { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
   .plus-prompt { text-align: center; }
   .plus-prompt .pp-ic { width: 46px; height: 46px; margin: 0 auto 10px; border-radius: 14px; display: grid; place-items: center; background: var(--bg); color: var(--accent2); }
   .plus-prompt h2 { font-family: "Fraunces", serif; font-size: 20px; margin: 0 0 8px; }
@@ -2266,6 +2300,8 @@
     level: "Home-style",
     dietStyle: "",
     health: [],
+    leftovers: [],
+    coach: {},
     sugarMode: "natuurlijk",
     cheeseMode: "hardekaas",
     familyMode: false,
@@ -3346,6 +3382,7 @@
         sel.onchange = function () { save({ planWeekDay: Number(sel.value) }); paint(); };
         row.appendChild(sel); row.appendChild(timeInput("notifyWeekTime", np.planWeekTime, "Tijd voor de weekherinnering", function (v) { save({ planWeekTime: v }); paint(); }));
         box.appendChild(row);
+        box.appendChild(toggle("notifyAutoWeek", "Zet mijn week alvast klaar", "Balanza vult de lege avonden met je eigen gerechten als voorstel; jij keurt goed of wisselt", np.autoWeek !== false, function () { save({ autoWeek: !(np.autoWeek !== false) }); paint(); }));
       }
       box.appendChild(toggle("notifyToday", "Diner van vandaag", "Om " + np.planTodayTime + " als er voor vanavond nog niets gepland staat", np.planToday, function () { save({ planToday: !np.planToday }); paint(); }));
       if (np.planToday) {
@@ -3353,6 +3390,13 @@
         row2.appendChild(timeInput("notifyTodayTime", np.planTodayTime, "Tijd voor de dagherinnering", function (v) { save({ planTodayTime: v }); paint(); }));
         box.appendChild(row2);
       }
+      box.appendChild(toggle("notifyCooked", "Na het eten: was het lekker?", "Om " + (np.cookedTime || "20:30") + " één vraag over het diner van vandaag, zodat Balanza je smaak leert", np.cookedCheck !== false, function () { save({ cookedCheck: !(np.cookedCheck !== false) }); paint(); }));
+      if (np.cookedCheck !== false) {
+        var row3 = document.createElement("div"); row3.className = "notify-when";
+        row3.appendChild(timeInput("notifyCookedTime", np.cookedTime || "20:30", "Tijd voor de vraag na het eten", function (v) { save({ cookedTime: v }); paint(); }));
+        box.appendChild(row3);
+      }
+      box.appendChild(toggle("notifyRecap", "Weekterugblik", "Maandagochtend je vorige week in cijfers", np.recap !== false, function () { save({ recap: !(np.recap !== false) }); paint(); }));
       if (communityOn()) box.appendChild(toggle("notifyCommunity", "Nieuwe recepten in de community", "Hooguit één keer per dag, rond 17:00, en alleen recepten die passen bij je voedingsstijl, doel en wat je niet eet", np.community, function () { save({ community: !np.community }); paint(); }));
     }
     fetch("/api/notify/prefs", { headers: authHeaders() }).then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
@@ -3364,7 +3408,14 @@
   var plansReady = null, plansReadyResolve = null;
   plansReady = new Promise(function (resolve) { plansReadyResolve = resolve; });
   function openFromLink(q) {
+    if (q && q.join) { handleJoinToken(q.join); return; }
     if (!q || !q.open) return;
+    if (q.open === "cooked" || q.open === "recap") {
+      Promise.race([plansReady, new Promise(function (r) { setTimeout(r, 6000); })]).then(function () {
+        if (q.open === "cooked") openCookedFromLink(); else openRecap(q.week, q.trial === "1");
+      });
+      return;
+    }
     if (q.open === "community" && communityOn()) {
       if (q.id && /^[A-Za-z0-9_-]{6,30}$/.test(q.id) && typeof openCommunityRecipe === "function") openCommunityRecipe(q.id);
       else goto("community");
@@ -3386,12 +3437,12 @@
   }
   function linkParams(search) {
     var q = {};
-    try { var p = new URLSearchParams(search || ""); ["open", "week", "day", "id"].forEach(function (k) { var v = p.get(k); if (v) q[k] = v.slice(0, 40); }); } catch (e) {}
+    try { var p = new URLSearchParams(search || ""); ["open", "week", "day", "id", "trial", "join"].forEach(function (k) { var v = p.get(k); if (v) q[k] = v.slice(0, 40); }); } catch (e) {}
     return q;
   }
   function handleStartLink() {
     var q = linkParams(location.search);
-    if (!q.open) return;
+    if (!q.open && !q.join) { checkPendingJoin(); return; }
     try { history.replaceState(null, "", location.pathname); } catch (e) {}
     setTimeout(function () { openFromLink(q); }, 50);
   }
@@ -3446,6 +3497,7 @@
       cta.appendChild(txt);
       accButton(cta, "profileCreate", "userplus", "Account aanmaken", function () { upgradeState.error = null; goto("upgrade"); });
     }
+    renderHouseholdCard(main);
     var plusCard = accCard(main, "Balanza Plus");
     plusCard.id = "plusCard"; plusCard.style.display = "none";
     var plusBody = document.createElement("div"); plusBody.id = "plusBody"; plusCard.appendChild(plusBody);
@@ -3524,6 +3576,7 @@
     };
     refreshPushState().then(paintPush).catch(function () {});
 
+    renderCoachSettings(main);
     var mine = accCard(main, "Mijn Balanza");
     accButton(mine, "settingsProfile", "user", "Mijn profiel", function () { goto("account"); });
     accButton(mine, "settingsPrefs", "sliders", "Mijn voorkeuren", function () { goto("myprefs", { prefsBack: "settings" }); });
@@ -3685,6 +3738,7 @@
     window.USER_ID = data.uid;
     window.setStoredUid(window.USER_ID);
     syncPush();
+    setTimeout(function () { loadHousehold(); checkPendingJoin(); }, 300);
   }
   function upgradeDoneMessage(m) {
     var what = describeMigrated(m);
@@ -4292,6 +4346,8 @@
       main.appendChild(accBanner);
     }
 
+    if (!state.homeEdit && !state.generating) renderHomeNudges(main);
+
     if (state.homeEdit) {
       renderHomeEditor(main);
       app.appendChild(main);
@@ -4331,7 +4387,7 @@
   }
 
   // ---------- Startscherm: eigen indeling ----------
-  var HOME_DEFAULT_ORDER = ["vandaag", "week", "foto", "recent", "community", "boodschappen", "uitleg", "genereren", "volgendeweek", "tip"];
+  var HOME_DEFAULT_ORDER = ["vandaag", "week", "seizoen", "foto", "recent", "community", "boodschappen", "uitleg", "genereren", "volgendeweek", "tip"];
   var HOME_DEFAULT_HIDDEN = ["genereren", "volgendeweek", "tip"];
   function homeLayout() {
     var hl = prefs.homeLayout && typeof prefs.homeLayout === "object" ? prefs.homeLayout : null;
@@ -4393,6 +4449,8 @@
       render: function (main) { homeWeekCard(main, getMonday(new Date()), "Huidige week"); } },
     volgendeweek: { label: "Volgende week", desc: "Alvast vooruit plannen", available: function () { return true; },
       render: function (main) { var m = getMonday(new Date()); m.setDate(m.getDate() + 7); homeWeekCard(main, m, "Volgende week"); } },
+    seizoen: { label: "Seizoen en momenten", desc: "Wat nu lekker is, en feestdagen waar je iets bijzonders voor kookt", available: function () { return !!window.appSeason && moduleOn("generate") && coachOn("season"); },
+      render: function (main) { renderSeasonCard(main); } },
     foto: { label: "Gerecht van foto", desc: "Snel naar de camera om een gerecht te maken", available: function () { return moduleOn("generate") && moduleOn("photo"); },
       render: function (main) {
         homeActionCard(main, "homePhotoBtn", iconSvg("camera", 22), "Gerecht van foto", "Maak een foto van je bord of van een recept.", pickDishPhoto, state.generating || quotaBlocked());
@@ -4856,7 +4914,7 @@
 
   // ---------- Nieuwe gerechten (genereren) ----------
   var GEN_MEAL_HINTS = { Ontbijt: "350–450", Lunch: "450–550", Diner: "550–650", Snack: "150–250" };
-  var WISH_OPTIONS = [["snel", "Snel (< 20 min)"], ["budget", "Budget"], ["prep", "Meal prep"], ["nieuw", "Iets nieuws"], ["huis", "Met wat ik in huis heb"]];
+  var WISH_OPTIONS = [["snel", "Snel (< 20 min)"], ["budget", "Budget"], ["prep", "Meal prep"], ["nieuw", "Iets nieuws"], ["huis", "Met wat ik in huis heb"], ["restjes", "Restjes opmaken"], ["seizoen", "Seizoensgroente"]];
   function mealCounts() {
     var mc = prefs.mealCounts && typeof prefs.mealCounts === "object" ? prefs.mealCounts : null;
     var out = {};
@@ -7416,6 +7474,7 @@
       var bannerW = planStatusBanner();
       if (bannerW) main.appendChild(bannerW);
       if (pw.autoFillError) { var aew = document.createElement("div"); aew.className = "errorbox"; aew.textContent = pw.autoFillError; main.appendChild(aew); }
+      plannerExtras(main, pw);
       renderPlanWeekOverview(main, pw);
       planActions(main, pw, null);
       app.appendChild(main);
@@ -7450,6 +7509,7 @@
     var t = goalTarget();
     var planTrial = planStatusBanner();
     if (planTrial) main.appendChild(planTrial);
+    plannerExtras(main, pw);
     var card = document.createElement("div"); card.className = "day-panel card";
     var isToday = isoDateKey(date) === isoDateKey(new Date());
     card.innerHTML = '<div class="dp-head"><b></b><span class="dp-kcal"></span></div><div class="dp-bar"><i></i></div><div class="dp-macros"></div><div class="dp-advice"></div>';
@@ -9147,7 +9207,8 @@
     var n = Math.max(1, Math.ceil(item.amount / best.size - 0.1));   // 10% speling: 520 g kwark is gewoon 1 bak
     var unit = item.family === "volume" ? " ml" : " g";
     var sizeTxt = best.size >= 1000 ? formatAmount(best.size / 1000) + (item.family === "volume" ? " l" : " kg") : best.size + unit;
-    return "≈ " + n + " " + (n === 1 ? best.one : best.many) + " van " + sizeTxt;
+    var over = Math.round(n * best.size - item.amount);
+    return "≈ " + n + " " + (n === 1 ? best.one : best.many) + " van " + sizeTxt + (over >= Math.max(50, best.size * 0.3) ? " \u00b7 \u00b1" + over + unit + " over" : "");
   }
   // Voor welke gerechten een product nodig is (max. 2 namen, daarna "+n").
   function dishesForItem(entries, key) {
@@ -10253,6 +10314,8 @@
       backFn = function () { goto("community"); };
     } else if (state.dayBackView === "weeks") {
       backFn = function () { goto("weeks"); };
+    } else if (state.dayBackView === "recap") {
+      backFn = function () { goto("recap"); };
     } else {
       backFn = function () { goto("week", { weekId: week.id }); };
     }
@@ -10646,7 +10709,7 @@
           var extra = newDays.filter(function (d) { return d.mealType === m; }).map(function (d) {
             return { week: findWeek(d.__weekId), day: d };
           });
-          buckets[m] = extra.concat(pool);
+          buckets[m] = extra.concat(preferLeftovers(pool));
         });
         var backup = JSON.parse(JSON.stringify(pw.slots));
         if (opts.range === "all") Object.keys(pw.slots).forEach(function (k) { if (!isPastDay(pw, k.split("|")[0])) delete pw.slots[k]; });
@@ -10766,6 +10829,593 @@
     }
   }
 
+  // =====================================================================================================
+  // Terugkomen en blijven: conceptweek, "gekookt?", weekterugblik, samen plannen, restjes en seizoen.
+  // =====================================================================================================
+  function todayKeyLocal() { return isoDateKey(new Date()); }
+  // Begeleiding: de gebruiker zet elk onderdeel zelf aan of uit (Instellingen → Begeleiding). Standaard staat alles aan.
+  var COACH_OPTIONS = [
+    ["draft", "Week alvast klaarzetten", "Een voorstel voor je week met je eigen gerechten; jij keurt goed of wisselt", "autoWeek"],
+    ["cooked", "Na het eten: was het lekker?", "Eén vraag na het diner, zodat Balanza je smaak leert", "cookedCheck"],
+    ["recap", "Weekterugblik", "Op maandag je vorige week in cijfers", "recap"],
+    ["leftovers", "Restjes opmaken", "Bij het plannen: wat moet er op, en welke gerechten gebruiken dat", null],
+    ["season", "Seizoen en feestdagen", "Inspiratie voor wat nu lekker is en voor speciale momenten", null]
+  ];
+  function coachOn(k) { return !(prefs.coach && prefs.coach[k] === false); }
+  function setCoach(k, on) {
+    prefs.coach = Object.assign({}, prefs.coach || {}); prefs.coach[k] = !!on; savePrefs();
+    var opt = COACH_OPTIONS.filter(function (o) { return o[0] === k; })[0];
+    if (opt && opt[3]) {   // de bijbehorende melding gaat mee aan of uit
+      var patch = {}; patch[opt[3]] = !!on;
+      fetch("/api/notify/prefs", { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, authHeaders()), body: JSON.stringify({ prefs: patch }) }).catch(function () {});
+    }
+  }
+  function renderCoachSettings(main) {
+    var card = accCard(main, "Begeleiding");
+    var p = document.createElement("div"); p.className = "acc-sub";
+    p.textContent = "Balanza helpt je op weg, maar jij bepaalt hoeveel. Zet aan wat je fijn vindt.";
+    card.appendChild(p);
+    COACH_OPTIONS.forEach(function (o) {
+      var on = coachOn(o[0]);
+      var b = document.createElement("button"); b.type = "button"; b.className = "sheet-toggle"; b.id = "coach-" + o[0];
+      b.setAttribute("role", "switch"); b.setAttribute("aria-checked", on ? "true" : "false");
+      b.innerHTML = '<span class="st-txt"><b></b><small></small></span><span class="st-track' + (on ? " on" : "") + '"><i></i></span>';
+      b.querySelector("b").textContent = o[1]; b.querySelector("small").textContent = o[2];
+      b.onclick = function () { setCoach(o[0], !on); render(); };
+      card.appendChild(b);
+    });
+  }
+  function weekByStart(key) { return plannedWeeks.filter(function (w) { return w.weekStart === key; })[0] || null; }
+  function mondayKeyOffset(weeks) { var m = getMonday(new Date()); m.setDate(m.getDate() + 7 * weeks); return isoDateKey(m); }
+  function dayNameOf(date) { return PLAN_DAYS[(date.getDay() + 6) % 7]; }
+  function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  function nudgeCard(main, opts) {
+    var box = document.createElement("div");
+    box.className = "nudge-card" + (opts.tone ? " " + opts.tone : ""); if (opts.id) box.id = opts.id;
+    var head = document.createElement("div"); head.className = "nudge-head";
+    if (opts.icon) { var ic = document.createElement("span"); ic.className = "nudge-ic"; ic.innerHTML = opts.icon; head.appendChild(ic); }
+    var txt = document.createElement("div"); txt.className = "nudge-txt";
+    var b = document.createElement("b"); b.textContent = opts.title; txt.appendChild(b);
+    if (opts.text) { var s = document.createElement("span"); s.textContent = opts.text; txt.appendChild(s); }
+    head.appendChild(txt);
+    if (opts.onClose) {
+      var x = document.createElement("button"); x.type = "button"; x.className = "nudge-x"; x.setAttribute("aria-label", "Verbergen"); x.textContent = "×";
+      x.onclick = opts.onClose; head.appendChild(x);
+    }
+    box.appendChild(head);
+    if (opts.actions && opts.actions.length) {
+      var row = document.createElement("div"); row.className = "nudge-actions";
+      opts.actions.forEach(function (a) {
+        var btn = document.createElement("button"); btn.type = "button"; btn.className = a.primary ? "primary-btn small" : "ghost-btn small";
+        if (a.id) btn.id = a.id;
+        btn.textContent = a.label; btn.onclick = a.onClick;
+        if (a.lock) lockEl(btn, a.lock);
+        row.appendChild(btn);
+      });
+      box.appendChild(row);
+    }
+    if (opts.body) box.appendChild(opts.body);
+    main.appendChild(box);
+    return box;
+  }
+
+  // ---------- 1. Conceptweek: "je week staat klaar" ----------
+  function draftKeysLeft(pw) {
+    if (!pw || !pw.draft || !Array.isArray(pw.draft.keys)) return [];
+    return pw.draft.keys.filter(function (k) { return pw.slots[k]; });
+  }
+  function approveDraft(pw) {
+    delete pw.draft; savePlannedWeeks(); render();
+    showToast("Top! Je week staat vast. Je boodschappenlijst is bijgewerkt.");
+  }
+  function discardDraft(pw) {
+    var keys = draftKeysLeft(pw), backup = JSON.parse(JSON.stringify(pw.slots)), draft = pw.draft;
+    keys.forEach(function (k) { delete pw.slots[k]; });
+    delete pw.draft; savePlannedWeeks(); render();
+    showUndoToast("Voorstel weggehaald", function () { pw.slots = backup; pw.draft = draft; savePlannedWeeks(); render(); });
+  }
+  // In de planner: een balk boven een week die Balanza (of een huisgenoot) heeft klaargezet.
+  function renderDraftBanner(main, pw) {
+    var keys = draftKeysLeft(pw);
+    if (!pw.draft) return;
+    if (!keys.length) { delete pw.draft; savePlannedWeeks(); return; }
+    nudgeCard(main, { id: "draftBanner", tone: "accent", icon: iconSvg("sparkle", 20),
+      title: "Voorstel: " + keys.length + (keys.length === 1 ? " maaltijd" : " maaltijden") + " klaargezet",
+      text: "Met je eigen gerechten, je favorieten vaker en wat op moet eerst. Wissel wat je niet zint en keur de week goed.",
+      actions: [
+        { label: "Week goedkeuren", primary: true, id: "draftOk", onClick: function () { approveDraft(pw); } },
+        { label: "Voorstel weghalen", id: "draftDrop", onClick: function () { discardDraft(pw); }, lock: "Je planning aanpassen" }
+      ] });
+  }
+  // Op Start (vrijdag t/m zondag): volgende week in één tik klaarzetten met je eigen gerechten.
+  function nextWeekNeedsPlan() {
+    var w = weekByStart(mondayKeyOffset(1));
+    var dinners = w ? PLAN_DAYS.filter(function (d) { return w.slots[d + "|Diner"]; }).length : 0;
+    return dinners <= 4;
+  }
+  function prepareNextWeek() {
+    if (requirePlus("Je week automatisch invullen")) return;
+    var m = getMonday(new Date()); m.setDate(m.getDate() + 7);
+    var pw = openOrCreateWeek(m);
+    var before = {}; Object.keys(pw.slots).forEach(function (k) { before[k] = 1; });
+    var meals = loadAutofillMeals().filter(function (x) { return MAIN_SLOTS.indexOf(x) > -1; });
+    generateAutoWeek(pw, true, meals.length ? meals : ["Diner"], { range: "rest", fit: !!dailyKcalTarget() });
+    var added = Object.keys(pw.slots).filter(function (k) { return !before[k]; });
+    if (added.length) { pw.draft = { createdAt: new Date().toISOString(), createdOn: todayKeyLocal(), keys: added }; savePlannedWeeks(); }
+    goto("planweek", { planWeekId: pw.id });
+  }
+
+  // ---------- 2. Na het eten: gekookt, en was het lekker? ----------
+  // Kijkt naar het diner van vandaag (vanaf 17:00) en anders dat van gisteren (tot 14:00).
+  function pendingCookedCheck() {
+    var now = new Date(), cands = [];
+    if (now.getHours() >= 17) cands.push(new Date(now));
+    if (now.getHours() < 14) { var y = new Date(now); y.setDate(y.getDate() - 1); cands.push(y); }
+    for (var i = 0; i < cands.length; i++) {
+      var dt = cands[i], pw = weekByStart(isoDateKey(getMonday(dt))), dn = dayNameOf(dt);
+      var slot = pw && pw.slots[dn + "|Diner"];
+      if (!slot || slot.rated !== undefined || slot.cooked === false) continue;
+      var res = resolveAssignedDish(slot);
+      if (res) return { pw: pw, day: dn, slot: slot, dish: res.day, yesterday: isoDateKey(dt) !== todayKeyLocal() };
+    }
+    return null;
+  }
+  function markCooked(c, cooked, rating) {
+    c.slot.cooked = cooked;
+    c.slot.cookedAt = new Date().toISOString();
+    if (cooked) c.slot.rated = rating || 0;
+    savePlannedWeeks();
+    if (cooked && rating) {
+      if (rating === 1) c.dish.rating = 1; else if (rating === -1) c.dish.rating = -1;
+      updateStoredDishesInDb([c.dish]);
+    }
+    render();
+    var n = cookedCountTotal();
+    showToast(!cooked ? "Genoteerd. Geen punt, volgende keer beter." :
+      rating === 1 ? "Lekker! Balanza plant dit vaker in." + (n % 5 === 0 ? " Al " + n + " keer zelf gekookt." : "") :
+      rating === -1 ? "Jammer. Dit gerecht komt niet meer vanzelf in je week." : "Genoteerd: gekookt.");
+  }
+  function cookedCountTotal() {
+    var n = 0;
+    plannedWeeks.forEach(function (pw) { Object.keys(pw.slots).forEach(function (k) { if (pw.slots[k] && pw.slots[k].cooked === true) n++; }); });
+    return n;
+  }
+  function renderCookedCard(main) {
+    if (!coachOn("cooked")) return;
+    var c = pendingCookedCheck();
+    if (!c) return;
+    nudgeCard(main, { id: "cookedCard", icon: iconSvg("pot", 20),
+      title: (c.yesterday ? "Gisteren: " : "Vanavond: ") + c.dish.name,
+      text: "Gekookt? Eén tik helpt Balanza je smaak te leren.",
+      actions: [
+        { label: "👍 Lekker", primary: true, id: "cookedYes", onClick: function () { markCooked(c, true, 1); } },
+        { label: "👎 Niet lekker", id: "cookedNo", onClick: function () { markCooked(c, true, -1); } },
+        { label: "Niet gekookt", id: "cookedSkip", onClick: function () { markCooked(c, false); } }
+      ] });
+  }
+  // Klaar in de kookmodus: staat dit gerecht vandaag op het menu, dan is het gekookt.
+  function markCookedFromCookMode(dayId) {
+    var now = new Date(), pw = weekByStart(isoDateKey(getMonday(now))), dn = dayNameOf(now);
+    if (!pw) return;
+    PLAN_SLOTS.forEach(function (sl) { var s = pw.slots[dn + "|" + sl]; if (s && s.dayId === dayId && s.cooked === undefined) { s.cooked = true; s.cookedAt = now.toISOString(); } });
+    savePlannedWeeks();
+  }
+
+  // ---------- 3. Weekterugblik ----------
+  function weekRecap(weeks) {
+    var r = { meals: 0, cooked: 0, liked: 0, balansSum: 0, balansN: 0, days: 0, kcal: 0, khG: 0, eiwitG: 0, vetG: 0, best: null, dishes: {} };
+    weeks.forEach(function (pw) {
+      PLAN_DAYS.forEach(function (d) {
+        var any = false;
+        PLAN_SLOTS.forEach(function (sl) {
+          var a = pw.slots[d + "|" + sl]; if (!a) return;
+          var res = resolveAssignedDish(a); if (!res) return;
+          var dish = res.day; any = true;
+          r.meals++; if (a.cooked === true) r.cooked++; if (a.rated === 1) r.liked++;
+          r.balansSum += dish.balans || 0; r.balansN++;
+          r.kcal += dish.kcal; r.khG += dish.kh / 100 * dish.kcal / 4; r.eiwitG += dish.eiwit / 100 * dish.kcal / 4; r.vetG += dish.vet / 100 * dish.kcal / 9;
+          r.dishes[dish.id] = dish;
+          var score = (a.rated === 1 ? 50 : 0) + (dish.rating === 1 ? 20 : 0) + (dish.balans || 0);
+          if (!r.best || score > r.best.score) r.best = { dish: dish, score: score };
+        });
+        if (any) r.days++;
+      });
+    });
+    var tk = r.khG * 4 + r.eiwitG * 4 + r.vetG * 9;
+    r.pct = tk ? { kh: Math.round(r.khG * 4 / tk * 100), eiwit: Math.round(r.eiwitG * 4 / tk * 100), vet: Math.round(r.vetG * 9 / tk * 100) } : null;
+    r.balans = r.balansN ? Math.round(r.balansSum / r.balansN) : null;
+    r.kcalPerDay = r.days ? Math.round(r.kcal / r.days) : 0;
+    return r;
+  }
+  function recapNoteFor(r) {
+    // Eén zin die aansluit bij wat er goed ging: vriendelijk, nooit belerend.
+    var t = goalTarget();
+    if (!r.meals) return "Nog niets gepland in deze periode. Een rustige week mag ook.";
+    if (r.cooked >= 5) return "Je kookte " + r.cooked + " keer zelf. Dat is precies de gewoonte die het verschil maakt.";
+    if (r.balans && r.balans >= 85) return "Je maaltijden sloten gemiddeld heel goed aan op je doel. Zo bouw je het rustig op.";
+    if (r.pct && Math.abs(r.pct.eiwit - t.eiwit) <= 4) return "Je eiwit zat precies waar het moet zitten voor je doel.";
+    if (r.meals >= 7) return "Je had " + r.meals + " maaltijden gepland. Een geplande week is de helft van het werk.";
+    return "Elke geplande maaltijd is er één waar je niet meer over na hoeft te denken.";
+  }
+  function trialWeeks() {
+    var end = quotaInfo && quotaInfo.trialEndsAt ? new Date(quotaInfo.trialEndsAt) : new Date();
+    var days = quotaInfo && quotaInfo.trialDays ? quotaInfo.trialDays : 7;
+    var start = new Date(end); start.setDate(start.getDate() - days);
+    var s = isoDateKey(getMonday(start)), e = isoDateKey(end);
+    return plannedWeeks.filter(function (w) { return w.weekStart >= s && w.weekStart <= e; });
+  }
+  function openRecap(weekKey, trial) {
+    state.recap = { week: /^\d{4}-\d{2}-\d{2}$/.test(weekKey || "") ? weekKey : mondayKeyOffset(-1), trial: !!trial };
+    goto("recap");
+  }
+  function renderRecapHomeCard(main) {
+    if (!coachOn("recap")) return;
+    var now = new Date(), dow = now.getDay();
+    if (trialModel() && userPlan() === "trial" && trialDaysLeft() !== null && trialDaysLeft() <= 2 && lsGet("balanza_recap_trial") !== "1") {
+      var tr = weekRecap(trialWeeks());
+      if (tr.meals >= 1) {
+        nudgeCard(main, { id: "recapTrialCard", tone: "accent", icon: iconSvg("sparkle", 20), title: "Je proefweek in cijfers",
+          text: tr.meals + " maaltijden gepland" + (tr.cooked ? ", " + tr.cooked + " gekookt" : "") + (tr.balans ? ", Balans gemiddeld " + tr.balans + "%" : "") + ".",
+          actions: [{ label: "Bekijk je terugblik", primary: true, id: "recapTrialGo", onClick: function () { openRecap(null, true); } }],
+          onClose: function () { lsSet("balanza_recap_trial", "1"); render(); } });
+        return;
+      }
+    }
+    if (dow < 1 || dow > 3) return;   // maandag t/m woensdag
+    var key = mondayKeyOffset(-1), pw = weekByStart(key);
+    if (!pw || lsGet("balanza_recap_seen") === key) return;
+    var r = weekRecap([pw]);
+    if (r.meals < 3) return;
+    nudgeCard(main, { id: "recapCard", icon: iconSvg("check", 20), title: "Je vorige week in cijfers",
+      text: r.meals + " maaltijden" + (r.cooked ? ", " + r.cooked + " gekookt" : "") + (r.balans ? ", Balans gemiddeld " + r.balans + "%" : "") + ".",
+      actions: [{ label: "Bekijk terugblik", primary: true, id: "recapGo", onClick: function () { lsSet("balanza_recap_seen", key); openRecap(key, false); } }],
+      onClose: function () { lsSet("balanza_recap_seen", key); render(); } });
+  }
+  function renderRecap() {
+    var rc = state.recap || { week: mondayKeyOffset(-1), trial: false };
+    var weeks = rc.trial ? trialWeeks() : [weekByStart(rc.week)].filter(Boolean);
+    var r = weekRecap(weeks), t = goalTarget(), target = dailyKcalTarget();
+    var app = document.getElementById("app"); app.innerHTML = "";
+    app.appendChild(renderTopbar(rc.trial ? "Je proefweek" : "Terugblik", true, function () { goto("weeks"); }));
+    var main = document.createElement("main"); main.className = "recap";
+    var eb = document.createElement("div"); eb.className = "eyebrow";
+    eb.textContent = rc.trial ? "Wat je met Balanza deed" : "Week van " + formatWeekLabel(new Date(rc.week + "T00:00:00"));
+    main.appendChild(eb);
+    var h = document.createElement("h2"); h.className = "recap-title"; h.textContent = recapNoteFor(r); main.appendChild(h);
+    var grid = document.createElement("div"); grid.className = "recap-grid";
+    [[r.meals, "maaltijden gepland"], [r.cooked, "zelf gekookt"], [r.balans !== null ? r.balans + "%" : "–", "gem. Balans"], [r.days + "", r.days === 1 ? "dag met een plan" : "dagen met een plan"]].forEach(function (x) {
+      var c = document.createElement("div"); c.className = "recap-stat"; c.innerHTML = "<b></b><span></span>";
+      c.querySelector("b").textContent = x[0]; c.querySelector("span").textContent = x[1]; grid.appendChild(c);
+    });
+    main.appendChild(grid);
+    if (r.pct) {
+      var mac = document.createElement("div"); mac.className = "card recap-macros";
+      var mh = document.createElement("div"); mh.className = "eyebrow"; mh.textContent = "Macroverdeling tegenover je doel"; mac.appendChild(mh);
+      [["Eiwit", r.pct.eiwit, t.eiwit, "var(--bar-eiwit, #1F8A55)"], ["Koolhydraten", r.pct.kh, t.kh, "var(--bar-kh, #E3A22F)"], ["Vet", r.pct.vet, t.vet, "var(--bar-vet, #3C8DCB)"]].forEach(function (m) {
+        var row = document.createElement("div"); row.className = "rm-row";
+        row.innerHTML = '<span class="rm-l"></span><div class="rm-bar"><i></i><em></em></div><span class="rm-v"></span>';
+        row.querySelector(".rm-l").textContent = m[0];
+        var bar = row.querySelector("i"); bar.style.width = Math.min(100, m[1]) + "%"; bar.style.background = m[3];
+        row.querySelector("em").style.left = Math.min(100, m[2]) + "%";
+        row.querySelector(".rm-v").textContent = m[1] + "% (doel " + m[2] + "%)";
+        mac.appendChild(row);
+      });
+      main.appendChild(mac);
+    }
+    if (r.best) {
+      var bc = document.createElement("button"); bc.type = "button"; bc.className = "card recap-best"; bc.id = "recapBest";
+      bc.innerHTML = '<div class="eyebrow">Gerecht van de week</div><h2></h2><div class="sub"></div>';
+      bc.querySelector("h2").textContent = r.best.dish.name;
+      bc.querySelector(".sub").textContent = r.best.dish.kcal + " kcal · Balans " + r.best.dish.balans + "%" + (r.best.dish.rating === 1 ? " · favoriet" : "");
+      var bd = findDayAnywhere(r.best.dish.id);
+      bc.onclick = function () { if (bd) goto("day", { weekId: bd.week.id, dayId: bd.day.id, dayBackView: "recap" }); };
+      main.appendChild(bc);
+    }
+    if (!r.cooked && r.meals) {
+      var hint = document.createElement("div"); hint.className = "acc-sub";
+      hint.textContent = "Tip: tik na het eten op “Lekker” of “Niet lekker” op het startscherm. Dan zie je hier ook wat je echt hebt gekookt, en worden je volgende weken nog beter.";
+      main.appendChild(hint);
+    }
+    var next = document.createElement("button"); next.type = "button"; next.className = "primary-btn"; next.id = "recapNext";
+    if (rc.trial && readOnlyMode() === false && userPlan() === "trial") {
+      next.textContent = "Zo ga je verder met Plus"; next.onclick = function () { goto("plans"); };
+    } else {
+      next.textContent = nextWeekNeedsPlan() ? "Zet volgende week klaar" : "Bekijk volgende week";
+      next.onclick = function () { if (nextWeekNeedsPlan()) prepareNextWeek(); else { var m = getMonday(new Date()); m.setDate(m.getDate() + 7); goto("planweek", { planWeekId: openOrCreateWeek(m).id }); } };
+      lockEl(next, "Je week automatisch invullen");
+    }
+    main.appendChild(next);
+    app.appendChild(main);
+  }
+
+  // ---------- 4. Samen plannen (huishouden) ----------
+  var householdInfo = null, householdLoaded = false, householdSyncTimer = null, lastSharedSync = 0;
+  function householdShared() { return !!(householdInfo && householdInfo.members && householdInfo.members.length > 1); }
+  function hhFetch(path, body) {
+    return fetch("/api/household" + (path ? "/" + path : ""), body ? { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, authHeaders()), body: JSON.stringify(body) } : { headers: authHeaders() })
+      .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { if (!r.ok) { var e = new Error(d.message || "Er ging iets mis."); e.code = d.code; throw e; } return d; }); });
+  }
+  function loadHousehold() {
+    if (!window.authToken) { householdLoaded = true; return Promise.resolve(null); }
+    return hhFetch("").then(function (d) { householdInfo = d.household; householdLoaded = true; startSharedSync(); if (state.view === "account") render(); return householdInfo; })
+      .catch(function () { householdLoaded = true; return null; });
+  }
+  // Huisgenoten werken in dezelfde planning: als de app weer in beeld komt (en elke minuut) halen we de laatste stand op.
+  function refreshSharedData() {
+    if (!householdShared() || !dbCap || !userCap || state.generating || document.querySelector(".sheet-overlay.active, .confirm-overlay.active")) return;
+    if (plannedWeeks.some(function (w) { return w.autoFilling || w.prepGenerating; })) return;
+    lastSharedSync = Date.now();
+    userCap.id().then(function (uid) {
+      if (!uid) return;
+      dbCap.doc("data/users/" + uid + "/plannedWeeks").get().then(function (snap) {
+        var list = snap.exists && snap.data() && Array.isArray(snap.data().list) ? snap.data().list : null;
+        if (!list) return;
+        var before = JSON.stringify(plannedWeeks.map(function (w) { return [w.id, w.slots, w.draft || null]; }));
+        var after = JSON.stringify(list.map(function (w) { return [w.id, w.slots || {}, w.draft || null]; }));
+        if (before === after) return;
+        var byId = {}; plannedWeeks.forEach(function (w) { byId[w.id] = w; });
+        plannedWeeks.length = 0;
+        list.forEach(function (item) {
+          var old = byId[item.id] || {};
+          plannedWeeks.push({ id: item.id, weekStart: item.weekStart, slots: item.slots ? deepClone(item.slots) : {}, dynamicPrep: item.dynamicPrep ? deepClone(item.dynamicPrep) : null,
+            draft: item.draft ? deepClone(item.draft) : null, prepGenerating: false, prepError: old.prepError || null, autoFilling: false, autoFillError: null });
+        });
+        render();
+      }).catch(function () {});
+      dbCap.doc("data/users/" + uid + "/dishes").get().then(function (snap) {
+        var data = snap.exists ? (snap.data() || {}) : {};
+        var cacheWeek = WEEKS.filter(function (w) { return w.id === "cache"; })[0];
+        var have = {}; if (cacheWeek) cacheWeek.days.forEach(function (d) { have[d.id] = 1; });
+        var fresh = [];
+        PLAN_MEALS.forEach(function (m) { (Array.isArray(data[m]) ? data[m] : []).forEach(function (d) { if (d && d.id && !have[d.id]) fresh.push(deepClone(d)); }); });
+        if (fresh.length) { addToCacheLibrary(fresh); render(); }
+      }).catch(function () {});
+    });
+  }
+  function startSharedSync() {
+    if (householdSyncTimer || !householdShared()) return;
+    householdSyncTimer = setInterval(function () { if (document.visibilityState === "visible" && Date.now() - lastSharedSync > 55000) refreshSharedData(); }, 15000);
+    document.addEventListener("visibilitychange", function () { if (document.visibilityState === "visible" && Date.now() - lastSharedSync > 10000) refreshSharedData(); });
+  }
+  function inviteHousehold(btn) {
+    if (btn) btn.disabled = true;
+    hhFetch("invite", {}).then(function (d) {
+      if (btn) btn.disabled = false;
+      var name = accountName();
+      var msg = (name ? name + " nodigt je uit" : "Je bent uitgenodigd") + " om samen te plannen in Balanza: dezelfde weekplanning, gerechten en boodschappenlijst. Open de link (7 dagen geldig): " + d.link;
+      var box = document.createElement("div"); box.className = "hh-invite";
+      var inp = document.createElement("input"); inp.className = "textinput"; inp.readOnly = true; inp.value = d.link; inp.id = "hhInviteLink";
+      var row = document.createElement("div"); row.className = "nudge-actions";
+      var wa = document.createElement("a"); wa.className = "primary-btn small"; wa.href = "https://wa.me/?text=" + encodeURIComponent(msg); wa.target = "_blank"; wa.rel = "noopener"; wa.textContent = "Deel via WhatsApp";
+      var cp = document.createElement("button"); cp.type = "button"; cp.className = "ghost-btn small"; cp.textContent = "Kopieer link";
+      cp.onclick = function () { try { navigator.clipboard.writeText(d.link).then(function () { showToast("Link gekopieerd."); }); } catch (e) { inp.select(); } };
+      row.appendChild(wa); row.appendChild(cp); box.appendChild(inp); box.appendChild(row);
+      var slot = document.getElementById("hhInviteSlot"); if (slot) { slot.innerHTML = ""; slot.appendChild(box); }
+      loadHousehold();
+    }).catch(function (e) { if (btn) btn.disabled = false; showToast(e.message); });
+  }
+  function leaveHousehold() {
+    var owner = householdInfo && householdInfo.owner;
+    askConfirm(owner
+      ? "Samen plannen stoppen? Iedereen houdt een eigen kopie van de gerechten en planning zoals ze nu zijn, en plant daarna weer apart."
+      : "Wil je stoppen met samen plannen? Je krijgt een kopie van de gedeelde gerechten en planning mee en plant daarna weer apart.", function () {
+      hhFetch("leave", { keepCopy: true }).then(function () { showToast("Je plant nu weer apart."); setTimeout(function () { location.reload(); }, 700); })
+        .catch(function (e) { showToast(e.message); });
+    }, owner ? "Stoppen" : "Vertrekken", "Annuleren");
+  }
+  function renderHouseholdCard(main) {
+    var card = accCard(main, "Samen plannen");
+    if (!window.authToken) {
+      var p0 = document.createElement("div"); p0.className = "acc-sub";
+      p0.textContent = "Plan samen met je partner of huisgenoten in dezelfde week, met één boodschappenlijst. Daarvoor heb je een account nodig.";
+      card.appendChild(p0); return;
+    }
+    if (!householdLoaded) { var w = document.createElement("div"); w.className = "acc-sub"; w.textContent = "Even kijken…"; card.appendChild(w); return; }
+    var p = document.createElement("div"); p.className = "acc-sub";
+    if (householdShared()) {
+      p.textContent = "Jullie delen gerechten, weekplanning en boodschappenlijst. Voorkeuren, meldingen en abonnement blijven per persoon.";
+      card.appendChild(p);
+      var ul = document.createElement("div"); ul.className = "hh-members"; ul.id = "hhMembers";
+      householdInfo.members.forEach(function (m) {
+        var li = document.createElement("div"); li.className = "hh-member";
+        li.textContent = m.name + (m.me ? " (jij)" : "") + (m.owner ? " · gestart" : "");
+        ul.appendChild(li);
+      });
+      card.appendChild(ul);
+    } else {
+      p.textContent = "Nodig je partner of een huisgenoot uit. Jullie plannen dan in dezelfde week, zien elkaars gerechten en hebben één boodschappenlijst. Wie lid wordt, houdt zijn eigen gerechten bewaard.";
+      card.appendChild(p);
+    }
+    var row = document.createElement("div"); row.className = "nudge-actions";
+    if (!householdInfo || householdInfo.members.length < (householdInfo.max || 6)) {
+      var inv = document.createElement("button"); inv.type = "button"; inv.className = householdShared() ? "ghost-btn small" : "primary-btn small"; inv.id = "hhInviteBtn";
+      inv.textContent = householdShared() ? "Nog iemand uitnodigen" : "Iemand uitnodigen";
+      inv.onclick = function () { inviteHousehold(inv); };
+      row.appendChild(inv);
+    }
+    if (householdShared()) {
+      var lv = document.createElement("button"); lv.type = "button"; lv.className = "ghost-btn small"; lv.id = "hhLeaveBtn";
+      lv.textContent = householdInfo.owner ? "Samen plannen stoppen" : "Vertrekken";
+      lv.onclick = leaveHousehold; row.appendChild(lv);
+    }
+    card.appendChild(row);
+    var slot = document.createElement("div"); slot.id = "hhInviteSlot"; card.appendChild(slot);
+  }
+  // Uitnodigingslink: /?join=<code>. Zonder account eerst inloggen of een account maken; daarna gaat het vanzelf verder.
+  var JOIN_KEY = "balanza_pending_join";
+  function handleJoinToken(token) {
+    if (!/^[A-Za-z0-9_-]{16,40}$/.test(token || "")) return;
+    try { sessionStorage.setItem(JOIN_KEY, token); } catch (e) {}
+    checkPendingJoin();
+  }
+  function checkPendingJoin() {
+    var token = null; try { token = sessionStorage.getItem(JOIN_KEY); } catch (e) {}
+    if (!token) return;
+    if (!window.authToken) {
+      askConfirm("Je bent uitgenodigd om samen te plannen. Daarvoor heb je een (gratis) account nodig. Wil je inloggen of een account aanmaken?", function () {
+        if (window.authRequired) { authState.mode = "login"; render(); } else goto("upgrade");
+      }, "Ja, verder", "Later");
+      return;
+    }
+    askConfirm("Samen plannen? Je deelt dan gerechten, weekplanning en boodschappenlijst met wie je uitnodigde. Je eigen gerechten en planning worden bewaard en komen terug als je ooit vertrekt.", function () {
+      hhFetch("join", { token: token }).then(function () {
+        try { sessionStorage.removeItem(JOIN_KEY); } catch (e) {}
+        try { sessionStorage.setItem("weekmenu_notice", "Welkom! Jullie plannen nu samen."); } catch (e) {}
+        location.reload();
+      }).catch(function (e) { try { sessionStorage.removeItem(JOIN_KEY); } catch (x) {} showToast(e.message); });
+    }, "Samen plannen", "Niet nu", function () { try { sessionStorage.removeItem(JOIN_KEY); } catch (e) {} });
+  }
+
+  // ---------- 5. Restjes: wat moet er op? ----------
+  var LEFTOVER_DAYS = 10;
+  function leftoverList() {
+    var cutoff = new Date(); cutoff.setDate(cutoff.getDate() - LEFTOVER_DAYS);
+    var ck = isoDateKey(cutoff);
+    return (Array.isArray(prefs.leftovers) ? prefs.leftovers : []).filter(function (l) { return l && l.t && (!l.at || l.at >= ck); });
+  }
+  function leftoverTerms() { return leftoverList().map(function (l) { return String(l.t).toLowerCase().trim(); }).filter(function (t) { return t.length >= 3; }); }
+  function setLeftovers(list) { prefs.leftovers = list.slice(-20); savePrefs(); }
+  function addLeftover(t) {
+    t = String(t || "").replace(/[\r\n,;]+/g, " ").trim().slice(0, 40);
+    if (!t) return;
+    var list = leftoverList().filter(function (l) { return l.t.toLowerCase() !== t.toLowerCase(); });
+    list.push({ t: t, at: todayKeyLocal() }); setLeftovers(list);
+  }
+  function removeLeftover(t) { setLeftovers(leftoverList().filter(function (l) { return l.t !== t; })); }
+  function dishLeftoverHits(dish, terms) {
+    if (!terms.length || !dish) return 0;
+    var hay = (dish.name + " " + (dish.ingredienten || []).join(" ")).toLowerCase();
+    return terms.filter(function (t) { return hay.indexOf(t) > -1; }).length;
+  }
+  // Wat er van verpakkingen overblijft deze week (bijv. 1 bak kwark van 500 g, maar je gebruikt er 150 g).
+  function packLeftoversFor(pw) {
+    if (!pw || !Object.keys(pw.slots).length) return [];
+    var out = [], cats;
+    try { cats = buildAggregatedShoppingList(buildPlanEntries(pw)); } catch (e) { return []; }
+    Object.keys(cats).forEach(function (c) {
+      cats[c].forEach(function (item) {
+        if (!item.amount || (item.family !== "weight" && item.family !== "volume")) return;
+        var name = String(item.name || "").toLowerCase(), best = null;
+        PACK_SIZES.forEach(function (p) { if (name.indexOf(p.kw) > -1 && (!best || p.kw.length > best.kw.length)) best = p; });
+        if (!best) return;
+        var n = Math.max(1, Math.ceil(item.amount / best.size - 0.1)), over = Math.round(n * best.size - item.amount);
+        if (over >= Math.max(50, best.size * 0.3)) out.push({ t: best.kw, over: over, unit: item.family === "volume" ? "ml" : "g" });
+      });
+    });
+    return out;
+  }
+  function leftoverSuggestions(pw) {
+    var terms = leftoverTerms(), planned = {};
+    if (!terms.length) return [];
+    if (pw) Object.keys(pw.slots).forEach(function (k) { planned[pw.slots[k].dayId] = 1; });
+    var all = [], byType = collectExistingByType();
+    PLAN_MEALS.forEach(function (m) { byType[m].forEach(function (it) { if (it.day.rating !== -1 && !planned[it.day.id]) all.push(it); }); });
+    return all.map(function (it) { return { it: it, hits: dishLeftoverHits(it.day, terms) }; }).filter(function (x) { return x.hits; })
+      .sort(function (a, b) { return b.hits - a.hits || (b.it.day.rating === 1) - (a.it.day.rating === 1); }).slice(0, 3).map(function (x) { return x.it; });
+  }
+  function renderLeftoversCard(main, pw) {
+    if (!coachOn("leftovers")) return;
+    var list = leftoverList(), packs = packLeftoversFor(pw).filter(function (p) { return !list.some(function (l) { return l.t.toLowerCase() === p.t; }); });
+    var open = state.leftoversOpen || list.length > 0;
+    if (!open) {
+      var link = document.createElement("button"); link.type = "button"; link.className = "comm-foot-link leftover-link"; link.id = "leftoverOpen";
+      link.textContent = "🥕 Iets dat op moet? Restjes toevoegen" + (packs.length ? " (" + packs.length + " voorstel" + (packs.length === 1 ? "" : "len") + ")" : "");
+      link.onclick = function () { state.leftoversOpen = true; render(); };
+      main.appendChild(link);
+      return;
+    }
+    var body = document.createElement("div"); body.className = "leftover-body";
+    var chips = document.createElement("div"); chips.className = "chiprow";
+    list.forEach(function (l) {
+      var c = document.createElement("button"); c.type = "button"; c.className = "chip selected"; c.textContent = l.t + " ×";
+      c.setAttribute("aria-label", l.t + " verwijderen"); c.onclick = function () { removeLeftover(l.t); render(); };
+      chips.appendChild(c);
+    });
+    packs.slice(0, 4).forEach(function (p) {
+      var c = document.createElement("button"); c.type = "button"; c.className = "chip"; c.textContent = "+ " + p.t + " (±" + p.over + " " + p.unit + " over)";
+      c.title = "Van de verpakking blijft waarschijnlijk iets over"; c.onclick = function () { addLeftover(p.t); render(); };
+      chips.appendChild(c);
+    });
+    body.appendChild(chips);
+    var add = document.createElement("form"); add.className = "leftover-add";
+    var inp = document.createElement("input"); inp.className = "textinput"; inp.id = "leftoverInput"; inp.placeholder = "Bijv. halve courgette, spinazie"; inp.maxLength = 40;
+    var ab = document.createElement("button"); ab.type = "submit"; ab.className = "ghost-btn small"; ab.textContent = "Toevoegen";
+    add.onsubmit = function (e) { e.preventDefault(); inp.value.split(",").forEach(addLeftover); render(); setTimeout(function () { var i = document.getElementById("leftoverInput"); if (i) i.focus(); }, 0); };
+    add.appendChild(inp); add.appendChild(ab); body.appendChild(add);
+    var sugg = leftoverSuggestions(pw);
+    if (sugg.length) {
+      var sl = document.createElement("div"); sl.className = "sheet-label"; sl.textContent = "Deze gerechten gebruiken dat"; body.appendChild(sl);
+      sugg.forEach(function (it) {
+        var b = document.createElement("button"); b.type = "button"; b.className = "leftover-dish";
+        b.innerHTML = "<b></b><span></span>";
+        b.querySelector("b").textContent = it.day.name;
+        b.querySelector("span").textContent = it.day.mealType + " · " + it.day.kcal + " kcal · Inplannen ›";
+        b.onclick = function () { openDishSheet(it); };
+        body.appendChild(b);
+      });
+    }
+    var actions = [];
+    if (list.length && moduleOn("generate")) actions.push({ label: "Nieuwe gerechten met mijn restjes", id: "leftoverGen", lock: "Nieuwe gerechten ontwerpen", onClick: function () {
+      state.genWish = { tags: ["restjes"], text: list.map(function (l) { return l.t; }).join(", ").slice(0, 200) };
+      goto("prefs", { tab: "ontwerpen" });
+    } });
+    nudgeCard(main, { id: "leftoverCard", icon: "🥕", title: "Op te maken",
+      text: list.length ? "Restjes blijven " + LEFTOVER_DAYS + " dagen staan. Balanza plant gerechten die ze gebruiken eerder in." : "Wat moet er op? Balanza zoekt gerechten die het gebruiken.",
+      actions: actions, body: body, onClose: list.length ? null : function () { state.leftoversOpen = false; render(); } });
+  }
+  // Bij automatisch invullen gaan gerechten met restjes voor (de volgorde blijft verder gelijk).
+  function preferLeftovers(pool) {
+    var terms = coachOn("leftovers") ? leftoverTerms() : [];
+    if (!terms.length) return pool;
+    var hit = [], rest = [];
+    pool.forEach(function (it) { (dishLeftoverHits(it.day, terms) ? hit : rest).push(it); });
+    return hit.concat(rest);
+  }
+  function plannerExtras(main, pw) {
+    renderDraftBanner(main, pw);
+    renderLeftoversCard(main, pw);
+  }
+
+  // ---------- 6. Seizoen en momenten ----------
+  function renderSeasonCard(main) {
+    var s = window.appSeason;
+    if (!s || !s.produce || !moduleOn("generate")) return;
+    var m = s.moment;
+    var title = m ? (m.key === "bbq" ? "Het is barbecueweer" : m.daysUntil === 0 ? "Vandaag: " + m.label : m.label + (m.daysUntil === 1 ? " is morgen" : " over " + m.daysUntil + " dagen")) : "Nu in het seizoen";
+    var text = m ? "Zin in iets speciaals? Balanza maakt gerechten die passen bij " + (m.key === "bbq" ? "de barbecue" : m.label) + " én bij je doel."
+      : s.produce.slice(0, 5).join(", ") + ". Op z'n lekkerst en vaak voordeliger.";
+    var actions = [{ label: m ? "Maak " + m.label.toLowerCase() + "gerechten" : "Maak seizoensgerechten", id: "seasonGen", lock: "Nieuwe gerechten ontwerpen", onClick: function () {
+      state.genWish = m ? { tags: [], text: m.wish.slice(0, 200) } : { tags: ["seizoen"], text: s.produce.slice(0, 6).join(", ") };
+      goto("prefs", { tab: "ontwerpen" });
+    } }];
+    nudgeCard(main, { id: "seasonCard", tone: "soft", icon: m ? "🎉" : "🍂", title: title, text: text, actions: actions });
+  }
+
+  // Op Start: wat er nu aandacht verdient, bovenaan en hooguit twee tegelijk (niet opdringerig).
+  function renderHomeNudges(main) {
+    var shown = 0, holder = document.createElement("div"); holder.className = "nudge-stack";
+    function room() { return shown < 2; }
+    var before;
+    before = holder.childNodes.length; renderCookedCard(holder); if (holder.childNodes.length > before) shown++;
+    var nextKey = mondayKeyOffset(1), nw = weekByStart(nextKey);
+    if (room() && coachOn("draft") && nw && nw.draft && draftKeysLeft(nw).length) {
+      nudgeCard(holder, { id: "draftHomeCard", tone: "accent", icon: iconSvg("calendar", 20), title: "Je volgende week staat klaar",
+        text: draftKeysLeft(nw).length + " maaltijden voorgesteld met je eigen gerechten. Bekijk, wissel en keur goed.",
+        actions: [{ label: "Bekijken", primary: true, id: "draftHomeGo", onClick: function () { goto("planweek", { planWeekId: nw.id }); } }] });
+      shown++;
+    } else if (room() && coachOn("draft") && [5, 6, 0].indexOf(new Date().getDay()) > -1 && hasAnyDishes() && !readOnlyMode() && nextWeekNeedsPlan() && lsGet("balanza_prepweek_skip") !== nextKey) {
+      nudgeCard(holder, { id: "prepWeekCard", icon: iconSvg("calendar", 20), title: "Volgende week alvast klaarzetten?",
+        text: "Balanza vult hem in één tik met je eigen gerechten. Daarna wissel je wat je wilt.",
+        actions: [{ label: "Zet klaar", primary: true, id: "prepWeekGo", onClick: prepareNextWeek }],
+        onClose: function () { lsSet("balanza_prepweek_skip", nextKey); render(); } });
+      shown++;
+    }
+    if (room()) { before = holder.childNodes.length; renderRecapHomeCard(holder); if (holder.childNodes.length > before) shown++; }
+    if (holder.childNodes.length) main.appendChild(holder);
+  }
+  function openCookedFromLink() { goto("weeks"); setTimeout(function () { var el = document.getElementById("cookedCard"); if (el && el.scrollIntoView) el.scrollIntoView({ block: "center", behavior: "smooth" }); }, 150); }
+
   var dbCap = null;
   var userCap = null;
 
@@ -10783,6 +11433,8 @@
         health: healthList(),
         sugarMode: prefs.sugarMode === "strikt" ? "strikt" : "natuurlijk",
         cheeseMode: prefs.cheeseMode === "geen" ? "geen" : "hardekaas",
+        leftovers: Array.isArray(prefs.leftovers) ? prefs.leftovers.slice(-20) : [],
+        coach: prefs.coach && typeof prefs.coach === "object" ? prefs.coach : {},
         familyMode: !!prefs.familyMode,
         equipment: prefs.equipment,
         exclude: prefs.exclude,
@@ -10812,7 +11464,8 @@
           id: pw.id,
           weekStart: pw.weekStart,
           slots: pw.slots,
-          dynamicPrep: pw.dynamicPrep || null
+          dynamicPrep: pw.dynamicPrep || null,
+          draft: pw.draft || null
         };
       });
       dbCap.doc("data/users/" + uid + "/plannedWeeks").set({ list: list }).catch(function () {});
@@ -11137,6 +11790,7 @@
   }
 
   function initPersistence() {
+    loadHousehold();
     claude.use("db").then(function (db) {
       dbCap = db;
       if (!db) return;
@@ -11152,7 +11806,7 @@
               return;
             }
             var pdata = psnap.data() || {};
-            ["name", "bringListLink", "cuisines", "flavors", "level", "dietStyle", "health", "sugarMode", "cheeseMode", "familyMode", "equipment", "exclude", "count", "mealTypes", "gender", "heightCm", "weightKg", "age", "activityLevel", "goal", "homeLayout", "mealCounts", "withImages", "pantry", "communityName"].forEach(function (k) {
+            ["name", "bringListLink", "cuisines", "flavors", "level", "dietStyle", "health", "leftovers", "coach", "sugarMode", "cheeseMode", "familyMode", "equipment", "exclude", "count", "mealTypes", "gender", "heightCm", "weightKg", "age", "activityLevel", "goal", "homeLayout", "mealCounts", "withImages", "pantry", "communityName"].forEach(function (k) {
               if (pdata[k] !== undefined) prefs[k] = deepClone(pdata[k]);
             });
             render();
@@ -11169,6 +11823,7 @@
                 weekStart: item.weekStart,
                 slots: item.slots ? deepClone(item.slots) : {},
                 dynamicPrep: item.dynamicPrep ? deepClone(item.dynamicPrep) : null,
+                draft: item.draft ? deepClone(item.draft) : null,
                 prepGenerating: false,
                 prepError: null,
                 autoFilling: false,
@@ -11275,7 +11930,7 @@
       next.onclick = function () { timerRemaining = 0; goto("cook", { weekId: week.id, dayId: day.id, stepIndex: state.stepIndex + 1 }); };
     } else {
       next.textContent = "Klaar — eet smakelijk";
-      next.onclick = function () { goto("day", { weekId: week.id, dayId: day.id }); };
+      next.onclick = function () { markCookedFromCookMode(day.id); goto("day", { weekId: week.id, dayId: day.id }); };
     }
     nav.appendChild(next);
     main.appendChild(nav);
@@ -11461,6 +12116,7 @@
       else if (state.view === "plan") renderPlan();
       else if (state.view === "planadd") renderPlanAdd();
       else if (state.view === "planweek") renderPlanWeek();
+      else if (state.view === "recap") renderRecap();
       else if (state.view === "planday") renderPlanDay();
       else if (state.view === "planprep") renderPlanPrep();
       else if (state.view === "planpick") renderPlanPick();
@@ -11544,6 +12200,7 @@
     window.appModules = cfg && cfg.modules && typeof cfg.modules === "object" ? cfg.modules : null;
     window.appPlanOnly = cfg && cfg.planOnly && typeof cfg.planOnly === "object" ? cfg.planOnly : null;
     window.appNotice = { maintenance: cfg ? cfg.maintenance || null : null, announcement: cfg ? cfg.announcement || null : null };
+    window.appSeason = cfg && cfg.season && Array.isArray(cfg.season.produce) ? cfg.season : null;
     updateNoticeBar();
     if (state.view) render();   // een module kan zojuist voor dit abonnement vrij- of afgesloten zijn
   }
