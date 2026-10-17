@@ -250,6 +250,36 @@
   .rm-bar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 99px; }
   .rm-bar em { position: absolute; top: -3px; width: 2px; height: 14px; background: var(--ink); opacity: .6; }
   .rm-v { grid-column: 2; font-size: 12px; color: var(--muted); }
+  .journey-tile { gap: 8px; padding: 18px 20px; }
+  .journey-tile h2 { font-size: 21px; }
+  .jt-steps { display: flex; gap: 6px; }
+  .jt-steps i { flex: 1; height: 6px; border-radius: 99px; background: var(--line); }
+  .jt-steps i.done { background: var(--accent2); opacity: .55; }
+  .jt-steps i.now { background: var(--accent2); }
+  .jt-chal { font-size: 13.5px; font-weight: 600; color: var(--accent2); }
+  .jt-chal:empty { display: none; }
+  .journey-sec { cursor: default; gap: 10px; padding: 18px 20px; }
+  .jp-row { display: flex; gap: 12px; align-items: flex-start; padding: 6px 0; opacity: .6; }
+  .jp-row.done, .jp-row.now { opacity: 1; }
+  .jp-row > div { display: flex; flex-direction: column; gap: 2px; }
+  .jp-row b { font-size: 14.5px; }
+  .jp-row .jp-focus { font-size: 13px; color: var(--muted); }
+  .jp-row small { font-size: 12.5px; color: var(--ink); line-height: 1.45; }
+  .jp-row small:empty { display: none; }
+  .jp-dot { flex: none; width: 14px; height: 14px; margin-top: 3px; border-radius: 50%; border: 2px solid var(--line); }
+  .jp-row.done .jp-dot { background: var(--accent2); border-color: var(--accent2); opacity: .6; }
+  .jp-row.now .jp-dot { border-color: var(--accent2); box-shadow: 0 0 0 4px var(--nevo-bg); background: var(--accent2); }
+  .jc-now { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+  .jc-now b { font-size: 15px; }
+  .jc-now span { font-size: 13px; color: var(--muted); white-space: nowrap; }
+  .ms-grid { display: flex; flex-direction: column; gap: 6px; }
+  .ms { font-size: 13.5px; padding: 8px 12px; border-radius: 10px; border: 1px dashed var(--line); color: var(--muted); }
+  .ms.got { border-style: solid; color: var(--ink); background: var(--bg); }
+  .chip.face { font-size: 20px; padding: 6px 12px; }
+  .spark { color: var(--accent2); height: 60px; }
+  .spark svg { width: 100%; height: 60px; display: block; }
+  .recap-journey { gap: 6px; }
+  .rj-lines { display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
   .hh-members { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 2px; }
   .hh-member { font-size: 14px; padding: 8px 12px; border-radius: 10px; background: var(--bg); border: 1px solid var(--line); }
   .hh-invite { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
@@ -2302,6 +2332,7 @@
     health: [],
     leftovers: [],
     coach: {},
+    journey: {},
     sugarMode: "natuurlijk",
     cheeseMode: "hardekaas",
     familyMode: false,
@@ -3580,6 +3611,7 @@
     var mine = accCard(main, "Mijn Balanza");
     accButton(mine, "settingsProfile", "user", "Mijn profiel", function () { goto("account"); });
     accButton(mine, "settingsPrefs", "sliders", "Mijn voorkeuren", function () { goto("myprefs", { prefsBack: "settings" }); });
+    if (journeyOn()) accButton(mine, "settingsJourney", "sparkle", "Jouw reis", function () { goto("journey"); });
     accButton(mine, "settingsGuide", "help", "Hoe werkt Balanza", function () { goto("guide"); });
 
     var bringCard = accCard(main, "Bring!");
@@ -4387,7 +4419,7 @@
   }
 
   // ---------- Startscherm: eigen indeling ----------
-  var HOME_DEFAULT_ORDER = ["vandaag", "week", "seizoen", "foto", "recent", "community", "boodschappen", "uitleg", "genereren", "volgendeweek", "tip"];
+  var HOME_DEFAULT_ORDER = ["vandaag", "reis", "week", "seizoen", "foto", "recent", "community", "boodschappen", "uitleg", "genereren", "volgendeweek", "tip"];
   var HOME_DEFAULT_HIDDEN = ["genereren", "volgendeweek", "tip"];
   function homeLayout() {
     var hl = prefs.homeLayout && typeof prefs.homeLayout === "object" ? prefs.homeLayout : null;
@@ -4449,6 +4481,8 @@
       render: function (main) { homeWeekCard(main, getMonday(new Date()), "Huidige week"); } },
     volgendeweek: { label: "Volgende week", desc: "Alvast vooruit plannen", available: function () { return true; },
       render: function (main) { var m = getMonday(new Date()); m.setDate(m.getDate() + 7); homeWeekCard(main, m, "Volgende week"); } },
+    reis: { label: "Jouw reis", desc: "Je fase, focus en uitdaging van deze week", available: function () { return journeyOn() && !journey().quiet; },
+      render: function (main) { renderJourneyTile(main); } },
     seizoen: { label: "Seizoen en momenten", desc: "Wat nu lekker is, en feestdagen waar je iets bijzonders voor kookt", available: function () { return !!window.appSeason && moduleOn("generate") && coachOn("season"); },
       render: function (main) { renderSeasonCard(main); } },
     foto: { label: "Gerecht van foto", desc: "Snel naar de camera om een gerecht te maken", available: function () { return moduleOn("generate") && moduleOn("photo"); },
@@ -4793,6 +4827,11 @@
       if (goalTargetAdjusted(prefs.goal, prefs.dietStyle)) main.appendChild(goalNoteEl(prefs.goal, prefs.dietStyle));
       var wWarn1 = dietGoalWarningEl(prefs.goal, prefs.dietStyle);
       if (wWarn1) main.appendChild(wWarn1);
+      prefs.journey = prefs.journey && typeof prefs.journey === "object" ? prefs.journey : {};
+      labelEl("Waarom wil je dit?", "Optioneel. Balanza herinnert je er af en toe aan, in je eigen woorden.");
+      chipGroupSingle(JOURNEY_WHY.map(function (w) { return [w[0], w[1]]; }), prefs.journey.why || null, function (w) { prefs.journey.why = w; prefs.journey.whyText = ""; });
+      labelEl("Welk tempo past bij je?", "Rustig geeft je langer de tijd per stap; stevig gaat sneller door de fases.");
+      chipGroupSingle(JOURNEY_PACE, prefs.journey.pace || "normaal", function (v) { prefs.journey.pace = v; });
     } else if (state.wizardStep === 2) {
       heading("Voedingsstijl & gezond eten", "Dit is een harde regel, geen suggestie: gerechten die hier niet aan voldoen worden nooit voorgesteld. Kies \u201cGeen voorkeur\u201d als dit niet van toepassing is.");
       var dietPairs = [["", "Geen voorkeur"]].concat(DIET_STYLES.map(function (d) { return [d, d]; }));
@@ -10839,7 +10878,11 @@
     ["cooked", "Na het eten: was het lekker?", "Eén vraag na het diner, zodat Balanza je smaak leert", "cookedCheck"],
     ["recap", "Weekterugblik", "Op maandag je vorige week in cijfers", "recap"],
     ["leftovers", "Restjes opmaken", "Bij het plannen: wat moet er op, en welke gerechten gebruiken dat", null],
-    ["season", "Seizoen en feestdagen", "Inspiratie voor wat nu lekker is en voor speciale momenten", null]
+    ["season", "Seizoen en feestdagen", "Inspiratie voor wat nu lekker is en voor speciale momenten", null],
+    ["journey", "Jouw reis", "Fases op weg naar je doel, met één focus per fase", null],
+    ["challenge", "Weekuitdaging", "Elke week kies je zelf een kleine uitdaging (of sla je over)", null],
+    ["milestones", "Mijlpalen", "Een kaartje als je iets bereikt, zoals 10 keer zelf gekookt", null],
+    ["progress", "Voortgang bijhouden", "Optioneel: energie, verzadiging, kleding of gewicht, één keer per week", null]
   ];
   function coachOn(k) { return !(prefs.coach && prefs.coach[k] === false); }
   function setCoach(k, on) {
@@ -11117,6 +11160,7 @@
       hint.textContent = "Tip: tik na het eten op “Lekker” of “Niet lekker” op het startscherm. Dan zie je hier ook wat je echt hebt gekookt, en worden je volgende weken nog beter.";
       main.appendChild(hint);
     }
+    if (!rc.trial) renderRecapJourney(main, rc.week);
     var next = document.createElement("button"); next.type = "button"; next.className = "primary-btn"; next.id = "recapNext";
     if (rc.trial && readOnlyMode() === false && userPlan() === "trial") {
       next.textContent = "Zo ga je verder met Plus"; next.onclick = function () { goto("plans"); };
@@ -11398,6 +11442,7 @@
     function room() { return shown < 2; }
     var before;
     before = holder.childNodes.length; renderCookedCard(holder); if (holder.childNodes.length > before) shown++;
+    if (room()) shown += renderJourneyNudges(holder, room);
     var nextKey = mondayKeyOffset(1), nw = weekByStart(nextKey);
     if (room() && coachOn("draft") && nw && nw.draft && draftKeysLeft(nw).length) {
       nudgeCard(holder, { id: "draftHomeCard", tone: "accent", icon: iconSvg("calendar", 20), title: "Je volgende week staat klaar",
@@ -11415,6 +11460,403 @@
     if (holder.childNodes.length) main.appendChild(holder);
   }
   function openCookedFromLink() { goto("weeks"); setTimeout(function () { var el = document.getElementById("cookedCard"); if (el && el.scrollIntoView) el.scrollIntoView({ block: "center", behavior: "smooth" }); }, 150); }
+
+  // =====================================================================================================
+  // De reis: Balanza neemt je mee naar je doel. Jij kiest (waarom, tempo, toon, uitdaging, wat je bijhoudt);
+  // de app geeft richting. Vergevingsgezind: geen reeksen die breken, een goede week is 4 van de 7 dagen.
+  // =====================================================================================================
+  var JOURNEY_WHY = [["energie", "Meer energie"], ["fitter", "Fitter voelen"], ["gewicht", "Gezonder gewicht"], ["sterker", "Sterker worden"],
+    ["sport", "Beter presteren"], ["gezin", "Gezonder eten met het gezin"], ["rust", "Minder gedoe met eten"]];
+  var JOURNEY_PACE = [["rustig", "Rustig"], ["normaal", "Normaal"], ["stevig", "Stevig"]];
+  var JOURNEY_TONE = [["coach", "Coachend"], ["zakelijk", "Zakelijk"], ["luchtig", "Luchtig"]];
+  var JOURNEY_METRIC = [["", "Niets"], ["energie", "Energie"], ["verzadiging", "Verzadiging"], ["kleding", "Hoe je kleding zit"], ["gewicht", "Gewicht"]];
+  // Fases per doel: [naam, aantal weken (normaal tempo, 0 = blijvend), focus, uitleg]
+  var JOURNEY_PHASES = {
+    "Vetverlies (spierbehoud)": [["Wennen", 2, "Elke avond een gepland diner", "Eerst het ritme: als je diner vastligt, gaat de rest vanzelf."],
+      ["Ritme", 4, "Eiwit bij elke maaltijd", "Eiwit houdt je langer verzadigd en beschermt je spieren terwijl je afvalt."],
+      ["Verfijnen", 6, "Slim snacken en groente bij elke lunch", "Kleine keuzes door de dag maken nu het verschil."],
+      ["Volhouden", 0, "Flexibel blijven: 80/20", "Het gaat om wat je meestal doet, niet om elke dag perfect."]],
+    "Cutting": [["Opbouw", 2, "Precies plannen, alle maaltijden", "Een strak doel vraagt een plan dat klopt."],
+      ["Strak", 6, "Eiwit hoog, binnen je kcal", "Nu telt consistentie: elke dag dicht bij je doel."],
+      ["Scherpstellen", 4, "Koolhydraten rond je training", "Energie op het moment dat je het nodig hebt."],
+      ["Afbouwen", 0, "Rustig terug naar onderhoud", "Langzaam meer eten houdt je resultaat vast."]],
+    "Spieropbouw (lean bulk)": [["Basis", 2, "Vier eetmomenten per dag", "Groeien vraagt genoeg brandstof, verspreid over de dag."],
+      ["Opbouwen", 6, "Eiwit bij elke maaltijd, ook ontbijt", "Je spieren bouwen het hele etmaal; voed ze ook 's ochtends."],
+      ["Doorgroeien", 8, "Elke week een nieuw krachtgerecht", "Variatie houdt het lekker en volhoudbaar."],
+      ["Consolideren", 0, "Je ritme vasthouden", "Wat je hebt opgebouwd, houd je met een vast ritme."]],
+    "Onderhoud": [["Ontdekken", 2, "Nieuwe gerechten proberen", "Ontdek wat jij lekker vindt én wat goed voelt."],
+      ["Ritme", 4, "Je week vooraf plannen", "Een geplande week scheelt stress en impulsaankopen."],
+      ["Variatie", 6, "Elke week iets met seizoensgroente", "Afwisseling is de makkelijkste route naar goed eten."],
+      ["Vanzelf", 0, "Het gaat vanzelf", "Je hebt een gewoonte gebouwd. Balanza houdt je scherp."]],
+    "Atleet (prestatiegericht)": [["Basis", 2, "Vaste maaltijden rond je trainingen", "Ritme eerst: eten afgestemd op je schema."],
+      ["Trainingsritme", 4, "Koolhydraten op trainingsdagen", "Brandstof waar je hem verbrandt."],
+      ["Prestatie", 6, "Herstel: eiwit na elke training", "Sneller herstel betekent beter trainen."],
+      ["Seizoen", 0, "Meebewegen met je seizoen", "Op- en afbouwen met je wedstrijden mee."]]
+  };
+  var PACE_FACTOR = { rustig: 1.5, normaal: 1, stevig: 0.75 };
+  // Weekuitdagingen: [sleutel, titel, controle op de week (geeft {n, of})]
+  var CHALLENGES = {
+    plan5: ["Plan 5 avonden vooruit", function (pw) { return { n: countSlots(pw, ["Diner"]), of: 5 }; }],
+    cook4: ["Kook 4 keer zelf", function (pw) { return { n: countSlots(pw, null, function (s) { return s.cooked === true; }), of: 4 }; }],
+    breakfast5: ["5 dagen een gepland ontbijt", function (pw) { return { n: countSlots(pw, ["Ontbijt"]), of: 5 }; }],
+    lunch5: ["5 dagen een geplande lunch", function (pw) { return { n: countSlots(pw, ["Lunch"]), of: 5 }; }],
+    newdish: ["Probeer een nieuw gerecht", function (pw) { var start = new Date(pw.weekStart + "T00:00:00").getTime() - 7 * 86400000; return { n: countSlots(pw, null, function (s, d) { return dishTimestamp({ day: d }) >= start; }) ? 1 : 0, of: 1 }; }],
+    balans85: ["Gemiddelde Balans van 85% of meer", function (pw) { var r = weekRecap([pw]); return { n: r.balans !== null && r.balans >= 85 && r.meals >= 5 ? 1 : 0, of: 1, label: r.balans !== null ? r.balans + "%" : "–" }; }],
+    protein: ["Eiwit op je doel (gemiddeld over de week)", function (pw) { var r = weekRecap([pw]), t = goalTarget(); return { n: r.pct && r.pct.eiwit >= t.eiwit - 3 && r.meals >= 5 ? 1 : 0, of: 1, label: r.pct ? r.pct.eiwit + "% / " + t.eiwit + "%" : "–" }; }],
+    seasonal: ["Twee gerechten met seizoensgroente", function (pw) { var prod = window.appSeason ? window.appSeason.produce : []; return { n: countSlots(pw, null, function (s, d) { return dishLeftoverHits(d, prod) > 0; }), of: 2 }; }],
+    leftovers: ["Maak twee keer restjes op", function (pw) { var t = leftoverTerms(); return { n: countSlots(pw, null, function (s, d) { return dishLeftoverHits(d, t) > 0; }), of: 2 }; }]
+  };
+  // Welke uitdagingen passen bij welke focus (fase-index per doel); daaruit kiest de gebruiker er één.
+  var PHASE_CHALLENGES = {
+    "Vetverlies (spierbehoud)": [["plan5", "cook4", "breakfast5"], ["protein", "cook4", "newdish"], ["lunch5", "seasonal", "balans85"], ["balans85", "leftovers", "newdish"]],
+    "Cutting": [["plan5", "breakfast5", "lunch5"], ["protein", "balans85", "cook4"], ["balans85", "plan5", "cook4"], ["newdish", "balans85", "seasonal"]],
+    "Spieropbouw (lean bulk)": [["breakfast5", "lunch5", "plan5"], ["protein", "breakfast5", "cook4"], ["newdish", "protein", "seasonal"], ["plan5", "balans85", "cook4"]],
+    "Onderhoud": [["newdish", "cook4", "seasonal"], ["plan5", "cook4", "leftovers"], ["seasonal", "newdish", "leftovers"], ["balans85", "newdish", "cook4"]],
+    "Atleet (prestatiegericht)": [["plan5", "breakfast5", "lunch5"], ["balans85", "plan5", "cook4"], ["protein", "cook4", "breakfast5"], ["balans85", "newdish", "seasonal"]]
+  };
+  // Mijlpalen over gedrag, met een zin over wie je aan het worden bent.
+  var MILESTONES = [
+    ["cook1", "cooked", 1, "Je eerste zelf gekookte Balanza-maaltijd", "Het begin is gemaakt."],
+    ["cook5", "cooked", 5, "5 keer zelf gekookt", "Je bent iemand die zelf kookt."],
+    ["cook10", "cooked", 10, "10 keer zelf gekookt", "Koken is een gewoonte aan het worden."],
+    ["cook25", "cooked", 25, "25 keer zelf gekookt", "Je weet wat je eet. Dat is veel waard."],
+    ["cook50", "cooked", 50, "50 keer zelf gekookt", "Dit is gewoon wie je bent."],
+    ["week1", "weeks", 1, "Je eerste goed geplande week", "Een plan maakt kiezen makkelijk."],
+    ["week4", "weeks", 4, "4 goed geplande weken", "Je bent iemand die vooruit plant."],
+    ["week12", "weeks", 12, "12 goed geplande weken", "Een kwartaal lang. Dit zit erin."],
+    ["chal1", "challenges", 1, "Je eerste weekuitdaging gehaald", "Kleine stappen tellen."],
+    ["chal5", "challenges", 5, "5 weekuitdagingen gehaald", "Je zet steeds een stapje extra."],
+    ["fav5", "favorites", 5, "5 favoriete gerechten", "Je weet wat je lekker vindt."]
+  ];
+
+  function countSlots(pw, meals, test) {
+    if (!pw) return 0;
+    var n = 0;
+    Object.keys(pw.slots).forEach(function (k) {
+      var parts = k.split("|"), s = pw.slots[k];
+      if (meals && meals.indexOf(parts[1]) === -1) return;
+      if (test) { var r = resolveAssignedDish(s); if (!r || !test(s, r.day)) return; }
+      n++;
+    });
+    return n;
+  }
+  function journey() {
+    prefs.journey = prefs.journey && typeof prefs.journey === "object" ? prefs.journey : {};
+    var j = prefs.journey;
+    var goal = prefs.goal || "Onderhoud";
+    if (!j.startedOn || j.goalAt !== goal) {   // nieuw doel = nieuwe reis (eerdere mijlpalen blijven gehaald)
+      var first = !j.startedOn;
+      j.startedOn = todayKeyLocal(); j.goalAt = goal; j.challenge = null;
+      savePrefsSoon();
+    }
+    j.pace = j.pace || "normaal"; j.tone = j.tone || "coach";
+    return j;
+  }
+  function journeyOn() { return coachOn("journey"); }
+  function journeyWeek() {
+    var j = journey(), s = new Date(j.startedOn + "T00:00:00");
+    return Math.max(1, Math.floor((new Date() - s) / (7 * 86400000)) + 1);
+  }
+  function journeyPhase() {
+    var j = journey(), phases = JOURNEY_PHASES[prefs.goal] || JOURNEY_PHASES["Onderhoud"], f = PACE_FACTOR[j.pace] || 1;
+    var wk = journeyWeek(), acc = 0;
+    for (var i = 0; i < phases.length; i++) {
+      var len = phases[i][1] ? Math.max(1, Math.round(phases[i][1] * f)) : 0;
+      if (!len || wk <= acc + len) return { i: i, phase: phases[i], phases: phases, weekIn: wk - acc, len: len, week: wk };
+      acc += len;
+    }
+    return { i: phases.length - 1, phase: phases[phases.length - 1], phases: phases, weekIn: wk - acc, len: 0, week: wk };
+  }
+  function whyLabel() { var j = journey(); if (j.whyText) return j.whyText; var w = JOURNEY_WHY.filter(function (x) { return x[0] === j.why; })[0]; return w ? w[1].toLowerCase() : ""; }
+  // Dezelfde boodschap in de toon die de gebruiker koos.
+  function say(key, a) {
+    var tone = journey().tone, why = whyLabel();
+    var T = {
+      phase: { coach: "Je zit in de fase “" + a + "”. Je bent goed op weg" + (why ? " naar " + why : "") + ".", zakelijk: "Fase: " + a + ".", luchtig: "Fase “" + a + "”. Lekker bezig!" },
+      chalDone: { coach: "Uitdaging gehaald. Precies dit soort stapjes brengen je" + (why ? " naar " + why : " verder") + ".", zakelijk: "Uitdaging gehaald.", luchtig: "Gehaald! High five ✋" },
+      welcome: { coach: "Fijn dat je er weer bent. Zullen we deze week simpel beginnen?", zakelijk: "Welkom terug. Begin klein: vul alleen je diners in.", luchtig: "Hé, daar ben je weer! Zullen we het makkelijk houden deze week?" }
+    };
+    return (T[key] && (T[key][tone] || T[key].coach)) || "";
+  }
+  function journeyCurrentWeek() { return weekByStart(mondayKeyOffset(0)); }
+  function currentChallenge() {
+    var j = journey(), wk = mondayKeyOffset(0);
+    return j.challenge && j.challenge.week === wk && CHALLENGES[j.challenge.key] ? j.challenge : null;
+  }
+  function challengeStatus(key, pw) { var c = CHALLENGES[key]; if (!c) return null; var r = c[1](pw || { slots: {}, weekStart: mondayKeyOffset(0) }); r.done = r.n >= r.of; return r; }
+  function pickChallenge(key) {
+    var j = journey(); j.challenge = key ? { week: mondayKeyOffset(0), key: key } : { week: mondayKeyOffset(0), key: null, skipped: true };
+    savePrefs(); render();
+  }
+  function checkChallengeDone() {
+    var c = currentChallenge(); if (!c || !c.key) return;
+    var st = challengeStatus(c.key, journeyCurrentWeek());
+    var j = journey(); j.done = j.done || {};
+    if (st && st.done && !j.done[c.week]) { j.done[c.week] = c.key; savePrefs(); if (!journey().quiet) setTimeout(function () { showToast(say("chalDone")); }, 600); }
+  }
+  function milestoneValues() {
+    var favs = 0; WEEKS.forEach(function (w) { if (w.id === "cache") w.days.forEach(function (d) { if (d.rating === 1) favs++; }); });
+    var good = plannedWeeks.filter(function (pw) { return PLAN_DAYS.filter(function (d) { return PLAN_SLOTS.some(function (sl) { return pw.slots[d + "|" + sl]; }); }).length >= 4; }).length;
+    var j = prefs.journey || {};
+    return { cooked: cookedCountTotal(), weeks: good, challenges: Object.keys(j.done || {}).length, favorites: favs };
+  }
+  function milestoneReached() { var v = milestoneValues(); return MILESTONES.filter(function (m) { return v[m[1]] >= m[2]; }); }
+  function nextMilestones() {
+    var v = milestoneValues(), out = {};
+    MILESTONES.forEach(function (m) { if (v[m[1]] < m[2] && !out[m[1]]) out[m[1]] = { m: m, have: v[m[1]] }; });
+    return Object.keys(out).map(function (k) { return out[k]; });
+  }
+  var plansLoadedFlag = false;
+  plansReady.then(function () { setTimeout(function () { plansLoadedFlag = true; }, 1500); });
+  function newMilestone() {
+    var j = journey();
+    if (!plansLoadedFlag) return null;
+    // De eerste keer: wat je al bereikt had niet allemaal achter elkaar vieren.
+    if (!j.seenInit) { j.seenInit = true; j.seen = milestoneReached().map(function (m) { return m[0]; }); savePrefsSoon(); return null; }
+    var seen = j.seen || []; return milestoneReached().filter(function (m) { return seen.indexOf(m[0]) === -1; })[0] || null; }
+  function markMilestoneSeen(id) { var j = journey(); j.seen = (j.seen || []).concat([id]); savePrefs(); }
+  // Lang weg geweest? Geen schuldgevoel, wel een makkelijk begin.
+  var WELCOME_KEY = "balanza_last_open";
+  (function trackOpen() {
+    var last = lsGet(WELCOME_KEY), today = isoDateKey(new Date());
+    if (last && last !== today) { var gap = Math.round((new Date(today) - new Date(last)) / 86400000); if (gap >= 8) state.welcomeBack = gap; }
+    lsSet(WELCOME_KEY, today);
+  })();
+  function startSimpleWeek() {
+    if (requirePlus("Je week automatisch invullen")) return;
+    var pw = openOrCreateWeek(getMonday(new Date()));
+    generateAutoWeek(pw, true, ["Diner"], { range: "rest", fit: false });
+    state.welcomeBack = null;
+    goto("planweek", { planWeekId: pw.id });
+  }
+
+  // Op Start: de nudges van de reis (telt mee in het maximum van twee kaarten).
+  function renderJourneyNudges(holder, room) {
+    if (!journeyOn() || !prefs.goal) return 0;
+    var j = journey(), n = 0;
+    if (j.quiet) return 0;
+    if (room() && state.welcomeBack && hasAnyDishes() && !readOnlyMode()) {
+      nudgeCard(holder, { id: "welcomeBackCard", tone: "accent", icon: "👋", title: say("welcome"),
+        text: "Balanza vult alleen je diners voor de rest van de week, met gerechten die je al kent. Meer hoeft niet.",
+        actions: [{ label: "Vul mijn diners", primary: true, id: "welcomeGo", onClick: startSimpleWeek }],
+        onClose: function () { state.welcomeBack = null; render(); } });
+      return 1;
+    }
+    var ms = coachOn("milestones") ? newMilestone() : null;
+    if (room() && ms && !j.quiet) {
+      nudgeCard(holder, { id: "milestoneCard", tone: "soft", icon: "🏅", title: ms[3], text: ms[4],
+        onClose: function () { markMilestoneSeen(ms[0]); render(); },
+        actions: [{ label: "Mooi", id: "milestoneOk", onClick: function () { markMilestoneSeen(ms[0]); render(); } }] });
+      n++;
+    }
+    return n;
+  }
+  // De tegel "Jouw reis" op Start.
+  function renderJourneyTile(main) {
+    if (!journeyOn()) return;
+    var ph = journeyPhase(), c = coachOn("challenge") ? currentChallenge() : null, pw = journeyCurrentWeek();
+    checkChallengeDone();
+    var b = document.createElement("button"); b.type = "button"; b.className = "card journey-tile"; b.id = "journeyTile";
+    b.innerHTML = '<div class="eyebrow">Jouw reis</div><h2></h2><div class="jt-steps"></div><div class="sub jt-focus"></div><div class="jt-chal"></div>';
+    b.querySelector("h2").textContent = ph.phase[0] + (ph.len ? " · week " + Math.min(ph.weekIn, ph.len) + " van " + ph.len : "");
+    var steps = b.querySelector(".jt-steps");
+    ph.phases.forEach(function (p, i) { var s = document.createElement("i"); s.className = i < ph.i ? "done" : i === ph.i ? "now" : ""; steps.appendChild(s); });
+    b.querySelector(".jt-focus").textContent = "Focus: " + ph.phase[2];
+    var ch = b.querySelector(".jt-chal");
+    if (coachOn("challenge")) {
+      if (c && c.key) { var st = challengeStatus(c.key, pw); ch.textContent = (st.done ? "✓ " : "") + "Deze week: " + CHALLENGES[c.key][0] + (st.of > 1 ? " (" + Math.min(st.n, st.of) + "/" + st.of + ")" : st.label ? " (" + st.label + ")" : ""); }
+      else if (!c) ch.textContent = "Kies je uitdaging voor deze week ›";
+    }
+    b.onclick = function () { goto("journey"); };
+    main.appendChild(b);
+  }
+
+  function sparkline(values) {
+    if (values.length < 2) return null;
+    var w = 300, h = 60, min = Math.min.apply(null, values), max = Math.max.apply(null, values), span = max - min || 1;
+    var pts = values.map(function (v, i) { return Math.round(i / (values.length - 1) * w) + "," + Math.round(h - 6 - (v - min) / span * (h - 12)); }).join(" ");
+    var d = document.createElement("div"); d.className = "spark";
+    d.innerHTML = '<svg viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none" role="img" aria-label="Verloop"><polyline fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" points="' + pts + '"/></svg>';
+    return d;
+  }
+  // Wekelijkse check-in voor wat de gebruiker zelf wil bijhouden. Gewicht als trend van weekgemiddelden, nooit per dag.
+  function weeklyLog() { var j = journey(); j.log = Array.isArray(j.log) ? j.log : []; return j.log; }
+  function logThisWeek(v) {
+    var log = weeklyLog(), wk = mondayKeyOffset(0), metric = journey().metric;
+    var others = log.filter(function (x) { return !(x.w === wk && x.m === metric); });
+    others.push({ w: wk, m: metric, v: v }); prefs.journey.log = others.slice(-60); savePrefs(); render();
+  }
+  function renderProgress(main) {
+    var j = journey();
+    var card = document.createElement("div"); card.className = "card journey-sec"; card.id = "journeyProgress";
+    var hd = document.createElement("div"); hd.className = "eyebrow"; hd.textContent = "Wat je bijhoudt"; card.appendChild(hd);
+    var row = document.createElement("div"); row.className = "chiprow";
+    JOURNEY_METRIC.forEach(function (m) {
+      var c = document.createElement("button"); c.type = "button"; c.className = "chip" + ((j.metric || "") === m[0] ? " selected" : ""); c.textContent = m[1];
+      c.onclick = function () { j.metric = m[0]; savePrefs(); render(); };
+      row.appendChild(c);
+    });
+    card.appendChild(row);
+    if (!j.metric) {
+      var p = document.createElement("div"); p.className = "acc-sub"; p.textContent = "Helemaal optioneel. Kies iets als je je voortgang wilt zien; Balanza vraagt er hooguit één keer per week naar.";
+      card.appendChild(p); main.appendChild(card); return;
+    }
+    var wk = mondayKeyOffset(0), log = weeklyLog().filter(function (x) { return x.m === j.metric; }).sort(function (a, b) { return a.w < b.w ? -1 : 1; });
+    var mine = log.filter(function (x) { return x.w === wk; })[0];
+    var q = document.createElement("div"); q.className = "acc-sub";
+    if (j.metric === "gewicht") {
+      q.textContent = mine ? "Deze week genoteerd: " + mine.v + " kg." : "Je gewicht deze week (bijvoorbeeld op maandagochtend). Schommelingen van een kilo zijn normaal; het gaat om de trend.";
+      card.appendChild(q);
+      var f = document.createElement("form"); f.className = "leftover-add";
+      var inp = document.createElement("input"); inp.className = "textinput"; inp.type = "number"; inp.step = "0.1"; inp.min = "30"; inp.max = "300"; inp.id = "journeyWeight"; inp.placeholder = "kg"; if (mine) inp.value = mine.v;
+      var sb = document.createElement("button"); sb.type = "submit"; sb.className = "ghost-btn small"; sb.textContent = "Opslaan";
+      f.onsubmit = function (e) { e.preventDefault(); var v = Math.round(Number(inp.value) * 10) / 10; if (v >= 30 && v <= 300) { prefs.weightKg = String(v); logThisWeek(v); } };
+      f.appendChild(inp); f.appendChild(sb); card.appendChild(f);
+      var hcm = Number(prefs.heightCm), last = mine ? mine.v : (log.length ? log[log.length - 1].v : null);
+      if (hcm && last && last / Math.pow(hcm / 100, 2) < 18.5 && /Vetverlies|Cutting/.test(prefs.goal || "")) {
+        var warn = document.createElement("div"); warn.className = "dietnote";
+        warn.innerHTML = "<strong>Je zit al aan de lichte kant</strong>Met je lengte valt dit gewicht onder een gezond gewicht. Overweeg het doel Onderhoud, en overleg bij twijfel met je huisarts of een diëtist.";
+        card.appendChild(warn);
+      }
+    } else {
+      var lbl = { energie: "Hoe was je energie deze week?", verzadiging: "Hoe verzadigd voelde je je na het eten?", kleding: "Hoe zit je kleding?" }[j.metric];
+      q.textContent = lbl; card.appendChild(q);
+      var faces = document.createElement("div"); faces.className = "chiprow";
+      ["😣", "😕", "😐", "🙂", "😄"].forEach(function (e, i) {
+        var c = document.createElement("button"); c.type = "button"; c.className = "chip face" + (mine && mine.v === i + 1 ? " selected" : ""); c.textContent = e;
+        c.setAttribute("aria-label", (i + 1) + " van 5"); c.onclick = function () { logThisWeek(i + 1); };
+        faces.appendChild(c);
+      });
+      card.appendChild(faces);
+    }
+    var sp = sparkline(log.map(function (x) { return x.v; }));
+    if (sp) { card.appendChild(sp); var cap = document.createElement("div"); cap.className = "acc-sub"; cap.textContent = log.length + " weken bijgehouden"; card.appendChild(cap); }
+    main.appendChild(card);
+  }
+  function renderJourney() {
+    var j = journey(), ph = journeyPhase(), pw = journeyCurrentWeek();
+    checkChallengeDone();
+    var app = document.getElementById("app"); app.innerHTML = "";
+    app.appendChild(renderTopbar("Jouw reis", true, function () { goto("weeks"); }));
+    var main = document.createElement("main"); main.className = "journey";
+    var eb = document.createElement("div"); eb.className = "eyebrow"; eb.textContent = String(prefs.goal || "Onderhoud").split(" (")[0] + " · week " + ph.week; main.appendChild(eb);
+    var h = document.createElement("h2"); h.className = "recap-title"; h.textContent = say("phase", ph.phase[0]); main.appendChild(h);
+    // Waarom
+    var why = document.createElement("div"); why.className = "card journey-sec"; why.id = "journeyWhy";
+    why.innerHTML = '<div class="eyebrow">Waarom je dit doet</div>';
+    var wr = document.createElement("div"); wr.className = "chiprow";
+    JOURNEY_WHY.forEach(function (w) {
+      var c = document.createElement("button"); c.type = "button"; c.className = "chip" + (j.why === w[0] && !j.whyText ? " selected" : ""); c.textContent = w[1];
+      c.onclick = function () { j.why = w[0]; j.whyText = ""; savePrefs(); render(); };
+      wr.appendChild(c);
+    });
+    why.appendChild(wr);
+    var wt = document.createElement("input"); wt.className = "textinput"; wt.id = "journeyWhyText"; wt.maxLength = 60; wt.placeholder = "Of in je eigen woorden, bijv. “fit genoeg om met de kinderen te voetballen”"; wt.value = j.whyText || "";
+    wt.onchange = function () { j.whyText = wt.value.trim().slice(0, 60); savePrefs(); render(); };
+    why.appendChild(wt);
+    main.appendChild(why);
+    // Fases
+    var tl = document.createElement("div"); tl.className = "card journey-sec"; tl.id = "journeyPhases";
+    tl.innerHTML = '<div class="eyebrow">Je route</div>';
+    var f = PACE_FACTOR[j.pace] || 1;
+    ph.phases.forEach(function (p, i) {
+      var r = document.createElement("div"); r.className = "jp-row" + (i < ph.i ? " done" : i === ph.i ? " now" : "");
+      r.innerHTML = '<span class="jp-dot"></span><div><b></b><span class="jp-focus"></span><small></small></div>';
+      r.querySelector("b").textContent = p[0] + (p[1] ? " · " + Math.max(1, Math.round(p[1] * f)) + " weken" : "");
+      r.querySelector(".jp-focus").textContent = p[2];
+      r.querySelector("small").textContent = i === ph.i ? p[3] : "";
+      tl.appendChild(r);
+    });
+    main.appendChild(tl);
+    // Weekuitdaging
+    if (coachOn("challenge")) {
+      var ch = document.createElement("div"); ch.className = "card journey-sec"; ch.id = "journeyChallenge";
+      ch.innerHTML = '<div class="eyebrow">Uitdaging van deze week</div>';
+      var c = currentChallenge();
+      if (c && c.key) {
+        var st = challengeStatus(c.key, pw);
+        var t = document.createElement("div"); t.className = "jc-now"; t.innerHTML = "<b></b><span></span>";
+        t.querySelector("b").textContent = (st.done ? "✓ " : "") + CHALLENGES[c.key][0];
+        t.querySelector("span").textContent = st.done ? "Gehaald!" : st.of > 1 ? Math.min(st.n, st.of) + " van " + st.of : (st.label ? "Nu: " + st.label : "Nog niet");
+        ch.appendChild(t);
+        if (st.of > 1) { var bar = document.createElement("div"); bar.className = "dp-bar"; bar.innerHTML = "<i></i>"; bar.querySelector("i").style.width = Math.min(100, Math.round(st.n / st.of * 100)) + "%"; ch.appendChild(bar); }
+        var other = document.createElement("button"); other.type = "button"; other.className = "comm-foot-link"; other.textContent = "Andere uitdaging kiezen";
+        other.onclick = function () { j.challenge = null; savePrefs(); render(); }; ch.appendChild(other);
+      } else if (c && c.skipped) {
+        var sk = document.createElement("div"); sk.className = "acc-sub"; sk.textContent = "Deze week zonder uitdaging. Ook prima.";
+        var again = document.createElement("button"); again.type = "button"; again.className = "comm-foot-link"; again.textContent = "Toch een uitdaging kiezen";
+        again.onclick = function () { j.challenge = null; savePrefs(); render(); };
+        ch.appendChild(sk); ch.appendChild(again);
+      } else {
+        var sub = document.createElement("div"); sub.className = "acc-sub"; sub.textContent = "Kies er één die bij je fase past, of sla deze week over.";
+        ch.appendChild(sub);
+        var opts = ((PHASE_CHALLENGES[prefs.goal] || PHASE_CHALLENGES["Onderhoud"])[ph.i] || []);
+        opts.forEach(function (k) {
+          var b = document.createElement("button"); b.type = "button"; b.className = "leftover-dish"; b.id = "chal-" + k;
+          b.innerHTML = "<b></b><span></span>"; b.querySelector("b").textContent = CHALLENGES[k][0];
+          var s0 = challengeStatus(k, pw); b.querySelector("span").textContent = s0.of > 1 ? "Nu " + Math.min(s0.n, s0.of) + " van " + s0.of : "";
+          b.onclick = function () { pickChallenge(k); };
+          ch.appendChild(b);
+        });
+        var skip = document.createElement("button"); skip.type = "button"; skip.className = "comm-foot-link"; skip.id = "chalSkip"; skip.textContent = "Deze week overslaan";
+        skip.onclick = function () { pickChallenge(null); }; ch.appendChild(skip);
+      }
+      main.appendChild(ch);
+    }
+    // Mijlpalen
+    if (coachOn("milestones")) {
+      var ms = document.createElement("div"); ms.className = "card journey-sec"; ms.id = "journeyMilestones";
+      ms.innerHTML = '<div class="eyebrow">Mijlpalen</div>';
+      var got = milestoneReached(), grid = document.createElement("div"); grid.className = "ms-grid";
+      got.slice(-6).forEach(function (m) { var e = document.createElement("div"); e.className = "ms got"; e.textContent = "🏅 " + m[3]; grid.appendChild(e); });
+      nextMilestones().slice(0, 3).forEach(function (x) { var e = document.createElement("div"); e.className = "ms"; e.textContent = x.m[3] + " (" + x.have + "/" + x.m[2] + ")"; grid.appendChild(e); });
+      ms.appendChild(grid);
+      var fl = document.createElement("div"); fl.className = "acc-sub"; fl.textContent = "Een goede week is een week met 4 of meer dagen met een plan. Er is geen reeks die kan breken.";
+      ms.appendChild(fl);
+      main.appendChild(ms);
+    }
+    if (coachOn("progress")) renderProgress(main);
+    // Zo wil ik het
+    var set = document.createElement("div"); set.className = "card journey-sec"; set.id = "journeySettings";
+    set.innerHTML = '<div class="eyebrow">Zo wil ik het</div>';
+    function chipLine(label, list, cur, onPick) {
+      var l = document.createElement("div"); l.className = "sheet-label"; l.textContent = label; set.appendChild(l);
+      var r = document.createElement("div"); r.className = "chiprow";
+      list.forEach(function (o) { var c = document.createElement("button"); c.type = "button"; c.className = "chip" + (cur === o[0] ? " selected" : ""); c.textContent = o[1]; c.onclick = function () { onPick(o[0]); savePrefs(); render(); }; r.appendChild(c); });
+      set.appendChild(r);
+    }
+    chipLine("Tempo", JOURNEY_PACE, j.pace, function (v) { j.pace = v; });
+    chipLine("Toon", JOURNEY_TONE, j.tone, function (v) { j.tone = v; });
+    var qt = document.createElement("button"); qt.type = "button"; qt.className = "sheet-toggle"; qt.id = "journeyQuiet";
+    qt.setAttribute("role", "switch"); qt.setAttribute("aria-checked", j.quiet ? "true" : "false");
+    qt.innerHTML = '<span class="st-txt"><b>Rustige modus</b><small>Geen felicitaties of kaartjes op Start; je reis staat hier als je hem zoekt</small></span><span class="st-track' + (j.quiet ? " on" : "") + '"><i></i></span>';
+    qt.onclick = function () { j.quiet = !j.quiet; savePrefs(); render(); };
+    set.appendChild(qt);
+    var more = document.createElement("button"); more.type = "button"; more.className = "comm-foot-link"; more.textContent = "Alle begeleiding aan- of uitzetten ›";
+    more.onclick = function () { goto("settings"); };
+    set.appendChild(more);
+    var rs = document.createElement("button"); rs.type = "button"; rs.className = "comm-foot-link"; rs.id = "journeyRestart"; rs.textContent = "Reis opnieuw beginnen";
+    rs.onclick = function () { askConfirm("Je reis opnieuw beginnen vanaf fase 1? Je mijlpalen blijven gehaald.", function () { j.startedOn = todayKeyLocal(); j.challenge = null; savePrefs(); render(); }, "Opnieuw beginnen", "Annuleren"); };
+    set.appendChild(rs);
+    main.appendChild(set);
+    app.appendChild(main);
+  }
+  // In de weekterugblik: hoe ging je uitdaging, en waar sta je op je reis.
+  function renderRecapJourney(main, weekKey) {
+    if (!journeyOn()) return;
+    var j = journey(), ph = journeyPhase(), pw = weekByStart(weekKey);
+    var box = document.createElement("button"); box.type = "button"; box.className = "card recap-journey"; box.id = "recapJourney";
+    var lines = [];
+    var chKey = (j.done && j.done[weekKey]) || (j.challenge && j.challenge.week === weekKey ? j.challenge.key : null);
+    if (chKey && CHALLENGES[chKey]) { var st = challengeStatus(chKey, pw); lines.push((st.done ? "✓ Uitdaging gehaald: " : "Uitdaging: ") + CHALLENGES[chKey][0] + (st.done ? "" : " (" + Math.min(st.n, st.of) + "/" + st.of + ", volgende keer beter)")); }
+    lines.push("Fase " + (ph.i + 1) + " van " + ph.phases.length + ": " + ph.phase[0] + " · focus: " + ph.phase[2].toLowerCase());
+    if (whyLabel()) lines.push("Voor: " + whyLabel());
+    box.innerHTML = '<div class="eyebrow">Jouw reis</div><div class="rj-lines"></div><span class="sub">Bekijk je reis ›</span>';
+    var holder = box.querySelector(".rj-lines");
+    lines.forEach(function (l) { var d = document.createElement("div"); d.textContent = l; holder.appendChild(d); });
+    box.onclick = function () { goto("journey"); };
+    main.appendChild(box);
+  }
 
   var dbCap = null;
   var userCap = null;
@@ -11435,6 +11877,7 @@
         cheeseMode: prefs.cheeseMode === "geen" ? "geen" : "hardekaas",
         leftovers: Array.isArray(prefs.leftovers) ? prefs.leftovers.slice(-20) : [],
         coach: prefs.coach && typeof prefs.coach === "object" ? prefs.coach : {},
+        journey: prefs.journey && typeof prefs.journey === "object" ? prefs.journey : {},
         familyMode: !!prefs.familyMode,
         equipment: prefs.equipment,
         exclude: prefs.exclude,
@@ -11806,7 +12249,7 @@
               return;
             }
             var pdata = psnap.data() || {};
-            ["name", "bringListLink", "cuisines", "flavors", "level", "dietStyle", "health", "leftovers", "coach", "sugarMode", "cheeseMode", "familyMode", "equipment", "exclude", "count", "mealTypes", "gender", "heightCm", "weightKg", "age", "activityLevel", "goal", "homeLayout", "mealCounts", "withImages", "pantry", "communityName"].forEach(function (k) {
+            ["name", "bringListLink", "cuisines", "flavors", "level", "dietStyle", "health", "leftovers", "coach", "journey", "sugarMode", "cheeseMode", "familyMode", "equipment", "exclude", "count", "mealTypes", "gender", "heightCm", "weightKg", "age", "activityLevel", "goal", "homeLayout", "mealCounts", "withImages", "pantry", "communityName"].forEach(function (k) {
               if (pdata[k] !== undefined) prefs[k] = deepClone(pdata[k]);
             });
             render();
@@ -12117,6 +12560,7 @@
       else if (state.view === "planadd") renderPlanAdd();
       else if (state.view === "planweek") renderPlanWeek();
       else if (state.view === "recap") renderRecap();
+      else if (state.view === "journey") renderJourney();
       else if (state.view === "planday") renderPlanDay();
       else if (state.view === "planprep") renderPlanPrep();
       else if (state.view === "planpick") renderPlanPick();

@@ -614,6 +614,21 @@ Zes onderdelen die gebruikers terugbrengen. De gebruiker zet elk onderdeel zelf 
 | **Restjes opmaken** | In de planner: "Op te maken". Restjes blijven 10 dagen staan (`prefs.leftovers`). Balanza stelt voor wat er van verpakkingen overblijft (bijv. 1 bak kwark van 500 g voor 150 g), toont gerechten die de restjes gebruiken, zet die bij automatisch invullen eerst en kan nieuwe gerechten maken met de wens "Restjes opmaken". De boodschappenlijst toont ook "± 350 g over". |
 | **Seizoen en feestdagen** | Een tegel op Start met groente en fruit van de maand, en in de aanloop naar Sinterklaas, Kerst, Pasen, Koningsdag, Moeder- en Vaderdag, Halloween en het barbecueseizoen een knop om daarvoor gerechten te maken. De server geeft dit door via `/api/config` (`season`) en voegt een zachte seizoensvoorkeur toe aan de opdracht voor de AI. |
 
+### Jouw reis (motivatie op weg naar je doel)
+
+Gebaseerd op wat in gedragspsychologie werkt: zelf kiezen, kleine successen, zichtbare vooruitgang en identiteit
+("je bent iemand die zelf kookt"), zonder schuld of reeksen die breken. Alles staat in `prefs.journey`; geen extra meldingen.
+
+- **Waarom en tempo**: in de wizard (stap Doel) en op het scherm *Jouw reis*. De app gebruikt het waarom later in de tekst ("op weg naar meer energie").
+- **Fases per doel** (bijv. vetverlies: Wennen → Ritme → Verfijnen → Volhouden), elk met één focus. Tempo rustig/normaal/stevig maakt de fases langer of korter. Een nieuw doel begint een nieuwe reis; mijlpalen blijven gehaald.
+- **Weekuitdaging**: elke week drie voorstellen die bij de fase passen (bijv. "Plan 5 avonden vooruit", "Eiwit op je doel"), de gebruiker kiest er één of slaat over. De voortgang wordt uit de planning berekend.
+- **Mijlpalen** over gedrag (zelf gekookt, goed geplande weken, uitdagingen, favorieten), één kaartje tegelijk. Een goede week = 4 of meer dagen met een plan.
+- **Welkom terug**: na 8+ dagen weg geen verwijt, maar "Zullen we deze week simpel beginnen?" met alleen de diners.
+- **Voortgang (optioneel)**: energie, verzadiging, kleding of gewicht, één keer per week, als trend. Bij een gewicht onder een gezond BMI met een afvaldoel adviseert de app Onderhoud en een huisarts of diëtist.
+- **Toon** (coachend, zakelijk, luchtig) en **rustige modus** (geen kaartjes of felicitaties op Start).
+- De terugblik op maandag laat ook de uitdaging en de fase zien.
+- Onder **Instellingen → Begeleiding** staan aparte schakelaars voor Jouw reis, Weekuitdaging, Mijlpalen en Voortgang bijhouden.
+
 In de beheerconsole staan de nieuwe meldingen bij *Overzicht → Meldingen* en in het logboek (soort "Samen plannen" voor
 het huishouden). Bij een gebruiker staat of hij samen plant.
 
