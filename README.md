@@ -638,6 +638,23 @@ Gebaseerd op wat in gedragspsychologie werkt: zelf kiezen, kleine successen, zic
 - **Vrienden uitdagen**: bij de weekuitdaging een WhatsApp-bericht met een link naar /welkom.
 - De toon van *Jouw reis* staat voor 16–25 standaard op luchtig.
 
+### Balanza-assistent (chat)
+
+Een chatknop rechtsboven in de app. Gebruikers stellen vragen over de app en hun eten, of laten de app aanpassen
+("ik wil vegetarisch eten", "zet volgende week klaar", "maak de app donker", "community bovenaan").
+
+- **Vaste lijst acties** (`POST /api/assistant`): doel, voedingsstijl, gezondheidsfilters, uitsluitingen, maaltijdmomenten en aantal,
+  keukens, smaken, niveau, kindvriendelijk, budgetmodus, begeleiding, Jouw reis (tempo, toon, rustige modus), meldingen, thema,
+  indeling van Start, navigeren, week klaarzetten, gerechten ontwerpen met een wens (de gebruiker start zelf) en restjes.
+  De server controleert elke actie; onbekende acties of waarden buiten de kaders vallen weg.
+- **De gebruiker bevestigt** elk voorstel met *Doen* en kan het daarna in dezelfde sessie *ongedaan maken*.
+- **Vaste kaders**: macroverdeling per doel, Balans-controle, NEVO, voedingsregels en de regels voor jongeren zijn geen actie.
+  Onder de 18 (volgens de opgeslagen voorkeuren) stelt de assistent geen afvaldoel voor. Geen medisch advies.
+- **Kosten en limieten**: onderdeel "Balanza-assistent (chat)" in Beheer → Instellingen → Onderdelen (aan/uit, of "Alleen Plus"),
+  limiet "Berichten aan de assistent per gebruiker per dag" (standaard 40, `ASSISTANT_DAILY_PER_USER`) en 120 per uur per IP.
+  Kosten tellen mee in het verbruik (actie "assistant"). Ander model: `ANTHROPIC_ASSISTANT_MODEL`.
+- Het gesprek staat alleen in de browser (sessie); de server bewaart geen chatgeschiedenis.
+
 In de beheerconsole staan de nieuwe meldingen bij *Overzicht → Meldingen* en in het logboek (soort "Samen plannen" voor
 het huishouden). Bij een gebruiker staat of hij samen plant.
 

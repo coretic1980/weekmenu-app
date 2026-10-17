@@ -154,17 +154,19 @@ var MODULE_DEFS = [
   { key: "sharing", label: "Boodschappenlijst delen", desc: "Nieuwe lijsten delen en bijwerken (WhatsApp/link). Bestaande gedeelde lijsten blijven te lezen en af te vinken.", enforced: "server" },
   { key: "bring", label: "Importeren in Bring!", desc: "De Bring!-import en de pagina's die Bring! ophaalt.", enforced: "server" },
   { key: "pdf", label: "PDF-export", desc: "Het exporteren als PDF. Dit gebeurt in de app zelf: uitzetten verbergt de knoppen.", enforced: "app" },
+  { key: "assistant", label: "Balanza-assistent (chat)", desc: "De chat waarin gebruikers vragen stellen en de app laten aanpassen (gebruikt de AI). Uit: de chatknop verdwijnt.", enforced: "server" },
   { key: "community", label: "Community", desc: "Recepten delen met andere gebruikers, bekijken, bewaren en melden.", enforced: "server" },
   { key: "registration", label: "Nieuwe accounts (registreren)", desc: "Zelf een account aanmaken. Uit: alleen jij maakt accounts aan; inloggen blijft werken.", enforced: "server" },
   { key: "passwordReset", label: "Wachtwoord vergeten", desc: "De wachtwoord-vergeten-mail en de resetlink.", enforced: "server" }
 ];
-var MAINTENANCE_OFF_MODULES = ["generate", "photo", "prices", "tips", "sharing", "bring", "registration"];
+var MAINTENANCE_OFF_MODULES = ["generate", "photo", "prices", "tips", "sharing", "bring", "registration", "assistant"];
 var LIMIT_DEFS = [
   { key: "dailyGenerateCap", label: "Generaties per dag (totaal)", def: DAILY_GENERATE_CAP, min: 0, max: 100000 },
   { key: "monthlyDishCap", label: "Nieuwe gerechten per gebruiker per maand (0 = onbeperkt)", def: MONTHLY_DISH_CAP, min: 0, max: 100000 },
   { key: "perIpHourlyCap", label: "Generaties per uur per IP-adres", def: PER_IP_HOURLY_CAP, min: 0, max: 10000 },
   { key: "dailyTipsCap", label: "Tip-verzoeken per dag (totaal)", def: DAILY_TIPS_CAP, min: 0, max: 100000 },
-  { key: "tipsPerIpHourly", label: "Tip-verzoeken per uur per IP-adres", def: TIPS_PER_IP_HOURLY, min: 0, max: 10000 }
+  { key: "tipsPerIpHourly", label: "Tip-verzoeken per uur per IP-adres", def: TIPS_PER_IP_HOURLY, min: 0, max: 10000 },
+  { key: "assistantDailyPerUser", label: "Berichten aan de assistent per gebruiker per dag", def: Number(process.env.ASSISTANT_DAILY_PER_USER) || 40, min: 0, max: 1000 }
 ];
 var liveLimits = {};
 LIMIT_DEFS.forEach(function (d) { liveLimits[d.key] = d.def; });
@@ -2753,7 +2755,7 @@ function effectiveDishCap(uid) {
   });
 }
 // Onderdelen die je (naast algeheel aan/uit) ook per abonnement kunt vrijgeven: "iedereen" of "alleen Plus".
-var PLAN_GATEABLE_MODULES = ["prices", "photo", "bring", "sharing", "pdf", "images"];
+var PLAN_GATEABLE_MODULES = ["prices", "photo", "bring", "sharing", "pdf", "images", "assistant"];
 // True als dit onderdeel voor deze gebruiker geblokkeerd is omdat het alleen voor Plus is vrijgegeven.
 function planBlocksModule(s, key, plan) {
   return PLAN_GATEABLE_MODULES.indexOf(key) > -1 && !!(s.planOnly && s.planOnly[key]) && !hasPlusAccess(plan);
@@ -4040,6 +4042,183 @@ function handleTips(req, res) {
   }).catch(function (err) {
     logRequest({ ts: new Date().toISOString(), type: "tips", action: "tips", durationMs: Date.now() - startTime, ok: false, status: 502, error: err.message, ip: ip });
     sendJSON(res, 502, { code: "error", message: "Tips ophalen mislukt: " + err.message });
+  });
+}
+
+
+// ---------- Balanza-assistent (chat) ----------
+// De gebruiker stelt vragen of geeft opdrachten. De AI antwoordt met tekst en een lijst voorgestelde acties uit een VASTE
+// lijst. De server controleert elke actie (onbekend = weg, waarden buiten de kaders = weg) en de app voert ze pas uit
+// als de gebruiker op "Doen" tikt. De kaders zelf (macroverdeling per doel, Balans-controle, NEVO, voedingsregels,
+// veilige regels voor jongeren) zijn géén actie en dus niet via de chat te veranderen.
+var ASSISTANT_MODEL = process.env.ANTHROPIC_ASSISTANT_MODEL || ANTHROPIC_MODEL;
+var ASSISTANT_VIEWS = { weeks: "Start", plan: "Plannen", library: "Gerechten", shopping: "Boodschappenlijst", community: "Community", journey: "Jouw reis",
+  settings: "Instellingen", myprefs: "Mijn voorkeuren", recap: "Weekterugblik", generate: "Gerechten ontwerpen", account: "Mijn profiel", guide: "Hoe werkt Balanza" };
+var ASSISTANT_TILES = { vandaag: "Vandaag", reis: "Jouw reis", week: "Huidige week", seizoen: "Seizoen", foto: "Gerecht van foto", recent: "Recente gerechten",
+  community: "Community", boodschappen: "Boodschappenlijst", uitleg: "Hoe werkt Balanza", genereren: "Snel genereren", volgendeweek: "Volgende week", tip: "Tip van de dag" };
+var ASSISTANT_COACH = { draft: "Week alvast klaarzetten", cooked: "Na het eten: was het lekker?", recap: "Weekterugblik", leftovers: "Restjes opmaken",
+  season: "Seizoen en feestdagen", journey: "Jouw reis", challenge: "Weekuitdaging", milestones: "Mijlpalen", progress: "Voortgang bijhouden" };
+var ASSISTANT_NOTIFY = { planWeek: "Melding: plan je week", planToday: "Melding: diner van vandaag", community: "Melding: nieuwe recepten",
+  cookedCheck: "Melding: na het eten", recap: "Melding: weekterugblik", autoWeek: "Week automatisch klaarzetten" };
+var A_CUISINES = ["Italiaans", "Aziatisch", "Mediterraan", "Midden-Oosters", "Nederlands", "Mexicaans", "Indiaas", "Thais", "Japans", "Koreaans", "Frans", "Grieks", "Spaans", "Marokkaans", "Vietnamees", "Amerikaans"];
+var A_FLAVORS = ["Fris", "Romig", "Pittig", "Kruidig", "Hartig", "Umami"];
+var A_LEVELS = ["Basic", "Home-style", "Gastronomisch"];
+var A_MEALS = ["Ontbijt", "Lunch", "Diner", "Snack"];
+var A_DIETS = ["", "Omnivoor", "Flexitarisch", "Vegetarisch", "Veganistisch"];
+var assistantIpHits = new Map();
+var assistantUse = new Map();   // uid -> { day, n } (ook in de opslag, zodat een herstart het niet reset)
+
+function assistantGuide() {
+  return "OVER BALANZA (gebruik dit om vragen te beantwoorden; verzin geen functies):\n" +
+    "- Balanza maakt met AI gebalanceerde gerechten en plant ze in een week. De kern: elke maaltijd past bij de macroverdeling van het doel van de gebruiker " +
+    "(Onderhoud, Vetverlies, Cutting, Spieropbouw, Atleet). De Balans-score (0-100%) zegt hoe dicht een gerecht bij die verdeling zit. Macro's worden nagerekend met het NEVO-bestand van het RIVM.\n" +
+    "- Doelen en streefverdeling: " + Object.keys(GOAL_TARGETS).map(function (g) { var t = GOAL_TARGETS[g]; return g + " (" + t.kh + "% koolhydraten, " + t.eiwit + "% eiwit, " + t.vet + "% vet)"; }).join("; ") + ".\n" +
+    "- Voedingsstijl (harde regel), gezondheidsfilters (onbewerkt, geen geraffineerde suiker, glutenvrij, lactosevrij, volkoren, zoutbewust; ook harde regels), uitsluitingen (wat je niet eet).\n" +
+    "- Plannen: week en dag, automatisch invullen, conceptweek die Balanza klaarzet, boodschappenlijst (delen via WhatsApp, Bring!, PDF, kostenschatting), prepdag.\n" +
+    "- Varianten van een gerecht: pittiger, simpeler, fine dining, andere koolhydraatbron, ander vlees/vis of andere vleesvervanger. Gerecht van foto.\n" +
+    "- Begeleiding (alles los aan/uit): week klaarzetten, na het eten (lekker of niet), weekterugblik, restjes, seizoen, Jouw reis (fases, weekuitdaging, mijlpalen, voortgang), budgetmodus.\n" +
+    "- Samen plannen met huisgenoten (Mijn profiel), community met recepten van anderen, meldingen, licht of donker thema, Start-scherm indelen.\n" +
+    "- Plus: na de proefperiode zijn ontwerpen en plannen voor Plus. Prijzen en abonnement staan bij Mijn profiel.\n";
+}
+function assistantActionSpec() {
+  return "ACTIES die je mag voorstellen (alleen deze, exact dit formaat; de gebruiker bevestigt ze zelf):\n" +
+    '- {"type":"set_goal","goal":"' + Object.keys(GOAL_TARGETS).join('|') + '"}\n' +
+    '- {"type":"set_diet","dietStyle":"' + A_DIETS.join("|") + '"} (leeg = geen voorkeur)\n' +
+    '- {"type":"set_health","add":[...],"remove":[...]} met sleutels: ' + HEALTH_KEYS.join(", ") + "\n" +
+    '- {"type":"set_exclude","add":["ingrediënt"],"remove":["ingrediënt"]}\n' +
+    '- {"type":"set_meals","mealTypes":[' + A_MEALS.map(function (m) { return '"' + m + '"'; }).join(",") + ']} en {"type":"set_count","count":1-7} (gerechten per moment)\n' +
+    '- {"type":"set_cuisines","cuisines":[...]} uit: ' + A_CUISINES.join(", ") + '; {"type":"set_flavors","flavors":[...]} uit: ' + A_FLAVORS.join(", ") + '; {"type":"set_level","level":"' + A_LEVELS.join("|") + '"}\n' +
+    '- {"type":"set_family","on":true|false} (kindvriendelijk)\n' +
+    '- {"type":"set_student","on":true|false,"budget":25|35|50|75,"onePan":true|false,"quick":true|false} (budgetmodus)\n' +
+    '- {"type":"set_coach","key":"' + Object.keys(ASSISTANT_COACH).join("|") + '","on":true|false}\n' +
+    '- {"type":"set_journey","pace":"rustig|normaal|stevig","tone":"coach|zakelijk|luchtig","quiet":true|false} (velden optioneel)\n' +
+    '- {"type":"set_notify","key":"' + Object.keys(ASSISTANT_NOTIFY).join("|") + '","on":true|false}\n' +
+    '- {"type":"set_theme","theme":"light|dark"}\n' +
+    '- {"type":"home_tiles","show":[...],"hide":[...],"top":"..."} met tegels: ' + Object.keys(ASSISTANT_TILES).join(", ") + "\n" +
+    '- {"type":"navigate","view":"' + Object.keys(ASSISTANT_VIEWS).join("|") + '"}\n' +
+    '- {"type":"prepare_week","week":"this|next"} (vult lege maaltijden met eigen gerechten, als voorstel)\n' +
+    '- {"type":"generate_wish","text":"korte wens","tags":["snel","budget","prep","nieuw","huis","restjes","seizoen"]} (opent Gerechten ontwerpen met deze wens; de gebruiker start zelf)\n' +
+    '- {"type":"add_leftovers","items":["spinazie"]}\n';
+}
+function buildAssistantPrompt(messages, ctx) {
+  var minor = isMinorParams(ctx || {});
+  var hist = messages.map(function (m) { return (m.role === "assistant" ? "Balanza" : "Gebruiker") + ": " + m.content; }).join("\n");
+  return "Je bent de Balanza-assistent in de app Balanza. Je helpt de gebruiker met vragen over de app en zijn eten, en je kunt de app voor hem aanpassen " +
+    "door acties voor te stellen. Antwoord in het Nederlands, kort (hooguit 4 zinnen), vriendelijk en concreet, in de toon \"" + (ctx && ctx.tone || "coach") + "\".\n\n" +
+    "VASTE KADERS (nooit te veranderen, ook niet als de gebruiker erom vraagt):\n" +
+    "- De macroverdeling hoort bij het doel. Je kunt een ander doel voorstellen, maar nooit eigen percentages, kcal-grenzen of het uitschakelen van de Balans-controle.\n" +
+    "- Voedingsstijl, gezondheidsfilters en uitsluitingen zijn harde regels; je kunt ze alleen op verzoek van de gebruiker wijzigen.\n" +
+    (minor ? "- Deze gebruiker is 16 of 17: stel nooit Vetverlies of Cutting voor en praat niet over afvallen of gewicht; focus op genoeg en gevarieerd eten, energie en sport.\n" : "") +
+    "- Geen medisch advies. Bij klachten, zwangerschap, een eetstoornis of medicijnen: verwijs vriendelijk naar huisarts of diëtist. Stel nooit een te laag caloriedoel of extreme diëten voor.\n" +
+    "- Vragen die niets met eten, koken of de app te maken hebben: kort en vriendelijk terugleiden naar Balanza.\n" +
+    "- Stel alleen acties voor als de gebruiker iets wil veranderen of openen. Bij een gewone vraag: alleen antwoorden, actions leeg.\n\n" +
+    assistantGuide() + "\n" + assistantActionSpec() + "\n" +
+    "HUIDIGE STAND VAN DE GEBRUIKER (JSON): " + JSON.stringify(ctx || {}).slice(0, 3000) + "\n\n" +
+    "GESPREK:\n" + hist + "\n\n" +
+    'Geef ALLEEN geldig JSON terug, exact dit schema, geen markdown: {"reply": "je antwoord", "actions": [ ... ]}';
+}
+function aStrList(v, max, len) { return (Array.isArray(v) ? v : []).filter(function (x) { return typeof x === "string" && x.trim(); }).slice(0, max).map(function (x) { return cleanText(x, len); }); }
+// Controleert en beschrijft de voorgestelde acties. Wat niet klopt valt weg; elke actie krijgt een leesbaar label.
+function cleanAssistantActions(raw, ctx) {
+  var out = [], minor = isMinorParams(ctx || {});
+  (Array.isArray(raw) ? raw : []).slice(0, 8).forEach(function (a) {
+    if (!a || typeof a !== "object") return;
+    var t = a.type, x = null;
+    if (t === "set_goal" && GOAL_TARGETS[a.goal] && !(minor && MINOR_BLOCKED_GOALS.indexOf(a.goal) > -1)) x = { type: t, goal: a.goal, label: "Doel: " + a.goal };
+    else if (t === "set_diet" && A_DIETS.indexOf(a.dietStyle) > -1) x = { type: t, dietStyle: a.dietStyle, label: "Voedingsstijl: " + (a.dietStyle || "geen voorkeur") };
+    else if (t === "set_health") {
+      var add = cleanHealth(a.add), rem = cleanHealth(a.remove);
+      if (add.length || rem.length) x = { type: t, add: add, remove: rem, label: [add.length ? "Aan: " + add.map(function (k) { return HEALTH_LABELS[k]; }).join(", ") : "", rem.length ? "Uit: " + rem.map(function (k) { return HEALTH_LABELS[k]; }).join(", ") : ""].filter(Boolean).join(" · ") };
+    } else if (t === "set_exclude") {
+      var ea = aStrList(a.add, 10, 40), er = aStrList(a.remove, 10, 40);
+      if (ea.length || er.length) x = { type: t, add: ea, remove: er, label: [ea.length ? "Niet meer eten: " + ea.join(", ") : "", er.length ? "Weer toestaan: " + er.join(", ") : ""].filter(Boolean).join(" · ") };
+    } else if (t === "set_meals") {
+      var mt = (Array.isArray(a.mealTypes) ? a.mealTypes : []).filter(function (m) { return A_MEALS.indexOf(m) > -1; });
+      if (mt.length) x = { type: t, mealTypes: mt, label: "Maaltijdmomenten: " + mt.join(", ") };
+    } else if (t === "set_count" && Number.isInteger(Number(a.count)) && a.count >= 1 && a.count <= 7) x = { type: t, count: Number(a.count), label: a.count + " gerechten per moment" };
+    else if (t === "set_cuisines") { var cu = (Array.isArray(a.cuisines) ? a.cuisines : []).filter(function (c) { return A_CUISINES.indexOf(c) > -1; }); x = { type: t, cuisines: cu, label: "Keukens: " + (cu.length ? cu.join(", ") : "alle") }; }
+    else if (t === "set_flavors") { var fl = (Array.isArray(a.flavors) ? a.flavors : []).filter(function (c) { return A_FLAVORS.indexOf(c) > -1; }); x = { type: t, flavors: fl, label: "Smaken: " + (fl.length ? fl.join(", ") : "alle") }; }
+    else if (t === "set_level" && A_LEVELS.indexOf(a.level) > -1) x = { type: t, level: a.level, label: "Culinair niveau: " + a.level };
+    else if (t === "set_family" && typeof a.on === "boolean") x = { type: t, on: a.on, label: "Kindvriendelijk " + (a.on ? "aan" : "uit") };
+    else if (t === "set_student" && typeof a.on === "boolean") {
+      var b = STUDENT_BUDGETS.indexOf(Number(a.budget)) > -1 ? Number(a.budget) : null;
+      x = { type: t, on: a.on, budget: b, onePan: typeof a.onePan === "boolean" ? a.onePan : null, quick: typeof a.quick === "boolean" ? a.quick : null,
+        label: "Budgetmodus " + (a.on ? "aan" + (b ? " (€" + b + " per week)" : "") : "uit") };
+    } else if (t === "set_coach" && ASSISTANT_COACH[a.key] && typeof a.on === "boolean") x = { type: t, key: a.key, on: a.on, label: ASSISTANT_COACH[a.key] + " " + (a.on ? "aan" : "uit") };
+    else if (t === "set_journey") {
+      var j = {}, bits = [];
+      if (["rustig", "normaal", "stevig"].indexOf(a.pace) > -1) { j.pace = a.pace; bits.push("tempo " + a.pace); }
+      if (["coach", "zakelijk", "luchtig"].indexOf(a.tone) > -1) { j.tone = a.tone; bits.push("toon " + (a.tone === "coach" ? "coachend" : a.tone)); }
+      if (typeof a.quiet === "boolean") { j.quiet = a.quiet; bits.push("rustige modus " + (a.quiet ? "aan" : "uit")); }
+      if (bits.length) x = Object.assign({ type: t, label: "Jouw reis: " + bits.join(", ") }, j);
+    } else if (t === "set_notify" && ASSISTANT_NOTIFY[a.key] && typeof a.on === "boolean") x = { type: t, key: a.key, on: a.on, label: ASSISTANT_NOTIFY[a.key] + " " + (a.on ? "aan" : "uit") };
+    else if (t === "set_theme" && (a.theme === "light" || a.theme === "dark")) x = { type: t, theme: a.theme, label: a.theme === "dark" ? "Donkere weergave" : "Lichte weergave" };
+    else if (t === "home_tiles") {
+      var sh = (Array.isArray(a.show) ? a.show : []).filter(function (k) { return ASSISTANT_TILES[k]; }), hi = (Array.isArray(a.hide) ? a.hide : []).filter(function (k) { return ASSISTANT_TILES[k]; });
+      var top = ASSISTANT_TILES[a.top] ? a.top : null;
+      if (sh.length || hi.length || top) x = { type: t, show: sh, hide: hi, top: top, label: "Start: " + [sh.length ? "tonen " + sh.map(function (k) { return ASSISTANT_TILES[k]; }).join(", ") : "", hi.length ? "verbergen " + hi.map(function (k) { return ASSISTANT_TILES[k]; }).join(", ") : "", top ? ASSISTANT_TILES[top] + " bovenaan" : ""].filter(Boolean).join(" · ") };
+    } else if (t === "navigate" && ASSISTANT_VIEWS[a.view]) x = { type: t, view: a.view, label: "Open " + ASSISTANT_VIEWS[a.view] };
+    else if (t === "prepare_week" && (a.week === "this" || a.week === "next")) x = { type: t, week: a.week, label: "Zet " + (a.week === "next" ? "volgende" : "deze") + " week klaar met je eigen gerechten" };
+    else if (t === "generate_wish") {
+      var tags = (Array.isArray(a.tags) ? a.tags : []).filter(function (k) { return WISH_TEXTS[k]; }).slice(0, 4), txt = cleanText(a.text, 200);
+      if (txt || tags.length) x = { type: t, text: txt, tags: tags, label: "Nieuwe gerechten ontwerpen" + (txt ? ": “" + txt + "”" : "") };
+    } else if (t === "add_leftovers") { var it = aStrList(a.items, 10, 40); if (it.length) x = { type: t, items: it, label: "Op te maken: " + it.join(", ") }; }
+    if (x) out.push(x);
+  });
+  return out;
+}
+function assistantAllowance(uid) {
+  var day = todayKey(), cap = liveLimits.assistantDailyPerUser;
+  var mem = assistantUse.get(uid);
+  var p = mem && mem.day === day ? Promise.resolve(mem) : dbGetDoc("assistant/" + uid).then(function (r) { var v = r.exists && r.value && r.value.day === day ? r.value : { day: day, n: 0 }; return v; }).catch(function () { return { day: day, n: 0 }; });
+  return p.then(function (u) { return { use: u, cap: cap, ok: cap > 0 && u.n < cap }; });
+}
+function handleAssistant(req, res) {
+  var ip = clientIp(req), t0 = Date.now();
+  var hit = assistantIpHits.get(ip), now = Date.now();
+  if (!hit || now - hit.start > 3600000) hit = { start: now, n: 0 };
+  hit.n++; assistantIpHits.set(ip, hit);
+  if (hit.n > 120) return sendJSON(res, 429, { code: "rate_limited", message: "Even rustig aan: probeer het over een paar minuten opnieuw." });
+  var settingsRef = null;
+  getSettings().then(function (s) {
+    settingsRef = s;
+    if (!effectiveModules(s).assistant) { sendJSON(res, 503, moduleOffBody("assistant", s)); return undefined; }
+    return resolveUser(req);
+  }).then(function (user) {
+    if (user === undefined) return;
+    if (!user) return sendUnauthorized(res);
+    if (!ANTHROPIC_API_KEY) return sendJSON(res, 500, { code: "not_configured", message: "De assistent is op deze server nog niet ingesteld." });
+    return getUserPlan(user.uid, settingsRef).then(function (plan) {
+      if (planBlocksModule(settingsRef, "assistant", plan)) return sendJSON(res, 403, { code: "plan_required", message: "De assistent is onderdeel van Balanza Plus." });
+      return assistantAllowance(user.uid).then(function (al) {
+        if (!al.ok) return sendJSON(res, 429, { code: "assistant_limit", message: "Je hebt vandaag al " + al.use.n + " berichten gestuurd. Morgen kan het weer." });
+        return readBody(req).then(function (body) {
+          var msgs = (Array.isArray(body && body.messages) ? body.messages : []).slice(-12).map(function (m) {
+            return { role: m && m.role === "assistant" ? "assistant" : "user", content: String(m && m.content || "").replace(/[\r\n]+/g, " ").slice(0, 600) };
+          }).filter(function (m) { return m.content.trim(); });
+          if (!msgs.length || msgs[msgs.length - 1].role !== "user") return sendJSON(res, 400, { code: "bad_request", message: "Stel een vraag." });
+          var ctx = body.context && typeof body.context === "object" ? body.context : {};
+          return dbGetDoc("data/users/" + user.uid + "/prefs").then(function (pr) {
+          // Leeftijd komt uit de opgeslagen voorkeuren, niet alleen uit wat de app meestuurt.
+          var stored = pr.exists && pr.value ? pr.value : {};
+          if (isMinorParams(stored)) { ctx.ageGroup = "16-17"; ctx.age = stored.age || ctx.age; }
+          var usage = newUsage();
+          al.use.n++; assistantUse.set(user.uid, al.use); dbSetDoc("assistant/" + user.uid, al.use).catch(function () {});
+          return usageCtx.run(usage, function () { return callAnthropicOnce(buildAssistantPrompt(msgs, ctx), ASSISTANT_MODEL, 1500); }).then(function (parsed) {
+            var reply = cleanText(parsed && parsed.reply, 1200) || "Sorry, dat begreep ik niet helemaal. Kun je het anders zeggen?";
+            var actions = cleanAssistantActions(parsed && parsed.actions, ctx);
+            return recordAccounting(user.uid, "assistant", usage, 0, true).then(function () {
+              logRequest({ ts: new Date().toISOString(), type: "assistant", action: "chat", durationMs: Date.now() - t0, ok: true, status: 200, uid: user.uid, ip: ip, actions: actions.length });
+              sendJSON(res, 200, { reply: reply, actions: actions, left: Math.max(0, al.cap - al.use.n) });
+            });
+          }, function (e) { return recordAccounting(user.uid, "assistant", usage, 0, false).then(function () { throw e; }); });
+          });
+        });
+      });
+    });
+  }).catch(function (err) {
+    logRequest({ ts: new Date().toISOString(), type: "assistant", action: "chat", durationMs: Date.now() - t0, ok: false, status: 502, error: err && err.message, ip: ip });
+    sendJSON(res, 502, { code: "error", message: "De assistent is even niet bereikbaar. Probeer het zo opnieuw." });
   });
 }
 
@@ -6376,6 +6555,7 @@ var server = http.createServer(function (req, res) {
   if (hhMatch && ((req.method === "GET" && !hhMatch[1]) || (req.method === "POST" && hhMatch[1]))) return handleHousehold(req, res, hhMatch[1]);
   if (req.method === "POST" && url.pathname === "/api/cron/notify") return handleCronNotify(req, res);
   if (req.method === "POST" && url.pathname === "/api/tips") return handleTips(req, res);
+  if (req.method === "POST" && url.pathname === "/api/assistant") return handleAssistant(req, res);
   if (req.method === "POST" && url.pathname === "/api/auth/register") return guardedRegister(req, res);
   if (req.method === "POST" && url.pathname === "/api/auth/upgrade") return guardedUpgrade(req, res);
   if (req.method === "GET" && url.pathname === "/api/auth/anon-status") return handleAnonStatus(req, res);

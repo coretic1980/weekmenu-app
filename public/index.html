@@ -280,6 +280,33 @@
   .spark svg { width: 100%; height: 60px; display: block; }
   .recap-journey { gap: 6px; }
   .rj-lines { display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+  .chat-btn { flex: none; appearance: none; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; border: 1px solid var(--line); background: var(--surface); color: var(--accent2); cursor: pointer; margin-right: 6px; }
+  .chat-btn:hover { border-color: var(--accent2); }
+  .chat-overlay { position: fixed; inset: 0; z-index: 80; background: rgba(10, 20, 15, 0.45); display: flex; align-items: flex-end; justify-content: center; opacity: 0; pointer-events: none; transition: opacity .18s; }
+  .chat-overlay.active { opacity: 1; pointer-events: auto; }
+  .chat-panel { width: 100%; max-width: 560px; height: min(86vh, 760px); background: var(--bg); border-radius: 20px 20px 0 0; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 -10px 40px rgba(0,0,0,.25); }
+  @media (min-width: 700px) { .chat-overlay { align-items: center; } .chat-panel { border-radius: 20px; } }
+  .chat-head { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--line); background: var(--surface); }
+  .chat-avatar { flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--accent2); color: #fff; font-family: "Fraunces", serif; font-weight: 700; }
+  .chat-ttl { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .chat-ttl b { font-size: 15.5px; }
+  .chat-ttl small { font-size: 12px; color: var(--muted); }
+  .chat-list { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+  .chat-msg { max-width: 86%; padding: 10px 14px; border-radius: 16px; font-size: 14.5px; line-height: 1.45; white-space: pre-wrap; }
+  .chat-msg.bot { align-self: flex-start; background: var(--surface); border: 1px solid var(--line); border-bottom-left-radius: 6px; }
+  .chat-msg.me { align-self: flex-end; background: var(--accent2); color: #fff; border-bottom-right-radius: 6px; }
+  .chat-msg.typing { display: flex; gap: 4px; }
+  .chat-msg.typing i { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); animation: chatdot 1s infinite ease-in-out; }
+  .chat-msg.typing i:nth-child(2) { animation-delay: .15s; } .chat-msg.typing i:nth-child(3) { animation-delay: .3s; }
+  @keyframes chatdot { 0%, 80%, 100% { opacity: .3; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-3px); } }
+  .chat-sugg { margin-top: 2px; }
+  .chat-sugg .chip { font-size: 13px; }
+  .chat-actions { align-self: flex-start; width: 86%; display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--accent2); background: var(--surface); }
+  .chat-act { font-size: 13.5px; }
+  .chat-left { align-self: center; font-size: 12px; color: var(--muted); }
+  .chat-form { display: flex; gap: 8px; padding: 12px 14px calc(12px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: var(--surface); }
+  .chat-form .textinput { flex: 1; min-width: 0; }
+  .chat-form .primary-btn { width: auto; flex: none; padding: 10px 16px; }
   .hh-members { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 2px; }
   .hh-member { font-size: 14px; padding: 8px 12px; border-radius: 10px; background: var(--bg); border: 1px solid var(--line); }
   .hh-invite { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
@@ -2421,6 +2448,13 @@
     var h = document.createElement("h1");
     h.textContent = title;
     el.appendChild(h);
+    if (chatAvailable()) {
+      var chatBtn = document.createElement("button"); chatBtn.type = "button"; chatBtn.className = "chat-btn"; chatBtn.id = "chatBtn";
+      chatBtn.setAttribute("aria-label", "Vraag het Balanza");
+      chatBtn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/><path d="M8.5 11h.01M12 11h.01M15.5 11h.01"/></svg>';
+      chatBtn.onclick = openChat;
+      el.appendChild(chatBtn);
+    }
     var acctBtn = document.createElement("button");
     acctBtn.className = "acct-btn";
     acctBtn.id = "accountBtn";
@@ -12024,6 +12058,171 @@
   function challengeFriend(title) {
     var msg = "Ik doe deze week een uitdaging met Balanza: “" + title + "”. Doe je mee? " + location.origin + "/welkom";
     window.open("https://wa.me/?text=" + encodeURIComponent(msg), "_blank", "noopener");
+  }
+
+  // =====================================================================================================
+  // Balanza-assistent: vragen stellen en de app laten aanpassen. Elke wijziging bevestigt de gebruiker zelf
+  // (Doen / Niet nu) en is ongedaan te maken. De server bepaalt welke acties bestaan; de kaders liggen vast.
+  // =====================================================================================================
+  var CHAT_KEY = "balanza_chat";
+  var chat = { msgs: [], busy: false, left: null };
+  try { var savedChat = JSON.parse(sessionStorage.getItem(CHAT_KEY) || "null"); if (savedChat && Array.isArray(savedChat.msgs)) chat.msgs = savedChat.msgs.slice(-30); } catch (e) {}
+  function saveChat() { try { sessionStorage.setItem(CHAT_KEY, JSON.stringify({ msgs: chat.msgs.slice(-30) })); } catch (e) {} }
+  function chatAvailable() { return configLoaded && moduleOn("assistant") && !!(window.authToken || !window.authRequired); }
+  var CHAT_SUGGESTIONS = ["Hoe werkt de Balans-score?", "Ik wil vegetarisch eten", "Zet volgende week voor me klaar", "Maak de app donker", "Ik wil goedkoper koken", "Waarom zoveel eiwit bij mijn doel?"];
+  function chatContext() {
+    var byType = collectExistingByType(), dishes = {};
+    PLAN_MEALS.forEach(function (m) { dishes[m] = byType[m].length; });
+    var cw = weekByStart(mondayKeyOffset(0)), nw = weekByStart(mondayKeyOffset(1));
+    var j = prefs.journey || {};
+    return { goal: prefs.goal, dietStyle: prefs.dietStyle || "", health: healthList(), exclude: prefs.exclude || "", mealTypes: prefs.mealTypes, count: prefs.count,
+      cuisines: prefs.cuisines, flavors: prefs.flavors, level: prefs.level, familyMode: !!prefs.familyMode, student: student(), coach: prefs.coach || {},
+      journey: { pace: j.pace || "normaal", tone: j.tone || "coach", quiet: !!j.quiet }, tone: j.tone || "coach", theme: currentTheme, homeTiles: homeLayout().visible,
+      view: state.view, dishes: dishes, mealsThisWeek: cw ? Object.keys(cw.slots).length : 0, mealsNextWeek: nw ? Object.keys(nw.slots).length : 0,
+      plan: userPlan() || "free", ageGroup: prefs.ageGroup || "", age: prefs.age || "", leftovers: leftoverTerms(), dailyKcal: dailyKcalTarget() };
+  }
+  function openChat() {
+    var ov = document.getElementById("chatOverlay");
+    if (!ov) {
+      ov = document.createElement("div"); ov.id = "chatOverlay"; ov.className = "chat-overlay";
+      ov.setAttribute("role", "dialog"); ov.setAttribute("aria-modal", "true"); ov.setAttribute("aria-labelledby", "chatTitle");
+      ov.innerHTML = '<div class="chat-panel"><div class="chat-head"><span class="chat-avatar" aria-hidden="true">B</span><div class="chat-ttl"><b id="chatTitle">Vraag het Balanza</b><small id="chatSub">Vragen over je eten en de app, of laat iets aanpassen</small></div>' +
+        '<button type="button" class="nudge-x" id="chatClose" aria-label="Sluiten">×</button></div><div class="chat-list" id="chatList" aria-live="polite"></div>' +
+        '<form class="chat-form" id="chatForm"><input class="textinput" id="chatInput" maxlength="500" autocomplete="off" placeholder="Typ je vraag of wens…" aria-label="Bericht aan Balanza"><button type="submit" class="primary-btn small" id="chatSend">Stuur</button></form></div>';
+      document.body.appendChild(ov);
+      document.getElementById("chatClose").onclick = closeChat;
+      ov.addEventListener("click", function (e) { if (e.target === ov) closeChat(); });
+      ov.addEventListener("keydown", function (e) { if (e.key === "Escape") closeChat(); });
+      document.getElementById("chatForm").onsubmit = function (e) { e.preventDefault(); var i = document.getElementById("chatInput"); var v = i.value.trim(); if (v) { i.value = ""; sendChat(v); } };
+    }
+    paintChat();
+    ov.classList.add("active");
+    setTimeout(function () { var i = document.getElementById("chatInput"); if (i) i.focus(); }, 50);
+  }
+  function closeChat() { var ov = document.getElementById("chatOverlay"); if (ov) ov.classList.remove("active"); }
+  function paintChat() {
+    var list = document.getElementById("chatList"); if (!list) return;
+    list.innerHTML = "";
+    if (!chat.msgs.length) {
+      var hi = document.createElement("div"); hi.className = "chat-msg bot";
+      hi.textContent = "Hoi" + (prefs.name ? " " + String(prefs.name).split(" ")[0] : "") + "! Ik weet alles van Balanza en van je instellingen. Vraag maar iets, of vertel wat je anders wilt. Ik laat altijd eerst zien wat ik ga aanpassen.";
+      list.appendChild(hi);
+      var sug = document.createElement("div"); sug.className = "chiprow chat-sugg";
+      CHAT_SUGGESTIONS.forEach(function (q) { var c = document.createElement("button"); c.type = "button"; c.className = "chip"; c.textContent = q; c.onclick = function () { sendChat(q); }; sug.appendChild(c); });
+      list.appendChild(sug);
+    }
+    chat.msgs.forEach(function (m, idx) {
+      var b = document.createElement("div"); b.className = "chat-msg " + (m.role === "user" ? "me" : "bot"); b.textContent = m.content;
+      list.appendChild(b);
+      if (m.actions && m.actions.length) list.appendChild(chatActionCard(m, idx));
+    });
+    if (chat.busy) { var t = document.createElement("div"); t.className = "chat-msg bot typing"; t.innerHTML = "<i></i><i></i><i></i>"; t.setAttribute("aria-label", "Balanza denkt na"); list.appendChild(t); }
+    if (chat.left !== null && chat.left <= 5) { var l = document.createElement("div"); l.className = "chat-left"; l.textContent = "Nog " + chat.left + " berichten vandaag"; list.appendChild(l); }
+    var send = document.getElementById("chatSend"); if (send) send.disabled = chat.busy;
+    list.scrollTop = list.scrollHeight;
+  }
+  function chatActionCard(m, idx) {
+    var card = document.createElement("div"); card.className = "chat-actions"; card.id = "chatActions-" + idx;
+    var h = document.createElement("div"); h.className = "sheet-label"; h.textContent = m.applied ? "Aangepast" : m.dismissed ? "Niet aangepast" : "Voorstel"; card.appendChild(h);
+    m.actions.forEach(function (a) { var r = document.createElement("div"); r.className = "chat-act"; r.textContent = (m.applied ? "✓ " : "• ") + a.label; card.appendChild(r); });
+    var row = document.createElement("div"); row.className = "nudge-actions";
+    if (!m.applied && !m.dismissed) {
+      var ok = document.createElement("button"); ok.type = "button"; ok.className = "primary-btn small"; ok.textContent = "Doen"; ok.id = "chatDo-" + idx;
+      ok.onclick = function () { applyChatActions(m); };
+      var no = document.createElement("button"); no.type = "button"; no.className = "ghost-btn small"; no.textContent = "Niet nu";
+      no.onclick = function () { m.dismissed = true; saveChat(); paintChat(); };
+      row.appendChild(ok); row.appendChild(no);
+    } else if (m.applied && m.undo && !m.undone) {
+      var un = document.createElement("button"); un.type = "button"; un.className = "ghost-btn small"; un.textContent = "Ongedaan maken"; un.id = "chatUndo-" + idx;
+      un.onclick = function () { undoChatActions(m); };
+      row.appendChild(un);
+    } else if (m.undone) { var u = document.createElement("div"); u.className = "acc-sub"; u.textContent = "Teruggezet."; row.appendChild(u); }
+    if (row.childNodes.length) card.appendChild(row);
+    return card;
+  }
+  function sendChat(text) {
+    if (chat.busy) return;
+    chat.msgs.push({ role: "user", content: text }); chat.busy = true; saveChat(); paintChat();
+    var history = chat.msgs.slice(-12).map(function (m) { return { role: m.role, content: m.content }; });
+    fetch("/api/assistant", { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, authHeaders()), body: JSON.stringify({ messages: history, context: chatContext() }) })
+      .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { if (!r.ok) throw new Error(d.message || "De assistent is even niet bereikbaar."); return d; }); })
+      .then(function (d) { chat.busy = false; chat.left = typeof d.left === "number" ? d.left : null; chat.msgs.push({ role: "assistant", content: d.reply, actions: d.actions || [] }); saveChat(); paintChat(); })
+      .catch(function (e) { chat.busy = false; chat.msgs.push({ role: "assistant", content: e.message || "Er ging iets mis. Probeer het opnieuw." }); saveChat(); paintChat(); });
+  }
+  var PLAN_CHANGING = ["prepare_week"];
+  function prepareWeekAt(offset) {
+    var m = getMonday(new Date()); m.setDate(m.getDate() + 7 * offset);
+    var pw = openOrCreateWeek(m), before = {}; Object.keys(pw.slots).forEach(function (k) { before[k] = 1; });
+    var meals = loadAutofillMeals().filter(function (x) { return MAIN_SLOTS.indexOf(x) > -1; });
+    generateAutoWeek(pw, true, meals.length ? meals : ["Diner"], { range: "rest", fit: !!dailyKcalTarget() });
+    var added = Object.keys(pw.slots).filter(function (k) { return !before[k]; });
+    if (added.length) { pw.draft = { createdAt: new Date().toISOString(), createdOn: todayKeyLocal(), keys: added }; savePlannedWeeks(); }
+    return pw;
+  }
+  function applyChatActions(m) {
+    if (m.actions.some(function (a) { return PLAN_CHANGING.indexOf(a.type) > -1 || a.type === "generate_wish"; }) && requirePlus("Plannen en ontwerpen")) return;
+    var snap = { prefs: deepClone(prefs), theme: currentTheme, weeks: plannedWeeks.map(function (w) { return { id: w.id, slots: deepClone(w.slots), draft: w.draft ? deepClone(w.draft) : null }; }), weekIds: plannedWeeks.map(function (w) { return w.id; }) };
+    var go = null, notify = {};
+    m.actions.forEach(function (a) {
+      switch (a.type) {
+        case "set_goal": prefs.goal = a.goal; enforceAgeRules(); break;
+        case "set_diet": prefs.dietStyle = a.dietStyle; break;
+        case "set_health": (a.add || []).forEach(function (k) { if (!healthHas(k)) healthToggle(k); }); (a.remove || []).forEach(function (k) { if (healthHas(k)) healthToggle(k); }); break;
+        case "set_exclude":
+          var toks = excludeTokens();
+          (a.add || []).forEach(function (x) { if (!excludeHasTerm(toks, x)) toks.push(x); });
+          toks = toks.filter(function (t) { return !(a.remove || []).some(function (r) { return r.toLowerCase() === t.toLowerCase(); }); });
+          prefs.exclude = toks.join(", "); break;
+        case "set_meals": prefs.mealTypes = a.mealTypes.slice(); prefs.mealCounts = null; break;
+        case "set_count": prefs.count = a.count; prefs.mealCounts = null; break;
+        case "set_cuisines": prefs.cuisines = a.cuisines.slice(); break;
+        case "set_flavors": prefs.flavors = a.flavors.slice(); break;
+        case "set_level": prefs.level = a.level; break;
+        case "set_family": prefs.familyMode = a.on; break;
+        case "set_student": var p = { on: a.on }; if (a.budget) p.budget = a.budget; if (a.onePan !== null && a.onePan !== undefined) p.onePan = a.onePan; if (a.quick !== null && a.quick !== undefined) p.quick = a.quick; setStudent(p); break;
+        case "set_coach": prefs.coach = Object.assign({}, prefs.coach || {}); prefs.coach[a.key] = a.on; var co = COACH_OPTIONS.filter(function (o) { return o[0] === a.key; })[0]; if (co && co[3]) notify[co[3]] = a.on; break;
+        case "set_journey": var j = journey(); ["pace", "tone", "quiet"].forEach(function (k) { if (a[k] !== undefined) j[k] = a[k]; }); break;
+        case "set_notify": notify[a.key] = a.on; break;
+        case "set_theme": currentTheme = a.theme; try { document.documentElement.setAttribute("data-theme", currentTheme); localStorage.setItem("weekmenu_theme", currentTheme); } catch (e) {} break;
+        case "home_tiles":
+          var lay = homeLayout(), order = lay.order.slice(), hidden = lay.hidden.filter(function (k) { return (a.show || []).indexOf(k) === -1; });
+          (a.hide || []).forEach(function (k) { if (hidden.indexOf(k) === -1) hidden.push(k); });
+          if (a.top) { order = [a.top].concat(order.filter(function (k) { return k !== a.top; })); hidden = hidden.filter(function (k) { return k !== a.top; }); }
+          prefs.homeLayout = { order: order, hidden: hidden }; break;
+        case "add_leftovers": (a.items || []).forEach(addLeftover); break;
+        case "prepare_week": go = { kind: "week", offset: a.week === "next" ? 1 : 0 }; break;
+        case "generate_wish": state.genWish = { tags: (a.tags || []).slice(), text: a.text || "" }; go = { kind: "view", view: "generate" }; break;
+        case "navigate": if (!go) go = { kind: "view", view: a.view }; break;
+      }
+    });
+    savePrefs();
+    if (Object.keys(notify).length) fetch("/api/notify/prefs", { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, authHeaders()), body: JSON.stringify({ prefs: notify }) }).catch(function () {});
+    m.applied = true; m.undo = true; m.snapshotKey = "chatsnap" + Date.now(); chatSnapshots[m.snapshotKey] = snap;
+    saveChat();
+    if (go) {
+      closeChat();
+      if (go.kind === "week") { var pw = prepareWeekAt(go.offset); goto("planweek", { planWeekId: pw.id }); }
+      else if (go.view === "generate") goto("prefs", { tab: "ontwerpen" });
+      else if (go.view === "shopping") onTab("lijst");
+      else if (go.view === "plan") needDishesThen(function () { goto("plan"); });
+      else if (go.view === "recap") openRecap(null, false);
+      else goto(go.view);
+    } else { render(); paintChat(); }
+    showToast("Aangepast. Je kunt het in de chat ongedaan maken.");
+  }
+  var chatSnapshots = {};
+  function undoChatActions(m) {
+    var snap = chatSnapshots[m.snapshotKey];
+    if (!snap) { showToast("Ongedaan maken kan alleen in dezelfde sessie."); return; }
+    Object.keys(prefs).forEach(function (k) { if (!(k in snap.prefs)) delete prefs[k]; });
+    Object.keys(snap.prefs).forEach(function (k) { prefs[k] = snap.prefs[k]; });
+    currentTheme = snap.theme; try { document.documentElement.setAttribute("data-theme", currentTheme); localStorage.setItem("weekmenu_theme", currentTheme); } catch (e) {}
+    for (var i = plannedWeeks.length - 1; i >= 0; i--) if (snap.weekIds.indexOf(plannedWeeks[i].id) === -1 && !Object.keys(plannedWeeks[i].slots).length) plannedWeeks.splice(i, 1);
+    snap.weeks.forEach(function (w) { var pw = findPlannedWeek(w.id); if (pw) { pw.slots = w.slots; pw.draft = w.draft; } });
+    plannedWeeks.forEach(function (pw) { if (snap.weekIds.indexOf(pw.id) === -1) { pw.slots = {}; delete pw.draft; } });
+    savePrefs(); savePlannedWeeks();
+    m.undone = true; saveChat(); render(); paintChat();
+    showToast("Teruggezet.");
   }
 
   var dbCap = null;
