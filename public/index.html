@@ -12276,8 +12276,8 @@
   function renderInboxNudge(holder) {
     var it = inbox.items.filter(function (x) { return !x.read; })[0];
     if (!it) return 0;
-    nudgeCard(holder, { id: "inboxCard", tone: "accent", icon: it.status === "accepted" ? "🎉" : "💡", title: it.title, text: it.text,
-      actions: [{ label: it.status === "accepted" ? "Gaaf!" : "Dank je", primary: true, id: "inboxOk", onClick: function () { markInboxRead([it.id]); render(); } }] });
+    nudgeCard(holder, { id: "inboxCard", tone: "accent", icon: it.status === "accepted" || it.status === "live" ? "🎉" : "💡", title: it.title, text: it.text,
+      actions: [{ label: it.status === "accepted" || it.status === "live" ? "Gaaf!" : "Dank je", primary: true, id: "inboxOk", onClick: function () { markInboxRead([it.id]); render(); } }] });
     return 1;
   }
   function renderIdeasCard(main) {
@@ -12291,7 +12291,7 @@
       var ul = document.createElement("div"); ul.className = "hh-members";
       list.forEach(function (sg) {
         var li = document.createElement("div"); li.className = "hh-member";
-        li.textContent = sg.title + " · " + (sg.status === "accepted" ? "geaccepteerd 🎉" : sg.status === "rejected" ? "bekeken" : "wordt bekeken");
+        li.textContent = sg.title + " · " + (sg.status === "live" ? "staat live 🚀" : sg.status === "accepted" ? "geaccepteerd 🎉" : sg.status === "rejected" ? "bekeken" : "wordt bekeken");
         ul.appendChild(li);
       });
       card.appendChild(ul);

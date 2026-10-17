@@ -1250,7 +1250,7 @@
   // Activiteit (logboek)
   // =====================================================================================
   var TYPE_LABELS = { generate: "AI", tips: "Tips", auth: "Account", push: "Melding", billing: "Betaling" };
-  var LOG_ACTION_LABELS = { login: "Inloggen", register: "Registreren", upgrade: "Anoniem omgezet naar account", "password-change": "Wachtwoord gewijzigd (door gebruiker)", notify: "Melding: gerechten klaar", "remind-week": "Melding: plan je week", "remind-today": "Melding: diner van vandaag", "community-digest": "Melding: nieuwe recepten", "week-ready": "Melding: week klaargezet", "cooked-check": "Melding: na het eten", recap: "Melding: weekterugblik", "trial-recap": "Melding: proefweek in cijfers", chat: "Assistent: bericht", submit: "Idee ingestuurd", "suggestion-reply": "Melding: reactie op idee", invite: "Huishouden: uitnodiging gemaakt", join: "Huishouden: lid geworden", leave: "Huishouden: vertrokken", disband: "Huishouden: gestopt", webhook: "Betaalmelding (Mollie)", "email-change": "E-mailadres gewijzigd (door gebruiker)", "logout-others": "Op andere apparaten uitgelogd", "self-delete": "Account zelf verwijderd", export: "Gegevens gedownload", "reset-request": "Reset aangevraagd", "reset-done": "Wachtwoord gereset" };
+  var LOG_ACTION_LABELS = { login: "Inloggen", register: "Registreren", upgrade: "Anoniem omgezet naar account", "password-change": "Wachtwoord gewijzigd (door gebruiker)", notify: "Melding: gerechten klaar", "remind-week": "Melding: plan je week", "remind-today": "Melding: diner van vandaag", "community-digest": "Melding: nieuwe recepten", "week-ready": "Melding: week klaargezet", "cooked-check": "Melding: na het eten", recap: "Melding: weekterugblik", "trial-recap": "Melding: proefweek in cijfers", chat: "Assistent: bericht", submit: "Idee ingestuurd", "suggestion-reply": "Melding: reactie op idee", "suggestion-live": "Melding: idee staat live", invite: "Huishouden: uitnodiging gemaakt", join: "Huishouden: lid geworden", leave: "Huishouden: vertrokken", disband: "Huishouden: gestopt", webhook: "Betaalmelding (Mollie)", "email-change": "E-mailadres gewijzigd (door gebruiker)", "logout-others": "Op andere apparaten uitgelogd", "self-delete": "Account zelf verwijderd", export: "Gegevens gedownload", "reset-request": "Reset aangevraagd", "reset-done": "Wachtwoord gereset" };
   function logRow(l, compact) {
     var who = null;
     if (!compact) {
@@ -1454,7 +1454,7 @@
   // Voorstellen: ideeën van gebruikers (uit de chat), functioneel uitgeschreven
   // =====================================================================================
   var SG = { status: "new" };
-  var SG_STATUS = { "new": ["Nieuw", "warn"], accepted: ["Geaccepteerd", "good"], rejected: ["Afgewezen", ""] };
+  var SG_STATUS = { "new": ["Nieuw", "warn"], accepted: ["Geaccepteerd", "good"], rejected: ["Afgewezen", ""], live: ["Live", "good"] };
   function suggestionDefaultMessage(sg, accept) {
     var who = sg.name ? ", " + sg.name : "";
     return accept
@@ -1490,7 +1490,8 @@
         h("dt", { text: "Geschatte impact" }), h("dd", { text: sg.impact }),
         h("dt", { text: "Ingediend door" }), h("dd", {}, who),
         h("dt", { text: "Ingediend" }), h("dd", { text: fmtDate(sg.createdAt) }),
-        sg.decidedAt ? [h("dt", { text: "Besloten" }), h("dd", { text: fmtDate(sg.decidedAt) })] : null),
+        sg.decidedAt ? [h("dt", { text: "Besloten" }), h("dd", { text: fmtDate(sg.decidedAt) })] : null,
+        sg.issueUrl ? [h("dt", { text: "GitHub" }), h("dd", {}, h("a", { href: sg.issueUrl, target: "_blank", rel: "noopener", text: "Issue #" + sg.issueNumber }))] : sg.issueError ? [h("dt", { text: "GitHub" }), h("dd", { text: "Nog niet gelukt: " + sg.issueError })] : null),
       sg.quote ? [h("h3", { text: "Wat de gebruiker vroeg" }), h("blockquote", { class: "sg-quote", text: "“" + sg.quote + "”" })] : null,
       sg.userStory ? [h("h3", { text: "Gebruikersverhaal" }), h("p", { text: sg.userStory })] : null,
       sg.problem ? [h("h3", { text: "Probleem" }), h("p", { text: sg.problem })] : null,
@@ -1503,20 +1504,26 @@
   }
   VIEWS.voorstellen = function (view, route, ctx) {
     var results = h("div", { id: "sgResults" }), counts = h("div", { class: "chips", id: "sgCounts" });
-    var statusSel = select([["new", "Nieuw"], ["accepted", "Geaccepteerd"], ["rejected", "Afgewezen"], ["", "Alles"]], SG.status, function (v) { SG.status = v; load(); }, "Status"); statusSel.id = "sgStatus";
+    var statusSel = select([["new", "Nieuw"], ["accepted", "Geaccepteerd"], ["live", "Live"], ["rejected", "Afgewezen"], ["", "Alles"]], SG.status, function (v) { SG.status = v; load(); }, "Status"); statusSel.id = "sgStatus";
     view.appendChild(h("div", { class: "page-head" }, h("h2", { text: "Voorstellen" })));
     view.appendChild(h("div", { class: "hint", style: { marginTop: "-6px", marginBottom: "10px" }, text: "Ideeën die gebruikers via de assistent instuurden, functioneel uitgeschreven. Accepteer of wijs af; de indiener krijgt altijd een vriendelijk bericht." }));
-    view.appendChild(h("div", { class: "toolbar" }, statusSel, counts));
+    var ghInfo = h("div", { class: "hint", id: "sgGithub" });
+    var syncBtn = h("button", { class: "ghost", id: "sgSync", text: "GitHub nu controleren" });
+    syncBtn.onclick = function () { syncBtn.disabled = true; api("/api/admin/suggestions/sync", { method: "POST", body: {} }).then(function () { toast("Gecontroleerd."); syncBtn.disabled = false; load(); }).catch(function (e) { syncBtn.disabled = false; if (!e.silent) toast(e.message, "bad"); }); };
+    view.appendChild(h("div", { class: "toolbar" }, statusSel, counts, syncBtn));
+    view.appendChild(ghInfo);
     view.appendChild(results);
     function load() {
       return api("/api/admin/suggestions" + qs({ status: SG.status })).then(function (d) {
         if (!ctx.alive()) return;
-        counts.textContent = d.counts.new + " nieuw · " + (d.counts.accepted || 0) + " geaccepteerd · " + (d.counts.rejected || 0) + " afgewezen";
+        counts.textContent = d.counts.new + " nieuw · " + (d.counts.accepted || 0) + " geaccepteerd · " + (d.counts.live || 0) + " live · " + (d.counts.rejected || 0) + " afgewezen";
+        ghInfo.textContent = d.github ? "Elk idee wordt een issue in " + d.github.repo + " (label idee-van-gebruiker). Sluit een geaccepteerd issue als voltooid zodra het live staat; de indiener krijgt dan automatisch bericht." : "GitHub-koppeling staat uit. Zet GITHUB_TOKEN in je omgeving om ideeën als issues te laten aanmaken.";
+        syncBtn.style.display = d.github ? "" : "none";
         clear(results);
         if (!d.suggestions.length) { results.appendChild(empty(SG.status === "new" ? "Geen nieuwe ideeën. Alles is bekeken." : "Geen voorstellen gevonden.")); return; }
         results.appendChild(table([th("Idee"), th("Onderdeel"), th("Impact"), th("Van"), th("Ingediend"), th("Status")], d.suggestions.map(function (sg) {
           var st = SG_STATUS[sg.status] || SG_STATUS["new"];
-          var tr = h("tr", { class: "clickable sgRow" }, h("td", {}, h("strong", { text: sg.title }), h("span", { class: "sub", text: sg.userStory || "" })),
+          var tr = h("tr", { class: "clickable sgRow" }, h("td", {}, h("strong", { text: sg.title + (sg.issueNumber ? "  #" + sg.issueNumber : "") }), h("span", { class: "sub", text: sg.userStory || "" })),
             h("td", { text: sg.area }), h("td", { text: sg.impact }), h("td", { text: sg.name || sg.email || shortUid(sg.uid) }),
             h("td", { class: "nowrap", text: relTime(sg.createdAt) }), h("td", {}, badge(st[0], st[1])));
           tr.onclick = function () { openSuggestion(sg, load); };

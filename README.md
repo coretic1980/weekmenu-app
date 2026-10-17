@@ -670,6 +670,15 @@ idee (titel en gebruikersverhaal) en de knoppen *Ja, stuur in* en *Nee, laat maa
 - **De gebruiker** krijgt het bericht als kaart bovenaan Start (`inbox/<uid>`) en, als meldingen aan staan, een pushmelding.
   Onder *Mijn profiel → Mijn ideeën* staat de stand van zijn ideeën.
 - Hooguit 10 ideeën per uur per gebruiker; een gelijk idee dat nog openstaat wordt niet dubbel opgeslagen.
+- **GitHub-issues** (optioneel, met `GITHUB_TOKEN`): elk ingestuurd idee wordt een issue in `GITHUB_REPO` (standaard
+  `coretic1980/weekmenu-app`) met de labels `idee-van-gebruiker` en `nieuw`. Bij accepteren wordt het label `geaccepteerd`
+  (issue blijft open, met een opmerking); bij afwijzen `afgewezen` en wordt het issue gesloten als "not planned". Sluit je een
+  geaccepteerd issue als **voltooid**, dan krijgt de indiener binnen ~10 minuten bericht ("Je idee staat live") en wordt de status
+  *Live* (label `live`). In de admin staat bij elk voorstel de link naar het issue en een knop "GitHub nu controleren".
+  **Er komen nooit namen, e-mailadressen of de letterlijke vraag van de gebruiker in het issue** (de repo is openbaar).
+  Lukt het aanmaken niet, dan staat de fout bij het voorstel en probeert de server het later opnieuw.
+- Token maken: GitHub → Settings → Developer settings → Fine-grained tokens → *Generate new token*; Repository access: alleen
+  deze repo; Permissions → Repository permissions → **Issues: Read and write** (verder niets). Zet hem als `GITHUB_TOKEN` in je omgeving.
 
 In de beheerconsole staan de nieuwe meldingen bij *Overzicht → Meldingen* en in het logboek (soort "Samen plannen" voor
 het huishouden). Bij een gebruiker staat of hij samen plant.

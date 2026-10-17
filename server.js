@@ -4275,6 +4275,7 @@ function handleSuggestions(req, res) {
         return dbSetDoc("suggestions/" + doc.id, doc).then(function () {
           logEvent("suggestion", "submit", true, 200, { uid: user.uid });
           sendJSON(res, 200, { ok: true, id: doc.id });
+          ghEnsureIssue(doc);   // op de achtergrond; de gebruiker hoeft er niet op te wachten
         });
       });
     });
@@ -4297,6 +4298,91 @@ function handleInbox(req, res, action) {
     });
   }).catch(function () { sendJSON(res, 400, { code: "bad_request", message: "Ongeldige aanvraag." }); });
 }
+
+// ---------- Ideeën als GitHub-issues ----------
+// Met GITHUB_TOKEN (fine-grained token met alleen "Issues: read and write" op deze repo) wordt elk ingestuurd idee een issue
+// met labels: idee-van-gebruiker + nieuw | geaccepteerd | afgewezen. Er staan nooit namen, e-mailadressen of de letterlijke
+// vraag van de gebruiker in (de repo kan openbaar zijn). Wordt een geaccepteerd issue gesloten als "voltooid", dan krijgt de
+// indiener bericht dat zijn idee live staat.
+var GITHUB_TOKEN = process.env.GITHUB_TOKEN || "";
+var GITHUB_REPO = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(process.env.GITHUB_REPO || "") ? process.env.GITHUB_REPO : "coretic1980/weekmenu-app";
+var GITHUB_API_URL = String(process.env.GITHUB_API_URL || "https://api.github.com").replace(/\/+$/, "");   // alleen aanpassen bij testen
+var GH_LABEL_BASE = "idee-van-gebruiker", GH_STATUS_LABEL = { "new": "nieuw", accepted: "geaccepteerd", rejected: "afgewezen", live: "live" };
+function githubOn() { return GITHUB_TOKEN.length > 10; }
+function ghApi(method, path, body) {
+  return fetch(GITHUB_API_URL + "/repos/" + GITHUB_REPO + path, {
+    method: method,
+    headers: { "Authorization": "Bearer " + GITHUB_TOKEN, "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "balanza-app", "Content-Type": "application/json" },
+    body: body ? JSON.stringify(body) : undefined
+  }).then(function (r) {
+    return r.text().then(function (t) { var j = null; try { j = t ? JSON.parse(t) : null; } catch (e) {} if (!r.ok) throw new Error("GitHub " + r.status + ": " + (j && j.message || t).slice(0, 200)); return j; });
+  });
+}
+function ghMd(t) { return String(t || "").replace(/@/g, "@​").replace(/<\/?[a-z][^>]*>/gi, ""); }   // geen @-vermeldingen of HTML
+function ghIssueBody(doc) {
+  return [
+    "> Idee van een Balanza-gebruiker, ingestuurd via de assistent in de app. Functioneel uitgeschreven door de assistent; beoordelen in Beheer → Voorstellen.",
+    "",
+    "**Onderdeel:** " + ghMd(doc.area) + " · **Geschatte impact:** " + ghMd(doc.impact),
+    "",
+    doc.userStory ? "### Gebruikersverhaal\n" + ghMd(doc.userStory) + "\n" : "",
+    doc.problem ? "### Probleem\n" + ghMd(doc.problem) + "\n" : "",
+    "### Voorstel\n" + ghMd(doc.proposal) + "\n",
+    doc.acceptance && doc.acceptance.length ? "### Acceptatiecriteria\n" + doc.acceptance.map(function (a) { return "- [ ] " + ghMd(a); }).join("\n") + "\n" : "",
+    doc.framework ? "### Kaders (macrobalans per doel)\n" + ghMd(doc.framework) + "\n" : "",
+    "---",
+    "<sub>Balanza-voorstel " + doc.id + "</sub>"
+  ].filter(function (x) { return x !== ""; }).join("\n");
+}
+function ghLabels(status) { return [GH_LABEL_BASE, GH_STATUS_LABEL[status] || "nieuw"]; }
+// Maakt het issue (als dat er nog niet is). Fouten houden niets tegen: de admin ziet ze en het wordt later opnieuw geprobeerd.
+function ghEnsureIssue(doc) {
+  if (!githubOn() || doc.issueNumber) return Promise.resolve(doc);
+  return ghApi("POST", "/issues", { title: "Idee: " + ghMd(doc.title), body: ghIssueBody(doc), labels: ghLabels(doc.status) }).then(function (iss) {
+    doc.issueNumber = iss.number; doc.issueUrl = iss.html_url; doc.issueError = null;
+    return dbSetDoc("suggestions/" + doc.id, doc).then(function () { return doc; });
+  }, function (e) {
+    doc.issueError = e.message; console.warn("GitHub-issue maken mislukt: " + e.message);
+    return dbSetDoc("suggestions/" + doc.id, doc).then(function () { return doc; });
+  });
+}
+function ghSyncDecision(doc, comment) {
+  if (!githubOn()) return Promise.resolve();
+  return ghEnsureIssue(doc).then(function () {
+    if (!doc.issueNumber) return;
+    var patch = { labels: ghLabels(doc.status) };
+    if (doc.status === "rejected") { patch.state = "closed"; patch.state_reason = "not_planned"; }
+    if (doc.status === "new" || doc.status === "accepted") patch.state = "open";
+    var note = comment ? ghApi("POST", "/issues/" + doc.issueNumber + "/comments", { body: comment }).catch(function () {}) : Promise.resolve();
+    return note.then(function () { return ghApi("PATCH", "/issues/" + doc.issueNumber, patch); }).catch(function (e) { console.warn("GitHub-issue bijwerken mislukt: " + e.message); });
+  });
+}
+// Geaccepteerd en het issue is gesloten als voltooid? Dan staat het live: de indiener krijgt bericht. Ook: ontbrekende issues alsnog maken.
+var ghLiveCheckAt = 0;
+function ghLiveCheck(force) {
+  if (!githubOn() || (!force && Date.now() - ghLiveCheckAt < 20 * 60 * 1000)) return Promise.resolve();
+  ghLiveCheckAt = Date.now();
+  return dbListDocs("suggestions/").then(function (docs) {
+    var all = docs.map(function (d) { return d.value; }).filter(Boolean);
+    return mapLimit(all, 3, function (doc) {
+      if (!doc.issueNumber) return ghEnsureIssue(doc);
+      if (doc.status !== "accepted") return null;
+      return ghApi("GET", "/issues/" + doc.issueNumber).then(function (iss) {
+        if (!iss || iss.state !== "closed" || iss.state_reason !== "completed") return;
+        doc.status = "live"; doc.liveAt = new Date().toISOString();
+        return dbSetDoc("suggestions/" + doc.id, doc).then(function () {
+          return pushInbox(doc.uid, { kind: "suggestion", status: "live", title: "Je idee staat live: " + doc.title,
+            text: "Het is zover: “" + doc.title + "” zit nu in Balanza. Dank je wel dat je meedacht. Zo maken we de app samen beter. Heb je nog meer ideeën? De assistent hoort ze graag." });
+        }).then(function () {
+          return notifyUser(doc.uid, { title: "Je idee staat live!", body: "“" + doc.title + "” zit nu in Balanza. Tik om te kijken.", url: "/?open=inbox", tag: "balanza-inbox" }, notifyHost(), "suggestion-live").catch(function () {});
+        }).then(function () { ghApi("PATCH", "/issues/" + doc.issueNumber, { labels: ghLabels("live") }).catch(function () {}); });
+      }).catch(function (e) { console.warn("GitHub-controle mislukt: " + e.message); });
+    });
+  }).catch(function () {});
+}
+var ghTimer = setInterval(function () { ghLiveCheck(false); }, 10 * 60 * 1000);
+if (ghTimer.unref) ghTimer.unref();
+
 // Beheer: lijst, detail, besluit (met bericht en melding naar de indiener) en verwijderen.
 function handleAdminSuggestions(req, res, url) {
   var status = url.searchParams.get("status") || "";
@@ -4305,22 +4391,28 @@ function handleAdminSuggestions(req, res, url) {
     var counts = { all: all.length, new: 0, accepted: 0, rejected: 0 };
     all.forEach(function (v) { counts[v.status] = (counts[v.status] || 0) + 1; });
     var list = all.filter(function (v) { return !status || v.status === status; }).sort(function (a, b) { return a.createdAt < b.createdAt ? 1 : -1; });
-    sendJSON(res, 200, { suggestions: list.slice(0, 200), counts: counts });
+    sendJSON(res, 200, { suggestions: list.slice(0, 200), counts: counts, github: githubOn() ? { repo: GITHUB_REPO } : null });
+    ghLiveCheck(false);
   });
 }
 function handleAdminSuggestionAction(req, res, id, action) {
   return dbGetDoc("suggestions/" + id).then(function (r) {
     var doc = r.exists && r.value ? r.value : null;
     if (!doc) throw HttpError(404, "not_found", "Dit voorstel bestaat niet (meer).");
-    if (action === "delete") return dbDeleteDoc("suggestions/" + id).then(function () { auditLog(req, "suggestion-delete", id, { title: doc.title }); sendJSON(res, 200, { ok: true }); });
+    if (action === "delete") return dbDeleteDoc("suggestions/" + id).then(function () {
+      auditLog(req, "suggestion-delete", id, { title: doc.title });
+      if (githubOn() && doc.issueNumber) ghApi("PATCH", "/issues/" + doc.issueNumber, { state: "closed", state_reason: "not_planned" }).catch(function () {});
+      sendJSON(res, 200, { ok: true });
+    });
     if (action !== "accept" && action !== "reject" && action !== "reopen") throw HttpError(404, "not_found", "Onbekende actie.");
     return requireBody(req).then(function (body) {
-      if (action === "reopen") { doc.status = "new"; doc.decidedAt = null; return dbSetDoc("suggestions/" + id, doc).then(function () { sendJSON(res, 200, { suggestion: doc }); }); }
+      if (action === "reopen") { doc.status = "new"; doc.decidedAt = null; return dbSetDoc("suggestions/" + id, doc).then(function () { ghSyncDecision(doc, "Opnieuw in beoordeling."); sendJSON(res, 200, { suggestion: doc }); }); }
       var msg = cleanNote(body && body.message, 1200);
       if (!msg) throw HttpError(400, "bad_request", "Schrijf een bericht voor de indiener.");
       doc.status = action === "accept" ? "accepted" : "rejected"; doc.decidedAt = new Date().toISOString(); doc.decisionMessage = msg;
       return dbSetDoc("suggestions/" + id, doc).then(function () {
         auditLog(req, "suggestion-" + action, id, { title: doc.title });
+        ghSyncDecision(doc, action === "accept" ? "Geaccepteerd: dit gaan we bouwen. Sluit dit issue als *voltooid* zodra het live staat; de indiener krijgt dan automatisch bericht." : "Afgewezen na beoordeling.");
         var title = action === "accept" ? "Je idee komt erin: " + doc.title : "Bedankt voor je idee: " + doc.title;
         return pushInbox(doc.uid, { kind: "suggestion", status: doc.status, title: title, text: msg }).then(function () {
           return notifyUser(doc.uid, { title: action === "accept" ? "Goed nieuws over je idee" : "Je idee is bekeken", body: "Over “" + doc.title + "”. Tik om de reactie te lezen.", url: "/?open=inbox", tag: "balanza-inbox" }, notifyHost(), "suggestion-reply").catch(function () {});
@@ -6259,6 +6351,7 @@ function handleAdminApi(req, res, url) {
     else if (cact && method === "POST") run = function () { return handleAdminCommunityAction(req, res, cid, cact); };
   }
   else if (method === "GET" && p === "/api/admin/suggestions") run = function () { return handleAdminSuggestions(req, res, url); };
+  else if (method === "POST" && p === "/api/admin/suggestions/sync") run = function () { return ghLiveCheck(true).then(function () { sendJSON(res, 200, { ok: true }); }); };
   else if ((m = p.match(/^\/api\/admin\/suggestions\/([a-f0-9]{16})\/(accept|reject|reopen|delete)$/)) && method === "POST") { var sid = m[1], sact = m[2]; run = function () { return handleAdminSuggestionAction(req, res, sid, sact); }; }
   else if (method === "GET" && p === "/api/admin/lists") run = function () { return handleAdminLists(req, res, url); };
   else if (method === "POST" && p === "/api/admin/lists/cleanup") run = function () { return handleAdminListCleanup(req, res); };
