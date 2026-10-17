@@ -655,6 +655,22 @@ Een chatknop rechtsboven in de app. Gebruikers stellen vragen over de app en hun
   Kosten tellen mee in het verbruik (actie "assistant"). Ander model: `ANTHROPIC_ASSISTANT_MODEL`.
 - Het gesprek staat alleen in de browser (sessie); de server bewaart geen chatgeschiedenis.
 
+### Ideeën van gebruikers
+
+Kan de assistent iets niet (de functie bestaat niet, of het valt buiten de kaders), dan zegt hij dat eerlijk, noemt een
+alternatief en vraagt: "Wil je hier een idee voor nieuwe functionaliteit van maken?". Daaronder staat een kaart met het
+idee (titel en gebruikersverhaal) en de knoppen *Ja, stuur in* en *Nee, laat maar*.
+
+- **Functioneel uitgeschreven**: titel, onderdeel, gebruikersverhaal ("Als gebruiker wil ik …, zodat …"), probleem, voorstel,
+  acceptatiecriteria, hoe het zich verhoudt tot de kaders (macrobalans per doel, Balans-score, NEVO, voedingsregels), geschatte
+  impact en de oorspronkelijke vraag van de gebruiker. Opgeslagen als `suggestions/<id>`.
+- **Beheer → Voorstellen**: filter op Nieuw, Geaccepteerd of Afgewezen. Openen toont het hele voorstel; *Accepteren* of *Afwijzen*
+  vult een vriendelijk, motiverend bericht voor (aanpasbaar) en *Versturen* stuurt het naar de gebruiker. Ook *Verwijderen* (zonder
+  bericht) en *Opnieuw beoordelen*. Op het Overzicht staat een aandachtspunt bij nieuwe ideeën; besluiten staan in het auditlog.
+- **De gebruiker** krijgt het bericht als kaart bovenaan Start (`inbox/<uid>`) en, als meldingen aan staan, een pushmelding.
+  Onder *Mijn profiel → Mijn ideeën* staat de stand van zijn ideeën.
+- Hooguit 10 ideeën per uur per gebruiker; een gelijk idee dat nog openstaat wordt niet dubbel opgeslagen.
+
 In de beheerconsole staan de nieuwe meldingen bij *Overzicht → Meldingen* en in het logboek (soort "Samen plannen" voor
 het huishouden). Bij een gebruiker staat of hij samen plant.
 

@@ -113,6 +113,8 @@
   .module:last-child { border-bottom: none; }
   .module .name { font-weight: 600; } .module .desc { color: var(--muted); font-size: 13px; margin-top: 2px; }
   .kv { display: grid; grid-template-columns: max-content 1fr; gap: 6px 18px; }
+  .sg-quote { margin: 0 0 8px; padding: 8px 12px; border-left: 3px solid var(--line); color: var(--muted); font-style: italic; }
+  #sgMsgWrap textarea { width: 100%; box-sizing: border-box; margin-top: 6px; }
   .kv dt { color: var(--muted); } .kv dd { margin: 0; word-break: break-word; }
 
   /* telefoon: compacte kop, tabbladen als menu, tabellen als kaarten */
@@ -506,7 +508,7 @@
   // =====================================================================================
   // Toestand, navigatie en het grote geheel
   // =====================================================================================
-  var TABS = [["overzicht", "Overzicht"], ["gebruikers", "Gebruikers"], ["activiteit", "Activiteit"], ["lijsten", "Gedeelde lijsten"], ["community", "Community"], ["instellingen", "Instellingen"], ["audit", "Auditlog"], ["systeem", "Systeem"]];
+  var TABS = [["overzicht", "Overzicht"], ["gebruikers", "Gebruikers"], ["activiteit", "Activiteit"], ["lijsten", "Gedeelde lijsten"], ["community", "Community"], ["voorstellen", "Voorstellen"], ["instellingen", "Instellingen"], ["audit", "Auditlog"], ["systeem", "Systeem"]];
   var meta = { settings: null };   // instellingen incl. beschrijvingen van modules en keuzelijsten (één keer opgehaald)
   var viewSeq = 0;                 // verouderde antwoorden negeren als je alweer ergens anders bent
   var refreshTimer = null;
@@ -659,6 +661,7 @@
     if (problems.length) todo.push({ kind: "bad", title: plural(problems.length, "systeempunt", "systeempunten") + (problems.length === 1 ? " vraagt" : " vragen") + " aandacht", sub: problems.map(function (p) { return p.label; }).join(" · "), go: function () { navigate("#/systeem"); } });
     if (b.pastDueCount) todo.push({ kind: "bad", title: plural(b.pastDueCount, "betaling", "betalingen") + " mislukt", sub: b.pastDue.map(function (x) { return x.name || x.email; }).join(", "), go: goUsers("pastdue") });
     if (b.endingCount) todo.push({ kind: "warn", title: plural(b.endingCount, "proef loopt", "proeven lopen") + " binnen 2 dagen af", sub: b.endingSoon.map(function (x) { return (x.name || x.email) + " (" + relFuture(x.trialEndsAt) + ")"; }).join(", "), go: goUsers("ending") });
+    if (st.suggestions && st.suggestions.new) todo.push({ kind: "warn", title: plural(st.suggestions.new, "nieuw idee", "nieuwe ideeën") + " van gebruikers", sub: "Beoordeel en accepteer of wijs af; de indiener krijgt een bericht", go: function () { SG.status = "new"; navigate("#/voorstellen"); } });
     if (st.community && (st.community.reported || st.community.hidden)) todo.push({ kind: "warn", title: "Community: " + [st.community.reported ? plural(st.community.reported, "gemeld recept", "gemelde recepten") : null, st.community.hidden ? plural(st.community.hidden, "verborgen recept", "verborgen recepten") : null].filter(Boolean).join(" · "), sub: "Bekijk en keur goed of verwijder", go: function () { C.status = st.community.reported ? "reported" : "hidden"; C.page = 1; navigate("#/community"); } });
     if (rq.errorsToday && rq.errorRate >= 10) todo.push({ kind: rq.errorRate >= 25 ? "bad" : "warn", title: plural(rq.errorsToday, "fout", "fouten") + " vandaag (" + String(rq.errorRate).replace(".", ",") + "%)", sub: rq.recentErrors[0] ? rq.recentErrors[0].error || "" : "", go: function () { resetLogFilters(); L.status = "error"; navigate("#/activiteit"); } });
     if (us.cap && pct >= 80) todo.push({ kind: pct >= 100 ? "bad" : "warn", title: "Daglimiet voor genereren " + (pct >= 100 ? "bereikt" : "bijna bereikt") + " (" + us.today + " / " + us.cap + ")", sub: "Verhoog de limiet als dit normaal gebruik is", go: function () { navigate("#/instellingen/limieten"); } });
@@ -1247,7 +1250,7 @@
   // Activiteit (logboek)
   // =====================================================================================
   var TYPE_LABELS = { generate: "AI", tips: "Tips", auth: "Account", push: "Melding", billing: "Betaling" };
-  var LOG_ACTION_LABELS = { login: "Inloggen", register: "Registreren", upgrade: "Anoniem omgezet naar account", "password-change": "Wachtwoord gewijzigd (door gebruiker)", notify: "Melding: gerechten klaar", "remind-week": "Melding: plan je week", "remind-today": "Melding: diner van vandaag", "community-digest": "Melding: nieuwe recepten", "week-ready": "Melding: week klaargezet", "cooked-check": "Melding: na het eten", recap: "Melding: weekterugblik", "trial-recap": "Melding: proefweek in cijfers", chat: "Assistent: bericht", invite: "Huishouden: uitnodiging gemaakt", join: "Huishouden: lid geworden", leave: "Huishouden: vertrokken", disband: "Huishouden: gestopt", webhook: "Betaalmelding (Mollie)", "email-change": "E-mailadres gewijzigd (door gebruiker)", "logout-others": "Op andere apparaten uitgelogd", "self-delete": "Account zelf verwijderd", export: "Gegevens gedownload", "reset-request": "Reset aangevraagd", "reset-done": "Wachtwoord gereset" };
+  var LOG_ACTION_LABELS = { login: "Inloggen", register: "Registreren", upgrade: "Anoniem omgezet naar account", "password-change": "Wachtwoord gewijzigd (door gebruiker)", notify: "Melding: gerechten klaar", "remind-week": "Melding: plan je week", "remind-today": "Melding: diner van vandaag", "community-digest": "Melding: nieuwe recepten", "week-ready": "Melding: week klaargezet", "cooked-check": "Melding: na het eten", recap: "Melding: weekterugblik", "trial-recap": "Melding: proefweek in cijfers", chat: "Assistent: bericht", submit: "Idee ingestuurd", "suggestion-reply": "Melding: reactie op idee", invite: "Huishouden: uitnodiging gemaakt", join: "Huishouden: lid geworden", leave: "Huishouden: vertrokken", disband: "Huishouden: gestopt", webhook: "Betaalmelding (Mollie)", "email-change": "E-mailadres gewijzigd (door gebruiker)", "logout-others": "Op andere apparaten uitgelogd", "self-delete": "Account zelf verwijderd", export: "Gegevens gedownload", "reset-request": "Reset aangevraagd", "reset-done": "Wachtwoord gereset" };
   function logRow(l, compact) {
     var who = null;
     if (!compact) {
@@ -1272,7 +1275,7 @@
       el.oninput = debounce(function () { L[key] = el.value.trim(); L.page = 1; load(); }, 350); return el;
     }
     var q = bind("lQ", "q", "Zoek in actie, melding, IP, gebruiker…", "grow", "search");
-    var typeSel = select([["", "Alle soorten"], ["generate", "AI (genereren)"], ["tips", "Tips"], ["auth", "Account (inloggen)"], ["push", "Meldingen (push)"], ["household", "Samen plannen"], ["assistant", "Assistent (chat)"], ["billing", "Betalingen"]], L.type, function (v) { L.type = v; L.page = 1; load(); }, "Soort"); typeSel.id = "lType";
+    var typeSel = select([["", "Alle soorten"], ["generate", "AI (genereren)"], ["tips", "Tips"], ["auth", "Account (inloggen)"], ["push", "Meldingen (push)"], ["household", "Samen plannen"], ["assistant", "Assistent (chat)"], ["suggestion", "Ideeën"], ["billing", "Betalingen"]], L.type, function (v) { L.type = v; L.page = 1; load(); }, "Soort"); typeSel.id = "lType";
     var statusSel = select([["", "Alle uitkomsten"], ["ok", "Gelukt"], ["error", "Fouten"]], L.status, function (v) { L.status = v; L.page = 1; load(); }, "Uitkomst"); statusSel.id = "lStatus";
     var uidIn = bind("lUid", "uid", "Gebruikers-ID", "", "text"), ipIn = bind("lIp", "ip", "IP-adres", "", "text");
     var fromIn = h("input", { type: "date", id: "lFrom", "aria-label": "Vanaf datum" }); fromIn.value = L.from; fromIn.onchange = function () { L.from = fromIn.value; L.page = 1; load(); };
@@ -1442,6 +1445,84 @@
         })));
         results.appendChild(pager(d, function (p) { C.page = p; load(); }, ["recept", "recepten"]));
       }).catch(function (e) { if (!e.silent && my === seq) { clear(results); results.appendChild(errorBox("Kon de community niet laden: " + e.message)); } });
+    }
+    reloadHook = load;
+    return load();
+  };
+
+  // =====================================================================================
+  // Voorstellen: ideeën van gebruikers (uit de chat), functioneel uitgeschreven
+  // =====================================================================================
+  var SG = { status: "new" };
+  var SG_STATUS = { "new": ["Nieuw", "warn"], accepted: ["Geaccepteerd", "good"], rejected: ["Afgewezen", ""] };
+  function suggestionDefaultMessage(sg, accept) {
+    var who = sg.name ? ", " + sg.name : "";
+    return accept
+      ? "Wat een goed idee" + who + "! We gaan “" + sg.title + "” oppakken. Dankzij meedenkers zoals jij wordt Balanza steeds beter. We laten het je weten zodra het er is."
+      : "Dank je wel voor je idee" + who + "! We hebben serieus gekeken naar “" + sg.title + "”. We bouwen het nu niet, omdat het niet goed past bij waar Balanza om draait: gebalanceerd eten dat past bij jouw doel. Blijf vooral ideeën sturen: elk idee helpt ons kiezen wat we wél bouwen.";
+  }
+  function openSuggestion(sg, after) {
+    var close = h("button", { class: "ghost", text: "Sluiten" }); close.onclick = closeModal;
+    var msg = h("textarea", { id: "sgMessage", maxLength: 1200, rows: 5 });
+    var mode = null;
+    var msgWrap = h("div", { class: "hidden", id: "sgMsgWrap" }, h("div", { class: "muted small", id: "sgMsgLabel", text: "" }), msg,
+      h("div", { class: "hint", text: "Dit bericht ziet de gebruiker in de app (en als melding, als die aan staat). Pas het gerust aan." }));
+    function pick(accept) { mode = accept ? "accept" : "reject"; msg.value = suggestionDefaultMessage(sg, accept); byId("sgMsgLabel").textContent = accept ? "Bericht bij accepteren" : "Bericht bij afwijzen"; msgWrap.classList.remove("hidden"); send.classList.remove("hidden"); msg.focus(); }
+    var acc = h("button", { id: "sgAccept", text: "Accepteren" }); acc.onclick = function () { pick(true); };
+    var rej = h("button", { class: "ghost", id: "sgReject", text: "Afwijzen" }); rej.onclick = function () { pick(false); };
+    var send = h("button", { id: "sgSend", class: "hidden", text: "Versturen" });
+    send.onclick = function () {
+      send.disabled = true;
+      api("/api/admin/suggestions/" + sg.id + "/" + mode, { method: "POST", body: { message: msg.value } }).then(function () {
+        toast(mode === "accept" ? "Geaccepteerd. De indiener heeft een bericht gekregen." : "Afgewezen. De indiener heeft een vriendelijk bericht gekregen."); closeModal(); if (after) after();
+      }).catch(function (e) { send.disabled = false; if (!e.silent) toast(e.message, "bad"); });
+    };
+    var del = h("button", { class: "danger", id: "sgDelete", text: "Verwijderen" });
+    del.onclick = function () { confirmDialog({ title: "Voorstel verwijderen", danger: true, confirmLabel: "Verwijderen", message: "Het voorstel verdwijnt zonder bericht aan de indiener." }).then(function (ok) { if (ok) api("/api/admin/suggestions/" + sg.id + "/delete", { method: "POST", body: {} }).then(function () { toast("Verwijderd."); closeModal(); if (after) after(); }); }); };
+    var reopen = h("button", { class: "ghost", id: "sgReopen", text: "Opnieuw beoordelen" });
+    reopen.onclick = function () { api("/api/admin/suggestions/" + sg.id + "/reopen", { method: "POST", body: {} }).then(function () { toast("Staat weer op nieuw."); closeModal(); if (after) after(); }); };
+    var who = (function () { var b = h("button", { class: "link", text: sg.name || sg.email || shortUid(sg.uid) }); b.onclick = function () { closeModal(); navigate("#/gebruikers/" + encodeURIComponent(sg.uid)); }; return b; })();
+    var st = SG_STATUS[sg.status] || SG_STATUS["new"];
+    openModal(sg.title, [
+      h("dl", { class: "kv", style: { marginBottom: "12px" } },
+        h("dt", { text: "Status" }), h("dd", {}, badge(st[0], st[1])),
+        h("dt", { text: "Onderdeel" }), h("dd", { text: sg.area }),
+        h("dt", { text: "Geschatte impact" }), h("dd", { text: sg.impact }),
+        h("dt", { text: "Ingediend door" }), h("dd", {}, who),
+        h("dt", { text: "Ingediend" }), h("dd", { text: fmtDate(sg.createdAt) }),
+        sg.decidedAt ? [h("dt", { text: "Besloten" }), h("dd", { text: fmtDate(sg.decidedAt) })] : null),
+      sg.quote ? [h("h3", { text: "Wat de gebruiker vroeg" }), h("blockquote", { class: "sg-quote", text: "“" + sg.quote + "”" })] : null,
+      sg.userStory ? [h("h3", { text: "Gebruikersverhaal" }), h("p", { text: sg.userStory })] : null,
+      sg.problem ? [h("h3", { text: "Probleem" }), h("p", { text: sg.problem })] : null,
+      h("h3", { text: "Voorstel" }), h("p", { text: sg.proposal }),
+      sg.acceptance && sg.acceptance.length ? [h("h3", { text: "Acceptatiecriteria" }), h("ul", {}, sg.acceptance.map(function (a) { return h("li", { text: a }); }))] : null,
+      sg.framework ? [h("h3", { text: "Kaders (macrobalans per doel)" }), h("p", { text: sg.framework })] : null,
+      sg.decisionMessage ? [h("h3", { text: "Bericht aan de gebruiker" }), h("p", { text: sg.decisionMessage })] : null,
+      msgWrap
+    ], sg.status === "new" ? [del, rej, acc, send, close] : [del, reopen, close], true);
+  }
+  VIEWS.voorstellen = function (view, route, ctx) {
+    var results = h("div", { id: "sgResults" }), counts = h("div", { class: "chips", id: "sgCounts" });
+    var statusSel = select([["new", "Nieuw"], ["accepted", "Geaccepteerd"], ["rejected", "Afgewezen"], ["", "Alles"]], SG.status, function (v) { SG.status = v; load(); }, "Status"); statusSel.id = "sgStatus";
+    view.appendChild(h("div", { class: "page-head" }, h("h2", { text: "Voorstellen" })));
+    view.appendChild(h("div", { class: "hint", style: { marginTop: "-6px", marginBottom: "10px" }, text: "Ideeën die gebruikers via de assistent instuurden, functioneel uitgeschreven. Accepteer of wijs af; de indiener krijgt altijd een vriendelijk bericht." }));
+    view.appendChild(h("div", { class: "toolbar" }, statusSel, counts));
+    view.appendChild(results);
+    function load() {
+      return api("/api/admin/suggestions" + qs({ status: SG.status })).then(function (d) {
+        if (!ctx.alive()) return;
+        counts.textContent = d.counts.new + " nieuw · " + (d.counts.accepted || 0) + " geaccepteerd · " + (d.counts.rejected || 0) + " afgewezen";
+        clear(results);
+        if (!d.suggestions.length) { results.appendChild(empty(SG.status === "new" ? "Geen nieuwe ideeën. Alles is bekeken." : "Geen voorstellen gevonden.")); return; }
+        results.appendChild(table([th("Idee"), th("Onderdeel"), th("Impact"), th("Van"), th("Ingediend"), th("Status")], d.suggestions.map(function (sg) {
+          var st = SG_STATUS[sg.status] || SG_STATUS["new"];
+          var tr = h("tr", { class: "clickable sgRow" }, h("td", {}, h("strong", { text: sg.title }), h("span", { class: "sub", text: sg.userStory || "" })),
+            h("td", { text: sg.area }), h("td", { text: sg.impact }), h("td", { text: sg.name || sg.email || shortUid(sg.uid) }),
+            h("td", { class: "nowrap", text: relTime(sg.createdAt) }), h("td", {}, badge(st[0], st[1])));
+          tr.onclick = function () { openSuggestion(sg, load); };
+          return tr;
+        }), { cards: true }));
+      }).catch(function (e) { if (!e.silent) { clear(results); results.appendChild(errorBox("Kon de voorstellen niet laden: " + e.message)); } });
     }
     reloadHook = load;
     return load();
@@ -1631,7 +1712,7 @@
   // =====================================================================================
   // Auditlog: wie deed wat
   // =====================================================================================
-  var AUDIT_LABELS = {
+  var AUDIT_LABELS = { "suggestion-accept": "Idee geaccepteerd", "suggestion-reject": "Idee afgewezen", "suggestion-delete": "Idee verwijderd",
     "admin.login": "Beheerder ingelogd", "admin.login-mislukt": "Mislukte beheerder-login", "gebruiker.aanmaken": "Gebruiker aangemaakt", "gebruiker.wijzigen": "Gebruiker gewijzigd",
     "gebruiker.blokkeren": "Gebruiker geblokkeerd", "gebruiker.deblokkeren": "Gebruiker gedeblokkeerd", "gebruiker.uitloggen": "Gebruiker uitgelogd", "gebruiker.wachtwoord-resetten": "Wachtwoord gereset",
     "gebruiker.resetlink": "Resetlink gemaakt", "gebruiker.gegevens-wissen": "Gegevens gewist", "gebruiker.verwijderen": "Gebruiker verwijderd", "gebruiker.exporteren": "Gegevens geëxporteerd",

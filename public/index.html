@@ -303,6 +303,7 @@
   .chat-sugg .chip { font-size: 13px; }
   .chat-actions { align-self: flex-start; width: 86%; display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--accent2); background: var(--surface); }
   .chat-act { font-size: 13.5px; }
+  .chat-idea b { font-size: 14.5px; }
   .chat-left { align-self: center; font-size: 12px; color: var(--muted); }
   .chat-form { display: flex; gap: 8px; padding: 12px 14px calc(12px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: var(--surface); }
   .chat-form .textinput { flex: 1; min-width: 0; }
@@ -3477,6 +3478,7 @@
   function openFromLink(q) {
     if (q && q.join) { handleJoinToken(q.join); return; }
     if (!q || !q.open) return;
+    if (q.open === "inbox") { loadInbox().then(function () { goto("weeks"); }); return; }
     if (q.open === "cooked" || q.open === "recap") {
       Promise.race([plansReady, new Promise(function (r) { setTimeout(r, 6000); })]).then(function () {
         if (q.open === "cooked") openCookedFromLink(); else openRecap(q.week, q.trial === "1");
@@ -3565,6 +3567,7 @@
       accButton(cta, "profileCreate", "userplus", "Account aanmaken", function () { upgradeState.error = null; goto("upgrade"); });
     }
     renderHouseholdCard(main);
+    renderIdeasCard(main);
     var plusCard = accCard(main, "Balanza Plus");
     plusCard.id = "plusCard"; plusCard.style.display = "none";
     var plusBody = document.createElement("div"); plusBody.id = "plusBody"; plusCard.appendChild(plusBody);
@@ -11495,6 +11498,7 @@
     var shown = 0, holder = document.createElement("div"); holder.className = "nudge-stack";
     function room() { return shown < 2; }
     var before;
+    shown += renderInboxNudge(holder);
     before = holder.childNodes.length; renderCookedCard(holder); if (holder.childNodes.length > before) shown++;
     if (room()) shown += renderJourneyNudges(holder, room);
     var nextKey = mondayKeyOffset(1), nw = weekByStart(nextKey);
@@ -12115,6 +12119,7 @@
       var b = document.createElement("div"); b.className = "chat-msg " + (m.role === "user" ? "me" : "bot"); b.textContent = m.content;
       list.appendChild(b);
       if (m.actions && m.actions.length) list.appendChild(chatActionCard(m, idx));
+      if (m.suggestion) list.appendChild(chatSuggestionCard(m, idx));
     });
     if (chat.busy) { var t = document.createElement("div"); t.className = "chat-msg bot typing"; t.innerHTML = "<i></i><i></i><i></i>"; t.setAttribute("aria-label", "Balanza denkt na"); list.appendChild(t); }
     if (chat.left !== null && chat.left <= 5) { var l = document.createElement("div"); l.className = "chat-left"; l.textContent = "Nog " + chat.left + " berichten vandaag"; list.appendChild(l); }
@@ -12146,8 +12151,38 @@
     var history = chat.msgs.slice(-12).map(function (m) { return { role: m.role, content: m.content }; });
     fetch("/api/assistant", { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, authHeaders()), body: JSON.stringify({ messages: history, context: chatContext() }) })
       .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { if (!r.ok) throw new Error(d.message || "De assistent is even niet bereikbaar."); return d; }); })
-      .then(function (d) { chat.busy = false; chat.left = typeof d.left === "number" ? d.left : null; chat.msgs.push({ role: "assistant", content: d.reply, actions: d.actions || [] }); saveChat(); paintChat(); })
+      .then(function (d) { chat.busy = false; chat.left = typeof d.left === "number" ? d.left : null; chat.msgs.push({ role: "assistant", content: d.reply, actions: d.actions || [], suggestion: d.suggestion || null, quote: text }); saveChat(); paintChat(); })
       .catch(function (e) { chat.busy = false; chat.msgs.push({ role: "assistant", content: e.message || "Er ging iets mis. Probeer het opnieuw." }); saveChat(); paintChat(); });
+  }
+  // Kan iets (nog) niet? Dan mag de gebruiker er een idee van maken; dat komt bij de beheerder binnen.
+  function chatSuggestionCard(m, idx) {
+    var s = m.suggestion, card = document.createElement("div"); card.className = "chat-actions chat-idea"; card.id = "chatIdea-" + idx;
+    var h = document.createElement("div"); h.className = "sheet-label"; h.textContent = "Idee voor Balanza"; card.appendChild(h);
+    var t = document.createElement("b"); t.textContent = s.title; card.appendChild(t);
+    if (s.userStory) { var u = document.createElement("div"); u.className = "chat-act"; u.textContent = s.userStory; card.appendChild(u); }
+    var row = document.createElement("div"); row.className = "nudge-actions";
+    if (m.ideaSent) { var ok = document.createElement("div"); ok.className = "acc-sub"; ok.textContent = "✓ Ingestuurd. Je hoort van ons!"; row.appendChild(ok); }
+    else if (m.ideaSkipped) { var sk = document.createElement("div"); sk.className = "acc-sub"; sk.textContent = "Niet ingestuurd."; row.appendChild(sk); }
+    else {
+      var yes = document.createElement("button"); yes.type = "button"; yes.className = "primary-btn small"; yes.id = "ideaYes-" + idx; yes.textContent = "Ja, stuur in";
+      yes.onclick = function () { submitIdea(m, yes); };
+      var no = document.createElement("button"); no.type = "button"; no.className = "ghost-btn small"; no.textContent = "Nee, laat maar";
+      no.onclick = function () { m.ideaSkipped = true; saveChat(); paintChat(); };
+      row.appendChild(yes); row.appendChild(no);
+    }
+    card.appendChild(row);
+    return card;
+  }
+  function submitIdea(m, btn) {
+    if (btn) btn.disabled = true;
+    fetch("/api/suggestions", { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, authHeaders()), body: JSON.stringify({ suggestion: m.suggestion, quote: m.quote || "" }) })
+      .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { if (!r.ok) throw new Error(d.message || "Insturen lukte niet."); return d; }); })
+      .then(function () {
+        m.ideaSent = true;
+        chat.msgs.push({ role: "assistant", content: "Top, dank je wel! Je idee “" + m.suggestion.title + "” ligt nu bij het Balanza-team. Je krijgt hier in de app bericht zodra we ernaar gekeken hebben. Zo maak je Balanza mee beter." });
+        saveChat(); paintChat();
+      })
+      .catch(function (e) { if (btn) btn.disabled = false; showToast(e.message); });
   }
   var PLAN_CHANGING = ["prepare_week"];
   function prepareWeekAt(offset) {
@@ -12223,6 +12258,44 @@
     savePrefs(); savePlannedWeeks();
     m.undone = true; saveChat(); render(); paintChat();
     showToast("Teruggezet.");
+  }
+
+  // ---------- Berichten aan de gebruiker (bijv. de reactie op een ingestuurd idee) ----------
+  var inbox = { items: [], loaded: false };
+  function loadInbox() {
+    if (!window.authToken && window.authRequired) return Promise.resolve();
+    return fetch("/api/inbox", { headers: authHeaders() }).then(function (r) { return r.ok ? r.json() : { items: [] }; })
+      .then(function (d) { inbox.items = Array.isArray(d.items) ? d.items : []; inbox.loaded = true; if (state.view === "weeks" || state.view === "account") render(); }).catch(function () {});
+  }
+  var lastInboxLoad = 0;
+  document.addEventListener("visibilitychange", function () { if (document.visibilityState === "visible" && Date.now() - lastInboxLoad > 300000) { lastInboxLoad = Date.now(); loadInbox(); } });
+  function markInboxRead(ids) {
+    inbox.items.forEach(function (it) { if (ids.indexOf(it.id) > -1) it.read = true; });
+    fetch("/api/inbox/read", { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, authHeaders()), body: JSON.stringify({ ids: ids }) }).catch(function () {});
+  }
+  function renderInboxNudge(holder) {
+    var it = inbox.items.filter(function (x) { return !x.read; })[0];
+    if (!it) return 0;
+    nudgeCard(holder, { id: "inboxCard", tone: "accent", icon: it.status === "accepted" ? "🎉" : "💡", title: it.title, text: it.text,
+      actions: [{ label: it.status === "accepted" ? "Gaaf!" : "Dank je", primary: true, id: "inboxOk", onClick: function () { markInboxRead([it.id]); render(); } }] });
+    return 1;
+  }
+  function renderIdeasCard(main) {
+    if (!chatAvailable()) return;
+    var card = accCard(main, "Mijn ideeën");
+    var p = document.createElement("div"); p.className = "acc-sub"; p.id = "ideasList";
+    p.textContent = "Mis je iets? Vraag het aan de assistent (de chatknop rechtsboven). Kan het nog niet, dan kun je er een idee van maken.";
+    card.appendChild(p);
+    fetch("/api/suggestions", { headers: authHeaders() }).then(function (r) { return r.ok ? r.json() : { suggestions: [] }; }).then(function (d) {
+      var list = d.suggestions || []; if (!list.length) return;
+      var ul = document.createElement("div"); ul.className = "hh-members";
+      list.forEach(function (sg) {
+        var li = document.createElement("div"); li.className = "hh-member";
+        li.textContent = sg.title + " · " + (sg.status === "accepted" ? "geaccepteerd 🎉" : sg.status === "rejected" ? "bekeken" : "wordt bekeken");
+        ul.appendChild(li);
+      });
+      card.appendChild(ul);
+    }).catch(function () {});
   }
 
   var dbCap = null;
@@ -12603,6 +12676,7 @@
 
   function initPersistence() {
     loadHousehold();
+    loadInbox();
     claude.use("db").then(function (db) {
       dbCap = db;
       if (!db) return;

@@ -4111,11 +4111,17 @@ function buildAssistantPrompt(messages, ctx) {
     (minor ? "- Deze gebruiker is 16 of 17: stel nooit Vetverlies of Cutting voor en praat niet over afvallen of gewicht; focus op genoeg en gevarieerd eten, energie en sport.\n" : "") +
     "- Geen medisch advies. Bij klachten, zwangerschap, een eetstoornis of medicijnen: verwijs vriendelijk naar huisarts of diëtist. Stel nooit een te laag caloriedoel of extreme diëten voor.\n" +
     "- Vragen die niets met eten, koken of de app te maken hebben: kort en vriendelijk terugleiden naar Balanza.\n" +
-    "- Stel alleen acties voor als de gebruiker iets wil veranderen of openen. Bij een gewone vraag: alleen antwoorden, actions leeg.\n\n" +
+    "- Stel alleen acties voor als de gebruiker iets wil veranderen of openen. Bij een gewone vraag: alleen antwoorden, actions leeg.\n" +
+    "- Kan een wens NIET met de acties hierboven (de functie bestaat niet), of valt hij buiten de kaders: zeg dat eerlijk en vriendelijk, noem waar mogelijk een alternatief, " +
+    "en vraag aan het eind: \"Wil je hier een idee voor nieuwe functionaliteit van maken? Dan kijken we ernaar.\" Vul dan ook \"suggestion\" in: een functioneel uitgeschreven voorstel " +
+    "{\"title\": \"korte titel\", \"area\": \"Ontwerpen|Plannen|Boodschappen|Begeleiding|Community|Account|Weergave|Overig\", \"userStory\": \"Als gebruiker wil ik ..., zodat ...\", " +
+    "\"problem\": \"wat de gebruiker nu mist\", \"proposal\": \"hoe het zou kunnen werken in de app\", \"acceptance\": [\"toetsbare criteria\"], " +
+    "\"framework\": \"hoe dit binnen de kaders blijft (macrobalans per doel, Balans-score, NEVO, voedingsregels) of waar het daarmee botst\", \"impact\": \"klein|middel|groot\"}. " +
+    "Geen suggestion bij een gewone vraag of als het al kan.\n\n" +
     assistantGuide() + "\n" + assistantActionSpec() + "\n" +
     "HUIDIGE STAND VAN DE GEBRUIKER (JSON): " + JSON.stringify(ctx || {}).slice(0, 3000) + "\n\n" +
     "GESPREK:\n" + hist + "\n\n" +
-    'Geef ALLEEN geldig JSON terug, exact dit schema, geen markdown: {"reply": "je antwoord", "actions": [ ... ]}';
+    'Geef ALLEEN geldig JSON terug, exact dit schema, geen markdown: {"reply": "je antwoord", "actions": [ ... ], "suggestion": null of het voorstel}';
 }
 function aStrList(v, max, len) { return (Array.isArray(v) ? v : []).filter(function (x) { return typeof x === "string" && x.trim(); }).slice(0, max).map(function (x) { return cleanText(x, len); }); }
 // Controleert en beschrijft de voorgestelde acties. Wat niet klopt valt weg; elke actie krijgt een leesbaar label.
@@ -4207,9 +4213,10 @@ function handleAssistant(req, res) {
           return usageCtx.run(usage, function () { return callAnthropicOnce(buildAssistantPrompt(msgs, ctx), ASSISTANT_MODEL, 1500); }).then(function (parsed) {
             var reply = cleanText(parsed && parsed.reply, 1200) || "Sorry, dat begreep ik niet helemaal. Kun je het anders zeggen?";
             var actions = cleanAssistantActions(parsed && parsed.actions, ctx);
+            var suggestion = actions.length ? null : cleanSuggestion(parsed && parsed.suggestion);
             return recordAccounting(user.uid, "assistant", usage, 0, true).then(function () {
               logRequest({ ts: new Date().toISOString(), type: "assistant", action: "chat", durationMs: Date.now() - t0, ok: true, status: 200, uid: user.uid, ip: ip, actions: actions.length });
-              sendJSON(res, 200, { reply: reply, actions: actions, left: Math.max(0, al.cap - al.use.n) });
+              sendJSON(res, 200, { reply: reply, actions: actions, suggestion: suggestion, left: Math.max(0, al.cap - al.use.n) });
             });
           }, function (e) { return recordAccounting(user.uid, "assistant", usage, 0, false).then(function () { throw e; }); });
           });
@@ -4219,6 +4226,107 @@ function handleAssistant(req, res) {
   }).catch(function (err) {
     logRequest({ ts: new Date().toISOString(), type: "assistant", action: "chat", durationMs: Date.now() - t0, ok: false, status: 502, error: err && err.message, ip: ip });
     sendJSON(res, 502, { code: "error", message: "De assistent is even niet bereikbaar. Probeer het zo opnieuw." });
+  });
+}
+
+
+// ---------- Ideeën van gebruikers (uit de chat) en berichten terug ----------
+//   suggestions/<id>  { id, uid, email, name, createdAt, status: new|accepted|rejected, title, area, userStory, problem, proposal,
+//                       acceptance[], framework, impact, quote, decidedAt, decisionMessage }
+//   inbox/<uid>       { items: [{ id, kind, title, text, at, read }] }  berichten aan de gebruiker (bijv. de reactie op een idee)
+var SUGGEST_AREAS = ["Ontwerpen", "Plannen", "Boodschappen", "Begeleiding", "Community", "Account", "Weergave", "Overig"];
+var suggestLimiter = makeHourlyLimiter(10);
+function cleanSuggestion(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  var title = cleanText(raw.title, 90), proposal = cleanText(raw.proposal, 1200);
+  if (!title || !proposal) return null;
+  return { title: title, area: SUGGEST_AREAS.indexOf(raw.area) > -1 ? raw.area : "Overig", userStory: cleanText(raw.userStory, 400),
+    problem: cleanText(raw.problem, 800), proposal: proposal, acceptance: aStrList(raw.acceptance, 8, 240),
+    framework: cleanText(raw.framework, 600), impact: ["klein", "middel", "groot"].indexOf(raw.impact) > -1 ? raw.impact : "middel" };
+}
+function pushInbox(uid, item) {
+  return dbGetDoc("inbox/" + uid).then(function (r) {
+    var items = r.exists && r.value && Array.isArray(r.value.items) ? r.value.items : [];
+    items.push(Object.assign({ id: crypto.randomBytes(8).toString("hex"), at: new Date().toISOString(), read: false }, item));
+    return dbSetDoc("inbox/" + uid, { items: items.slice(-30) });
+  });
+}
+function handleSuggestions(req, res) {
+  return resolveUser(req).then(function (user) {
+    if (!user) return sendUnauthorized(res);
+    if (req.method === "GET") {
+      return dbListDocs("suggestions/").then(function (docs) {
+        var mine = docs.map(function (d) { return d.value; }).filter(function (v) { return v && v.uid === user.uid; })
+          .sort(function (a, b) { return a.createdAt < b.createdAt ? 1 : -1; }).slice(0, 20)
+          .map(function (v) { return { id: v.id, title: v.title, status: v.status, createdAt: v.createdAt, decidedAt: v.decidedAt || null }; });
+        sendJSON(res, 200, { suggestions: mine });
+      });
+    }
+    if (!suggestLimiter(user.uid)) return sendJSON(res, 429, { code: "rate_limited", message: "Je hebt al veel ideeën ingestuurd dit uur. Dank je wel! Probeer het later nog eens." });
+    return readBody(req).then(function (body) {
+      var sug = cleanSuggestion(body && body.suggestion);
+      if (!sug) return sendJSON(res, 400, { code: "bad_request", message: "Dit idee is niet compleet." });
+      return Promise.all([dbGetDoc("data/users/" + user.uid + "/prefs"), dbListDocs("suggestions/")]).then(function (r) {
+        var name = r[0].exists && r[0].value && r[0].value.name ? cleanText(r[0].value.name, 40) : "";
+        var dup = r[1].map(function (d) { return d.value; }).filter(function (v) { return v && v.uid === user.uid && v.title.toLowerCase() === sug.title.toLowerCase() && v.status === "new"; })[0];
+        if (dup) return sendJSON(res, 200, { ok: true, id: dup.id, duplicate: true });
+        var doc = Object.assign({ id: crypto.randomBytes(8).toString("hex"), uid: user.uid, email: user.email || null, name: name,
+          createdAt: new Date().toISOString(), status: "new", quote: cleanText(body.quote, 500) }, sug);
+        return dbSetDoc("suggestions/" + doc.id, doc).then(function () {
+          logEvent("suggestion", "submit", true, 200, { uid: user.uid });
+          sendJSON(res, 200, { ok: true, id: doc.id });
+        });
+      });
+    });
+  }).catch(function () { sendJSON(res, 400, { code: "bad_request", message: "Ongeldige aanvraag." }); });
+}
+function handleInbox(req, res, action) {
+  return resolveUser(req).then(function (user) {
+    if (!user) return sendUnauthorized(res);
+    if (req.method === "GET") return dbGetDoc("inbox/" + user.uid).then(function (r) {
+      var items = r.exists && r.value && Array.isArray(r.value.items) ? r.value.items : [];
+      sendJSON(res, 200, { items: items.slice(-30).reverse() });
+    });
+    return readBody(req).then(function (body) {
+      var ids = Array.isArray(body && body.ids) ? body.ids : [];
+      return dbGetDoc("inbox/" + user.uid).then(function (r) {
+        var items = r.exists && r.value && Array.isArray(r.value.items) ? r.value.items : [];
+        items.forEach(function (it) { if (ids.indexOf(it.id) > -1 || body.all === true) it.read = true; });
+        return dbSetDoc("inbox/" + user.uid, { items: items }).then(function () { sendJSON(res, 200, { ok: true }); });
+      });
+    });
+  }).catch(function () { sendJSON(res, 400, { code: "bad_request", message: "Ongeldige aanvraag." }); });
+}
+// Beheer: lijst, detail, besluit (met bericht en melding naar de indiener) en verwijderen.
+function handleAdminSuggestions(req, res, url) {
+  var status = url.searchParams.get("status") || "";
+  return dbListDocs("suggestions/").then(function (docs) {
+    var all = docs.map(function (d) { return d.value; }).filter(Boolean);
+    var counts = { all: all.length, new: 0, accepted: 0, rejected: 0 };
+    all.forEach(function (v) { counts[v.status] = (counts[v.status] || 0) + 1; });
+    var list = all.filter(function (v) { return !status || v.status === status; }).sort(function (a, b) { return a.createdAt < b.createdAt ? 1 : -1; });
+    sendJSON(res, 200, { suggestions: list.slice(0, 200), counts: counts });
+  });
+}
+function handleAdminSuggestionAction(req, res, id, action) {
+  return dbGetDoc("suggestions/" + id).then(function (r) {
+    var doc = r.exists && r.value ? r.value : null;
+    if (!doc) throw HttpError(404, "not_found", "Dit voorstel bestaat niet (meer).");
+    if (action === "delete") return dbDeleteDoc("suggestions/" + id).then(function () { auditLog(req, "suggestion-delete", id, { title: doc.title }); sendJSON(res, 200, { ok: true }); });
+    if (action !== "accept" && action !== "reject" && action !== "reopen") throw HttpError(404, "not_found", "Onbekende actie.");
+    return requireBody(req).then(function (body) {
+      if (action === "reopen") { doc.status = "new"; doc.decidedAt = null; return dbSetDoc("suggestions/" + id, doc).then(function () { sendJSON(res, 200, { suggestion: doc }); }); }
+      var msg = cleanNote(body && body.message, 1200);
+      if (!msg) throw HttpError(400, "bad_request", "Schrijf een bericht voor de indiener.");
+      doc.status = action === "accept" ? "accepted" : "rejected"; doc.decidedAt = new Date().toISOString(); doc.decisionMessage = msg;
+      return dbSetDoc("suggestions/" + id, doc).then(function () {
+        auditLog(req, "suggestion-" + action, id, { title: doc.title });
+        var title = action === "accept" ? "Je idee komt erin: " + doc.title : "Bedankt voor je idee: " + doc.title;
+        return pushInbox(doc.uid, { kind: "suggestion", status: doc.status, title: title, text: msg }).then(function () {
+          return notifyUser(doc.uid, { title: action === "accept" ? "Goed nieuws over je idee" : "Je idee is bekeken", body: "Over “" + doc.title + "”. Tik om de reactie te lezen.", url: "/?open=inbox", tag: "balanza-inbox" }, notifyHost(), "suggestion-reply").catch(function () {});
+        }).then(function () { sendJSON(res, 200, { suggestion: doc }); });
+      });
+    });
   });
 }
 
@@ -5675,7 +5783,7 @@ function deleteUserEverywhere(user) {
     var tokens = r.exists && r.value && Array.isArray(r.value.tokens) ? r.value.tokens : [];
     return Promise.all(tokens.map(function (t) { return dbDeleteDoc("lists/" + t); }));
   }).then(function () {
-    var paths = ["data/users/" + uid + "/prefs", "data/users/" + uid + "/dishes", "data/users/" + uid + "/plannedWeeks", "data/users/" + uid + "/meta", "listsIndex/" + uid, "adminMeta/" + uid, "push/" + uid, "quota/" + uid, "billing/" + uid, "notify/" + uid];
+    var paths = ["data/users/" + uid + "/prefs", "data/users/" + uid + "/dishes", "data/users/" + uid + "/plannedWeeks", "data/users/" + uid + "/meta", "listsIndex/" + uid, "adminMeta/" + uid, "push/" + uid, "quota/" + uid, "billing/" + uid, "notify/" + uid, "inbox/" + uid, "assistant/" + uid];
     if (user.email) paths.push("auth/users/" + user.email);
     return Promise.all(paths.map(dbDeleteDoc));
   }).then(function () {
@@ -5929,7 +6037,7 @@ function aiCostSummary(docs, days14) {
 }
 function handleAdminStats(req, res) {
   return Promise.all([loadUserSummaries(), getUsageToday(), getUsageHistory(14), getRecentLogs(LOG_CAP), dbListDocs("lists/"), getSettings(), dbListDocs("tokenUsage/"),
-    communityAll().catch(function () { return []; }), dbListDocs("push/").catch(function () { return []; })]).then(function (r) {
+    communityAll().catch(function () { return []; }), dbListDocs("push/").catch(function () { return []; }), dbListDocs("suggestions/").catch(function () { return []; })]).then(function (r) {
     var users = r[0], logs = r[3].map(cleanLogRow), now = Date.now();
     function within(ts, days) { var t = ts ? Date.parse(ts) : NaN; return isFinite(t) && now - t <= days * DAY_MS; }
     var accounts = users.filter(function (u) { return u.type === "account"; });
@@ -5977,7 +6085,8 @@ function handleAdminStats(req, res) {
         return { usersWithPush: r[8].filter(function (d) { return d.value && Array.isArray(d.value.subs) && d.value.subs.length; }).length, last7d: by,
           lastTickAt: notifyStats.lastTickAt, lastTickSource: notifyStats.lastTickSource, cronConfigured: CRON_SECRET.length >= 16 };
       })(),
-      community: { reported: r[7].filter(function (x) { return (x.reports || []).length && !x.hidden; }).length, hidden: r[7].filter(function (x) { return x.hidden; }).length }
+      community: { reported: r[7].filter(function (x) { return (x.reports || []).length && !x.hidden; }).length, hidden: r[7].filter(function (x) { return x.hidden; }).length },
+      suggestions: { new: r[9].filter(function (d) { return d.value && d.value.status === "new"; }).length }
     });
   });
 }
@@ -6149,6 +6258,8 @@ function handleAdminApi(req, res, url) {
     if (!cact && method === "GET") run = function () { return handleAdminCommunityDetail(req, res, cid); };
     else if (cact && method === "POST") run = function () { return handleAdminCommunityAction(req, res, cid, cact); };
   }
+  else if (method === "GET" && p === "/api/admin/suggestions") run = function () { return handleAdminSuggestions(req, res, url); };
+  else if ((m = p.match(/^\/api\/admin\/suggestions\/([a-f0-9]{16})\/(accept|reject|reopen|delete)$/)) && method === "POST") { var sid = m[1], sact = m[2]; run = function () { return handleAdminSuggestionAction(req, res, sid, sact); }; }
   else if (method === "GET" && p === "/api/admin/lists") run = function () { return handleAdminLists(req, res, url); };
   else if (method === "POST" && p === "/api/admin/lists/cleanup") run = function () { return handleAdminListCleanup(req, res); };
   else if ((m = p.match(/^\/api\/admin\/lists\/([A-Za-z0-9_-]{22})(?:\/(delete))?$/))) {
@@ -6556,6 +6667,8 @@ var server = http.createServer(function (req, res) {
   if (req.method === "POST" && url.pathname === "/api/cron/notify") return handleCronNotify(req, res);
   if (req.method === "POST" && url.pathname === "/api/tips") return handleTips(req, res);
   if (req.method === "POST" && url.pathname === "/api/assistant") return handleAssistant(req, res);
+  if ((req.method === "GET" || req.method === "POST") && url.pathname === "/api/suggestions") return handleSuggestions(req, res);
+  if ((req.method === "GET" && url.pathname === "/api/inbox") || (req.method === "POST" && url.pathname === "/api/inbox/read")) return handleInbox(req, res);
   if (req.method === "POST" && url.pathname === "/api/auth/register") return guardedRegister(req, res);
   if (req.method === "POST" && url.pathname === "/api/auth/upgrade") return guardedUpgrade(req, res);
   if (req.method === "GET" && url.pathname === "/api/auth/anon-status") return handleAnonStatus(req, res);
