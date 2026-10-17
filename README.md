@@ -652,6 +652,13 @@ browsers (zoals Chrome) laten de spraak door hun eigen dienst omzetten; de brows
   in het Nederlands (tekst-naar-spraak van het toestel, geen kosten), met een knop *Stil*. Jouw eigen woorden worden niet
   herhaald; de assistent krijgt de opdracht direct en kort te antwoorden. Getypte berichten worden niet voorgelezen.
   Schakelaar: *Begeleiding → Antwoord voorlezen na inspreken*.
+- **Stem**: onder *Begeleiding*, bij voorlezen, kies je *Warm (vrouw)* (standaard: vrouwenstem, iets lager en rustiger),
+  *Vrouw* of *Man*, met een knop *Luister*. Balanza kiest een bekende Nederlandse stem van het toestel en geeft de voorkeur aan
+  verbeterde/natuurlijke stemmen. Op iPhone zijn betere stemmen te downloaden via Toegankelijkheid → Gesproken materiaal → Stemmen.
+- **Plannen via de chat** (`plan_week`): "plan ontbijt en diner voor elke dag, en maak gerechten als ze er niet zijn" plant de
+  gevraagde momenten voor elke nog lege dag. Met `generate` maakt de app eerst nieuwe gerechten als er per moment te weinig zijn
+  (telt mee voor de maandlimiet) en plant ze daarna in. De chat meldt het resultaat ("Klaar! 4 maaltijden ingepland, met 7 nieuwe
+  gerechten") of wat er nog leeg is.
 
 ### Balanza-assistent (chat)
 

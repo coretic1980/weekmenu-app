@@ -4097,7 +4097,10 @@ function assistantActionSpec() {
     '- {"type":"set_theme","theme":"light|dark"}\n' +
     '- {"type":"home_tiles","show":[...],"hide":[...],"top":"..."} met tegels: ' + Object.keys(ASSISTANT_TILES).join(", ") + "\n" +
     '- {"type":"navigate","view":"' + Object.keys(ASSISTANT_VIEWS).join("|") + '"}\n' +
-    '- {"type":"prepare_week","week":"this|next"} (vult lege maaltijden met eigen gerechten, als voorstel)\n' +
+    '- {"type":"plan_week","week":"this|next","meals":["Ontbijt","Lunch","Diner","Snack"],"generate":true|false} (plant de gekozen momenten voor elke dag die nog leeg is; ' +
+    'generate=true: als er te weinig eigen gerechten zijn voor dat moment, maakt de app eerst nieuwe gerechten en plant ze daarna in. Gebruik generate=true als de gebruiker dat vraagt ' +
+    'of als hij voor een gevraagd moment te weinig gerechten heeft (zie "dishes" in de stand). Alleen de momenten die de gebruiker noemt; "this" = de rest van deze week vanaf vandaag)\n' +
+    '- {"type":"prepare_week","week":"this|next"} (alleen een voorstel met bestaande gerechten, zonder nieuwe te maken)\n' +
     '- {"type":"generate_wish","text":"korte wens","tags":["snel","budget","prep","nieuw","huis","restjes","seizoen"]} (opent Gerechten ontwerpen met deze wens; de gebruiker start zelf)\n' +
     '- {"type":"add_leftovers","items":["spinazie"]}\n';
 }
@@ -4169,6 +4172,13 @@ function cleanAssistantActions(raw, ctx) {
       var top = ASSISTANT_TILES[a.top] ? a.top : null;
       if (sh.length || hi.length || top) x = { type: t, show: sh, hide: hi, top: top, label: "Start: " + [sh.length ? "tonen " + sh.map(function (k) { return ASSISTANT_TILES[k]; }).join(", ") : "", hi.length ? "verbergen " + hi.map(function (k) { return ASSISTANT_TILES[k]; }).join(", ") : "", top ? ASSISTANT_TILES[top] + " bovenaan" : ""].filter(Boolean).join(" · ") };
     } else if (t === "navigate" && ASSISTANT_VIEWS[a.view]) x = { type: t, view: a.view, label: "Open " + ASSISTANT_VIEWS[a.view] };
+    else if (t === "plan_week" && (a.week === "this" || a.week === "next")) {
+      var pm = (Array.isArray(a.meals) ? a.meals : []).filter(function (m, i, arr) { return A_MEALS.indexOf(m) > -1 && arr.indexOf(m) === i; });
+      if (!pm.length) pm = ["Diner"];
+      var gen = a.generate === true;
+      x = { type: t, week: a.week, meals: pm, generate: gen, label: "Plan " + pm.map(function (m) { return m.toLowerCase(); }).join(" en ") + " voor elke dag van " + (a.week === "next" ? "volgende week" : "de rest van deze week") +
+        (gen ? "; ontbreken er gerechten, dan maak ik er eerst nieuwe bij (telt mee voor je maandlimiet)" : " met je eigen gerechten") };
+    }
     else if (t === "prepare_week" && (a.week === "this" || a.week === "next")) x = { type: t, week: a.week, label: "Zet " + (a.week === "next" ? "volgende" : "deze") + " week klaar met je eigen gerechten" };
     else if (t === "generate_wish") {
       var tags = (Array.isArray(a.tags) ? a.tags : []).filter(function (k) { return WISH_TEXTS[k]; }).slice(0, 4), txt = cleanText(a.text, 200);
@@ -5654,6 +5664,9 @@ function sanitizePrefsPatch(patch) {
       case "student":
         if (!v || typeof v !== "object" || Array.isArray(v)) errors.push("Budgetmodus moet een object zijn.");
         else clean.student = { on: v.on === true, budget: STUDENT_BUDGETS.indexOf(Number(v.budget)) > -1 ? Number(v.budget) : 35, onePan: v.onePan === true, quick: v.quick !== false };
+        break;
+      case "voiceStyle":
+        if (["warm", "vrouw", "man"].indexOf(v) === -1) errors.push("Onbekende stem."); else clean.voiceStyle = v;
         break;
       case "coach":
         if (!v || typeof v !== "object" || Array.isArray(v)) errors.push("Begeleiding moet een object zijn.");

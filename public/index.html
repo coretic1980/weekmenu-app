@@ -10884,6 +10884,7 @@
         pw.autoFilling = false;
         savePlannedWeeks();
         render();
+        if (opts.onDone) { try { opts.onDone(added, newDays.length); } catch (e) {} }
         if (!added) { showToast("Er viel niets meer in te vullen voor deze momenten."); return; }
         showUndoToast(added + (added === 1 ? " maaltijd" : " maaltijden") + " ingepland", function () { pw.slots = backup; savePlannedWeeks(); render(); });
       };
@@ -10932,6 +10933,7 @@
             busyEnd();
             pw.autoFillError = "Automatisch invullen is niet gelukt. Probeer het nogmaals.";
             render();
+            if (opts.onError) opts.onError(pw.autoFillError);
           }
         }).catch(function (e) {
           console.error("Auto-fill week: genereren mislukt", e);
@@ -10939,6 +10941,7 @@
           busyEnd();
           pw.autoFillError = (e && e.code === "quota_exceeded" && e.message) ? e.message : (e && e.code === "rate_limited") ? "Even geduld, probeer over een moment opnieuw." : "Automatisch invullen is niet gelukt. Probeer het nogmaals.";
           render();
+          if (opts.onError) opts.onError(pw.autoFillError);
         });
       });
     } catch (e) {
@@ -10979,6 +10982,23 @@
       fetch("/api/notify/prefs", { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, authHeaders()), body: JSON.stringify({ prefs: patch }) }).catch(function () {});
     }
   }
+  function renderVoiceSettings(card) {
+    if (!window.speechSynthesis || !coachOn("voiceReply")) return;
+    var l = document.createElement("div"); l.className = "field-label"; l.style.marginTop = "10px"; l.textContent = "Stem bij voorlezen"; card.appendChild(l);
+    var r = document.createElement("div"); r.className = "chiprow"; r.id = "voiceStyleChips";
+    VOICE_STYLES.forEach(function (v) {
+      var c = document.createElement("button"); c.type = "button"; c.className = "chip" + (voiceStyle() === v[0] ? " selected" : ""); c.textContent = v[1];
+      c.onclick = function () { prefs.voiceStyle = v[0]; savePrefs(); render(); speak(v[0] === "man" ? "Hoi, zo klink ik." : "Hoi, zo klink ik. Zullen we samen je week plannen?"); };
+      r.appendChild(c);
+    });
+    var t = document.createElement("button"); t.type = "button"; t.className = "chip"; t.id = "voiceTest"; t.textContent = "\u25b6 Luister";
+    t.onclick = function () { unlockSpeech(); speak("Hoi" + (firstName() ? " " + firstName() : "") + ". Vanavond iets lekkers en gebalanceerds? Ik help je graag."); };
+    r.appendChild(t);
+    card.appendChild(r);
+    var n = pickNlVoice(), hint = document.createElement("div"); hint.className = "acc-sub";
+    hint.textContent = (n ? "Stem op dit toestel: " + n.name + ". " : "") + "Klinkt het niet goed? Op een iPhone kun je extra Nederlandse stemmen downloaden via Instellingen \u2192 Toegankelijkheid \u2192 Gesproken materiaal \u2192 Stemmen \u2192 Nederlands (kies een \u201cverbeterde\u201d stem).";
+    card.appendChild(hint);
+  }
   function renderCoachSettings(main) {
     var card = accCard(main, "Begeleiding");
     var p = document.createElement("div"); p.className = "acc-sub";
@@ -10992,6 +11012,7 @@
       b.querySelector("b").textContent = o[1]; b.querySelector("small").textContent = o[2];
       b.onclick = function () { setCoach(o[0], !on); render(); };
       card.appendChild(b);
+      if (o[0] === "voiceReply") renderVoiceSettings(card);
     });
   }
   function weekByStart(key) { return plannedWeeks.filter(function (w) { return w.weekStart === key; })[0] || null; }
@@ -12158,10 +12179,24 @@
 
   // ---------- Voorlezen (tekst naar spraak, Nederlands) ----------
   var Synth = window.speechSynthesis || null, speechUnlocked = false, nlVoice = null;
+  // Stemkeuze: "warm" (vrouw, iets lager en rustiger, standaard), "vrouw", "man". Browsers zeggen niet of een stem een vrouw
+  // of man is, dus we herkennen bekende namen van Nederlandse stemmen (iOS/macOS, Android/Chrome, Windows/Edge).
+  var VOICE_STYLES = [["warm", "Warm (vrouw)"], ["vrouw", "Vrouw"], ["man", "Man"]];
+  var FEMALE_NL = /claire|ellen|fleur|lotte|anna|colette|fenna|hanna|google nederlands|siri.*(stem|voice) ?2|female|vrouw|nl-nl-x-(tfb|lfc|bmh|yfr)/i;
+  var MALE_NL = /xander|maarten|frank|arnaud|siri.*(stem|voice) ?1|male|man\b|nl-nl-x-(bmg|dma)/i;
+  function voiceStyle() { var v = prefs.voiceStyle; return VOICE_STYLES.some(function (s) { return s[0] === v; }) ? v : "warm"; }
   function pickNlVoice() {
     if (!Synth) return null;
-    var vs = Synth.getVoices() || [];
-    return vs.filter(function (v) { return /^nl(-|_)NL/i.test(v.lang); })[0] || vs.filter(function (v) { return /^nl/i.test(v.lang); })[0] || null;
+    var vs = (Synth.getVoices() || []).filter(function (v) { return /^nl/i.test(v.lang); });
+    if (!vs.length) return null;
+    var nlNl = function (list) { return list.filter(function (v) { return /^nl(-|_)NL/i.test(v.lang); })[0] || list[0]; };
+    var wantMale = voiceStyle() === "man";
+    var match = vs.filter(function (v) { return wantMale ? MALE_NL.test(v.name) && !FEMALE_NL.test(v.name) : FEMALE_NL.test(v.name); });
+    var better = match.filter(function (v) { return /premium|enhanced|verbeterd|natural|neural|online|siri/i.test(v.name); });   // mooiere stemmen eerst
+    if (better.length) return nlNl(better);
+    if (match.length) return nlNl(match);
+    var notOther = vs.filter(function (v) { return wantMale ? !FEMALE_NL.test(v.name) : !MALE_NL.test(v.name); });
+    return nlNl(notOther.length ? notOther : vs);
   }
   if (Synth && "onvoiceschanged" in Synth) Synth.onvoiceschanged = function () { nlVoice = pickNlVoice(); };
   function unlockSpeech() {   // iPhone: voorlezen mag pas na een tik; die tik is het inspreken zelf
@@ -12174,7 +12209,8 @@
     stopSpeaking();
     try {
       var u = new SpeechSynthesisUtterance(String(text).replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, "").slice(0, 900));
-      u.lang = "nl-NL"; nlVoice = nlVoice || pickNlVoice(); if (nlVoice) u.voice = nlVoice; u.rate = 1.03;
+      u.lang = "nl-NL"; nlVoice = pickNlVoice(); if (nlVoice) u.voice = nlVoice;
+      var st = voiceStyle(); u.rate = st === "warm" ? 0.92 : 1.0; u.pitch = st === "warm" ? 0.9 : 1.0;
       u.onend = u.onerror = function () { var sb = document.getElementById("chatSpeaking"); if (sb) sb.remove(); };
       Synth.speak(u);
       var form = document.getElementById("chatForm");
@@ -12408,7 +12444,28 @@
       })
       .catch(function (e) { if (btn) btn.disabled = false; showToast(e.message); });
   }
-  var PLAN_CHANGING = ["prepare_week"];
+  var PLAN_CHANGING = ["prepare_week", "plan_week"];
+  // Plant de gevraagde momenten voor elke (nog lege) dag; maakt zo nodig eerst nieuwe gerechten en meldt het resultaat in de chat.
+  function chatPlanWeek(offset, meals, generate) {
+    var m = getMonday(new Date()); m.setDate(m.getDate() + 7 * offset);
+    var pw = openOrCreateWeek(m);
+    var mealsOk = PLAN_MEALS.filter(function (x) { return meals.indexOf(x) > -1; });
+    var canGen = generate && moduleOn("generate") && !quotaBlocked();
+    var label = mealsOk.map(function (x) { return x.toLowerCase(); }).join(" en ");
+    function report(text) { chat.msgs.push({ role: "assistant", content: text }); saveChat(); paintChat(); var cb = document.getElementById("chatBtn"); if (cb && !document.querySelector(".chat-overlay.active")) cb.classList.add("has-dot"); }
+    if (generate && !canGen) report(quotaBlocked() ? "Je maandlimiet voor nieuwe gerechten is bereikt, dus ik plan alleen met je eigen gerechten." : "Nieuwe gerechten maken staat nu uit, dus ik plan alleen met je eigen gerechten.");
+    else if (canGen) report("Ik ga aan de slag: " + label + " voor elke dag. Ontbreken er gerechten, dan maak ik er eerst nieuwe bij. Dat duurt ongeveer een minuut; ik laat het je hier weten.");
+    generateAutoWeek(pw, !canGen, mealsOk, { range: "rest", fit: !!dailyKcalTarget(),
+      onDone: function (added, made) {
+        var missing = [];
+        PLAN_DAYS.forEach(function (d) { if (isPastDay(pw, d)) return; mealsOk.forEach(function (x) { if (x !== "Snack" && !pw.slots[d + "|" + x]) missing.push(d.toLowerCase() + " " + x.toLowerCase()); }); });
+        report("Klaar! " + (added ? added + (added === 1 ? " maaltijd" : " maaltijden") + " ingepland" : "Er hoefde niets meer ingepland te worden") +
+          (made ? ", met " + made + " nieuwe " + (made === 1 ? "gerecht" : "gerechten") : "") + "." +
+          (missing.length ? " Nog leeg: " + missing.slice(0, 4).join(", ") + (missing.length > 4 ? " en meer" : "") + ". Wil je dat ik daar nieuwe gerechten voor maak?" : " Alles staat erin. Je boodschappenlijst is bijgewerkt."));
+      },
+      onError: function (msg) { report("Dat lukte niet helemaal: " + msg); } });
+    return pw;
+  }
   function prepareWeekAt(offset) {
     var m = getMonday(new Date()); m.setDate(m.getDate() + 7 * offset);
     var pw = openOrCreateWeek(m), before = {}; Object.keys(pw.slots).forEach(function (k) { before[k] = 1; });
@@ -12450,6 +12507,7 @@
           prefs.homeLayout = { order: order, hidden: hidden }; break;
         case "add_leftovers": (a.items || []).forEach(addLeftover); break;
         case "prepare_week": go = { kind: "week", offset: a.week === "next" ? 1 : 0 }; break;
+        case "plan_week": go = { kind: "plan", offset: a.week === "next" ? 1 : 0, meals: a.meals, generate: !!a.generate }; break;
         case "generate_wish": state.genWish = { tags: (a.tags || []).slice(), text: a.text || "" }; go = { kind: "view", view: "generate" }; break;
         case "navigate": if (!go) go = { kind: "view", view: a.view }; break;
       }
@@ -12461,6 +12519,7 @@
     if (go) {
       closeChat();
       if (go.kind === "week") { var pw = prepareWeekAt(go.offset); goto("planweek", { planWeekId: pw.id }); }
+      else if (go.kind === "plan") { var pw2 = chatPlanWeek(go.offset, go.meals, go.generate); setPlanView && setPlanView("week"); goto("planweek", { planWeekId: pw2.id }); }
       else if (go.view === "generate") goto("prefs", { tab: "ontwerpen" });
       else if (go.view === "shopping") onTab("lijst");
       else if (go.view === "plan") needDishesThen(function () { goto("plan"); });
@@ -12541,6 +12600,7 @@
         cheeseMode: prefs.cheeseMode === "geen" ? "geen" : "hardekaas",
         leftovers: Array.isArray(prefs.leftovers) ? prefs.leftovers.slice(-20) : [],
         coach: prefs.coach && typeof prefs.coach === "object" ? prefs.coach : {},
+        voiceStyle: voiceStyle(),
         journey: prefs.journey && typeof prefs.journey === "object" ? prefs.journey : {},
         ageGroup: AGE_GROUPS.some(function (g) { return g[0] === prefs.ageGroup; }) ? prefs.ageGroup : "",
         student: student(),
@@ -12916,7 +12976,7 @@
               return;
             }
             var pdata = psnap.data() || {};
-            ["name", "bringListLink", "cuisines", "flavors", "level", "dietStyle", "health", "leftovers", "coach", "journey", "ageGroup", "student", "sugarMode", "cheeseMode", "familyMode", "equipment", "exclude", "count", "mealTypes", "gender", "heightCm", "weightKg", "age", "activityLevel", "goal", "homeLayout", "mealCounts", "withImages", "pantry", "communityName"].forEach(function (k) {
+            ["name", "bringListLink", "cuisines", "flavors", "level", "dietStyle", "health", "leftovers", "coach", "voiceStyle", "journey", "ageGroup", "student", "sugarMode", "cheeseMode", "familyMode", "equipment", "exclude", "count", "mealTypes", "gender", "heightCm", "weightKg", "age", "activityLevel", "goal", "homeLayout", "mealCounts", "withImages", "pantry", "communityName"].forEach(function (k) {
               if (pdata[k] !== undefined) prefs[k] = deepClone(pdata[k]);
             });
             if (enforceAgeRules()) savePrefs();
