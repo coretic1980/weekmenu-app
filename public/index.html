@@ -10357,7 +10357,8 @@
         ["Pittiger", "pittiger"],
         ["Simpeler (basic)", "simpeler"],
         ["Fine dining", "finedining"],
-        ["Wissel koolhydraatbron", "wisselkh"]
+        ["Wissel koolhydraatbron", "wisselkh"],
+        [prefs.dietStyle === "Vegetarisch" || prefs.dietStyle === "Veganistisch" ? "Wissel vleesvervanger" : "Wissel vlees/vis", "wisseleiwit"]
       ].forEach(function (pair) {
         var vBtn = document.createElement("button");
         vBtn.className = "ghost-btn variant-btn";

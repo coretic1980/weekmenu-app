@@ -967,6 +967,26 @@ var VARIATION_INSTRUCTIONS = {
   wisselkh: "Vervang de koolhydraatbron door een andere (bijv. rijst i.p.v. aardappel of andersom), maar behoud dezelfde macroverdeling."
 };
 
+// "Wissel eiwitbron": bij vegetarisch/veganistisch een andere plantaardige vervanger, anders een andere soort vlees of vis.
+function variationInstructionText(kind, p) {
+  if (kind !== "wisseleiwit") return VARIATION_INSTRUCTIONS[kind] || "";
+  p = p || {};
+  var style = p.dietStyle, puur = cleanHealth(p.health).indexOf("puur") > -1, glutenvrij = cleanHealth(p.health).indexOf("glutenvrij") > -1;
+  var keep = " Pas de rest van het gerecht (groente, kruiden, saus, bereiding) waar nodig aan zodat het goed bij de nieuwe eiwitbron past, " +
+    "geef het gerecht een naam die bij de nieuwe eiwitbron hoort en behoud ongeveer dezelfde kcal en macroverdeling.";
+  if (style === "Vegetarisch" || style === "Veganistisch") {
+    var opties = puur
+      ? "tofu, tempeh, peulvruchten (linzen, kikkererwten, bonen), edamame" + (style === "Vegetarisch" ? ", eieren of een naturel zuivelproduct" : "")
+      : (glutenvrij ? "" : "seitan, ") + "tofu, tempeh, vegetarisch gehakt of vegetarische reepjes, mycoproteïne, lupine, peulvruchten" + (style === "Vegetarisch" ? ", eieren of halloumi" : "");
+    return "Vervang de huidige vleesvervanger of plantaardige hoofd-eiwitbron door een duidelijk ANDERE " + style.toLowerCase() + "e eiwitbron (bijv. " + opties + "). " +
+      "Gebruik géén vlees of vis." + keep;
+  }
+  return "Vervang het vlees of de vis (de hoofd-eiwitbron) door een duidelijk ANDERE soort dierlijk vlees, gevogelte of vis " +
+    "(bijv. kip in plaats van rundvlees, zalm in plaats van kip, garnalen in plaats van varkenshaas). Is het gerecht nu zonder vlees of vis, " +
+    "kies dan een passende vlees- of vissoort als hoofd-eiwitbron; bij ontbijt of snack mag dat ook ei, magere kwark of skyr zijn." +
+    (puur ? " Kies onbewerkt vlees of vis, geen vleeswaren of worst." : "") + keep;
+}
+
 var FOTO_TERM_LINE = "\"foto_zoekterm\" is een korte Engelse zoekterm (2 tot 4 woorden) om een passende stockfoto van dit gerecht te vinden: " +
   "noem het hoofdingrediënt en het soort gerecht, zonder bijvoeglijke naamwoorden als pittig, gastronomisch of huisgemaakt " +
   "(bijv. \"grilled salmon asparagus\" of \"chicken curry rice\"). ";
@@ -1395,7 +1415,7 @@ function buildBackgroundGeneratePrompt(needed, p) {
 
 function buildVariationPromptServer(current, kind, p) {
   return "Hier is een bestaand gerecht in JSON: " + JSON.stringify(current) + "\n\n" +
-    "Opdracht: " + (VARIATION_INSTRUCTIONS[kind] || "") + "\n" +
+    "Opdracht: " + variationInstructionText(kind, p) + "\n" +
     dietHardRuleText(p.dietStyle) + healthHardRuleText(p) +
     goalInstructionText(p.goal, p.dietStyle) + "\n" +
     (p.dietStyle ? dietStyleInstructionText(p.dietStyle) : "") +
