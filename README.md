@@ -629,6 +629,15 @@ Gebaseerd op wat in gedragspsychologie werkt: zelf kiezen, kleine successen, zic
 - De terugblik op maandag laat ook de uitdaging en de fase zien.
 - Onder **Instellingen → Begeleiding** staan aparte schakelaars voor Jouw reis, Weekuitdaging, Mijlpalen en Voortgang bijhouden.
 
+### Jongeren (16–25)
+
+- **Leeftijd als bereik** (16–17, 18–25, 26–40, 41+) in de wizard en bij *Jij & je doel*; nooit een geboortedatum.
+- **Onder de 18** (bereik 16–17 of leeftijd onder 18): geen afvaldoelen (Vetverlies, Cutting) en geen gewicht bijhouden. De server dwingt dit ook af (`applyAgeRules`) en geeft de AI een extra regel: genoeg energie, eiwit, calcium en ijzer, geen calorietekort, geen dieetproducten. Tips gaan dan niet over afvallen of gewicht.
+- **Budgetmodus** (*Budget & tijd*, ook in de wizard): weekbudget €25/35/50/75, optioneel weinig spullen (1 pan) en snel (max 25 min). De AI krijgt een prijs per portie mee; in de boodschappenlijst staat na een kostenschatting of je binnen je budget blijft.
+- **Delen als afbeelding**: "Deel je week als afbeelding" in de planner en "Deel als afbeelding" bij een gerecht (1080×1350, voor Instagram, TikTok of WhatsApp; via delen op de telefoon, anders downloaden).
+- **Vrienden uitdagen**: bij de weekuitdaging een WhatsApp-bericht met een link naar /welkom.
+- De toon van *Jouw reis* staat voor 16–25 standaard op luchtig.
+
 In de beheerconsole staan de nieuwe meldingen bij *Overzicht → Meldingen* en in het logboek (soort "Samen plannen" voor
 het huishouden). Bij een gebruiker staat of hij samen plant.
 

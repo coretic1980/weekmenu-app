@@ -1318,6 +1318,32 @@ function seasonInfo(ms) {
   });
   return { month: MONTH_NAMES_NL[month], produce: SEASON_PRODUCE[month].slice(), moment: moment };
 }
+// ---------- Jongeren en budgetmodus ----------
+var MINOR_BLOCKED_GOALS = ["Vetverlies (spierbehoud)", "Cutting"];
+function isMinorParams(p) { var a = Number(p && p.age); return !!p && (p.ageGroup === "16-17" || (a > 0 && a < 18)); }
+// Onder de 18 nooit een afvaldoel of calorietekort, ook niet als een oudere app-versie dat meestuurt.
+function applyAgeRules(p) {
+  if (isMinorParams(p) && MINOR_BLOCKED_GOALS.indexOf(p.goal) > -1) p.goal = "Onderhoud";
+  return p;
+}
+function youthInstructionText(p) {
+  if (!isMinorParams(p)) return "";
+  return "- JONGERE (16-17 jaar): het lichaam groeit nog. Zorg voor voldoende energie, eiwit, calcium en ijzer, geen calorietekort en geen dieetproducten of supplementen; " +
+    "gewone, gevarieerde en vullende gerechten.\n";
+}
+var STUDENT_BUDGETS = [25, 35, 50, 75];
+function studentInstructionText(p) {
+  var s = p && p.student && typeof p.student === "object" ? p.student : null;
+  if (!s || !s.on) return "";
+  var budget = STUDENT_BUDGETS.indexOf(Number(s.budget)) > -1 ? Number(s.budget) : 35;
+  var meals = (Array.isArray(p.mealTypes) && p.mealTypes.length ? p.mealTypes : ["Ontbijt", "Lunch", "Diner"]).filter(function (m) { return m !== "Snack"; }).length || 1;
+  var perMeal = Math.max(1, Math.round(budget / (7 * meals) * 2) / 2);
+  return "- BUDGETMODUS: weekbudget ca. \u20ac" + budget + " voor alle maaltijden (ongeveer \u20ac" + perMeal.toFixed(2).replace(".", ",") + " per portie bij een Nederlandse supermarkt). " +
+    "Kies goedkope basisproducten (huismerk, peulvruchten, eieren, kip(dij), seizoensgroente, diepvriesgroente, rijst, pasta, aardappel, havermout), " +
+    "geen dure specialiteiten, en ingrediënten die in meerdere gerechten terugkomen zodat er weinig overblijft." +
+    (s.onePan !== false && s.onePan ? " Gebruik hoogstens één pan of één ovenschaal per gerecht." : "") +
+    (s.quick === false ? "" : " Totale bereidingstijd hoogstens 25 minuten.") + "\n";
+}
 function seasonInstructionText() {
   var s = seasonInfo();
   return "- Seizoen (" + s.month + "): gebruik waar het past groente en fruit van het seizoen, zoals " + s.produce.slice(0, 6).join(", ") +
@@ -1350,7 +1376,7 @@ dietStyleInstructionText(p.dietStyle) +
     familyModeInstructionText(p.familyMode) +
     "- Beschikbare apparatuur (mag je gebruiken, niet elk gerecht hoeft alles te gebruiken): " + equipTxt + "\n" +
     "- Uitgesloten ingrediënten: " + excludeTxt + "\n" +
-    wishInstructionText(p) + tasteInstructionText(p) + seasonInstructionText() +
+    wishInstructionText(p) + tasteInstructionText(p) + seasonInstructionText() + studentInstructionText(p) + youthInstructionText(p) +
     buildBodyProfileLine(p) +
     goalInstructionText(p.goal, p.dietStyle) +
     "Gebruik reële, haalbare porties en ingrediënten die passen " +
@@ -1487,7 +1513,7 @@ function buildBackgroundGeneratePrompt(needed, p) {
   return "Je bent een voedingskundige chef-kok. Genereer in totaal " + totalCount + " macro-gebalanceerde " +
     "gerechten (per 1 persoon), verdeeld als: " + countTxt + ". Precies deze aantallen per maaltijdmoment.\n" +
     dietHardRuleText(p.dietStyle) + healthHardRuleText(p) +
-    wishInstructionText(p) + tasteInstructionText(p) + seasonInstructionText() +
+    wishInstructionText(p) + tasteInstructionText(p) + seasonInstructionText() + studentInstructionText(p) + youthInstructionText(p) +
     "- Uitgesloten ingrediënten: " + ((p.exclude && String(p.exclude).trim()) ? String(p.exclude).trim() : "geen") + "\n" +
     "- Keukenstijl: " + cuisineTxt + "\n- Smaakprofiel: " + flavorTxt + "\n- Culinair niveau: " + (p.level || "Home-style") + "\n" +
     dietStyleInstructionText(p.dietStyle) +
@@ -1515,6 +1541,7 @@ function buildVariationPromptServer(current, kind, p) {
     goalInstructionText(p.goal, p.dietStyle) + "\n" +
     (p.dietStyle ? dietStyleInstructionText(p.dietStyle) : "") +
     familyModeInstructionText(p.familyMode) +
+    studentInstructionText(p) + youthInstructionText(p) +
     "- Uitgesloten ingrediënten (mogen er niet in, ook niet na de variatie): " + ((p.exclude && String(p.exclude).trim()) ? String(p.exclude).trim() : "geen") + "\n" +
     INGREDIENT_SPECIFICITY_LINE +
     "Geef ALLEEN geldig JSON terug, exact dit schema, geen markdown, geen uitleg erbuiten:\n" +
@@ -1594,7 +1621,7 @@ function applyNevoToParsed(parsed) {
 }
 function runGenerateAction(body) {
   var action = body && body.action;
-  var params = (body && body.params) || {};
+  var params = applyAgeRules((body && body.params) || {});
 
   if (action === "generate") {
     var mealTypes = (params.mealTypes && params.mealTypes.length) ? params.mealTypes : ["Diner"];
@@ -3939,6 +3966,8 @@ function buildTipsPrompt(p) {
   var diet = TIP_DIETS.indexOf(p.dietStyle) > -1 ? p.dietStyle : "";
   var family = p.familyMode === true;
   var healthTxt = healthWithExclude(p.health, p.exclude).map(function (k) { return HEALTH_LABELS[k]; }).join(", ");
+  if (isMinorParams(p) && MINOR_BLOCKED_GOALS.indexOf(goal) > -1) goal = "Onderhoud";
+  var youth = isMinorParams(p) ? " De lezer is 16 of 17: schrijf niets over afvallen, calorieën beperken of gewicht; wel over energie, sport, groeien en lekker eten." : "";
   var avoid = (Array.isArray(p.avoid) ? p.avoid : []).slice(0, 30)
     .map(function (s) { return String(s).replace(/[\r\n"]+/g, " ").trim().slice(0, 90); })
     .filter(Boolean);
@@ -3947,7 +3976,7 @@ function buildTipsPrompt(p) {
     "maaltijden ontwerpt op basis van macro's. De lezer wacht even op het genereren van gerechten en wil zich vermaken en iets leren.\n\n" +
     "Schrijf 8 NIEUWE items in het Nederlands. Verdeel ze over deze onderwerpen: " + topics.join(", ") + ". " +
     "Maak van hooguit 1 item een tip over Balanza zelf.\n" +
-    "Context van de lezer: doel \"" + goal + "\"" + (diet ? ", voedingsstijl \"" + diet + "\"" : "") + (family ? ", kookt in gezinsmodus (kindvriendelijk)" : "") + (healthTxt ? ", eet " + healthTxt + " (noem in tips nooit producten die daar niet bij passen)" : "") + ". " +
+    "Context van de lezer: doel \"" + goal + "\"" + (diet ? ", voedingsstijl \"" + diet + "\"" : "") + (family ? ", kookt in gezinsmodus (kindvriendelijk)" : "") + (healthTxt ? ", eet " + healthTxt + " (noem in tips nooit producten die daar niet bij passen)" : "") + "." + youth + " " +
     "Laat minstens twee items aansluiten op dat doel" + (diet ? " of die voedingsstijl" : "") + (family ? " of gezinsmodus" : "") + ".\n\n" +
     "Regels:\n" +
     "- Maximaal 190 tekens per item, één of twee korte zinnen, geen opsomming, geen emoji's, spreek de lezer aan met \"je\".\n" +
@@ -5234,6 +5263,13 @@ function sanitizePrefsPatch(patch) {
       case "familyMode": clean.familyMode = v === true; break;
       case "health":
         if (!Array.isArray(v) || v.some(function (x) { return HEALTH_KEYS.indexOf(x) === -1; })) errors.push("Onbekende gezondheidsvoorkeur."); else clean.health = cleanHealth(v);
+        break;
+      case "ageGroup":
+        if (["", "16-17", "18-25", "26-40", "41+"].indexOf(v) === -1) errors.push("Onbekende leeftijdsgroep."); else clean.ageGroup = v;
+        break;
+      case "student":
+        if (!v || typeof v !== "object" || Array.isArray(v)) errors.push("Budgetmodus moet een object zijn.");
+        else clean.student = { on: v.on === true, budget: STUDENT_BUDGETS.indexOf(Number(v.budget)) > -1 ? Number(v.budget) : 35, onePan: v.onePan === true, quick: v.quick !== false };
         break;
       case "coach":
         if (!v || typeof v !== "object" || Array.isArray(v)) errors.push("Begeleiding moet een object zijn.");

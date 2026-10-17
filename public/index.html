@@ -2333,6 +2333,8 @@
     leftovers: [],
     coach: {},
     journey: {},
+    ageGroup: "",
+    student: {},
     sugarMode: "natuurlijk",
     cheeseMode: "hardekaas",
     familyMode: false,
@@ -2633,7 +2635,7 @@
   function requestTips() {
     return claude.use("sample").then(function (sample) {
       if (!sample) throw new Error("niet beschikbaar");
-      return sample.json({ action: "tips", params: { goal: prefs.goal, dietStyle: prefs.dietStyle, health: healthList(), exclude: prefs.exclude, familyMode: prefs.familyMode, avoid: recentTipTexts() } }, { modelTier: "default" });
+      return sample.json({ action: "tips", params: { goal: prefs.goal, dietStyle: prefs.dietStyle, health: healthList(), exclude: prefs.exclude, familyMode: prefs.familyMode, ageGroup: prefs.ageGroup || "", age: prefs.age, avoid: recentTipTexts() } }, { modelTier: "default" });
     });
   }
 
@@ -4688,6 +4690,7 @@
       prefs.health = [];
       prefs.sugarMode = "natuurlijk";
       prefs.cheeseMode = "hardekaas";
+      prefs.ageGroup = ""; prefs.student = {}; prefs.journey = {}; prefs.coach = {}; prefs.leftovers = [];
       prefs.familyMode = false;
       prefs.equipment = EQUIPMENT.slice();
       prefs.exclude = "";
@@ -4812,18 +4815,22 @@
       wNameInp.placeholder = "Bijv. Dave";
       wNameInp.oninput = function (e) { prefs.name = e.target.value; };
       main.appendChild(wNameInp);
+      labelEl("Hoe oud ben je?", "Optioneel. Zo stemmen we doelen en tips op je af.");
+      ageGroupChips(main, render);
       labelEl("Voor welke maaltijdmomenten wil je gerechten?", "Bepaalt voor welke maaltijden we straks gerechten voorstellen. Meerdere mogelijk.");
       chipGroupMulti(PLAN_MEALS, prefs.mealTypes);
       labelEl("Hoeveel gerechten per maaltijdmoment?", "Zoveel verschillende gerechten maken we per gekozen moment als je op Genereren tikt.");
       chipGroupSingle([1, 2, 3, 4, 5, 6, 7].map(function (n) { return [n, String(n)]; }), prefs.count, function (n) { prefs.count = n; });
     } else if (state.wizardStep === 1) {
       heading("Wat is je doel?", "Dit bepaalt de macroverdeling (koolhydraten/eiwit/vet) waar elk gerecht naar streeft \u2014 de basis van de Balans-score. De winst: gerechten die echt bij je doel passen, niet alleen lekker maar ook macrotechnisch kloppend.");
-      var goalPairs = Object.keys(GOAL_DESCRIPTIONS).map(function (g) { return [g, g]; });
+      enforceAgeRules();
+      var goalPairs = allowedGoals(Object.keys(GOAL_DESCRIPTIONS)).map(function (g) { return [g, g]; });
       chipGroupSingle(goalPairs, prefs.goal, function (g) { prefs.goal = g; });
       var descBox = document.createElement("div");
       descBox.className = "plainbox";
       descBox.textContent = GOAL_DESCRIPTIONS[prefs.goal];
       main.appendChild(descBox);
+      if (isMinor()) main.appendChild(minorNoteEl());
       if (goalTargetAdjusted(prefs.goal, prefs.dietStyle)) main.appendChild(goalNoteEl(prefs.goal, prefs.dietStyle));
       var wWarn1 = dietGoalWarningEl(prefs.goal, prefs.dietStyle);
       if (wWarn1) main.appendChild(wWarn1);
@@ -4861,6 +4868,8 @@
         wFamilySeg.appendChild(chip);
       });
       main.appendChild(wFamilySeg);
+      labelEl("Op budget koken?", "Voor studenten en starters: goedkope ingrediënten binnen een weekbudget. Mag je overslaan.");
+      renderStudentEditor(main, render);
     } else if (state.wizardStep === 5) {
       heading("Welke apparatuur heb je?", "Alleen gerechten die hiermee te maken zijn worden voorgesteld \u2014 zo krijg je nooit een recept dat om iets vraagt wat je niet hebt staan. Mag je overslaan; dan gaan we uit van een standaard fornuis en oven.");
       chipGroupMulti(EQUIPMENT, prefs.equipment);
@@ -5011,7 +5020,7 @@
     var w = genWish();
     var p = {
       mealTypes: prefs.mealTypes, count: prefs.count, mealCounts: mealCounts(),
-      cuisines: prefs.cuisines, flavors: prefs.flavors, level: prefs.level, dietStyle: prefs.dietStyle, health: healthList(), sugarMode: prefs.sugarMode || "natuurlijk", cheeseMode: prefs.cheeseMode || "hardekaas", familyMode: prefs.familyMode,
+      cuisines: prefs.cuisines, flavors: prefs.flavors, level: prefs.level, dietStyle: prefs.dietStyle, health: healthList(), sugarMode: prefs.sugarMode || "natuurlijk", cheeseMode: prefs.cheeseMode || "hardekaas", familyMode: prefs.familyMode, ageGroup: prefs.ageGroup || "", student: studentParams(),
       equipment: prefs.equipment, exclude: prefs.exclude, goal: prefs.goal, gender: prefs.gender, heightCm: prefs.heightCm,
       weightKg: prefs.weightKg, age: prefs.age, activityLevel: prefs.activityLevel,
       wish: { tags: w.tags.slice(), text: String(w.text || "").slice(0, 200) },
@@ -5209,8 +5218,12 @@
           n.setAttribute("aria-label", "Jouw naam"); n.value = prefs.name || "";
           n.oninput = function (e) { prefs.name = e.target.value; changed(false); };
           c.appendChild(n);
+          label(c, "Leeftijd", "Optioneel, als bereik");
+          ageGroupChips(c, function () { changed(true); });
+          if (enforceAgeRules()) changed(false);
           label(c, "Doel", "Bepaalt de streefverdeling van koolhydraten, eiwit en vet");
-          chips(c, GOALS, function (g) { return prefs.goal === g; }, function (g) { prefs.goal = g; });
+          chips(c, allowedGoals(GOALS), function (g) { return prefs.goal === g; }, function (g) { prefs.goal = g; });
+          if (isMinor()) c.appendChild(minorNoteEl());
           c.appendChild(goalNoteEl(prefs.goal, prefs.dietStyle));
           label(c, "Lichaamsprofiel", "Optioneel — stemt porties en calorieën af op jouw behoefte");
           chips(c, GENDERS, function (g) { return prefs.gender === g; }, function (g, on) { prefs.gender = on ? "" : g; });
@@ -5243,6 +5256,9 @@
           label(c, "Culinair niveau");
           chips(c, LEVELS, function (l) { return prefs.level === l; }, function (l) { prefs.level = l; });
         } },
+      { id: "budget", title: "Budget & tijd", icon: "euro",
+        summary: student().on ? "Budgetmodus \u00b7 \u20ac" + student().budget + " per week" + (student().quick ? " \u00b7 snel" : "") + (student().onePan ? " \u00b7 weinig spullen" : "") : "Geen budgetmodus",
+        body: function (c) { renderStudentEditor(c, function () { changed(true); }); } },
       { id: "app", title: "Apparatuur", icon: "pan",
         summary: prefs.equipment.length ? prefs.equipment.join(", ") : "Standaard fornuis en oven",
         body: function (c) {
@@ -5316,6 +5332,7 @@
       chef: '<path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2M7 2v20M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3zm0 0v7"/>',
       pan: '<path d="M2 12h20M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7M8 8V6a4 4 0 0 1 8 0v2"/>',
       users: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
+      euro: '<path d="M18 7a7 7 0 1 0 0 10M4 10h10M4 14h10"/>',
       heart: '<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78z"/>'
     };
     return '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (P[k] || "") + "</svg>";
@@ -5856,7 +5873,7 @@
     goto("weeks");
     var meals = ["Ontbijt", "Lunch", "Diner", "Snack"];
     var params = {
-      cuisines: prefs.cuisines, flavors: prefs.flavors, level: prefs.level, dietStyle: prefs.dietStyle, health: healthList(), sugarMode: prefs.sugarMode || "natuurlijk", cheeseMode: prefs.cheeseMode || "hardekaas", familyMode: prefs.familyMode,
+      cuisines: prefs.cuisines, flavors: prefs.flavors, level: prefs.level, dietStyle: prefs.dietStyle, health: healthList(), sugarMode: prefs.sugarMode || "natuurlijk", cheeseMode: prefs.cheeseMode || "hardekaas", familyMode: prefs.familyMode, ageGroup: prefs.ageGroup || "", student: studentParams(),
       equipment: prefs.equipment, exclude: prefs.exclude, goal: prefs.goal, gender: prefs.gender, heightCm: prefs.heightCm,
       weightKg: prefs.weightKg, age: prefs.age, activityLevel: prefs.activityLevel
     };
@@ -6707,6 +6724,7 @@
         showToast(fav ? "Niet meer bij je favorieten." : "Toegevoegd aan je favorieten.");
       });
       if (communityOn() && item.week.id === "cache" && !day.fromCommunity) act("share", "userplus", day.communityId ? "Community-versie bijwerken" : "Delen in de community", "Anderen kunnen het bekijken en bewaren", function () { closeSheet(ov); openPublishDialog(day); });
+      act("shareimg", "download", "Deel als afbeelding", "Voor Instagram, TikTok of WhatsApp", function () { closeSheet(ov); shareDishImage(day); });
       if (moduleOn("pdf")) act("pdf", "download", "Download als PDF", "Het recept om te printen of te bewaren", function () { closeSheet(ov); exportLibraryPdf([item], null, { title: day.name, subtitle: "Recept uit Balanza", file: "recept-" + day.name }); });
       if (dupes && dupes.length) act("dupes", "check", "Dubbelen samenvoegen", (dupes.length + 1) + "× hetzelfde gerecht; de nieuwste blijft", function () { closeSheet(ov); mergeDuplicates(item, dupes); });
       act("del", "trash", "Verwijderen", "Je kunt het daarna nog ongedaan maken", function () { closeSheet(ov); removeDishesWithUndo([item]); }, true);
@@ -7515,6 +7533,7 @@
       if (pw.autoFillError) { var aew = document.createElement("div"); aew.className = "errorbox"; aew.textContent = pw.autoFillError; main.appendChild(aew); }
       plannerExtras(main, pw);
       renderPlanWeekOverview(main, pw);
+      if (Object.keys(pw.slots).length) { var shW = document.createElement("button"); shW.type = "button"; shW.className = "comm-foot-link"; shW.id = "shareWeekImg"; shW.textContent = "Deel je week als afbeelding \u203a"; shW.onclick = function () { shareWeekImage(pw); }; main.appendChild(shW); }
       planActions(main, pw, null);
       app.appendChild(main);
       return;
@@ -9426,6 +9445,7 @@
       totalBadge.className = "tag balans";
       totalBadge.textContent = "Geschat totaal: " + formatEuro(totalLow) + " – " + formatEuro(totalHigh);
       priceRow.appendChild(totalBadge);
+      var bBadge = budgetBadge(totalLow, totalHigh); if (bBadge) priceRow.appendChild(bBadge);
     } else if (moduleOn("prices")) {
       var priceBtn = document.createElement("button");
       priceBtn.className = "ghost-btn";
@@ -10559,7 +10579,7 @@
         benodigdheden: day.benodigdheden,
         steps: day.steps.map(function (s) { return s.title + ": " + s.content; })
       };
-      sample.json({ action: "variation", current: variationCurrent, kind: kind, params: { goal: prefs.goal, dietStyle: prefs.dietStyle, health: healthList(), sugarMode: prefs.sugarMode || "natuurlijk", cheeseMode: prefs.cheeseMode || "hardekaas", exclude: prefs.exclude, familyMode: prefs.familyMode } }, { modelTier: "default" }).then(function (d) {
+      sample.json({ action: "variation", current: variationCurrent, kind: kind, params: { goal: prefs.goal, dietStyle: prefs.dietStyle, health: healthList(), sugarMode: prefs.sugarMode || "natuurlijk", cheeseMode: prefs.cheeseMode || "hardekaas", exclude: prefs.exclude, familyMode: prefs.familyMode, ageGroup: prefs.ageGroup || "", age: prefs.age, student: studentParams() } }, { modelTier: "default" }).then(function (d) {
         var kcal = Number(d.kcal) || 0;
         var khG = Number(d.kh_g) || 0;
         var eiwitG = Number(d.eiwit_g) || 0;
@@ -11549,7 +11569,7 @@
       j.startedOn = todayKeyLocal(); j.goalAt = goal; j.challenge = null;
       savePrefsSoon();
     }
-    j.pace = j.pace || "normaal"; j.tone = j.tone || "coach";
+    j.pace = j.pace || "normaal"; j.tone = j.tone || (isYoung() ? "luchtig" : "coach");
     return j;
   }
   function journeyOn() { return coachOn("journey"); }
@@ -11691,7 +11711,7 @@
     var card = document.createElement("div"); card.className = "card journey-sec"; card.id = "journeyProgress";
     var hd = document.createElement("div"); hd.className = "eyebrow"; hd.textContent = "Wat je bijhoudt"; card.appendChild(hd);
     var row = document.createElement("div"); row.className = "chiprow";
-    JOURNEY_METRIC.forEach(function (m) {
+    JOURNEY_METRIC.filter(function (m) { return !(isMinor() && m[0] === "gewicht"); }).forEach(function (m) {
       var c = document.createElement("button"); c.type = "button"; c.className = "chip" + ((j.metric || "") === m[0] ? " selected" : ""); c.textContent = m[1];
       c.onclick = function () { j.metric = m[0]; savePrefs(); render(); };
       row.appendChild(c);
@@ -11781,7 +11801,10 @@
         ch.appendChild(t);
         if (st.of > 1) { var bar = document.createElement("div"); bar.className = "dp-bar"; bar.innerHTML = "<i></i>"; bar.querySelector("i").style.width = Math.min(100, Math.round(st.n / st.of * 100)) + "%"; ch.appendChild(bar); }
         var other = document.createElement("button"); other.type = "button"; other.className = "comm-foot-link"; other.textContent = "Andere uitdaging kiezen";
-        other.onclick = function () { j.challenge = null; savePrefs(); render(); }; ch.appendChild(other);
+        other.onclick = function () { j.challenge = null; savePrefs(); render(); };
+        var fr = document.createElement("button"); fr.type = "button"; fr.className = "ghost-btn small"; fr.id = "chalFriend"; fr.textContent = "Daag een vriend uit";
+        fr.onclick = function () { challengeFriend(CHALLENGES[c.key][0]); };
+        ch.appendChild(fr); ch.appendChild(other);
       } else if (c && c.skipped) {
         var sk = document.createElement("div"); sk.className = "acc-sub"; sk.textContent = "Deze week zonder uitdaging. Ook prima.";
         var again = document.createElement("button"); again.type = "button"; again.className = "comm-foot-link"; again.textContent = "Toch een uitdaging kiezen";
@@ -11858,6 +11881,151 @@
     main.appendChild(box);
   }
 
+  // =====================================================================================================
+  // Jongeren (16–25): leeftijd als bereik, veilige regels onder de 18, budgetmodus en delen naar socials.
+  // =====================================================================================================
+  var AGE_GROUPS = [["16-17", "16–17"], ["18-25", "18–25"], ["26-40", "26–40"], ["41+", "41+"]];
+  var MINOR_BLOCKED_GOALS = ["Vetverlies (spierbehoud)", "Cutting"];
+  function isMinor() { var a = Number(prefs.age); return prefs.ageGroup === "16-17" || (a > 0 && a < 18); }
+  function isYoung() { var a = Number(prefs.age); return isMinor() || prefs.ageGroup === "18-25" || (a >= 18 && a <= 25); }
+  function allowedGoals(list) { return isMinor() ? list.filter(function (g) { return MINOR_BLOCKED_GOALS.indexOf(g) === -1; }) : list; }
+  function enforceAgeRules() {
+    var changed = false;
+    if (isMinor() && MINOR_BLOCKED_GOALS.indexOf(prefs.goal) > -1) { prefs.goal = "Onderhoud"; changed = true; }
+    if (isMinor() && prefs.journey && prefs.journey.metric === "gewicht") { prefs.journey.metric = ""; changed = true; }
+    return changed;
+  }
+  function minorNoteEl() {
+    var el = document.createElement("div"); el.className = "dietnote"; el.id = "minorNote";
+    el.innerHTML = "<strong>Onder de 18</strong>Je lichaam groeit nog, dus genoeg en gevarieerd eten is het belangrijkst. Daarom staan afvaldoelen en gewicht bijhouden uit. Wil je sterker worden of beter sporten? Kies dan Spieropbouw of Atleet.";
+    return el;
+  }
+  function ageGroupChips(container, onPick) {
+    var r = document.createElement("div"); r.className = "chiprow"; r.id = "ageGroupChips";
+    AGE_GROUPS.forEach(function (g) {
+      var c = document.createElement("button"); c.type = "button"; c.className = "chip" + (prefs.ageGroup === g[0] ? " selected" : ""); c.textContent = g[1];
+      c.onclick = function () { prefs.ageGroup = prefs.ageGroup === g[0] ? "" : g[0]; enforceAgeRules(); onPick(); };
+      r.appendChild(c);
+    });
+    container.appendChild(r);
+  }
+
+  // ---------- Budgetmodus (studenten en iedereen die het goedkoop en snel wil) ----------
+  var BUDGET_OPTIONS = [25, 35, 50, 75];
+  function student() {
+    var s = prefs.student && typeof prefs.student === "object" ? prefs.student : {};
+    return { on: !!s.on, budget: BUDGET_OPTIONS.indexOf(Number(s.budget)) > -1 ? Number(s.budget) : 35, onePan: !!s.onePan, quick: s.quick !== false };
+  }
+  function setStudent(patch) { prefs.student = Object.assign(student(), patch); }
+  function studentParams() { var s = student(); return s.on ? s : null; }
+  function renderStudentEditor(c, onChange) {
+    var s = student();
+    var t = document.createElement("button"); t.type = "button"; t.className = "sheet-toggle"; t.id = "studentToggle";
+    t.setAttribute("role", "switch"); t.setAttribute("aria-checked", s.on ? "true" : "false");
+    t.innerHTML = '<span class="st-txt"><b>Budgetmodus</b><small>Goedkope, alledaagse ingrediënten binnen een weekbudget. Handig voor studenten en starters.</small></span><span class="st-track' + (s.on ? " on" : "") + '"><i></i></span>';
+    t.onclick = function () { setStudent({ on: !s.on }); onChange(); };
+    c.appendChild(t);
+    if (!s.on) return;
+    var l = document.createElement("div"); l.className = "field-label"; l.textContent = "Budget per week (alle maaltijden, 1 persoon)"; c.appendChild(l);
+    var r = document.createElement("div"); r.className = "chiprow";
+    BUDGET_OPTIONS.forEach(function (b) {
+      var ch = document.createElement("button"); ch.type = "button"; ch.className = "chip" + (s.budget === b ? " selected" : ""); ch.textContent = "€" + b;
+      ch.onclick = function () { setStudent({ budget: b }); onChange(); };
+      r.appendChild(ch);
+    });
+    c.appendChild(r);
+    [["onePan", "Weinig spullen", "Hoogstens één pan of ovenschaal, weinig afwas"], ["quick", "Snel", "Hoogstens 25 minuten"]].forEach(function (o) {
+      var on = s[o[0]];
+      var b = document.createElement("button"); b.type = "button"; b.className = "sheet-toggle"; b.id = "student-" + o[0];
+      b.setAttribute("role", "switch"); b.setAttribute("aria-checked", on ? "true" : "false");
+      b.innerHTML = '<span class="st-txt"><b></b><small></small></span><span class="st-track' + (on ? " on" : "") + '"><i></i></span>';
+      b.querySelector("b").textContent = o[1]; b.querySelector("small").textContent = o[2];
+      b.onclick = function () { var p = {}; p[o[0]] = !on; setStudent(p); onChange(); };
+      c.appendChild(b);
+    });
+  }
+  function budgetBadge(totalLow, totalHigh) {
+    var s = student();
+    if (!s.on) return null;
+    var mid = (totalLow + totalHigh) / 2, el = document.createElement("div");
+    el.className = "tag " + (mid <= s.budget ? "balans" : "neutral"); el.id = "budgetBadge";
+    el.textContent = mid <= s.budget ? "Binnen je budget van €" + s.budget : "± " + formatEuro(mid - s.budget) + " boven je budget van €" + s.budget;
+    return el;
+  }
+
+  // ---------- Delen als afbeelding (Instagram, TikTok, WhatsApp) ----------
+  function wrapText(ctx, text, maxW) {
+    var words = String(text).split(" "), lines = [], cur = "";
+    words.forEach(function (w) { var t = cur ? cur + " " + w : w; if (ctx.measureText(t).width > maxW && cur) { lines.push(cur); cur = w; } else cur = t; });
+    if (cur) lines.push(cur);
+    return lines;
+  }
+  function drawShareCard(title, subtitle, rows, footerNote) {
+    var W = 1080, H = 1350, cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+    var ctx = cv.getContext("2d");
+    var g = ctx.createLinearGradient(0, 0, W, H); g.addColorStop(0, "#14543A"); g.addColorStop(1, "#0C2E21");
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = "rgba(242,193,78,0.16)"; ctx.beginPath(); ctx.arc(W - 120, 140, 260, 0, Math.PI * 2); ctx.fill();
+    var serif = "Fraunces, Georgia, serif", sans = "'Public Sans', Helvetica, Arial, sans-serif";
+    ctx.fillStyle = "#F2C14E"; ctx.font = "700 30px " + sans; ctx.fillText("BALANZA", 80, 110);
+    ctx.fillStyle = "#FFFFFF"; ctx.font = "600 76px " + serif;
+    var y = 210;
+    wrapText(ctx, title, W - 160).slice(0, 2).forEach(function (l) { ctx.fillText(l, 80, y); y += 88; });
+    if (subtitle) { ctx.fillStyle = "rgba(255,255,255,0.75)"; ctx.font = "400 34px " + sans; ctx.fillText(subtitle, 80, y); y += 40; }
+    y += 90;
+    rows.slice(0, 8).forEach(function (r) {
+      ctx.fillStyle = "rgba(255,255,255,0.08)"; roundRect(ctx, 70, y - 54, W - 140, 104, 22); ctx.fill();
+      ctx.fillStyle = "#F2C14E"; ctx.font = "700 30px " + sans; ctx.fillText(r[0], 104, y + 8);
+      ctx.fillStyle = "#FFFFFF"; ctx.font = "600 36px " + sans;
+      var t = r[1]; while (ctx.measureText(t).width > W - 420 && t.length > 4) t = t.slice(0, -2);
+      if (t !== r[1]) t = t.replace(/\s*\S?$/, "") + "…";
+      ctx.fillText(t, 230, y + 8);
+      if (r[2]) { ctx.fillStyle = "rgba(255,255,255,0.6)"; ctx.font = "400 26px " + sans; var w = ctx.measureText(r[2]).width; ctx.fillText(r[2], W - 104 - w, y + 8); }
+      y += 122;
+    });
+    ctx.fillStyle = "rgba(255,255,255,0.7)"; ctx.font = "400 28px " + sans;
+    ctx.fillText(footerNote || "Gebalanceerd gepland met Balanza", 80, H - 120);
+    ctx.fillStyle = "#F2C14E"; ctx.font = "700 30px " + sans; ctx.fillText(location.host || "Balanza", 80, H - 72);
+    return cv;
+  }
+  function roundRect(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
+  function shareCanvas(cv, fileName, text) {
+    var ready = document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve();
+    return ready.then(function () {
+      return new Promise(function (res) { cv.toBlob(res, "image/png"); });
+    }).then(function (blob) {
+      if (!blob) throw new Error("no blob");
+      var file = null; try { file = new File([blob], fileName, { type: "image/png" }); } catch (e) {}
+      if (file && navigator.canShare && navigator.canShare({ files: [file] })) return navigator.share({ files: [file], text: text }).catch(function () {});
+      var a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = fileName; document.body.appendChild(a); a.click();
+      setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+      showToast("Afbeelding opgeslagen. Deel hem waar je wilt.");
+    }).catch(function () { showToast("Delen lukte niet op dit toestel."); });
+  }
+  function shareWeekImage(pw) {
+    var rows = [];
+    PLAN_DAYS.forEach(function (d) {
+      var a = pw.slots[d + "|Diner"] || pw.slots[d + "|Lunch"] || pw.slots[d + "|Ontbijt"];
+      var r = a ? resolveAssignedDish(a) : null;
+      if (r) rows.push([PLAN_SHORT[d], r.day.name, r.day.kcal + " kcal"]);
+    });
+    if (!rows.length) { showToast("Plan eerst een paar gerechten, dan kun je je week delen."); return; }
+    var agg = aggregateWeekMacros(pw);
+    var cv = drawShareCard("Mijn week in " + rows.length + " gerechten", formatWeekLabel(new Date(pw.weekStart + "T00:00:00")) + (agg ? " · Balans " + agg.balans + "%" : ""), rows);
+    shareCanvas(cv, "balanza-week.png", "Mijn week, gepland met Balanza");
+  }
+  function shareDishImage(day) {
+    var rows = [["KCAL", String(day.kcal), ""], ["EIWIT", (day.eiwitG || Math.round(day.kcal * day.eiwit / 400)) + " g", ""], ["BALANS", computeBalance(day.kh, day.eiwit, day.vet) + "%", ""]];
+    if (day.bereidingstijd) rows.push(["TIJD", day.bereidingstijd + " minuten", ""]);
+    (day.ingredienten || []).slice(0, 4).forEach(function (ing, i) { rows.push([i ? "" : "MET", String(ing).replace(/^[\d.,]+\s*(g|ml|el|tl|stuks?|x)?\s*/i, ""), ""]); });
+    var cv = drawShareCard(day.name, day.mealType || "", rows, "Dit kookte ik met Balanza");
+    shareCanvas(cv, "balanza-gerecht.png", day.name + ", gemaakt met Balanza");
+  }
+  function challengeFriend(title) {
+    var msg = "Ik doe deze week een uitdaging met Balanza: “" + title + "”. Doe je mee? " + location.origin + "/welkom";
+    window.open("https://wa.me/?text=" + encodeURIComponent(msg), "_blank", "noopener");
+  }
+
   var dbCap = null;
   var userCap = null;
 
@@ -11878,6 +12046,8 @@
         leftovers: Array.isArray(prefs.leftovers) ? prefs.leftovers.slice(-20) : [],
         coach: prefs.coach && typeof prefs.coach === "object" ? prefs.coach : {},
         journey: prefs.journey && typeof prefs.journey === "object" ? prefs.journey : {},
+        ageGroup: AGE_GROUPS.some(function (g) { return g[0] === prefs.ageGroup; }) ? prefs.ageGroup : "",
+        student: student(),
         familyMode: !!prefs.familyMode,
         equipment: prefs.equipment,
         exclude: prefs.exclude,
@@ -12215,7 +12385,7 @@
       if (!sample) return;
       busyStart("Gerechten worden aangevuld op de achtergrond…");
       var bgParams2 = {
-        cuisines: prefs.cuisines, flavors: prefs.flavors, level: prefs.level, dietStyle: prefs.dietStyle, health: healthList(), sugarMode: prefs.sugarMode || "natuurlijk", cheeseMode: prefs.cheeseMode || "hardekaas", familyMode: prefs.familyMode,
+        cuisines: prefs.cuisines, flavors: prefs.flavors, level: prefs.level, dietStyle: prefs.dietStyle, health: healthList(), sugarMode: prefs.sugarMode || "natuurlijk", cheeseMode: prefs.cheeseMode || "hardekaas", familyMode: prefs.familyMode, ageGroup: prefs.ageGroup || "", student: studentParams(),
         equipment: prefs.equipment, exclude: prefs.exclude, goal: prefs.goal, gender: prefs.gender, heightCm: prefs.heightCm,
         weightKg: prefs.weightKg, age: prefs.age, activityLevel: prefs.activityLevel
       };
@@ -12249,9 +12419,10 @@
               return;
             }
             var pdata = psnap.data() || {};
-            ["name", "bringListLink", "cuisines", "flavors", "level", "dietStyle", "health", "leftovers", "coach", "journey", "sugarMode", "cheeseMode", "familyMode", "equipment", "exclude", "count", "mealTypes", "gender", "heightCm", "weightKg", "age", "activityLevel", "goal", "homeLayout", "mealCounts", "withImages", "pantry", "communityName"].forEach(function (k) {
+            ["name", "bringListLink", "cuisines", "flavors", "level", "dietStyle", "health", "leftovers", "coach", "journey", "ageGroup", "student", "sugarMode", "cheeseMode", "familyMode", "equipment", "exclude", "count", "mealTypes", "gender", "heightCm", "weightKg", "age", "activityLevel", "goal", "homeLayout", "mealCounts", "withImages", "pantry", "communityName"].forEach(function (k) {
               if (pdata[k] !== undefined) prefs[k] = deepClone(pdata[k]);
             });
+            if (enforceAgeRules()) savePrefs();
             render();
           }).catch(function () {});
 
