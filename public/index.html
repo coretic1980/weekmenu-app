@@ -309,6 +309,7 @@
   @keyframes micpulse { 0% { box-shadow: 0 0 0 0 rgba(194,65,12,.45); } 70% { box-shadow: 0 0 0 10px rgba(194,65,12,0); } 100% { box-shadow: 0 0 0 0 rgba(194,65,12,0); } }
   .voice-row { display: flex; gap: 8px; align-items: center; }
   .voice-row .textinput { flex: 1; min-width: 0; margin: 0; }
+  .chat-clear { appearance: none; border: 0; background: none; color: var(--muted); font: inherit; font-size: 12.5px; cursor: pointer; padding: 6px 4px; }
   .chat-foot { font-size: 11.5px; color: var(--muted); text-align: center; padding: 0 14px 10px; background: var(--surface); }
   .chat-btn { position: relative; }
   .chat-btn.has-dot::after { content: ""; position: absolute; top: 4px; right: 4px; width: 9px; height: 9px; border-radius: 50%; background: #E3A22F; border: 2px solid var(--surface); }
@@ -2468,6 +2469,7 @@
       chatBtn.setAttribute("aria-label", "Vraag het Balanza");
       chatBtn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/><path d="M8.5 11h.01M12 11h.01M15.5 11h.01"/></svg>';
       chatBtn.onclick = openChat;
+      try { loadChat(); if (chat.msgs.length > Number(localStorage.getItem("balanza_chat_seen") || 0)) chatBtn.classList.add("has-dot"); } catch (e) {}
       el.appendChild(chatBtn);
     }
     var acctBtn = document.createElement("button");
@@ -12168,6 +12170,7 @@
     return cands[dayNr % cands.length];
   }
   function openerDue() {
+    loadChat();
     if (!chatAvailable() || !coachOn("opener") || state.generating || (prefs.journey && prefs.journey.quiet)) return false;
     if (state.view !== "weeks" || lsGet(OPENER_DAY_KEY) === todayKeyLocal()) return false;
     if (chat.msgs.length && chat.msgs[chat.msgs.length - 1].openerDay === todayKeyLocal()) return false;
@@ -12189,11 +12192,11 @@
       document.body.appendChild(bub);
       btn.classList.add("has-dot");
       lsSet(OPENER_DAY_KEY, todayKeyLocal());
-      function gone() { if (bub.parentNode) bub.parentNode.removeChild(bub); btn.classList.remove("has-dot"); }
+      chat.msgs.push({ role: "assistant", content: o.text, quick: o.quick, openerDay: todayKeyLocal() }); saveChat();   // staat ook in het gesprek
+      function gone() { if (bub.parentNode) bub.parentNode.removeChild(bub); }
       bub.querySelector(".cb-x").onclick = gone;
       bub.querySelector(".cb-txt").onclick = function () {
         gone();
-        chat.msgs.push({ role: "assistant", content: o.text, quick: o.quick, openerDay: todayKeyLocal() }); saveChat();
         openChat();
       };
       setTimeout(gone, 15000);   // niet blijven hangen
@@ -12201,9 +12204,20 @@
   }
 
   var CHAT_KEY = "balanza_chat";
-  var chat = { msgs: [], busy: false, left: null };
-  try { var savedChat = JSON.parse(sessionStorage.getItem(CHAT_KEY) || "null"); if (savedChat && Array.isArray(savedChat.msgs)) chat.msgs = savedChat.msgs.slice(-30); } catch (e) {}
-  function saveChat() { try { sessionStorage.setItem(CHAT_KEY, JSON.stringify({ msgs: chat.msgs.slice(-30) })); } catch (e) {} }
+  // Het gesprek blijft op dit toestel bewaard, per account (de server bewaart geen chatgeschiedenis).
+  var chat = { msgs: [], busy: false, left: null, key: null };
+  function chatStoreKey() { return CHAT_KEY + "_" + (window.USER_ID || window.anonId || "x"); }
+  function loadChat() {
+    var k = chatStoreKey(); if (chat.key === k) return;
+    chat.key = k; chat.msgs = [];
+    try {
+      var saved = JSON.parse(localStorage.getItem(k) || sessionStorage.getItem(CHAT_KEY) || "null");
+      if (saved && Array.isArray(saved.msgs)) chat.msgs = saved.msgs.slice(-50);
+      sessionStorage.removeItem(CHAT_KEY);
+    } catch (e) {}
+  }
+  function saveChat() { loadChat(); var ov = document.getElementById("chatOverlay"); if (ov && ov.classList.contains("active")) lsSet("balanza_chat_seen", String(chat.msgs.length)); try { localStorage.setItem(chatStoreKey(), JSON.stringify({ msgs: chat.msgs.slice(-50) })); } catch (e) {} }
+  function clearChat() { chat.msgs = []; saveChat(); paintChat(); }
   function chatAvailable() { return configLoaded && moduleOn("assistant") && !!(window.authToken || !window.authRequired); }
   var CHAT_SUGGESTIONS = ["Hoe werkt de Balans-score?", "Ik wil vegetarisch eten", "Zet volgende week voor me klaar", "Maak de app donker", "Ik wil goedkoper koken", "Ik heb een idee voor Balanza"];
   function chatContext() {
@@ -12218,15 +12232,19 @@
       plan: userPlan() || "free", ageGroup: prefs.ageGroup || "", age: prefs.age || "", leftovers: leftoverTerms(), dailyKcal: dailyKcalTarget() };
   }
   function openChat() {
+    loadChat();
+    lsSet("balanza_chat_seen", String(chat.msgs.length));
+    var cbtn = document.getElementById("chatBtn"); if (cbtn) cbtn.classList.remove("has-dot");
     var ov = document.getElementById("chatOverlay");
     if (!ov) {
       ov = document.createElement("div"); ov.id = "chatOverlay"; ov.className = "chat-overlay";
       ov.setAttribute("role", "dialog"); ov.setAttribute("aria-modal", "true"); ov.setAttribute("aria-labelledby", "chatTitle");
       ov.innerHTML = '<div class="chat-panel"><div class="chat-head"><span class="chat-avatar" aria-hidden="true">B</span><div class="chat-ttl"><b id="chatTitle">Vraag het Balanza</b><small id="chatSub">Vragen over je eten en de app, of laat iets aanpassen</small></div>' +
-        '<button type="button" class="nudge-x" id="chatClose" aria-label="Sluiten">×</button></div><div class="chat-list" id="chatList" aria-live="polite"></div>' +
+        '<button type="button" class="chat-clear" id="chatClear" title="Gesprek wissen" aria-label="Gesprek wissen">Wissen</button><button type="button" class="nudge-x" id="chatClose" aria-label="Sluiten">×</button></div><div class="chat-list" id="chatList" aria-live="polite"></div>' +
         '<form class="chat-form" id="chatForm"><input class="textinput" id="chatInput" maxlength="500" autocomplete="off" placeholder="Typ je vraag of wens…" aria-label="Bericht aan Balanza"><button type="submit" class="primary-btn small" id="chatSend">Stuur</button></form><div class="chat-foot">Mis je een functie? Vraag het hier, dan maken we er samen een idee van.</div></div>';
       document.body.appendChild(ov);
       document.getElementById("chatClose").onclick = closeChat;
+      document.getElementById("chatClear").onclick = function () { askConfirm("Het gesprek op dit toestel wissen?", clearChat, "Wissen", "Annuleren"); };
       ov.addEventListener("click", function (e) { if (e.target === ov) closeChat(); });
       ov.addEventListener("keydown", function (e) { if (e.key === "Escape") closeChat(); });
       document.getElementById("chatForm").onsubmit = function (e) { e.preventDefault(); stopVoice(true); var i = document.getElementById("chatInput"); var v = i.value.trim(); if (v) { i.value = ""; sendChat(v); } };

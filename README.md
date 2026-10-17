@@ -660,11 +660,11 @@ Een chatknop rechtsboven in de app. Gebruikers stellen vragen over de app en hun
 - **Kosten en limieten**: onderdeel "Balanza-assistent (chat)" in Beheer → Instellingen → Onderdelen (aan/uit, of "Alleen Plus"),
   limiet "Berichten aan de assistent per gebruiker per dag" (standaard 40, `ASSISTANT_DAILY_PER_USER`) en 120 per uur per IP.
   Kosten tellen mee in het verbruik (actie "assistant"). Ander model: `ANTHROPIC_ASSISTANT_MODEL`.
-- Het gesprek staat alleen in de browser (sessie); de server bewaart geen chatgeschiedenis.
+- Het gesprek wordt op het toestel bewaard (per account, de laatste 50 berichten) en is te wissen met *Wissen* in de chat; de server bewaart geen chatgeschiedenis.
 - **Openingszinnetje**: hooguit één keer per dag verschijnt na een paar seconden op Start een klein tekstballonnetje bij de
   chatknop (met een stipje op de knop), persoonlijk en op basis van wat er speelt: het diner van vanavond, volgende week
   klaarzetten, restjes, de fase van je reis of het seizoen. Om de paar dagen is het de uitnodiging om een idee te delen.
-  Tik = de chat opent met die zin en twee snelle antwoorden; × of 15 seconden = weg. Kost geen AI. Niet tijdens genereren of
+  Het zinnetje komt meteen ook in het gesprek; de chatknop houdt een stipje tot je de chat opent. Tik = de chat opent met die zin en twee snelle antwoorden; × of 15 seconden = het wolkje verdwijnt. Kost geen AI. Niet tijdens genereren of
   in de rustige modus; uit te zetten onder *Begeleiding → Balanza begint soms een gesprekje*.
 - **Ideeën aanvragen**: de welkomsttekst van de chat, een snelle keuze "Ik heb een idee voor Balanza" en een regel onder het
   invoerveld laten zien dat je nieuwe functies via de chat kunt aanvragen.
