@@ -1083,6 +1083,115 @@ function adaptPromptToDiet(prompt, dietStyle) {
   return out;
 }
 
+// ===== Gezondheidsfilters (combineerbaar met elke voedingsstijl) =====
+// prefs.health = lijst sleutels; prefs.sugarMode = "natuurlijk" (honing e.d. met mate) of "strikt" (alleen fruit en dadels).
+var HEALTH_KEYS = ["puur", "suikervrij", "glutenvrij", "volkoren", "zoutbewust"];
+var HEALTH_LABELS = { puur: "onbewerkt", suikervrij: "zonder geraffineerde suiker", glutenvrij: "glutenvrij", volkoren: "volkoren en vezelrijk", zoutbewust: "zoutbewust" };
+var NATURAL_SWEET_RE = /\b(honing\w*|ahornsiroop|maple\s?siroop|maplesiroop|kokosbloesemsuiker|dadelsiroop|dadelstroop)\b/i;
+function cleanHealth(v) {
+  return (Array.isArray(v) ? v : []).filter(function (k, i, a) { return HEALTH_KEYS.indexOf(k) > -1 && a.indexOf(k) === i; });
+}
+function cleanSugarMode(v) { return v === "strikt" ? "strikt" : "natuurlijk"; }
+// Eén object met alle harde eetregels; generateWithBalansRetry accepteert ook nog een losse voedingsstijl (tekst).
+function dietRulesFromParams(p) {
+  p = p || {};
+  return { style: typeof p.dietStyle === "string" ? p.dietStyle : "", health: cleanHealth(p.health), sugarMode: cleanSugarMode(p.sugarMode) };
+}
+function asDietRules(v) {
+  if (v && typeof v === "object") return { style: v.style || "", health: cleanHealth(v.health), sugarMode: cleanSugarMode(v.sugarMode) };
+  return { style: typeof v === "string" ? v : "", health: [], sugarMode: "natuurlijk" };
+}
+function hasHealth(rules, k) { return !!(rules && rules.health && rules.health.indexOf(k) > -1); }
+function healthChecked(rules) { return hasHealth(rules, "puur") || hasHealth(rules, "suikervrij") || hasHealth(rules, "glutenvrij"); }
+function rulesActive(rules) { return !!(DIET_FORBIDDEN_TEXT[rules.style] || healthChecked(rules)); }
+
+function healthHardRuleText(p) {
+  var rules = p && p.style !== undefined ? asDietRules(p) : dietRulesFromParams(p);   // params of een regels-object
+  if (!rules.health.length) return "";
+  var lines = [];
+  if (hasHealth(rules, "glutenvrij")) lines.push("GLUTENVRIJ (harde eis): geen tarwe, spelt, rogge, gerst, kamut, bulgur, couscous, seitan, gewone pasta, noedels van tarwe, brood, wraps, " +
+    "pita, paneermeel, bloem, gewone sojasaus of ketjap. Gebruik rijst, quinoa, boekweit, gierst, aardappel, zoete aardappel, maïs(tortilla), rijst- of glasnoedels, " +
+    "glutenvrije pasta, tamari en glutenvrije havermout. Noem bij haver en pasta expliciet \"glutenvrij\".");
+  if (hasHealth(rules, "suikervrij")) lines.push("ZONDER GERAFFINEERDE SUIKER (harde eis): geen witte, bruine of rietsuiker, basterdsuiker, poedersuiker, glucose- of fructosestroop, " +
+    "agavesiroop, jam, ketchup, zoete sauzen (sweet chili, teriyaki, hoisin, barbecue, ketjap), frisdrank of melkchocolade. " +
+    (rules.sugarMode === "strikt"
+      ? "Ook geen honing, ahornsiroop, kokosbloesemsuiker of dadelsiroop: zoet alleen met vers of gedroogd fruit (bijv. banaan, dadels, appel)."
+      : "Zoeten mag met vers of gedroogd fruit en hoogstens 1 tl honing, ahornsiroop of kokosbloesemsuiker per portie."));
+  if (hasHealth(rules, "puur")) lines.push("ONBEWERKT (harde eis): kook met verse, onbewerkte basisproducten. Geen kant-en-klare sauzen of pastasaus uit pot, mixen, pakjes of zakjes, " +
+    "bouillonblokjes of -poeder (gebruik kruiden, specerijen, ui, knoflook of zelfgetrokken bouillon), geen vleeswaren (ham, spek, worst, chorizo, salami), " +
+    "geen vleesvervangers, eiwitpoeder, margarine, mayonaise, smeerkaas of zoetstoffen. Tomaten uit blik, peulvruchten uit blik/glas, tofu, tempeh, naturel zuivel, eieren en volkoren producten mogen wel.");
+  if (hasHealth(rules, "volkoren")) lines.push("VOLKOREN & VEZELRIJK: kies volkoren of zilvervlies in plaats van witte varianten en zorg voor veel groente, peulvruchten, noten of zaden (vezelrijk).");
+  if (hasHealth(rules, "zoutbewust")) lines.push("ZOUTBEWUST: weinig zout (hoogstens een snuf), geen bouillonblokjes en zo min mogelijk zoute sauzen of kaas; geef smaak met kruiden, specerijen, citrus en knoflook.");
+  return "GEZONDHEIDSVOORKEUREN van de gebruiker (gelden voor elk gerecht, naast de voedingsstijl):\n" + lines.map(function (l) { return "- " + l; }).join("\n") + "\n" +
+    "Controleer vóór je antwoordt elk ingrediënt hierop.\n";
+}
+
+var GLUTEN_RE = /\b(tarwe\w*|\w*bloem|spelt\w*|rogge\w*|gerst\w*|kamut|bulgur|couscous|seitan|freekeh|farro|orzo|pasta\w*|spaghetti|penne|macaroni|fusilli|tagliatelle|lasagne\w*|linguine|farfalle|ravioli|tortellini|gnocchi|noedels?|mie|udon|ramen|\w*brood\w*|\w*broodje\w*|wraps?|tortilla\w*|pita\w*|naan|ciabatta|baguette|focaccia|croutons?|paneermeel|panko|beschuit\w*|cracker\w*|kn[aä]ckebr[oö]d|muesli|granola|havermout|haver\w*|bladerdeeg|filodeeg|pizzadeeg|deeg|sojasaus|saus soja-|ketjap|bier|teriyaki\w*|hoisin\w*)\b/i;
+var GLUTEN_SAFE_RE = /\b(glutenvrij\w*|zonder gluten|rijstnoedels?|glasnoedels?|rijstvermicelli|ma[iï]stortilla\w*|tortilla\w* van ma[iï]s|tortillachips van ma[iï]s|ma[iï]szetmeel|maizena|rijstebloem|rijstbloem|ma[iï]sbloem|ma[iï]smeel|boekweit\w*|amandelmeel|kokosmeel|kikkererwtenmeel|kikkererwtenbloem|tapiocameel|aardappelzetmeel|bloemkool\w*|bloemen|tamari|rijstwafel\w*|quinoa\w*|linzenpasta|kikkererwtenpasta|rijstpasta|ma[iï]spasta)\b/gi;
+var SUGAR_RE = /\b(\w*suiker\w*|\w*stroop|siroop|limonadesiroop|glucose\w*|fructose\w*|dextrose|agave\w*|jam|confituur|ketchup|frisdrank|cola|melkchocolade|witte chocolade|chocolade\w*|chocoladepasta|hagelslag|marshmallow\w*|koek\w*|cake|sweet chili\w*|zoetzure saus|teriyaki\w*|hoisin\w*|barbecuesaus|bbq-?saus|ketjap\w*|gecondenseerde melk|karamel\w*|nutella)\b/i;
+var SUGAR_SAFE_RE = /\b(zonder (toegevoegde )?suiker|z suiker|suikervrij\w*|ongezoet\w*|suikermais|suikerma[iï]s|ma[iï]s suiker|suikerbonen?|suikerschot\w*|suikerpeul\w*|suikerbiet\w*|appelstroop zonder\w*|pure chocolade (8[5-9]|9\d|100)\s?%|cacao\w*|100\s?% (pure )?chocolade)\b/gi;
+var PROCESSED_RE = /\b(kant-en-klaar\w*|kant en klaar\w*|uit (een )?(pot|potje|zakje|pakje)|\w+mix|bouillonblok\w*|bouillontablet\w*|bouillonpoeder|bouillon v blokje|maggi|aromat|vleeswaren|vleeswaar|\(vleeswaar\)|ham|achterham|spek\w*|bacon|\w*worst\w*|chorizo|salami|pancetta|frikandel\w*|kroket\w*|nuggets?|kipnuggets?|vissticks?|fishsticks?|surimi|vleesvervanger\w*|vegetarisch gehakt|vegetarische (reepjes|stukjes|burger\w*|kipstukjes|balletjes)|gehakt rul vegetarisch|reepjes\/stukjes vegetarisch|vegaburger\w*|mycoprote\w*|eiwitpoeder\w*|whey|wei-eiwit\w*|margarine|halvarine|mayonaise|sandwichspread|smeerkaas|zoetstof\w*|aspartaam|chips|instant\w*)\b/i;
+var PROCESSED_SAFE_LINE_RE = /\b(zelfgemaakt\w*|huisgemaakt\w*|zelfgetrokken|zelf getrokken|vers gemaakte?)\b/i;   // expliciet zelf gemaakt: hele regel is goed
+var PROCESSED_SAFE_RE = /\b(kokoschips|kruidenmix|specerijenmix|notenmix|zadenmix|pittenmix|slamix|groentemix|sla mix|kiemgroentemix|pitten- en zadenmix)\b/gi;
+
+// Welke ingrediënten in een gerecht botsen met de gezondheidsfilters? Geeft [{woord, regel}].
+function dishHealthViolations(d, rules) {
+  if (!d || !healthChecked(rules)) return [];
+  // Alleen de ingrediënten tellen (wat de gebruiker ziet en koopt); de gerechtnaam niet.
+  var parts = (Array.isArray(d.ingredienten) ? d.ingredienten : []).map(function (x) {
+    return x && typeof x === "object" ? String(x.tekst || "") + " " + String(x.nevo || "") : String(x || "");
+  });
+  var hits = [];
+  parts.forEach(function (t) {
+    var txt = t.toLowerCase();
+    if (hasHealth(rules, "glutenvrij") && !/\b(glutenvrij\w*|zonder gluten)\b/.test(txt)) {
+      var gm = txt.replace(GLUTEN_SAFE_RE, " ").match(GLUTEN_RE);
+      if (gm) hits.push({ woord: gm[0], regel: "glutenvrij" });
+    }
+    if (hasHealth(rules, "suikervrij")) {
+      var s = txt.replace(SUGAR_SAFE_RE, " ");
+      if (rules.sugarMode !== "strikt") s = s.replace(new RegExp(NATURAL_SWEET_RE.source, "gi"), " ");
+      var sm = s.match(SUGAR_RE) || (rules.sugarMode === "strikt" ? s.match(NATURAL_SWEET_RE) : null);
+      if (sm) hits.push({ woord: sm[0], regel: "suikervrij" });
+    }
+    if (hasHealth(rules, "puur") && !PROCESSED_SAFE_LINE_RE.test(txt)) {
+      var pm = txt.replace(PROCESSED_SAFE_RE, " ").match(PROCESSED_RE);
+      if (pm) hits.push({ woord: pm[0], regel: "puur" });
+    }
+  });
+  return hits;
+}
+// Alle overtredingen (voedingsstijl en gezondheidsfilters) als korte tekst, bijv. "kip (niet vegetarisch)".
+function dishRuleViolations(d, rules) {
+  var out = dishDietViolations(d, rules.style).map(function (w) { return w + " (niet " + String(rules.style).toLowerCase() + ")"; });
+  dishHealthViolations(d, rules).forEach(function (h) { out.push(h.woord + " (niet " + HEALTH_LABELS[h.regel] + ")"); });
+  return out;
+}
+function ruleViolationCount(parsed, rules) {
+  if (!rulesActive(rules)) return 0;
+  var dishes = Array.isArray(parsed) ? parsed : [parsed];
+  return dishes.reduce(function (n, d) { return n + (dishRuleViolations(d, rules).length ? 1 : 0); }, 0);
+}
+// Voorbeelden, eiwitstrategie en NEVO-lijst in de prompt afstemmen op de gezondheidsfilters.
+function adaptPromptToRules(prompt, rules) {
+  var out = adaptPromptToDiet(prompt, rules.style);
+  if (!healthChecked(rules)) return out;
+  if (hasHealth(rules, "glutenvrij")) out = out.split("seitan, ").join("");
+  if (hasHealth(rules, "puur")) {
+    out = out.split(", vegetarisch gehakt of vegetarische reepjes op basis van soja, mycoproteïne").join("")
+      .split(", vegetarisch gehakt of reepjes op basis van soja (vegan)").join("")
+      .split(", of eiwitpoeder").join("").split(", of erwteneiwitpoeder").join("");
+  }
+  var fake = function (name) { return { name: "", ingredienten: [{ tekst: name, nevo: "" }] }; };
+  return out.split("\n").filter(function (ln) {
+    if (ln.indexOf(" | ") === -1 || !/kcal/.test(ln)) return true;   // alleen regels uit de NEVO-lijst filteren
+    return !dishHealthViolations(fake(ln.split(" | ")[0]), rules).length;
+  }).join("\n");
+}
+function communityHealthOk(d, prefs) {
+  return !dishHealthViolations(d, dietRulesFromParams(prefs)).length;
+}
+
 // Een harde, doorlopende voorkeur (zoals voedingsstijl): geldt bij genereren, aanvullen én variëren.
 function familyModeInstructionText(familyMode) {
   if (!familyMode) return "";
@@ -1118,7 +1227,7 @@ function buildGeneratePrompt(p) {
       count + " per moment.";
   return "Je bent een voedingskundige chef-kok. Genereer in totaal " + totalCount + " macro-gebalanceerde " +
     "gerechten (per 1 persoon) die voldoen aan:\n" +
-    dietHardRuleText(p.dietStyle) +
+    dietHardRuleText(p.dietStyle) + healthHardRuleText(p) +
     "- Maaltijdmomenten: " + mealGuideTxt + "\n" +
     mealInstruction + "\n" +
     "- Keukenstijl: " + cuisineTxt + "\n" +
@@ -1176,7 +1285,7 @@ function buildPhotoPrompt(p, mode, mealType) {
         "- Stem de portie af op het maaltijdmoment: " + types.map(function (mt) { return mt + " (" + mealtypeGuideText(mt, p.goal) + ")"; }).join("; ") + "\n" +
         buildBodyProfileLine(p)
       : "- Blijf ZO DICHT MOGELIJK bij het origineel: dezelfde ingrediënten en een realistische portie zoals op de foto. Pas niets aan om het gezonder te maken.\n") +
-    dietHardRuleText(p.dietStyle) +
+    dietHardRuleText(p.dietStyle) + healthHardRuleText(p) +
     dietStyleInstructionText(p.dietStyle) +
     familyModeInstructionText(p.familyMode) +
     "- Beschikbare apparatuur (gebruik bij de bereiding alleen wat er is): " + equipTxt + "\n" +
@@ -1215,7 +1324,7 @@ function runPhotoAction(body, params) {
     return applyNevoToParsed(list);
   };
   // Eén bijstelronde en een kortere tijdslimiet: bij een foto telt snelheid zwaarder dan het laatste procentje Balans.
-  return generateWithBalansRetry(buildPhotoPrompt(params, mode, mealType), mode === "balanza" ? params.goal : null, post, params.dietStyle,
+  return generateWithBalansRetry(buildPhotoPrompt(params, mode, mealType), mode === "balanza" ? params.goal : null, post, dietRulesFromParams(params),
     { image: { mediaType: mediaType, data: data }, repairRounds: 1, timeBudgetMs: 45000 });
 }
 
@@ -1262,7 +1371,7 @@ function buildBackgroundGeneratePrompt(needed, p) {
   var countTxt = types.map(function (m) { return needed[m] + "x " + m + " (" + mealtypeGuideText(m, p.goal) + ")"; }).join(", ");
   return "Je bent een voedingskundige chef-kok. Genereer in totaal " + totalCount + " macro-gebalanceerde " +
     "gerechten (per 1 persoon), verdeeld als: " + countTxt + ". Precies deze aantallen per maaltijdmoment.\n" +
-    dietHardRuleText(p.dietStyle) +
+    dietHardRuleText(p.dietStyle) + healthHardRuleText(p) +
     wishInstructionText(p) + tasteInstructionText(p) +
     "- Uitgesloten ingrediënten: " + ((p.exclude && String(p.exclude).trim()) ? String(p.exclude).trim() : "geen") + "\n" +
     "- Keukenstijl: " + cuisineTxt + "\n- Smaakprofiel: " + flavorTxt + "\n- Culinair niveau: " + (p.level || "Home-style") + "\n" +
@@ -1287,7 +1396,7 @@ function buildBackgroundGeneratePrompt(needed, p) {
 function buildVariationPromptServer(current, kind, p) {
   return "Hier is een bestaand gerecht in JSON: " + JSON.stringify(current) + "\n\n" +
     "Opdracht: " + (VARIATION_INSTRUCTIONS[kind] || "") + "\n" +
-    dietHardRuleText(p.dietStyle) +
+    dietHardRuleText(p.dietStyle) + healthHardRuleText(p) +
     goalInstructionText(p.goal, p.dietStyle) + "\n" +
     (p.dietStyle ? dietStyleInstructionText(p.dietStyle) : "") +
     familyModeInstructionText(p.familyMode) +
@@ -1383,13 +1492,13 @@ function runGenerateAction(body) {
     if (mealTypes.length > 1 || mc) {
       return Promise.all(mealTypes.map(function (mt) {
         var subParams = Object.assign({}, params, { mealTypes: [mt] }, mc ? { count: Number(mc[mt]) } : {});
-        return generateWithBalansRetry(buildGeneratePrompt(subParams), params.goal, applyNevoToParsed, params.dietStyle).then(function (arr) {
+        return generateWithBalansRetry(buildGeneratePrompt(subParams), params.goal, applyNevoToParsed, dietRulesFromParams(params)).then(function (arr) {
           (Array.isArray(arr) ? arr : []).forEach(function (d) { if (d && typeof d === "object") d.mealType = mt; });   // elk deelverzoek is één moment
           return arr;
         });
       })).then(mergeDishArrays);
     }
-    return generateWithBalansRetry(buildGeneratePrompt(params), params.goal, applyNevoToParsed, params.dietStyle);
+    return generateWithBalansRetry(buildGeneratePrompt(params), params.goal, applyNevoToParsed, dietRulesFromParams(params));
   }
 
   if (action === "background") {
@@ -1399,16 +1508,16 @@ function runGenerateAction(body) {
       return Promise.all(types.map(function (mt) {
         var subNeeded = {};
         subNeeded[mt] = needed[mt];
-        return generateWithBalansRetry(buildBackgroundGeneratePrompt(subNeeded, params), params.goal, applyNevoToParsed, params.dietStyle);
+        return generateWithBalansRetry(buildBackgroundGeneratePrompt(subNeeded, params), params.goal, applyNevoToParsed, dietRulesFromParams(params));
       })).then(mergeDishArrays);
     }
-    return generateWithBalansRetry(buildBackgroundGeneratePrompt(needed, params), params.goal, applyNevoToParsed, params.dietStyle);
+    return generateWithBalansRetry(buildBackgroundGeneratePrompt(needed, params), params.goal, applyNevoToParsed, dietRulesFromParams(params));
   }
 
   if (action === "photo") return runPhotoAction(body, params);
 
   if (action === "variation") {
-    return generateWithBalansRetry(buildVariationPromptServer(body.current || {}, body.kind, params), params.goal, applyNevoToParsed, params.dietStyle);
+    return generateWithBalansRetry(buildVariationPromptServer(body.current || {}, body.kind, params), params.goal, applyNevoToParsed, dietRulesFromParams(params));
   }
 
   if (action === "prep") {
@@ -1552,18 +1661,21 @@ function dishKcalPenalty(d, goal) {
   var off = dishKcalOff(d, goal);
   return off ? (off.dir === "hoog" ? off.kcal - off.max : off.min - off.kcal) : 0;
 }
-function dishNeedsRepair(d, goal, dietStyle) {
-  if (dishDietViolations(d, dietStyle).length) return true;
+function dishNeedsRepair(d, goal, rules) {
+  rules = asDietRules(rules);
+  if (dishRuleViolations(d, rules).length) return true;
   if (!goal) return false;
-  return dishBalans(d, goal, dietStyle) < BALANS_MIN_THRESHOLD || !!dishKcalOff(d, goal);
+  return dishBalans(d, goal, rules.style) < BALANS_MIN_THRESHOLD || !!dishKcalOff(d, goal);
 }
 // Eén vergelijkbaar getal per gerecht: balans, met aftrek voor kcal buiten de grens (elke 10 kcal = 1 punt).
-function dishQuality(d, goal, dietStyle) {
-  return (goal ? dishBalans(d, goal, dietStyle) : 100) - dishKcalPenalty(d, goal) / 10;
+function dishQuality(d, goal, rules) {
+  rules = asDietRules(rules);
+  return (goal ? dishBalans(d, goal, rules.style) : 100) - dishKcalPenalty(d, goal) / 10;
 }
 // Alleen de gerechten die afwijken worden bijgesteld (kleine, snelle aanroep) in plaats van alles opnieuw te maken.
-function buildRepairPrompt(dishes, goal, dietStyle) {
-  var t = goalTargetFor(goal, dietStyle);
+function buildRepairPrompt(dishes, goal, rules) {
+  rules = asDietRules(rules);
+  var t = goalTargetFor(goal, rules.style);
   var names = { kh: "koolhydraten", eiwit: "eiwit", vet: "vet" };
   var lines = dishes.map(function (d, i) {
     var pc = dishMacroPcts(d), bits = [];
@@ -1573,12 +1685,12 @@ function buildRepairPrompt(dishes, goal, dietStyle) {
         if (Math.abs(diff) > 3) bits.push((diff > 0 ? "te veel " : "te weinig ") + names[k] + " (" + (diff > 0 ? "+" : "") + diff + ")");
       });
     }
-    var viol = dishDietViolations(d, dietStyle);
+    var viol = dishRuleViolations(d, rules);
     var ko = dishKcalOff(d, goal);
     if (ko) bits.push("kcal te " + ko.dir + ": nu " + ko.kcal + " kcal, moet " + ko.min + "-" + ko.max + " kcal worden (porties " + (ko.dir === "hoog" ? "kleiner" : "groter") + ")");
     return (i + 1) + ". \"" + String(d.name || "gerecht") + "\"" + (pc ? ": nu " + pc.kh + "% koolhydraten, " + pc.eiwit + "% eiwit, " + pc.vet + "% vet" : "") +
       (bits.length ? " \u2014 " + bits.join(", ") : "") +
-      (viol.length ? " \u2014 bevat ingrediënten die niet " + String(dietStyle).toLowerCase() + " zijn: " + viol.slice(0, 5).join(", ") : "");
+      (viol.length ? " \u2014 bevat ingrediënten die niet mogen: " + viol.slice(0, 5).join(", ") + "; vervang ze door een passend alternatief" : "");
   });
   var slim = dishes.map(function (d) {
     var o = {};
@@ -1593,7 +1705,7 @@ function buildRepairPrompt(dishes, goal, dietStyle) {
     "en het maaltijdmoment. Staat er bij een gerecht \"kcal te hoog\" of \"kcal te laag\", breng het dan binnen die grens " +
     "(schaal vooral olie, kaas, noten, rijst, pasta, brood en sauzen); anders houd je ongeveer hetzelfde aantal kcal. Werk ingrediënten, kcal, kh_g, eiwit_g, vet_g en de bereidingsstappen bij zodat alles klopt. " +
     "Heeft een gerecht de velden \"herkend\" en \"aanpassingen\", laat \"herkend\" dan staan en werk \"aanpassingen\" bij.\n" +
-    dietHardRuleText(dietStyle) +
+    dietHardRuleText(rules.style) + healthHardRuleText(rules) +
     "Gerechten: " + JSON.stringify(slim) + "\n" +
     "Geef ALLEEN geldig JSON terug: een array van EXACT " + dishes.length + " objecten, in dezelfde volgorde en met exact hetzelfde schema als de invoer, " +
     "geen markdown, geen uitleg erbuiten." + nevoPromptText();
@@ -1620,66 +1732,67 @@ function summarizeProgress(usage) {
   return sum;
 }
 
-function generateWithBalansRetry(prompt, goal, post, dietStyle, opts) {
+function generateWithBalansRetry(prompt, goal, post, diet, opts) {
+  var rules = asDietRules(diet);
   var image = opts && opts.image ? opts.image : null;   // alleen de eerste aanroep krijgt de foto; bijstellen werkt op de tekst
   var maxRounds = opts && opts.repairRounds !== undefined ? opts.repairRounds : BALANS_REPAIR_ROUNDS;
   var budgetMs = opts && opts.timeBudgetMs ? opts.timeBudgetMs : BALANS_TIME_BUDGET_MS;
-  prompt = adaptPromptToDiet(prompt, dietStyle);
-  if (!goal && !DIET_FORBIDDEN_TEXT[dietStyle]) return callAnthropicOnce(prompt, null, null, image).then(function (parsed) { return post ? post(parsed) : parsed; });
+  prompt = adaptPromptToRules(prompt, rules);
+  if (!goal && !rulesActive(rules)) return callAnthropicOnce(prompt, null, null, image).then(function (parsed) { return post ? post(parsed) : parsed; });
   var t0 = Date.now();
   var track = progressTrack();
   function done(result) {
     var list = Array.isArray(result) ? result : [result];
     track.stage = "done"; track.total = list.length; track.fixing = 0;
-    track.ok = list.filter(function (d) { return d && !dishNeedsRepair(d, goal, dietStyle); }).length;
+    track.ok = list.filter(function (d) { return d && !dishNeedsRepair(d, goal, rules); }).length;
     return result;
   }
 
   // Een lijst gerechten: eerst één keer genereren, daarna alleen de afwijkers bijstellen.
   function repairRound(dishes, round) {
     var bad = [];
-    dishes.forEach(function (d, i) { if (dishNeedsRepair(d, goal, dietStyle)) bad.push(i); });
+    dishes.forEach(function (d, i) { if (dishNeedsRepair(d, goal, rules)) bad.push(i); });
     track.total = dishes.length; track.ok = dishes.length - bad.length;
-    if (!bad.length || round > maxRounds || Date.now() - t0 > budgetMs) return Promise.resolve(done(finalizeDiet(dishes, dietStyle)));
+    if (!bad.length || round > maxRounds || Date.now() - t0 > budgetMs) return Promise.resolve(done(finalizeDiet(dishes, rules)));
     track.stage = "repair"; track.fixing = bad.length; track.round = round;
     var subset = bad.map(function (i) { return dishes[i]; });
-    return callAnthropicOnce(adaptPromptToDiet(buildRepairPrompt(subset, goal, dietStyle), dietStyle)).then(function (fixed) {
+    return callAnthropicOnce(adaptPromptToRules(buildRepairPrompt(subset, goal, rules), rules)).then(function (fixed) {
       if (post) fixed = post(fixed);
-      if (!Array.isArray(fixed)) return done(finalizeDiet(dishes, dietStyle));
+      if (!Array.isArray(fixed)) return done(finalizeDiet(dishes, rules));
       var next = dishes.slice(), improved = 0;
       bad.forEach(function (idx, j) {
         var nd = fixed[j], od = dishes[idx];
         if (!nd || typeof nd !== "object" || !Array.isArray(nd.ingredienten)) return;
         if (od.mealType) nd.mealType = od.mealType;
-        var ov = dishDietViolations(od, dietStyle).length, nv = dishDietViolations(nd, dietStyle).length;
-        var ob = dishQuality(od, goal, dietStyle), nb = dishQuality(nd, goal, dietStyle);
+        var ov = dishRuleViolations(od, rules).length, nv = dishRuleViolations(nd, rules).length;
+        var ob = dishQuality(od, goal, rules), nb = dishQuality(nd, goal, rules);
         if (nv < ov || (nv === ov && nb > ob)) { next[idx] = nd; improved++; }
       });
       console.log("Balans bijstellen ronde " + round + ": " + bad.length + " afwijkend, " + improved + " verbeterd (" + Math.round((Date.now() - t0) / 1000) + " s)");
       return repairRound(next, round + 1);
     }, function (err) {
       console.warn("Bijstellen mislukt, we leveren het beste resultaat tot nu toe: " + (err && err.message));
-      return done(finalizeDiet(dishes, dietStyle));
+      return done(finalizeDiet(dishes, rules));
     });
   }
 
   // Eén los gerecht (bijv. een variatie): het oude gedrag, opnieuw proberen met de hele opdracht.
   var bestParsed = null, bestScore = -Infinity, attempt = 0, currentPrompt = prompt;
   function handleSingle(parsed) {
-    var violations = dietViolationCount(parsed, dietStyle);
+    var violations = ruleViolationCount(parsed, rules);
     var list = Array.isArray(parsed) ? parsed : [parsed];
-    var quality = list.reduce(function (m, d) { return Math.min(m, dishQuality(d, goal, dietStyle)); }, 100);
+    var quality = list.reduce(function (m, d) { return Math.min(m, dishQuality(d, goal, rules)); }, 100);
     var score = quality - violations * 1000;   // overtreding weegt zwaarder dan elke balans-score
     if (score > bestScore) { bestScore = score; bestParsed = parsed; }
-    var allOk = list.every(function (d) { return !dishNeedsRepair(d, goal, dietStyle); });
+    var allOk = list.every(function (d) { return !dishNeedsRepair(d, goal, rules); });
     if ((violations === 0 && allOk) || attempt >= BALANS_MAX_ATTEMPTS || Date.now() - t0 > BALANS_TIME_BUDGET_MS) {
-      return done(finalizeDiet(bestParsed, dietStyle));
+      return done(finalizeDiet(bestParsed, rules));
     }
     track.stage = "repair"; track.total = 1; track.ok = 0; track.fixing = 1; track.round = attempt;
     if (violations) {
-      var found = dishDietViolations(parsed, dietStyle);
-      currentPrompt = prompt + "\nLET OP: een vorige poging bevatte ingrediënten die niet " + dietStyle.toLowerCase() + " zijn (" +
-        found.slice(0, 8).join(", ") + "). Dat is niet toegestaan; maak het gerecht volledig " + dietStyle.toLowerCase() + ".";
+      var found = (Array.isArray(parsed) ? parsed : [parsed]).reduce(function (all, d) { return all.concat(dishRuleViolations(d, rules)); }, []);
+      currentPrompt = prompt + "\nLET OP: een vorige poging bevatte ingrediënten die niet mogen (" +
+        found.slice(0, 8).join(", ") + "). Dat is niet toegestaan; vervang ze door passende alternatieven.";
     }
     return next();
   }
@@ -1695,10 +1808,11 @@ function generateWithBalansRetry(prompt, goal, post, dietStyle, opts) {
   return next();
 }
 // Blijft er na alle pogingen toch iets niet-passends over, dan laten we die gerechten weg (als er iets overblijft).
-function finalizeDiet(parsed, dietStyle) {
-  if (!DIET_FORBIDDEN_TEXT[dietStyle] || !Array.isArray(parsed)) return parsed;
-  var ok = parsed.filter(function (d) { return !dishDietViolations(d, dietStyle).length; });
-  if (ok.length && ok.length < parsed.length) console.warn("Voedingsstijl " + dietStyle + ": " + (parsed.length - ok.length) + " gerecht(en) weggelaten na herhaalde overtreding.");
+function finalizeDiet(parsed, rules) {
+  rules = asDietRules(rules);
+  if (!rulesActive(rules) || !Array.isArray(parsed)) return parsed;
+  var ok = parsed.filter(function (d) { return !dishRuleViolations(d, rules).length; });
+  if (ok.length && ok.length < parsed.length) console.warn("Eetregels " + [rules.style].concat(rules.health).filter(Boolean).join("+") + ": " + (parsed.length - ok.length) + " gerecht(en) weggelaten na herhaalde overtreding.");
   return ok.length ? ok : parsed;
 }
 
@@ -3118,6 +3232,7 @@ function communityMatches(rec, prefs) {
   prefs = prefs || {};
   if (Array.isArray(prefs.mealTypes) && prefs.mealTypes.length && prefs.mealTypes.indexOf(d.mealType) === -1) return false;
   if (prefs.dietStyle && dishDietViolations(d, prefs.dietStyle).length) return false;
+  if (!communityHealthOk(d, prefs)) return false;
   var excl = String(prefs.exclude || "").toLowerCase().split(/[,;\n]+/).map(function (x) { return x.trim(); }).filter(function (x) { return x.length >= 3; });
   if (excl.length) {
     var hay = (d.name + " " + (d.ingredienten || []).join(" ")).toLowerCase();
@@ -4744,6 +4859,12 @@ function sanitizePrefsPatch(patch) {
       case "exclude": clean.exclude = cleanText(v, 300); break;
       case "bringListLink": clean.bringListLink = cleanText(v, 500); break;
       case "familyMode": clean.familyMode = v === true; break;
+      case "health":
+        if (!Array.isArray(v) || v.some(function (x) { return HEALTH_KEYS.indexOf(x) === -1; })) errors.push("Onbekende gezondheidsvoorkeur."); else clean.health = cleanHealth(v);
+        break;
+      case "sugarMode":
+        if (v !== "natuurlijk" && v !== "strikt") errors.push("Suikerkeuze moet natuurlijk of strikt zijn."); else clean.sugarMode = v;
+        break;
       case "goal":
         if (typeof v !== "string" || !GOAL_TARGETS[v]) errors.push("Onbekend doel: " + cleanText(v, 60) + "."); else clean.goal = v;
         break;
