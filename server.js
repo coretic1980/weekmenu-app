@@ -4118,7 +4118,9 @@ function buildAssistantPrompt(messages, ctx) {
     "{\"title\": \"korte titel\", \"area\": \"Ontwerpen|Plannen|Boodschappen|Begeleiding|Community|Account|Weergave|Overig\", \"userStory\": \"Als gebruiker wil ik ..., zodat ...\", " +
     "\"problem\": \"wat de gebruiker nu mist\", \"proposal\": \"hoe het zou kunnen werken in de app\", \"acceptance\": [\"toetsbare criteria\"], " +
     "\"framework\": \"hoe dit binnen de kaders blijft (macrobalans per doel, Balans-score, NEVO, voedingsregels) of waar het daarmee botst\", \"impact\": \"klein|middel|groot\"}. " +
-    "Geen suggestion bij een gewone vraag of als het al kan.\n\n" +
+    "Geen suggestion bij een gewone vraag of als het al kan.\n" +
+    "- Zegt de gebruiker dat hij een idee heeft maar nog niet welk: vraag kort en enthousiast wat hij mist. Beschrijft hij een idee dat nog niet bestaat: bedank, vat het samen en vul \"suggestion\" in (vraag dan of je het mag insturen).\n" +
+    "- Is het eerste bericht in het gesprek van Balanza zelf (een openingszin), sluit daar dan natuurlijk op aan.\n\n" +
     assistantGuide() + "\n" + assistantActionSpec() + "\n" +
     "HUIDIGE STAND VAN DE GEBRUIKER (JSON): " + JSON.stringify(ctx || {}).slice(0, 3000) + "\n\n" +
     "GESPREK:\n" + hist + "\n\n" +

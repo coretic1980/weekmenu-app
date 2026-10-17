@@ -309,6 +309,14 @@
   @keyframes micpulse { 0% { box-shadow: 0 0 0 0 rgba(194,65,12,.45); } 70% { box-shadow: 0 0 0 10px rgba(194,65,12,0); } 100% { box-shadow: 0 0 0 0 rgba(194,65,12,0); } }
   .voice-row { display: flex; gap: 8px; align-items: center; }
   .voice-row .textinput { flex: 1; min-width: 0; margin: 0; }
+  .chat-foot { font-size: 11.5px; color: var(--muted); text-align: center; padding: 0 14px 10px; background: var(--surface); }
+  .chat-btn { position: relative; }
+  .chat-btn.has-dot::after { content: ""; position: absolute; top: 4px; right: 4px; width: 9px; height: 9px; border-radius: 50%; background: #E3A22F; border: 2px solid var(--surface); }
+  .chat-bubble { position: absolute; right: 16px; z-index: 60; max-width: min(300px, calc(100vw - 32px)); display: flex; align-items: flex-start; gap: 4px;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 16px 4px 16px 16px; box-shadow: 0 10px 28px rgba(0,0,0,.14); animation: bubblein .35s ease-out; }
+  .chat-bubble .cb-txt { appearance: none; border: 0; background: none; text-align: left; font: inherit; font-size: 13.5px; line-height: 1.45; color: var(--ink); padding: 10px 2px 10px 14px; cursor: pointer; }
+  .chat-bubble .cb-x { appearance: none; border: 0; background: none; color: var(--muted); font-size: 18px; padding: 6px 10px; cursor: pointer; }
+  @keyframes bubblein { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
   .chat-left { align-self: center; font-size: 12px; color: var(--muted); }
   .chat-form { display: flex; gap: 8px; padding: 12px 14px calc(12px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: var(--surface); }
   .chat-form .textinput { flex: 1; min-width: 0; }
@@ -4423,6 +4431,7 @@
     }
 
     if (!state.homeEdit && !state.generating) renderHomeNudges(main);
+    setTimeout(scheduleOpener, 0);
 
     if (state.homeEdit) {
       renderHomeEditor(main);
@@ -10949,6 +10958,7 @@
     ["challenge", "Weekuitdaging", "Elke week kies je zelf een kleine uitdaging (of sla je over)", null],
     ["milestones", "Mijlpalen", "Een kaartje als je iets bereikt, zoals 10 keer zelf gekookt", null],
     ["progress", "Voortgang bijhouden", "Optioneel: energie, verzadiging, kleding of gewicht, één keer per week", null],
+    ["opener", "Balanza begint soms een gesprekje", "Hooguit één keer per dag een klein persoonlijk berichtje bij de chatknop", null],
     ["voice", "Inspreken", "Een microfoonknop in de chat en bij je wens; je browser zet je stem om in tekst die je eerst kunt aanpassen", null]
   ];
   function coachOn(k) { return !(prefs.coach && prefs.coach[k] === false); }
@@ -12110,12 +12120,67 @@
     return b;
   }
 
+  // ---------- Openingszinnetje: de chat begint af en toe zelf, persoonlijk en subtiel ----------
+  // Hooguit één keer per dag, niet tijdens genereren of in de rustige modus, en weg met één tik. Geen AI-kosten:
+  // de zin komt uit wat er nu bij de gebruiker speelt. Af en toe een hint dat je ideeën kunt insturen.
+  var OPENER_DAY_KEY = "balanza_opener_day";
+  function firstName() { return prefs.name ? String(prefs.name).split(" ")[0] : ""; }
+  function pickOpener() {
+    var now = new Date(), h = now.getHours(), dow = now.getDay(), nm = firstName(), hi = nm ? nm + ", " : "";
+    var cands = [];
+    var cw = weekByStart(mondayKeyOffset(0)), today = dayNameOf(now);
+    var dinner = cw && cw.slots[today + "|Diner"] ? resolveAssignedDish(cw.slots[today + "|Diner"]) : null;
+    if (dinner && h >= 11 && h < 19) cands.push({ text: hi + "vanavond staat " + dinner.day.name + " op het menu. Zin in een tip voor een lekker bijgerecht?", quick: ["Ja, geef een tip", "Kan het sneller?"] });
+    if ([5, 6, 0].indexOf(dow) > -1 && nextWeekNeedsPlan() && hasAnyDishes() && !readOnlyMode()) cands.push({ text: (nm ? "Hé " + nm + "! " : "") + "Zal ik volgende week alvast voor je klaarzetten? Dan hoef jij alleen nog te kijken.", quick: ["Ja, zet volgende week klaar", "Nee, dank je"] });
+    var lo = coachOn("leftovers") ? leftoverTerms() : [];
+    if (lo.length) cands.push({ text: hi + "je hebt nog " + lo.slice(0, 2).join(" en ") + " liggen. Zal ik iets bedenken zodat het niet weg hoeft?", quick: ["Ja, wat kan ik ermee?", "Later"] });
+    if (journeyOn() && prefs.goal) { var ph = journeyPhase(); cands.push({ text: hi + "je zit in week " + ph.week + " van je reis (" + ph.phase[0] + "). Hoe gaat “" + ph.phase[2].toLowerCase() + "” tot nu toe?", quick: ["Gaat goed!", "Lastig, help me"] }); }
+    if (window.appSeason && coachOn("season")) cands.push({ text: "Het is " + window.appSeason.month + (nm ? ", " + nm : "") + ": " + window.appSeason.produce.slice(0, 2).join(" en ") + " zijn nu op hun best. Zin in een idee daarmee?", quick: ["Ja, verras me", "Niet nu"] });
+    var idea = { text: (nm ? nm + ", mis" : "Mis") + " je iets in Balanza? Vertel het me gerust. Goede ideeën gaan naar het team, en die bouwen we echt.", quick: ["Ik heb een idee", "Nu even niet"] };
+    // Elke paar dagen de idee-hint, anders de eerste die nu het meest speelt.
+    var dayNr = Math.floor(now / 86400000);
+    if (!cands.length || dayNr % 4 === 0) return idea;
+    return cands[dayNr % cands.length];
+  }
+  function openerDue() {
+    if (!chatAvailable() || !coachOn("opener") || state.generating || (prefs.journey && prefs.journey.quiet)) return false;
+    if (state.view !== "weeks" || lsGet(OPENER_DAY_KEY) === todayKeyLocal()) return false;
+    if (chat.msgs.length && chat.msgs[chat.msgs.length - 1].openerDay === todayKeyLocal()) return false;
+    return true;
+  }
+  var openerTimer = null;
+  function scheduleOpener() {
+    clearTimeout(openerTimer);
+    if (!openerDue()) return;
+    openerTimer = setTimeout(function () {
+      if (!openerDue() || document.querySelector(".confirm-overlay.active, .sheet-overlay.active, .chat-overlay.active")) return;
+      var btn = document.getElementById("chatBtn"); if (!btn) return;
+      var o = pickOpener();
+      var bub = document.createElement("div"); bub.className = "chat-bubble"; bub.id = "chatBubble"; bub.setAttribute("role", "status");
+      bub.innerHTML = '<button type="button" class="cb-txt"></button><button type="button" class="cb-x" aria-label="Verbergen">\u00d7</button>';
+      bub.querySelector(".cb-txt").textContent = o.text;
+      var r = btn.getBoundingClientRect();
+      bub.style.top = (r.bottom + 10 + window.scrollY) + "px";
+      document.body.appendChild(bub);
+      btn.classList.add("has-dot");
+      lsSet(OPENER_DAY_KEY, todayKeyLocal());
+      function gone() { if (bub.parentNode) bub.parentNode.removeChild(bub); btn.classList.remove("has-dot"); }
+      bub.querySelector(".cb-x").onclick = gone;
+      bub.querySelector(".cb-txt").onclick = function () {
+        gone();
+        chat.msgs.push({ role: "assistant", content: o.text, quick: o.quick, openerDay: todayKeyLocal() }); saveChat();
+        openChat();
+      };
+      setTimeout(gone, 15000);   // niet blijven hangen
+    }, 4000);
+  }
+
   var CHAT_KEY = "balanza_chat";
   var chat = { msgs: [], busy: false, left: null };
   try { var savedChat = JSON.parse(sessionStorage.getItem(CHAT_KEY) || "null"); if (savedChat && Array.isArray(savedChat.msgs)) chat.msgs = savedChat.msgs.slice(-30); } catch (e) {}
   function saveChat() { try { sessionStorage.setItem(CHAT_KEY, JSON.stringify({ msgs: chat.msgs.slice(-30) })); } catch (e) {} }
   function chatAvailable() { return configLoaded && moduleOn("assistant") && !!(window.authToken || !window.authRequired); }
-  var CHAT_SUGGESTIONS = ["Hoe werkt de Balans-score?", "Ik wil vegetarisch eten", "Zet volgende week voor me klaar", "Maak de app donker", "Ik wil goedkoper koken", "Waarom zoveel eiwit bij mijn doel?"];
+  var CHAT_SUGGESTIONS = ["Hoe werkt de Balans-score?", "Ik wil vegetarisch eten", "Zet volgende week voor me klaar", "Maak de app donker", "Ik wil goedkoper koken", "Ik heb een idee voor Balanza"];
   function chatContext() {
     var byType = collectExistingByType(), dishes = {};
     PLAN_MEALS.forEach(function (m) { dishes[m] = byType[m].length; });
@@ -12134,7 +12199,7 @@
       ov.setAttribute("role", "dialog"); ov.setAttribute("aria-modal", "true"); ov.setAttribute("aria-labelledby", "chatTitle");
       ov.innerHTML = '<div class="chat-panel"><div class="chat-head"><span class="chat-avatar" aria-hidden="true">B</span><div class="chat-ttl"><b id="chatTitle">Vraag het Balanza</b><small id="chatSub">Vragen over je eten en de app, of laat iets aanpassen</small></div>' +
         '<button type="button" class="nudge-x" id="chatClose" aria-label="Sluiten">×</button></div><div class="chat-list" id="chatList" aria-live="polite"></div>' +
-        '<form class="chat-form" id="chatForm"><input class="textinput" id="chatInput" maxlength="500" autocomplete="off" placeholder="Typ je vraag of wens…" aria-label="Bericht aan Balanza"><button type="submit" class="primary-btn small" id="chatSend">Stuur</button></form></div>';
+        '<form class="chat-form" id="chatForm"><input class="textinput" id="chatInput" maxlength="500" autocomplete="off" placeholder="Typ je vraag of wens…" aria-label="Bericht aan Balanza"><button type="submit" class="primary-btn small" id="chatSend">Stuur</button></form><div class="chat-foot">Mis je een functie? Vraag het hier, dan maken we er samen een idee van.</div></div>';
       document.body.appendChild(ov);
       document.getElementById("chatClose").onclick = closeChat;
       ov.addEventListener("click", function (e) { if (e.target === ov) closeChat(); });
@@ -12153,7 +12218,7 @@
     list.innerHTML = "";
     if (!chat.msgs.length) {
       var hi = document.createElement("div"); hi.className = "chat-msg bot";
-      hi.textContent = "Hoi" + (prefs.name ? " " + String(prefs.name).split(" ")[0] : "") + "! Ik weet alles van Balanza en van je instellingen. Vraag maar iets, of vertel wat je anders wilt. Ik laat altijd eerst zien wat ik ga aanpassen.";
+      hi.textContent = "Hoi" + (prefs.name ? " " + String(prefs.name).split(" ")[0] : "") + "! Ik weet alles van Balanza en van je instellingen. Vraag maar iets, of vertel wat je anders wilt. Ik laat altijd eerst zien wat ik ga aanpassen. En mis je iets in de app? Zeg het gerust: goede ideeën gaan naar het team, en die bouwen we echt.";
       list.appendChild(hi);
       var sug = document.createElement("div"); sug.className = "chiprow chat-sugg";
       CHAT_SUGGESTIONS.forEach(function (q) { var c = document.createElement("button"); c.type = "button"; c.className = "chip"; c.textContent = q; c.onclick = function () { sendChat(q); }; sug.appendChild(c); });
@@ -12164,6 +12229,11 @@
       list.appendChild(b);
       if (m.actions && m.actions.length) list.appendChild(chatActionCard(m, idx));
       if (m.suggestion) list.appendChild(chatSuggestionCard(m, idx));
+      if (m.quick && m.quick.length && idx === chat.msgs.length - 1 && !chat.busy) {
+        var qr = document.createElement("div"); qr.className = "chiprow chat-sugg";
+        m.quick.forEach(function (q) { var c = document.createElement("button"); c.type = "button"; c.className = "chip"; c.textContent = q; c.onclick = function () { sendChat(q); }; qr.appendChild(c); });
+        list.appendChild(qr);
+      }
     });
     if (chat.busy) { var t = document.createElement("div"); t.className = "chat-msg bot typing"; t.innerHTML = "<i></i><i></i><i></i>"; t.setAttribute("aria-label", "Balanza denkt na"); list.appendChild(t); }
     if (chat.left !== null && chat.left <= 5) { var l = document.createElement("div"); l.className = "chat-left"; l.textContent = "Nog " + chat.left + " berichten vandaag"; list.appendChild(l); }
