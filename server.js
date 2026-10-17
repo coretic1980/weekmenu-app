@@ -971,19 +971,20 @@ var VARIATION_INSTRUCTIONS = {
 function variationInstructionText(kind, p) {
   if (kind !== "wisseleiwit") return VARIATION_INSTRUCTIONS[kind] || "";
   p = p || {};
-  var style = p.dietStyle, puur = cleanHealth(p.health).indexOf("puur") > -1, glutenvrij = cleanHealth(p.health).indexOf("glutenvrij") > -1;
+  var hl = healthWithExclude(p.health, p.exclude);
+  var style = p.dietStyle, puur = hl.indexOf("puur") > -1, glutenvrij = hl.indexOf("glutenvrij") > -1, lactosevrij = hl.indexOf("lactosevrij") > -1;
   var keep = " Pas de rest van het gerecht (groente, kruiden, saus, bereiding) waar nodig aan zodat het goed bij de nieuwe eiwitbron past, " +
     "geef het gerecht een naam die bij de nieuwe eiwitbron hoort en behoud ongeveer dezelfde kcal en macroverdeling.";
   if (style === "Vegetarisch" || style === "Veganistisch") {
     var opties = puur
-      ? "tofu, tempeh, peulvruchten (linzen, kikkererwten, bonen), edamame" + (style === "Vegetarisch" ? ", eieren of een naturel zuivelproduct" : "")
-      : (glutenvrij ? "" : "seitan, ") + "tofu, tempeh, vegetarisch gehakt of vegetarische reepjes, mycoproteïne, lupine, peulvruchten" + (style === "Vegetarisch" ? ", eieren of halloumi" : "");
+      ? "tofu, tempeh, peulvruchten (linzen, kikkererwten, bonen), edamame" + (style === "Vegetarisch" ? (lactosevrij ? ", eieren" : ", eieren of een naturel zuivelproduct") : "")
+      : (glutenvrij ? "" : "seitan, ") + "tofu, tempeh, vegetarisch gehakt of vegetarische reepjes, mycoproteïne, lupine, peulvruchten" + (style === "Vegetarisch" ? (lactosevrij ? ", eieren" : ", eieren of halloumi") : "");
     return "Vervang de huidige vleesvervanger of plantaardige hoofd-eiwitbron door een duidelijk ANDERE " + style.toLowerCase() + "e eiwitbron (bijv. " + opties + "). " +
       "Gebruik géén vlees of vis." + keep;
   }
   return "Vervang het vlees of de vis (de hoofd-eiwitbron) door een duidelijk ANDERE soort dierlijk vlees, gevogelte of vis " +
     "(bijv. kip in plaats van rundvlees, zalm in plaats van kip, garnalen in plaats van varkenshaas). Is het gerecht nu zonder vlees of vis, " +
-    "kies dan een passende vlees- of vissoort als hoofd-eiwitbron; bij ontbijt of snack mag dat ook ei, magere kwark of skyr zijn." +
+    "kies dan een passende vlees- of vissoort als hoofd-eiwitbron; bij ontbijt of snack mag dat ook ei" + (lactosevrij ? " of lactosevrije kwark" : ", magere kwark of skyr") + " zijn." +
     (puur ? " Kies onbewerkt vlees of vis, geen vleeswaren of worst." : "") + keep;
 }
 
@@ -1105,24 +1106,37 @@ function adaptPromptToDiet(prompt, dietStyle) {
 
 // ===== Gezondheidsfilters (combineerbaar met elke voedingsstijl) =====
 // prefs.health = lijst sleutels; prefs.sugarMode = "natuurlijk" (honing e.d. met mate) of "strikt" (alleen fruit en dadels).
-var HEALTH_KEYS = ["puur", "suikervrij", "glutenvrij", "volkoren", "zoutbewust"];
-var HEALTH_LABELS = { puur: "onbewerkt", suikervrij: "zonder geraffineerde suiker", glutenvrij: "glutenvrij", volkoren: "volkoren en vezelrijk", zoutbewust: "zoutbewust" };
+var HEALTH_KEYS = ["puur", "suikervrij", "glutenvrij", "lactosevrij", "volkoren", "zoutbewust"];
+var HEALTH_LABELS = { puur: "onbewerkt", suikervrij: "zonder geraffineerde suiker", glutenvrij: "glutenvrij", lactosevrij: "lactosevrij", volkoren: "volkoren en vezelrijk", zoutbewust: "zoutbewust" };
+// Uitsluitingen die we als harde gezondheidsfilter behandelen (ook voor oudere app-versies en community-matching).
+var EXCLUDE_TO_HEALTH = { gluten: "glutenvrij", lactose: "lactosevrij" };
 var NATURAL_SWEET_RE = /\b(honing\w*|ahornsiroop|maple\s?siroop|maplesiroop|kokosbloesemsuiker|dadelsiroop|dadelstroop)\b/i;
 function cleanHealth(v) {
   return (Array.isArray(v) ? v : []).filter(function (k, i, a) { return HEALTH_KEYS.indexOf(k) > -1 && a.indexOf(k) === i; });
 }
 function cleanSugarMode(v) { return v === "strikt" ? "strikt" : "natuurlijk"; }
+// prefs.cheeseMode: "hardekaas" (lang gerijpte, vrijwel lactosevrije kaas mag) of "geen" (helemaal geen gewone kaas).
+function cleanCheeseMode(v) { return v === "geen" ? "geen" : "hardekaas"; }
+function excludeTokensServer(v) {
+  return String(v || "").toLowerCase().split(/[,;\n]+/).map(function (x) { return x.trim(); }).filter(Boolean);
+}
+function healthWithExclude(health, exclude) {
+  var list = cleanHealth(health);
+  excludeTokensServer(exclude).forEach(function (t) { var k = EXCLUDE_TO_HEALTH[t]; if (k && list.indexOf(k) === -1) list.push(k); });
+  return list;
+}
 // Eén object met alle harde eetregels; generateWithBalansRetry accepteert ook nog een losse voedingsstijl (tekst).
 function dietRulesFromParams(p) {
   p = p || {};
-  return { style: typeof p.dietStyle === "string" ? p.dietStyle : "", health: cleanHealth(p.health), sugarMode: cleanSugarMode(p.sugarMode) };
+  return { style: typeof p.dietStyle === "string" ? p.dietStyle : "", health: healthWithExclude(p.health, p.exclude), sugarMode: cleanSugarMode(p.sugarMode),
+    cheeseMode: cleanCheeseMode(p.cheeseMode), exclude: typeof p.exclude === "string" ? p.exclude.trim().slice(0, 300) : "" };
 }
 function asDietRules(v) {
-  if (v && typeof v === "object") return { style: v.style || "", health: cleanHealth(v.health), sugarMode: cleanSugarMode(v.sugarMode) };
-  return { style: typeof v === "string" ? v : "", health: [], sugarMode: "natuurlijk" };
+  if (v && typeof v === "object") return { style: v.style || "", health: cleanHealth(v.health), sugarMode: cleanSugarMode(v.sugarMode), cheeseMode: cleanCheeseMode(v.cheeseMode), exclude: v.exclude || "" };
+  return { style: typeof v === "string" ? v : "", health: [], sugarMode: "natuurlijk", cheeseMode: "hardekaas", exclude: "" };
 }
 function hasHealth(rules, k) { return !!(rules && rules.health && rules.health.indexOf(k) > -1); }
-function healthChecked(rules) { return hasHealth(rules, "puur") || hasHealth(rules, "suikervrij") || hasHealth(rules, "glutenvrij"); }
+function healthChecked(rules) { return hasHealth(rules, "puur") || hasHealth(rules, "suikervrij") || hasHealth(rules, "glutenvrij") || hasHealth(rules, "lactosevrij"); }
 function rulesActive(rules) { return !!(DIET_FORBIDDEN_TEXT[rules.style] || healthChecked(rules)); }
 
 function healthHardRuleText(p) {
@@ -1132,6 +1146,12 @@ function healthHardRuleText(p) {
   if (hasHealth(rules, "glutenvrij")) lines.push("GLUTENVRIJ (harde eis): geen tarwe, spelt, rogge, gerst, kamut, bulgur, couscous, seitan, gewone pasta, noedels van tarwe, brood, wraps, " +
     "pita, paneermeel, bloem, gewone sojasaus of ketjap. Gebruik rijst, quinoa, boekweit, gierst, aardappel, zoete aardappel, maïs(tortilla), rijst- of glasnoedels, " +
     "glutenvrije pasta, tamari en glutenvrije havermout. Noem bij haver en pasta expliciet \"glutenvrij\".");
+  if (hasHealth(rules, "lactosevrij")) lines.push("LACTOSEVRIJ (harde eis): geen melk, karnemelk, room, slagroom, kookroom, zure room, crème fraîche, yoghurt, kwark, skyr, " +
+    "roomboter, roomkaas, verse of zachte kaas (mozzarella, burrata, feta, ricotta, mascarpone, hüttenkäse, geitenkaas, halloumi), melkchocolade, wei of melkpoeder. " +
+    (rules.cheeseMode === "geen"
+      ? "Ook geen gewone harde kaas: gebruik alleen lactosevrije kaas of een plantaardig alternatief. "
+      : "Lang gerijpte harde kaas (parmezaan, pecorino, oude of belegen Goudse, gruyère, comté, emmentaler) mag met mate; die bevat vrijwel geen lactose. ") +
+    "Gebruik lactosevrije zuivel (noem die expliciet \"lactosevrij\", bijv. \"150 g lactosevrije kwark\"), plantaardige varianten (sojadrink, havermelk, kokosmelk, sojayoghurt) of olijfolie/ghee in plaats van boter.");
   if (hasHealth(rules, "suikervrij")) lines.push("ZONDER GERAFFINEERDE SUIKER (harde eis): geen witte, bruine of rietsuiker, basterdsuiker, poedersuiker, glucose- of fructosestroop, " +
     "agavesiroop, jam, ketchup, zoete sauzen (sweet chili, teriyaki, hoisin, barbecue, ketjap), frisdrank of melkchocolade. " +
     (rules.sugarMode === "strikt"
@@ -1154,6 +1174,10 @@ var PROCESSED_RE = /\b(kant-en-klaar\w*|kant en klaar\w*|uit (een )?(pot|potje|z
 var PROCESSED_SAFE_LINE_RE = /\b(zelfgemaakt\w*|huisgemaakt\w*|zelfgetrokken|zelf getrokken|vers gemaakte?)\b/i;   // expliciet zelf gemaakt: hele regel is goed
 var PROCESSED_SAFE_RE = /\b(kokoschips|kruidenmix|specerijenmix|notenmix|zadenmix|pittenmix|slamix|groentemix|sla mix|kiemgroentemix|pitten- en zadenmix)\b/gi;
 
+var LACTOSE_RE = /\b(melk|melkpoeder|karnemelk|volle melk|halfvolle melk|magere melk|chocolademelk|room|slagroom|kookroom|zure room|roomijs|ijs|cr[eè]me fra[iî]che|creme fraiche\w*|yoghurt\w*|kwark\w*|skyr|boter|roomboter|\w*kaas\w*|mozzarella|burrata|feta|ricotta|mascarpone|cottage cheese|h[uü]ttenk[aä]se|halloumi|parmezaan\w*|parmigiano|grana padano|pecorino|gruy[eè]re|comt[eé]|emmentaler|manchego|cheddar|brie|camembert|gorgonzola|paneer|labneh|wei|wei-eiwit\w*|whey|melkchocolade|witte chocolade|b[eé]chamel\w*|custard|vla|pudding|tzatziki|raita)\b/i;
+var LACTOSE_SAFE_RE = /\b(lactosevrij\w*|zonder lactose|ghee|kokos\w*|pindakaas|pindaboter|notenboter|amandelboter|cashewboter|cacaoboter|sheaboter|sojamelk|havermelk|amandelmelk|rijstmelk|sojayoghurt|kokosyoghurt|haveryoghurt|plantaardig\w*( \w+)?|vegan\w*( \w+)?|edelgistvlokken|gistvlokken|kaasjeskruid)\b/gi;
+var HARD_CHEESE_RE = /\b(parmezaan\w*|parmigiano( reggiano)?|grana padano|pecorino( romano)?|oude kaas|oude goudse|belegen kaas|extra belegen( kaas)?|belegen goudse|kaas goudse 48\+( gem)?|goudse kaas|gruy[eè]re|comt[eé]|emmentaler|manchego|cheddar|kaas parmezaanse)\b/gi;
+
 // Welke ingrediënten in een gerecht botsen met de gezondheidsfilters? Geeft [{woord, regel}].
 function dishHealthViolations(d, rules) {
   if (!d || !healthChecked(rules)) return [];
@@ -1167,6 +1191,12 @@ function dishHealthViolations(d, rules) {
     if (hasHealth(rules, "glutenvrij") && !/\b(glutenvrij\w*|zonder gluten)\b/.test(txt)) {
       var gm = txt.replace(GLUTEN_SAFE_RE, " ").match(GLUTEN_RE);
       if (gm) hits.push({ woord: gm[0], regel: "glutenvrij" });
+    }
+    if (hasHealth(rules, "lactosevrij") && !/\b(lactosevrij\w*|zonder lactose)\b/.test(txt)) {
+      var l = txt.replace(PLANT_DAIRY_RE, " ").replace(LACTOSE_SAFE_RE, " ");
+      if (rules.cheeseMode !== "geen") l = l.replace(HARD_CHEESE_RE, " ");
+      var lm = l.match(LACTOSE_RE);
+      if (lm) hits.push({ woord: lm[0], regel: "lactosevrij" });
     }
     if (hasHealth(rules, "suikervrij")) {
       var s = txt.replace(SUGAR_SAFE_RE, " ");
@@ -1197,16 +1227,23 @@ function adaptPromptToRules(prompt, rules) {
   var out = adaptPromptToDiet(prompt, rules.style);
   if (!healthChecked(rules)) return out;
   if (hasHealth(rules, "glutenvrij")) out = out.split("seitan, ").join("");
+  if (hasHealth(rules, "lactosevrij")) out = out.split(", magere kwark, skyr").join(", lactosevrije kwark").split("magere kwark of Griekse yoghurt 0% als sausbasis").join("lactosevrije kwark of sojayoghurt als sausbasis");
   if (hasHealth(rules, "puur")) {
     out = out.split(", vegetarisch gehakt of vegetarische reepjes op basis van soja, mycoproteïne").join("")
       .split(", vegetarisch gehakt of reepjes op basis van soja (vegan)").join("")
       .split(", of eiwitpoeder").join("").split(", of erwteneiwitpoeder").join("");
   }
   var fake = function (name) { return { name: "", ingredienten: [{ tekst: name, nevo: "" }] }; };
-  return out.split("\n").filter(function (ln) {
+  // Zuivel blijft in de NEVO-lijst staan: lactosevrije varianten hebben dezelfde voedingswaarden en gebruiken die NEVO-naam.
+  var listRules = Object.assign({}, rules, { health: rules.health.filter(function (k) { return k !== "lactosevrij"; }) });
+  out = out.split("\n").filter(function (ln) {
     if (ln.indexOf(" | ") === -1 || !/kcal/.test(ln)) return true;   // alleen regels uit de NEVO-lijst filteren
-    return !dishHealthViolations(fake(ln.split(" | ")[0]), rules).length;
+    return !dishHealthViolations(fake(ln.split(" | ")[0]), listRules).length;
   }).join("\n");
+  if (hasHealth(rules, "lactosevrij") && out.indexOf("NEVO 2025 per 100 g") > -1) {
+    out = out.replace("NEVO 2025 per 100 g", "Lactosevrije zuivel: zet \"lactosevrij\" in \"tekst\" en gebruik bij \"nevo\" de gewone zuivelnaam uit de lijst (bijv. \"Kwark magere\").\nNEVO 2025 per 100 g");
+  }
+  return out;
 }
 function communityHealthOk(d, prefs) {
   return !dishHealthViolations(d, dietRulesFromParams(prefs)).length;
@@ -1420,6 +1457,7 @@ function buildVariationPromptServer(current, kind, p) {
     goalInstructionText(p.goal, p.dietStyle) + "\n" +
     (p.dietStyle ? dietStyleInstructionText(p.dietStyle) : "") +
     familyModeInstructionText(p.familyMode) +
+    "- Uitgesloten ingrediënten (mogen er niet in, ook niet na de variatie): " + ((p.exclude && String(p.exclude).trim()) ? String(p.exclude).trim() : "geen") + "\n" +
     INGREDIENT_SPECIFICITY_LINE +
     "Geef ALLEEN geldig JSON terug, exact dit schema, geen markdown, geen uitleg erbuiten:\n" +
     '{"name": "gerechtnaam", "kcal": 600, "kh_g": 50, "eiwit_g": 48, "vet_g": 22, ' +
@@ -1726,6 +1764,7 @@ function buildRepairPrompt(dishes, goal, rules) {
     "(schaal vooral olie, kaas, noten, rijst, pasta, brood en sauzen); anders houd je ongeveer hetzelfde aantal kcal. Werk ingrediënten, kcal, kh_g, eiwit_g, vet_g en de bereidingsstappen bij zodat alles klopt. " +
     "Heeft een gerecht de velden \"herkend\" en \"aanpassingen\", laat \"herkend\" dan staan en werk \"aanpassingen\" bij.\n" +
     dietHardRuleText(rules.style) + healthHardRuleText(rules) +
+    (rules.exclude ? "- Uitgesloten ingrediënten (mogen er ook na het bijstellen niet in): " + rules.exclude + "\n" : "") +
     "Gerechten: " + JSON.stringify(slim) + "\n" +
     "Geef ALLEEN geldig JSON terug: een array van EXACT " + dishes.length + " objecten, in dezelfde volgorde en met exact hetzelfde schema als de invoer, " +
     "geen markdown, geen uitleg erbuiten." + nevoPromptText();
@@ -3590,6 +3629,7 @@ function buildTipsPrompt(p) {
   var goal = TIP_GOALS.indexOf(p.goal) > -1 ? p.goal : "Onderhoud";
   var diet = TIP_DIETS.indexOf(p.dietStyle) > -1 ? p.dietStyle : "";
   var family = p.familyMode === true;
+  var healthTxt = healthWithExclude(p.health, p.exclude).map(function (k) { return HEALTH_LABELS[k]; }).join(", ");
   var avoid = (Array.isArray(p.avoid) ? p.avoid : []).slice(0, 30)
     .map(function (s) { return String(s).replace(/[\r\n"]+/g, " ").trim().slice(0, 90); })
     .filter(Boolean);
@@ -3598,7 +3638,7 @@ function buildTipsPrompt(p) {
     "maaltijden ontwerpt op basis van macro's. De lezer wacht even op het genereren van gerechten en wil zich vermaken en iets leren.\n\n" +
     "Schrijf 8 NIEUWE items in het Nederlands. Verdeel ze over deze onderwerpen: " + topics.join(", ") + ". " +
     "Maak van hooguit 1 item een tip over Balanza zelf.\n" +
-    "Context van de lezer: doel \"" + goal + "\"" + (diet ? ", voedingsstijl \"" + diet + "\"" : "") + (family ? ", kookt in gezinsmodus (kindvriendelijk)" : "") + ". " +
+    "Context van de lezer: doel \"" + goal + "\"" + (diet ? ", voedingsstijl \"" + diet + "\"" : "") + (family ? ", kookt in gezinsmodus (kindvriendelijk)" : "") + (healthTxt ? ", eet " + healthTxt + " (noem in tips nooit producten die daar niet bij passen)" : "") + ". " +
     "Laat minstens twee items aansluiten op dat doel" + (diet ? " of die voedingsstijl" : "") + (family ? " of gezinsmodus" : "") + ".\n\n" +
     "Regels:\n" +
     "- Maximaal 190 tekens per item, één of twee korte zinnen, geen opsomming, geen emoji's, spreek de lezer aan met \"je\".\n" +
@@ -3610,7 +3650,7 @@ function buildTipsPrompt(p) {
     "- Echte Balanza-functies (verzin er geen andere): Balans-score per gerecht (hoe dicht de macroverdeling bij het doel ligt); " +
     "dag- en weektotalen van macro's; weekplanning per maaltijdmoment; boodschappenlijst (samengevoegd per week of per dag, " +
     "gegroepeerd per categorie, met prijsindicatie); prepdag-plan; een variant van een gerecht laten maken (pittiger, simpeler, " +
-    "fine dining, andere koolhydraatbron); aantal personen per gerecht; kookmodus met timers; PDF-export; bereidingstijd per gerecht; " +
+    "fine dining, andere koolhydraatbron, ander vlees/vis of andere vleesvervanger); gezondheidsfilters (onbewerkt, geen geraffineerde suiker, glutenvrij, lactosevrij, volkoren, zoutbewust); aantal personen per gerecht; kookmodus met timers; PDF-export; bereidingstijd per gerecht; " +
     "doel en voedingsstijl instellen.\n" +
     (avoid.length ? "- Herhaal deze eerder getoonde items niet en varieer sterk:\n" + avoid.map(function (a) { return "  * " + a; }).join("\n") + "\n" : "") +
     "\nGeef ALLEEN geldig JSON terug: een array van 8 objecten, exact dit schema, geen markdown, geen uitleg erbuiten:\n" +
@@ -4691,6 +4731,7 @@ function buildSummary(account, blocked, noteDoc, settings) {
       name: prefs && typeof prefs.name === "string" ? prefs.name.slice(0, 40) : null,
       goal: prefs ? prefs.goal || null : null,
       dietStyle: prefs ? prefs.dietStyle || null : null,
+      health: prefs ? healthWithExclude(prefs.health, prefs.exclude) : [],
       level: prefs ? prefs.level || null : null,
       dishCount: dishCount,
       plannedWeekCount: weekList.length,
@@ -4748,7 +4789,7 @@ function withLocation(u) {
 function filterUsers(list, q) {
   var text = (q.get("q") || "").trim().toLowerCase();
   var type = q.get("type") || "all", status = q.get("status") || "all";
-  var goal = q.get("goal") || "", diet = q.get("diet") || "", active = q.get("active") || "", created = q.get("created") || "", plan = q.get("plan") || "";
+  var goal = q.get("goal") || "", diet = q.get("diet") || "", health = q.get("health") || "", active = q.get("active") || "", created = q.get("created") || "", plan = q.get("plan") || "";
   var now = Date.now();
   function within(ts, days) { var t = ts ? Date.parse(ts) : NaN; return isFinite(t) && now - t <= days * DAY_MS; }
   return list.filter(function (u) {
@@ -4758,6 +4799,7 @@ function filterUsers(list, q) {
     if (status === "disabled" && !u.disabled) return false;
     if (goal && u.goal !== goal) return false;
     if (diet && u.dietStyle !== diet) return false;
+    if (health && (u.health || []).indexOf(health) === -1) return false;
     if (active === "24h" && !within(u.lastSeenAt, 1)) return false;
     if (active === "7d" && !within(u.lastSeenAt, 7)) return false;
     if (active === "30d" && !within(u.lastSeenAt, 30)) return false;
@@ -4771,7 +4813,7 @@ function filterUsers(list, q) {
       if (["plus", "expired", "free", "anon"].indexOf(plan) > -1 && u.plan !== plan) return false;
     }
     if (text) {
-      var hay = [u.email, u.name, u.uid, u.note, u.lastIp, u.goal, u.dietStyle].join(" ").toLowerCase();
+      var hay = [u.email, u.name, u.uid, u.note, u.lastIp, u.goal, u.dietStyle].concat((u.health || []).map(function (k) { return HEALTH_LABELS[k] || k; })).join(" ").toLowerCase();
       if (hay.indexOf(text) === -1) return false;
     }
     return true;
@@ -4881,6 +4923,9 @@ function sanitizePrefsPatch(patch) {
       case "familyMode": clean.familyMode = v === true; break;
       case "health":
         if (!Array.isArray(v) || v.some(function (x) { return HEALTH_KEYS.indexOf(x) === -1; })) errors.push("Onbekende gezondheidsvoorkeur."); else clean.health = cleanHealth(v);
+        break;
+      case "cheeseMode":
+        if (v !== "hardekaas" && v !== "geen") errors.push("Kaaskeuze moet hardekaas of geen zijn."); else clean.cheeseMode = v;
         break;
       case "sugarMode":
         if (v !== "natuurlijk" && v !== "strikt") errors.push("Suikerkeuze moet natuurlijk of strikt zijn."); else clean.sugarMode = v;
@@ -5443,7 +5488,10 @@ function handleAdminSystem(req, res) {
 function settingsPayload(s) {
   return { billingEnv: billingEnvInfo(), settings: s, effectiveModules: effectiveModules(s), moduleDefs: MODULE_DEFS, limitDefs: LIMIT_DEFS, maintenanceOffModules: MAINTENANCE_OFF_MODULES,
     planGateableModules: PLAN_GATEABLE_MODULES,
-    prefOptions: { goals: Object.keys(GOAL_TARGETS), diets: TIP_DIETS, mealTypes: PREF_MEALTYPES } };
+    prefOptions: { goals: Object.keys(GOAL_TARGETS), diets: TIP_DIETS, mealTypes: PREF_MEALTYPES,
+      health: HEALTH_KEYS.map(function (k) { return [k, HEALTH_LABELS[k]]; }),
+      sugarModes: [["natuurlijk", "Natuurlijke zoetmiddelen met mate"], ["strikt", "Alleen fruit en dadels"]],
+      cheeseModes: [["hardekaas", "Harde kaas mag met mate"], ["geen", "Helemaal geen kaas"]] } };
 }
 function diffSettings(cur, next) {
   var out = [];

@@ -510,9 +510,9 @@
   var meta = { settings: null };   // instellingen incl. beschrijvingen van modules en keuzelijsten (één keer opgehaald)
   var viewSeq = 0;                 // verouderde antwoorden negeren als je alweer ergens anders bent
   var refreshTimer = null;
-  var U = { q: "", type: "", status: "", plan: "", goal: "", diet: "", active: "", created: "", sort: "lastSeen", dir: "", page: 1, pageSize: 25, sel: {} };
+  var U = { q: "", type: "", status: "", plan: "", goal: "", diet: "", health: "", active: "", created: "", sort: "lastSeen", dir: "", page: 1, pageSize: 25, sel: {} };
   var L = { q: "", type: "", status: "", action: "", uid: "", ip: "", from: "", to: "", minMs: "", page: 1, pageSize: 50, auto: false };
-  function resetUserFilters() { U.q = ""; U.type = ""; U.status = ""; U.plan = ""; U.goal = ""; U.diet = ""; U.active = ""; U.created = ""; U.sort = "lastSeen"; U.dir = ""; U.page = 1; }
+  function resetUserFilters() { U.q = ""; U.type = ""; U.status = ""; U.plan = ""; U.goal = ""; U.diet = ""; U.health = ""; U.active = ""; U.created = ""; U.sort = "lastSeen"; U.dir = ""; U.page = 1; }
   function resetLogFilters() { L.q = ""; L.type = ""; L.status = ""; L.action = ""; L.uid = ""; L.ip = ""; L.from = ""; L.to = ""; L.minMs = ""; L.page = 1; }
   var A = { q: "", action: "", from: "", to: "", page: 1, pageSize: 50 };
   var S = { q: "", status: "", page: 1, pageSize: 25 };
@@ -763,6 +763,8 @@
   // Gebruikers: overzicht
   // =====================================================================================
   function goalOptions() { return [["", "Alle doelen"]].concat(meta.settings.prefOptions.goals.map(function (g) { return [g, g]; })); }
+  function healthOptions() { return [["", "Alle gezondheidsfilters"]].concat((meta.settings.prefOptions.health || []).map(function (p) { return [p[0], p[1].charAt(0).toUpperCase() + p[1].slice(1)]; })); }
+  function healthLabel(k) { var m = (meta.settings.prefOptions.health || []).filter(function (p) { return p[0] === k; })[0]; return m ? m[1] : k; }
   function dietOptions() { return [["", "Alle diëten"]].concat(meta.settings.prefOptions.diets.map(function (g) { return [g, g]; })); }
   var SORTS = [["lastSeen", "Laatst actief"], ["created", "Aangemaakt"], ["lastLogin", "Laatste login"], ["name", "Naam"], ["email", "E-mail"], ["dishes", "Aantal gerechten"], ["weeks", "Aantal weken"], ["logins", "Aantal logins"], ["trialEnd", "Einde proef"]];
   function defaultDir(key) { return key === "name" || key === "email" || key === "trialEnd" ? "asc" : "desc"; }
@@ -792,7 +794,7 @@
     }
     var typeSel = sel("fType", [["", "Alle soorten"], ["account", "Accounts"], ["anon", "Anoniem"]], "type", "Soort");
     var statusSel = sel("fStatus", [["", "Alle statussen"], ["active", "Actief"], ["disabled", "Geblokkeerd"]], "status", "Status");
-    var goalSel = sel("fGoal", goalOptions(), "goal", "Doel"), dietSel = sel("fDiet", dietOptions(), "diet", "Dieet");
+    var goalSel = sel("fGoal", goalOptions(), "goal", "Doel"), dietSel = sel("fDiet", dietOptions(), "diet", "Dieet"), healthSel = sel("fHealth", healthOptions(), "health", "Gezond eten");
     var activeSel = sel("fActive", [["", "Altijd"], ["24h", "Actief afgelopen 24 uur"], ["7d", "Actief afgelopen 7 dagen"], ["30d", "Actief afgelopen 30 dagen"], ["inactive30", "Niet actief in 30 dagen"]], "active", "Laatst actief");
     var createdSel = sel("fCreated", [["", "Elke aanmaakdatum"], ["7d", "Nieuw in 7 dagen"], ["30d", "Nieuw in 30 dagen"]], "created", "Aangemaakt");
     var sortSel = sel("fSort", SORTS, "sort", "Sorteren op");
@@ -805,9 +807,9 @@
     clearBtn.onclick = function () { resetUserFilters(); render(); };
     var newBtn = h("button", { id: "newUserBtn", text: "+ Nieuwe gebruiker" });
     newBtn.onclick = function () { createUserModal(function () { load(); }); };
-    var extraOn = !!(U.type || U.status || U.goal || U.diet || U.active || U.created);
+    var extraOn = !!(U.type || U.status || U.goal || U.diet || U.health || U.active || U.created);
     var moreBtn = h("button", { class: "ghost", id: "fMore", type: "button", "aria-expanded": "false" });
-    var more = h("div", { class: "more-filters", id: "moreFilters" }, h("div", { class: "toolbar" }, typeSel, statusSel, goalSel, dietSel, activeSel, createdSel), h("div", { class: "toolbar" }, h("span", { class: "muted small", text: "Sorteren op" }), sortSel, dirBtn, clearBtn));
+    var more = h("div", { class: "more-filters", id: "moreFilters" }, h("div", { class: "toolbar" }, typeSel, statusSel, goalSel, dietSel, healthSel, activeSel, createdSel), h("div", { class: "toolbar" }, h("span", { class: "muted small", text: "Sorteren op" }), sortSel, dirBtn, clearBtn));
     function paintMore(open) { more.classList.toggle("hidden", !open); moreBtn.setAttribute("aria-expanded", open ? "true" : "false"); moreBtn.textContent = (open ? "Minder filters" : "Meer filters") + (extraOn ? " •" : ""); }
     var moreOpen = extraOn || prefGet("moreUserFilters") === "1";
     moreBtn.onclick = function () { moreOpen = !moreOpen; prefSet("moreUserFilters", moreOpen ? "1" : "0"); paintMore(moreOpen); };
@@ -871,7 +873,7 @@
           h("td", {}, cb),
           h("td", {}, h("strong", { text: u.name || (u.email ? u.email.split("@")[0] : "Anoniem") }), h("span", { class: "sub", text: u.email || shortUid(u.uid) })),
           h("td", {}, planBadge(u)),
-          h("td", { text: u.goal || "—" }),
+          h("td", { text: u.goal || "—" }, (u.dietStyle || (u.health && u.health.length)) ? h("span", { class: "sub", text: [u.dietStyle].concat((u.health || []).map(healthLabel)).filter(Boolean).join(" · ") }) : null),
           h("td", { class: "nowrap", text: u.dishCount + " gerechten" }, h("span", { class: "sub", text: plural(u.plannedWeekCount, "week", "weken") })),
           h("td", { class: "nowrap", text: relTime(u.lastSeenAt) }, u.location ? h("span", { class: "sub", text: [u.location.city, u.location.country].filter(Boolean).join(", ") }) : null),
           h("td", { class: "nowrap", text: u.createdAt ? fmtDate(u.createdAt).replace(/, \d\d:\d\d$/, "") : "—" }, u.createdBy === "admin" ? h("span", { class: "sub", text: "door beheerder" }) : u.upgradedFrom ? h("span", { class: "sub", text: "eerst anoniem" }) : null));
@@ -883,7 +885,7 @@
     }
     function load() {
       var my = ++seq;
-      return api("/api/admin/users" + qs({ q: U.q, type: U.type, status: U.status, plan: U.plan, goal: U.goal, diet: U.diet, active: U.active, created: U.created, sort: U.sort, dir: U.dir, page: U.page, pageSize: U.pageSize })).then(function (d) {
+      return api("/api/admin/users" + qs({ q: U.q, type: U.type, status: U.status, plan: U.plan, goal: U.goal, diet: U.diet, health: U.health, active: U.active, created: U.created, sort: U.sort, dir: U.dir, page: U.page, pageSize: U.pageSize })).then(function (d) {
         if (my !== seq || !ctx.alive()) return;
         if (d.page !== U.page) U.page = d.page;
         draw(d);
@@ -1112,6 +1114,18 @@
       ctl[key] = { changed: function () { return el.value.trim() !== orig.trim(); }, value: function () { return el.value.split(",").map(function (x) { return x.trim(); }).filter(Boolean); } };
       return field(label, el, "Gescheiden door komma’s");
     }
+    // Gezondheidsfilters (lijst) en de bijbehorende keuzes
+    var healthBoxes = (opts.health || []).map(function (p) {
+      var cb = h("input", { type: "checkbox", id: "p_health_" + p[0] }); cb.checked = Array.isArray(P.health) && P.health.indexOf(p[0]) > -1; cb._orig = cb.checked;
+      return { k: p[0], cb: cb, node: h("label", { class: "row small" }, cb, h("span", { text: p[1].charAt(0).toUpperCase() + p[1].slice(1) })) };
+    });
+    ctl.health = { changed: function () { return healthBoxes.some(function (x) { return x.cb.checked !== x.cb._orig; }); }, value: function () { return healthBoxes.filter(function (x) { return x.cb.checked; }).map(function (x) { return x.k; }); } };
+    function modeSel(key, label, pairs, def) {
+      var cur = P[key] || def;
+      var el = select(pairs, cur, function () {}, label); el.id = "p_" + key;
+      ctl[key] = { changed: function () { return el.value !== cur; }, value: function () { return el.value; } };
+      return field(label, el);
+    }
     var mealBoxes = opts.mealTypes.map(function (m) {
       var cb = h("input", { type: "checkbox", id: "p_meal_" + m }); cb.checked = Array.isArray(P.mealTypes) ? P.mealTypes.indexOf(m) > -1 : true; cb._orig = cb.checked;
       return { m: m, cb: cb, node: h("label", { class: "row small" }, cb, h("span", { text: m })) };
@@ -1127,7 +1141,11 @@
     panes.voorkeuren.appendChild(card("Voorkeuren en profiel",
       h("div", { class: "form-grid" }, txt("name", "Naam", 40), sel("goal", "Doel", opts.goals), sel("dietStyle", "Dieet", opts.diets), txt("level", "Kookniveau", 40), txt("activityLevel", "Activiteitsniveau", 40), txt("gender", "Geslacht", 20),
         txt("age", "Leeftijd", 3, "number"), txt("heightCm", "Lengte (cm)", 3, "number"), txt("weightKg", "Gewicht (kg)", 5, "number"), txt("count", "Gerechten per keer (1–14)", 2, "number")),
-      txt("exclude", "Wil niet eten (uitsluiten)", 300), h("div", { class: "form-grid" }, lst("cuisines", "Keukens"), lst("flavors", "Smaken"), lst("equipment", "Keukenapparatuur")),
+      h("div", { class: "muted small", text: "Gezond eten (harde regels)" }), h("div", { class: "row", style: { margin: "6px 0 10px", flexWrap: "wrap" } }, healthBoxes.map(function (x) { return x.node; })),
+      h("div", { class: "form-grid" }, modeSel("sugarMode", "Bij geen geraffineerde suiker", opts.sugarModes || [["natuurlijk", "natuurlijk"], ["strikt", "strikt"]], "natuurlijk"),
+        modeSel("cheeseMode", "Bij lactosevrij", opts.cheeseModes || [["hardekaas", "hardekaas"], ["geen", "geen"]], "hardekaas")),
+      txt("exclude", "Wil niet eten (uitsluiten)", 300), h("div", { class: "hint", text: "Staat Gluten of Lactose bij de uitsluitingen, dan geldt glutenvrij of lactosevrij ook als harde regel." }),
+      h("div", { class: "form-grid" }, lst("cuisines", "Keukens"), lst("flavors", "Smaken"), lst("equipment", "Keukenapparatuur")),
       h("div", { class: "muted small", text: "Maaltijdsoorten" }), h("div", { class: "row", style: { margin: "6px 0 14px" } }, mealBoxes.map(function (x) { return x.node; })), savePrefs,
       h("div", { class: "hint", text: d.prefs ? "Alleen gewijzigde velden worden opgeslagen; de rest blijft zoals de gebruiker het had." : "Deze gebruiker heeft nog geen voorkeuren opgeslagen; alles wat je invult wordt nieuw." })));
 
