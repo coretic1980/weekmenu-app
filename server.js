@@ -4104,7 +4104,7 @@ function assistantActionSpec() {
     '- {"type":"generate_wish","text":"korte wens","tags":["snel","budget","prep","nieuw","huis","restjes","seizoen"]} (opent Gerechten ontwerpen met deze wens; de gebruiker start zelf)\n' +
     '- {"type":"add_leftovers","items":["spinazie"]}\n';
 }
-function buildAssistantPrompt(messages, ctx, spoken) {
+function buildAssistantPrompt(messages, ctx) {
   var minor = isMinorParams(ctx || {});
   var hist = messages.map(function (m) { return (m.role === "assistant" ? "Balanza" : "Gebruiker") + ": " + m.content; }).join("\n");
   return "Je bent de Balanza-assistent in de app Balanza. Je helpt de gebruiker met vragen over de app en zijn eten, en je kunt de app voor hem aanpassen " +
@@ -4114,8 +4114,6 @@ function buildAssistantPrompt(messages, ctx, spoken) {
     "- Voedingsstijl, gezondheidsfilters en uitsluitingen zijn harde regels; je kunt ze alleen op verzoek van de gebruiker wijzigen.\n" +
     (minor ? "- Deze gebruiker is 16 of 17: stel nooit Vetverlies of Cutting voor en praat niet over afvallen of gewicht; focus op genoeg en gevarieerd eten, energie en sport.\n" : "") +
     "- Geen medisch advies. Bij klachten, zwangerschap, een eetstoornis of medicijnen: verwijs vriendelijk naar huisarts of diëtist. Stel nooit een te laag caloriedoel of extreme diëten voor.\n" +
-    (spoken ? "- De gebruiker sprak dit bericht in en jouw antwoord wordt hardop voorgelezen: herhaal of citeer zijn woorden NIET en vat zijn vraag niet samen; " +
-      "begin direct met het antwoord, in korte gesproken zinnen (hooguit 3), zonder opsommingstekens, emoji of haakjes.\n" : "") +
     "- Vragen die niets met eten, koken of de app te maken hebben: kort en vriendelijk terugleiden naar Balanza.\n" +
     "- Stel alleen acties voor als de gebruiker iets wil veranderen of openen. Bij een gewone vraag: alleen antwoorden, actions leeg.\n" +
     "- Kan een wens NIET met de acties hierboven (de functie bestaat niet), of valt hij buiten de kaders: zeg dat eerlijk en vriendelijk, noem waar mogelijk een alternatief, " +
@@ -4225,7 +4223,7 @@ function handleAssistant(req, res) {
           if (isMinorParams(stored)) { ctx.ageGroup = "16-17"; ctx.age = stored.age || ctx.age; }
           var usage = newUsage();
           al.use.n++; assistantUse.set(user.uid, al.use); dbSetDoc("assistant/" + user.uid, al.use).catch(function () {});
-          return usageCtx.run(usage, function () { return callAnthropicOnce(buildAssistantPrompt(msgs, ctx, body.spoken === true), ASSISTANT_MODEL, 1500); }).then(function (parsed) {
+          return usageCtx.run(usage, function () { return callAnthropicOnce(buildAssistantPrompt(msgs, ctx), ASSISTANT_MODEL, 1500); }).then(function (parsed) {
             var reply = cleanText(parsed && parsed.reply, 1200) || "Sorry, dat begreep ik niet helemaal. Kun je het anders zeggen?";
             var actions = cleanAssistantActions(parsed && parsed.actions, ctx);
             var suggestion = actions.length ? null : cleanSuggestion(parsed && parsed.suggestion);
@@ -5665,10 +5663,7 @@ function sanitizePrefsPatch(patch) {
         if (!v || typeof v !== "object" || Array.isArray(v)) errors.push("Budgetmodus moet een object zijn.");
         else clean.student = { on: v.on === true, budget: STUDENT_BUDGETS.indexOf(Number(v.budget)) > -1 ? Number(v.budget) : 35, onePan: v.onePan === true, quick: v.quick !== false };
         break;
-      case "voiceName": clean.voiceName = cleanText(v, 200); break;
-      case "voiceStyle":
-        if (["warm", "vrouw", "man"].indexOf(v) === -1) errors.push("Onbekende stem."); else clean.voiceStyle = v;
-        break;
+      case "voiceName": case "voiceStyle": break;   // voorlezen is verwijderd; oude waarden negeren
       case "coach":
         if (!v || typeof v !== "object" || Array.isArray(v)) errors.push("Begeleiding moet een object zijn.");
         else { clean.coach = {}; Object.keys(v).slice(0, 20).forEach(function (k) { if (/^[a-z]{2,20}$/.test(k) && typeof v[k] === "boolean") clean.coach[k] = v[k]; }); }
