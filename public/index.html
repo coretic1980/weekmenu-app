@@ -12230,7 +12230,8 @@
     try {
       var u = new SpeechSynthesisUtterance(String(text).replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, "").slice(0, 900));
       u.lang = "nl-NL"; nlVoice = pickNlVoice(); if (nlVoice) u.voice = nlVoice;
-      var st = voiceStyle(); u.rate = st === "warm" ? 0.92 : 1.0; u.pitch = st === "warm" ? 0.9 : 1.0;
+      // Toonhoogte nooit aanpassen: op iPhone vervormt dat de stem, waardoor Claire niet meer als Claire klinkt.
+      var st = voiceStyle(); u.rate = (st === "warm" && !prefs.voiceName) ? 0.95 : 1.0; u.pitch = 1.0;
       u.onend = u.onerror = function () { var sb = document.getElementById("chatSpeaking"); if (sb) sb.remove(); };
       Synth.speak(u);
       var form = document.getElementById("chatForm");
