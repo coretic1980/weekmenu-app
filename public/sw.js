@@ -4,7 +4,7 @@
 // request fails (e.g. briefly offline). Bump CACHE_NAME whenever you want to
 // force-invalidate old cached assets after a deploy.
 
-var CACHE_NAME = "weekmenu-shell-v10";
+var CACHE_NAME = "weekmenu-shell-v11";
 var SHELL_FILES = [
   "/",
   "/manifest.json",
@@ -25,7 +25,7 @@ self.addEventListener("activate", function (event) {
   event.waitUntil(
     caches.keys().then(function (keys) {
       return Promise.all(
-        keys.filter(function (key) { return key !== CACHE_NAME; })
+        keys.filter(function (key) { return key !== CACHE_NAME && key !== "balanza-badge"; })
             .map(function (key) { return caches.delete(key); })
       );
     })
@@ -73,7 +73,27 @@ self.addEventListener("push", function (event) {
     renotify: true,
     data: { url: data.url || "/" }
   };
-  event.waitUntil(self.registration.showNotification(title, options));
+  event.waitUntil(Promise.all([self.registration.showNotification(title, options), bumpBadge()]));
+});
+
+// ---------- Teller op het app-icoon (iPhone vanaf iOS 16.4 op het beginscherm, Android/desktop in Chrome/Edge) ----------
+// Elke melding telt er één bij; de app zet de teller weer op nul zodra je hem opent. De stand bewaren we in een eigen cache,
+// omdat een service worker tussendoor kan worden afgesloten.
+var BADGE_CACHE = "balanza-badge", BADGE_KEY = "/__badge";
+function readBadge() {
+  return caches.open(BADGE_CACHE).then(function (c) { return c.match(BADGE_KEY); })
+    .then(function (r) { return r ? r.text() : "0"; }).then(function (t) { return Number(t) || 0; }, function () { return 0; });
+}
+function writeBadge(n) {
+  return caches.open(BADGE_CACHE).then(function (c) { return c.put(BADGE_KEY, new Response(String(n))); }).catch(function () {});
+}
+function bumpBadge() {
+  if (!self.navigator || typeof self.navigator.setAppBadge !== "function") return Promise.resolve();
+  return readBadge().then(function (n) { n = Math.min(n + 1, 99); return writeBadge(n).then(function () { return self.navigator.setAppBadge(n); }); }).catch(function () {});
+}
+
+self.addEventListener("message", function (event) {
+  if (event.data && event.data.type === "balanza-badge-reset") event.waitUntil(writeBadge(0));
 });
 
 self.addEventListener("notificationclick", function (event) {

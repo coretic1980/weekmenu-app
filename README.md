@@ -591,6 +591,14 @@ curl -X POST https://jouw-domein.nl/api/cron/notify -H "Authorization: Bearer $C
 Dubbel versturen kan niet: per gebruiker wordt per dag bijgehouden wat al verstuurd is. De beheerconsole toont onder
 *Overzicht → Meldingen* hoeveel er de afgelopen 7 dagen per soort zijn afgeleverd, en onder *Systeem* of de cron is ingesteld.
 
+**Testmelding**: onder *Instellingen → Meldingen* staat (als meldingen aan zijn) *Stuur een testmelding*. Die gaat meteen naar alle
+toestellen van de gebruiker en toont wat de pushdienst antwoordde (bijv. `Apple zei: 403 (BadJwtToken)`); weigeringen staan ook in de log.
+De VAPID-`sub` is altijd een echte https-URL (`VAPID_SUBJECT`, anders `PUBLIC_BASE_URL` of `RENDER_EXTERNAL_HOSTNAME`), omdat Apple
+een nep-adres weigert.
+
+**Teller op het app-icoon**: elke melding telt één op bij het icoon (Badging API; iPhone vanaf iOS 16.4 op het beginscherm, Chrome/Edge).
+Open je de app, dan toont de teller alleen nog ongelezen chatberichten en antwoorden op ideeën, of verdwijnt hij.
+
 **Zichtbaar voor gebruikers.** Zodra abonnementen aan staan, ziet een gebruiker altijd welk plan hij heeft: een klein label
 ("Gratis" of "Plus") naast de avatar rechtsboven en in het accountmenu. Vanuit het accountmenu, de Plus-kaart in Mijn profiel
 en de limietmelding op het generatiescherm gaat een link "Abonnement vergelijken" naar een pagina met Gratis en Plus naast

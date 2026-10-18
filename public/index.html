@@ -3659,7 +3659,21 @@
         b.style.display = st === "on" || st === "off" ? "flex" : "none";
         if (b.labelEl) b.labelEl.textContent = st === "on" ? "Meldingen uitzetten" : "Meldingen aanzetten";
       }
+      var tb = document.getElementById("settingsPushTest"); if (tb) tb.style.display = st === "on" ? "flex" : "none";
     }
+    var testBtn = accButton(pushCard, "settingsPushTest", "bell", "Stuur een testmelding", function () {
+      testBtn.disabled = true;
+      registerPushDevice().catch(function () {}).then(function () {
+        return fetch("/api/push/test", { method: "POST", headers: authHeaders() }).then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { if (!r.ok) throw new Error(d.message || "De testmelding kon niet worden verstuurd."); return d; }); });
+      }).then(function (d) {
+        var t = document.getElementById("settingsPushTestResult");
+        if (!t) { t = document.createElement("div"); t.className = "acc-sub"; t.id = "settingsPushTestResult"; testBtn.parentNode.insertBefore(t, testBtn.nextSibling); }
+        if (!d.devices) t.textContent = "Er is geen toestel aangemeld. Zet meldingen uit en weer aan, en probeer het opnieuw.";
+        else if (d.sent) t.textContent = "Verstuurd naar " + d.sent + (d.sent === 1 ? " toestel" : " toestellen") + ". Zie je niets binnen een halve minuut? Kijk bij Instellingen → Meldingen → Balanza op je telefoon of meldingen en 'Badges' aanstaan, en of een focusmodus ze tegenhoudt.";
+        else t.textContent = "De melding is niet aangekomen. " + d.results.map(function (x) { return x.service + " zei: " + (x.status || "geen verbinding") + (x.reason ? " (" + x.reason + ")" : ""); }).join("; ") + (d.removed ? ". Dit toestel is afgemeld; zet meldingen uit en weer aan." : "");
+      }).catch(function (e) { showToast(friendlyNetError(e)); }).then(function () { testBtn.disabled = false; });
+    });
+    testBtn.style.display = "none";
     pushBtn.onclick = function () {
       pushBtn.disabled = true;
       var p = pushState === "on" ? disablePush() : enablePush();   // enablePush start direct in deze tik, zoals de browser eist
@@ -12266,6 +12280,7 @@
     loadChat();
     lsSet("balanza_chat_seen", String(chat.msgs.length));
     var cbtn = document.getElementById("chatBtn"); if (cbtn) cbtn.classList.remove("has-dot");
+    syncAppBadge();
     var ov = document.getElementById("chatOverlay");
     if (!ov) {
       ov = document.createElement("div"); ov.id = "chatOverlay"; ov.className = "chat-overlay";
@@ -12477,12 +12492,29 @@
   function loadInbox() {
     if (!window.authToken && window.authRequired) return Promise.resolve();
     return fetch("/api/inbox", { headers: authHeaders() }).then(function (r) { return r.ok ? r.json() : { items: [] }; })
-      .then(function (d) { inbox.items = Array.isArray(d.items) ? d.items : []; inbox.loaded = true; if (state.view === "weeks" || state.view === "account") render(); }).catch(function () {});
+      .then(function (d) { inbox.items = Array.isArray(d.items) ? d.items : []; inbox.loaded = true; syncAppBadge(); if (state.view === "weeks" || state.view === "account") render(); }).catch(function () {});
   }
   var lastInboxLoad = 0;
   document.addEventListener("visibilitychange", function () { if (document.visibilityState === "visible" && Date.now() - lastInboxLoad > 300000) { lastInboxLoad = Date.now(); loadInbox(); } });
+  // ---------- Teller op het app-icoon ----------
+  // Meldingen tellen op het icoon op (dat doet de service worker). Open je de app, dan heb je ze gezien: de teller toont dan
+  // alleen nog wat echt nog op je wacht, zoals een ongelezen chatbericht of een antwoord op je idee.
+  function syncAppBadge() {
+    if (typeof navigator.setAppBadge !== "function") return;
+    var n = 0;
+    try { loadChat(); n += Math.max(0, chat.msgs.length - Number(localStorage.getItem("balanza_chat_seen") || 0)); } catch (e) {}
+    n += inbox.items.filter(function (it) { return !it.read; }).length;
+    try { (n > 0 ? navigator.setAppBadge(n) : navigator.clearAppBadge()).catch(function () {}); } catch (e) {}
+  }
+  function resetPushBadge() {
+    try { if (navigator.serviceWorker && navigator.serviceWorker.controller) navigator.serviceWorker.controller.postMessage({ type: "balanza-badge-reset" }); } catch (e) {}
+    syncAppBadge();
+  }
+  document.addEventListener("visibilitychange", function () { if (document.visibilityState === "visible") resetPushBadge(); });
+  setTimeout(resetPushBadge, 1500);
   function markInboxRead(ids) {
     inbox.items.forEach(function (it) { if (ids.indexOf(it.id) > -1) it.read = true; });
+    syncAppBadge();
     fetch("/api/inbox/read", { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, authHeaders()), body: JSON.stringify({ ids: ids }) }).catch(function () {});
   }
   function renderInboxNudge(holder) {

@@ -3288,7 +3288,9 @@ function validPushSubscription(sub) {
 function sendWebPush(sub, payload, host) {
   return getVapidKeys().then(function (keys) {
     var endpoint = new URL(sub.endpoint);
-    var subject = process.env.VAPID_SUBJECT || (host ? "https://" + String(host).replace(/[^A-Za-z0-9.:-]/g, "") : "mailto:beheer@balanza.invalid");
+    // Apple weigert meldingen als 'sub' geen echt adres is (bijv. een .invalid-mailadres): altijd een echte https-URL gebruiken.
+    var h = host || notifyHost();
+    var subject = process.env.VAPID_SUBJECT || (h ? "https://" + String(h).replace(/[^A-Za-z0-9.:-]/g, "") : "https://balanza.app");
     var jwt = signVapid(endpoint.origin, subject, keys);
     var body = encryptWebPush(sub.p256dh, sub.auth, Buffer.from(JSON.stringify(payload)));
     var ctrl = new AbortController();
@@ -3296,21 +3298,33 @@ function sendWebPush(sub, payload, host) {
     return fetch(sub.endpoint, {
       method: "POST", redirect: "manual", signal: ctrl.signal, body: body,
       headers: { "Content-Type": "application/octet-stream", "Content-Encoding": "aes128gcm", "Content-Length": String(body.length), "TTL": "3600", "Urgency": "normal", "Authorization": "vapid t=" + jwt + ", k=" + keys.publicKey }
-    }).then(function (r) { clearTimeout(t); return r.status; }, function (e) { clearTimeout(t); throw e; });
+    }).then(function (r) {
+      clearTimeout(t);
+      return r.text().catch(function () { return ""; }).then(function (txt) { return { status: r.status, reason: r.status >= 300 ? pushReason(txt) : "" }; });
+    }, function (e) { clearTimeout(t); throw e; });
   });
+}
+function pushReason(txt) {   // Apple/Google geven bij een weigering een korte reden terug, bijv. {"reason":"BadJwtToken"}
+  var t = String(txt || "").slice(0, 300);
+  try { var j = JSON.parse(t); if (j && (j.reason || j.message || j.error)) return String(j.reason || j.message || (j.error && j.error.message) || j.error).slice(0, 120); } catch (e) {}
+  return t.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 120);
+}
+function pushServiceName(endpoint) {
+  try { var h = new URL(endpoint).hostname; return /apple\.com$/.test(h) ? "Apple" : /googleapis\.com$/.test(h) ? "Google" : /mozilla\.com$/.test(h) ? "Firefox" : /windows\.com$/.test(h) ? "Windows" : h; } catch (e) { return "?"; }
 }
 function notifyUser(uid, payload, host, kind) {
   return dbGetDoc("push/" + uid).then(function (r) {
     var subs = r.exists && r.value && Array.isArray(r.value.subs) ? r.value.subs : [];
     if (!subs.length) return { sent: 0 };
     return Promise.all(subs.map(function (s) {
-      return sendWebPush(s, payload, host).then(function (status) { return { s: s, status: status }; }, function () { return { s: s, status: 0 }; });
+      return sendWebPush(s, payload, host).then(function (x) { return { s: s, status: x.status, reason: x.reason }; }, function (e) { return { s: s, status: 0, reason: e && e.message ? String(e.message).slice(0, 120) : "netwerkfout" }; });
     })).then(function (results) {
       var sent = results.filter(function (x) { return x.status >= 200 && x.status < 300; }).length;
       var dead = results.filter(function (x) { return [400, 401, 403, 404, 410].indexOf(x.status) > -1; }).map(function (x) { return x.s.endpoint; });
-      logEvent("push", kind || "notify", sent > 0, sent > 0 ? 200 : (results[0] ? results[0].status : 0), { uid: uid, sent: sent, failed: results.length - sent, error: sent > 0 ? undefined : "Melding niet afgeleverd" });
-      if (!dead.length) return { sent: sent, removed: 0 };
-      return dbSetDoc("push/" + uid, { subs: subs.filter(function (s) { return dead.indexOf(s.endpoint) === -1; }) }).then(function () { return { sent: sent, removed: dead.length }; });
+      logEvent("push", kind || "notify", sent > 0, sent > 0 ? 200 : (results[0] ? results[0].status : 0), { uid: uid, sent: sent, failed: results.length - sent, error: sent > 0 ? undefined : "Melding niet afgeleverd" + (results[0] && results[0].reason ? " (" + pushServiceName(results[0].s.endpoint) + ": " + results[0].reason + ")" : "") });
+      var detail = results.map(function (x) { return { service: pushServiceName(x.s.endpoint), status: x.status, reason: x.reason || "" }; });
+      if (!dead.length) return { sent: sent, removed: 0, results: detail };
+      return dbSetDoc("push/" + uid, { subs: subs.filter(function (s) { return dead.indexOf(s.endpoint) === -1; }) }).then(function () { return { sent: sent, removed: dead.length, results: detail }; });
     });
   }).catch(function () { return { sent: 0 }; });
 }
@@ -3393,7 +3407,8 @@ function communityMatches(rec, prefs) {
 
 function notifyHost() {
   var base = process.env.PUBLIC_BASE_URL || "";
-  try { return base ? new URL(base).host : null; } catch (e) { return null; }
+  try { if (base) return new URL(base).host; } catch (e) {}
+  return process.env.RENDER_EXTERNAL_HOSTNAME || null;
 }
 // ---- Conceptweek: Balanza zet de week alvast klaar met je eigen gerechten (geen AI, dus geen kosten) ----
 var DRAFT_MAIN = ["Ontbijt", "Lunch", "Diner"];
@@ -3624,6 +3639,17 @@ function handlePushSubscribe(req, res) {
   }).catch(function (err) {
     sendJSON(res, 400, { code: "bad_request", message: err && err.message ? err.message : "Ongeldige aanvraag." });
   });
+}
+// Testmelding: stuurt meteen een melding naar alle toestellen van de gebruiker en meldt per toestel wat de pushdienst zei.
+var pushTestAllowed = makeHourlyLimiter(10);
+function handlePushTest(req, res) {
+  return resolveUser(req).then(function (user) {
+    if (!user) return sendUnauthorized(res);
+    if (!pushTestAllowed("t:" + user.uid)) return sendJSON(res, 429, { code: "rate_limited", message: "Je hebt al een paar testmeldingen gestuurd. Probeer het over een uur opnieuw." });
+    return notifyUser(user.uid, { title: "Balanza", body: "Testmelding: je meldingen werken! \ud83c\udf89", url: "/", tag: "balanza-test", badge: 1 }, req.headers.host, "test").then(function (r) {
+      sendJSON(res, 200, { sent: r.sent || 0, devices: (r.results || []).length, removed: r.removed || 0, results: r.results || [] });
+    });
+  }).catch(function () { sendJSON(res, 500, { code: "server_error", message: "De testmelding kon niet worden verstuurd." }); });
 }
 function handlePushUnsubscribe(req, res) {
   if (!pushSubscribeAllowed(clientIp(req))) return sendJSON(res, 429, { code: "rate_limited", message: "Te veel verzoeken. Probeer het later opnieuw." });
@@ -6768,6 +6794,7 @@ var server = http.createServer(function (req, res) {
   if (req.method === "GET" && url.pathname === "/api/push/key") return handlePushKey(req, res);
   if (req.method === "POST" && url.pathname === "/api/push/subscribe") return handlePushSubscribe(req, res);
   if (req.method === "POST" && url.pathname === "/api/push/unsubscribe") return handlePushUnsubscribe(req, res);
+  if (req.method === "POST" && url.pathname === "/api/push/test") return handlePushTest(req, res);
   if ((req.method === "GET" || req.method === "POST") && url.pathname === "/api/notify/prefs") return handleNotifyPrefs(req, res);
   var hhMatch = url.pathname.match(/^\/api\/household(?:\/(invite|join|leave))?$/);
   if (hhMatch && ((req.method === "GET" && !hhMatch[1]) || (req.method === "POST" && hhMatch[1]))) return handleHousehold(req, res, hhMatch[1]);
