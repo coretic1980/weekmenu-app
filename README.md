@@ -64,7 +64,7 @@ daarom niet meer onderaan het startscherm.
 
 **Dagelijks (bij Vandaag op Start):**
 - **Anders gegeten** (`/api/estimate`): beschrijf of fotografeer wat je at; de AI (assistent-model) schat kcal en macro's, die je kunt
-  aanpassen. Kies "In plaats van" een geplande maaltijd of "Extra". Het telt mee in je dag (meters, balk, planner); opgeslagen in
+  aanpassen. Met een foto gebruikt de server het hoofdmodel (`ANTHROPIC_MODEL`, kan foto's lezen), alleen tekst gaat via het assistent-model. Fouten staan in het scherm zelf en in de log (soort "estimate"). Kies "In plaats van" een geplande maaltijd of "Extra". Het telt mee in je dag (meters, balk, planner); opgeslagen in
   `plannedWeeks[].extra[dag]` met `who` (in een huishouden ziet ieder alleen zijn eigen). Max 30 schattingen per uur per gebruiker.
 - **Uit eten**: restaurantnaam (met eerdere restaurants als suggestie) en optioneel je locatie, afgerond op ±100 m. Balanza onthoudt
   wat je er at (`prefs.places`, max 30) en stelt de volgende keer restaurants binnen 250 m voor, met "Hetzelfde als vorige keer".

@@ -4366,7 +4366,7 @@ function handleEstimate(req, res) {
       }
       if (!text && !image) return sendJSON(res, 400, { code: "bad_request", message: "Beschrijf wat je at of maak een foto." });
       var usage = newUsage();
-      return usageCtx.run(usage, function () { return callAnthropicOnce(buildEstimatePrompt(text, !!image), ASSISTANT_MODEL, 600, image); }).then(function (p) {
+      return usageCtx.run(usage, function () { return callAnthropicOnce(buildEstimatePrompt(text, !!image), image ? ANTHROPIC_MODEL : ASSISTANT_MODEL, 1200, image); }).then(function (p) {
         return recordAccounting(user.uid, "estimate", usage, 0, true).then(function () {
           if (!p || p.error) return sendJSON(res, 422, { code: "not_food", message: "Hier herken ik geen eten in. Probeer een andere foto of beschrijf het kort." });
           var n = function (v, max) { v = Math.round(Number(v) || 0); return Math.max(0, Math.min(max, v)); };
@@ -4378,7 +4378,8 @@ function handleEstimate(req, res) {
       }, function (e) { return recordAccounting(user.uid, "estimate", usage, 0, false).then(function () { throw e; }); });
     });
   }).catch(function (err) {
-    logRequest({ ts: new Date().toISOString(), type: "estimate", action: "schatten", durationMs: Date.now() - t0, ok: false, status: 502, error: err && err.message, ip: ip });
+    logRequest({ ts: new Date().toISOString(), type: "estimate", action: "schatten", durationMs: Date.now() - t0, ok: false, status: 502, error: String(err && err.message || err).slice(0, 300), ip: ip });
+    console.error("estimate failed:", err && err.message);
     sendJSON(res, 502, { code: "error", message: "Schatten lukte even niet. Probeer het zo opnieuw." });
   });
 }

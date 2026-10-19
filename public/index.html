@@ -401,7 +401,7 @@
     font-size: 14px; font-weight: 600; padding: 14px 18px; border-radius: 14px;
     box-shadow: 0 8px 24px rgba(10, 18, 36, 0.18);
     opacity: 0; pointer-events: none; transition: opacity 0.25s ease, transform 0.25s ease;
-    z-index: 60; text-align: center;
+    z-index: 200; text-align: center;
   }
   .toast.active { opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto; }
   .toast.success::before { content: "\2713"; display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; margin-right: 8px; border-radius: 50%;
@@ -1424,6 +1424,7 @@
   .op-kcal { display: flex; align-items: center; gap: 8px; font-size: 15px; color: var(--muted); }
   .op-kcal input { width: 110px; font: inherit; font-size: 22px; font-weight: 700; padding: 6px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
   .op-mac { font-size: 13px; color: var(--muted); }
+  .op-err { margin: 0; padding: 10px 12px; border-radius: 12px; background: #FBE9E4; color: #8A2E1C; font-size: 13.5px; line-height: 1.45; }
   .op-note { font-size: 13.5px; color: var(--muted); margin: 0; line-height: 1.45; }
   .hh-meals { display: flex; flex-direction: column; margin-top: 4px; border-top: 1px solid var(--line); }
   .hh-meal { appearance: none; border: 0; border-bottom: 1px solid var(--line); background: none; padding: 11px 2px; display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; gap: 12px;
@@ -4872,10 +4873,20 @@
       var payload = { text: text };
       if (st.image) { var m = String(st.image).match(/^data:(image\/[a-z]+);base64,(.+)$/); if (m) payload.image = { mediaType: m[1], data: m[2] }; }
       btn.disabled = true; btn.textContent = "Even schatten…";
-      fetch("/api/estimate", { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, authHeaders()), body: JSON.stringify(payload) })
-        .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { if (!r.ok) throw new Error(d.message || "Schatten lukte even niet."); return d; }); })
-        .then(function (d) { confirmAdd(d); })
-        .catch(function (e) { btn.disabled = false; btn.textContent = "Schatten en toevoegen"; showToast(e.message); });
+      var errBox = document.getElementById("opErr"); if (errBox) errBox.remove();
+      var ctrl = typeof AbortController === "function" ? new AbortController() : null;
+      var killT = setTimeout(function () { if (ctrl) ctrl.abort(); }, 60000);
+      fetch("/api/estimate", { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, authHeaders()), body: JSON.stringify(payload), signal: ctrl ? ctrl.signal : undefined })
+        .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { if (!r.ok) throw new Error(d.message || "Schatten lukte even niet (fout " + r.status + ")."); return d; }); })
+        .then(function (d) { clearTimeout(killT); if (!d || typeof d.kcal !== "number") throw new Error("Ik kreeg geen bruikbare schatting terug."); confirmAdd(d); })
+        .catch(function (e) {
+          clearTimeout(killT);
+          btn.disabled = false; btn.textContent = "Opnieuw proberen";
+          var msg = e && e.name === "AbortError" ? "Dit duurde te lang. Probeer het opnieuw, of beschrijf kort wat je at." : (e && e.message) || "Schatten lukte even niet.";
+          if (st.image && !(st.text || "").trim()) msg += " Tip: typ er een paar woorden bij, dan lukt het ook zonder foto.";
+          var eb = document.createElement("p"); eb.className = "op-err"; eb.id = "opErr"; eb.setAttribute("role", "alert"); eb.textContent = msg;
+          btn.parentNode.insertBefore(eb, btn);
+        });
     }
     function confirmAdd(d) {
       body.innerHTML = "";
