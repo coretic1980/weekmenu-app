@@ -404,6 +404,11 @@
     z-index: 60; text-align: center;
   }
   .toast.active { opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto; }
+  .toast.success::before { content: "\2713"; display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; margin-right: 8px; border-radius: 50%;
+    background: #2E9A5C; color: #fff; font-size: 12px; font-weight: 800; vertical-align: -4px; }
+  .toast.success.active::before { animation: okPop .45s cubic-bezier(.2, 1.6, .4, 1); }
+  @keyframes okPop { 0% { transform: scale(0); } 100% { transform: scale(1); } }
+  @media (prefers-reduced-motion: reduce) { .toast.success.active::before { animation: none; } }
   .update-banner { position: fixed; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 10px); transform: translate(-50%, -16px);
     width: min(92vw, 520px); z-index: 120; display: flex; align-items: center; gap: 10px; padding: 10px 10px 10px 14px; border-radius: 14px;
     background: #1A140C; color: #F6F0E3; box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35); font-size: 13.5px; line-height: 1.4;
@@ -1341,6 +1346,61 @@
   .meal-row .tag.nevo { padding: 3px 8px 3px 5px; font-size: 11px; gap: 4px; display: inline-flex; align-items: center; }
   .meal-row .tag.nevo svg { width: 13px; height: 13px; }
 
+
+  /* ---- Startscherm v2 ---- */
+  .home-hero { display: flex; flex-direction: column; gap: 12px; padding: 18px; border-radius: 20px; }
+  .hh-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+  .hh-head .eyebrow { margin: 0; }
+  .hh-kcal { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .hh-kcal b { font-family: "Fraunces", serif; font-size: 22px; color: var(--ink); }
+  .hh-bar { height: 8px; border-radius: 999px; background: rgba(26, 20, 12, 0.09); overflow: hidden; }
+  .hh-bar span { display: block; height: 100%; border-radius: 999px; background: var(--accent2); transition: width .6s ease; }
+  .hh-macros { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; margin-top: -4px; }
+  .hh-macros b { color: var(--ink); }
+  .hh-empty { font-size: 14px; color: var(--muted); line-height: 1.45; }
+  .hh-meals { display: flex; flex-direction: column; gap: 8px; margin-top: 2px; }
+  .hh-meal { appearance: none; border: 1px solid var(--line); background: var(--surface); border-radius: 14px; padding: 8px 12px 8px 8px; display: grid;
+    grid-template-columns: 52px minmax(0, 1fr) auto; gap: 12px; align-items: center; text-align: left; font-family: inherit; color: var(--ink); cursor: pointer; }
+  .hh-meal.next { border-color: var(--accent2); box-shadow: 0 0 0 1px var(--accent2) inset; }
+  .hh-meal.done { opacity: .7; }
+  .hh-meal-txt small { display: block; font-size: 11.5px; color: var(--muted); font-weight: 600; }
+  .hh-meal.next .hh-meal-txt small { color: var(--accent2); }
+  .hh-meal-txt b { display: block; font-family: "Fraunces", serif; font-weight: 600; font-size: 15.5px; line-height: 1.25; margin-top: 1px; }
+  .hh-meal-go { font-size: 20px; color: var(--muted); padding: 0 2px; }
+  .hh-meal.done .hh-meal-go { color: var(--accent2); font-size: 16px; font-weight: 700; }
+  .hh-thumb { position: relative; width: 52px; height: 52px; border-radius: 12px; overflow: hidden; display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 700; letter-spacing: .06em; color: #1A140C; flex: none; }
+  .hh-thumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .hh-thumb.has-img span { visibility: hidden; }
+  .week-strip { display: flex; flex-direction: column; gap: 12px; padding: 16px 16px 10px; }
+  .ws-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+  .ws-head .eyebrow { margin: 0; }
+  .ws-sum { font-size: 12.5px; color: var(--muted); }
+  .ws-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+  .ws-day { appearance: none; border: 0; background: none; padding: 2px 0; display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; font-family: inherit; color: var(--muted); }
+  .ws-dn { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+  .ws-dot { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700;
+    border: 1.5px dashed var(--line); color: var(--muted); font-variant-numeric: tabular-nums; transition: transform .15s ease; }
+  .ws-day:active .ws-dot { transform: scale(.92); }
+  .ws-day.planned .ws-dot { border: 0; background: var(--bg); color: var(--ink); }
+  .ws-day.cooked .ws-dot { background: var(--accent2); color: var(--accent2-ink); }
+  .ws-day.today .ws-dn { color: var(--ink); }
+  .ws-day.today .ws-dot { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--accent2); }
+  .ws-day.past:not(.planned) .ws-dot { opacity: .45; }
+  .ws-open { appearance: none; border: 0; border-top: 1px solid var(--line); background: none; font: inherit; font-size: 13.5px; font-weight: 700; color: var(--accent2);
+    padding: 11px 0 4px; cursor: pointer; text-align: center; }
+  .foryou { display: flex; flex-direction: column; gap: 8px; }
+  .fy-head { display: flex; align-items: center; justify-content: space-between; }
+  .fy-head .eyebrow { margin: 0; }
+  .fy-next { appearance: none; border: 1px solid var(--line); background: none; border-radius: 999px; padding: 4px 11px; font: inherit; font-size: 12px; font-weight: 700;
+    color: var(--muted); cursor: pointer; font-variant-numeric: tabular-nums; }
+  .fy-next:hover { color: var(--ink); border-color: var(--accent2); }
+  .fy-slot > * { margin: 0 !important; }
+  .fy-in { animation: fyIn .25s ease; }
+  @keyframes fyIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+  .recent-card .hh-thumb { display: none; width: 100%; height: 84px; border-radius: 10px; margin-bottom: 4px; }
+  .recent-card .hh-thumb.has-img { display: flex; }
+  @media (prefers-reduced-motion: reduce) { .fy-in, .hh-bar span, .ws-dot { animation: none; transition: none; } }
   /* Zwevende tabbalk */
   @media (max-width: 700px), (max-height: 500px) and (orientation: landscape) {
     body.has-tabbar .tabbar {
@@ -2074,6 +2134,7 @@
     var el = document.getElementById("toast");
     var txt = document.getElementById("toastText");
     if (!el || !txt) { showToast(message); return; }
+    el.classList.remove("success");
     txt.textContent = message + " ";
     var b = document.createElement("button");
     b.type = "button";
@@ -2087,11 +2148,13 @@
     undoTimer = setTimeout(function () { el.classList.remove("active"); }, 5000);
   }
 
-  function showToast(message) {
+  function showToast(message, kind) {
     var el = document.getElementById("toast");
     var textEl = document.getElementById("toastText");
     if (!el || !textEl) return;
     textEl.textContent = message;
+    el.classList.toggle("success", kind === "ok");
+    if (kind === "ok") { try { if (navigator.vibrate) navigator.vibrate(12); } catch (e) {} }
     el.classList.add("active");
     if (toastTimer) clearTimeout(toastTimer);
     toastTimer = setTimeout(function () { el.classList.remove("active"); }, 4500);
@@ -4284,7 +4347,7 @@
       btn.textContent = "Plan vandaag";
       btn.onclick = function () {
         if (!hasAnyDishes()) {
-          askConfirm("Let op: er zijn nog geen recepten beschikbaar. Navigeer naar gerechten ontwerpen.", function () { goto("prefs"); }, "Ok", "Nee");
+          askConfirm("Je hebt nog geen gerechten om in te plannen. Zullen we er eerst een paar maken die passen bij je doel?", function () { goto("prefs"); }, "Gerechten maken", "Later");
           return;
         }
         var w = pw || addOrOpenPlannedWeek(getMonday(new Date()));
@@ -4381,6 +4444,164 @@
     listCol.appendChild(list);
   }
 
+
+  // ---------- Nieuw startscherm: één kaart voor vandaag, je week in één oogopslag, één suggestie tegelijk ----------
+  var SLOT_HOURS = { "Ontbijt": 10, "Snack na ontbijt": 12, "Lunch": 14, "Snack na lunch": 17, "Diner": 21, "Snack na diner": 24 };
+  function homeThumb(dish, mealType) {
+    var th = MEAL_THUMBS[mealType] || MEAL_THUMBS["Snack"];
+    var wrap = document.createElement("span"); wrap.className = "hh-thumb"; wrap.style.background = th[1];
+    var lbl = document.createElement("span"); lbl.textContent = th[0]; wrap.appendChild(lbl);
+    if (dish && wantsImages()) {
+      var img = document.createElement("img"); img.alt = ""; img.loading = "lazy"; img.style.display = "none";
+      img.onload = function () { wrap.classList.add("has-img"); };
+      wrap.appendChild(img);
+      try { loadDishImageInto(dish, img); } catch (e) {}
+    }
+    return wrap;
+  }
+  function renderHomeHero(main) {
+    var now = new Date(), dayName = PLAN_DAYS[(now.getDay() + 6) % 7];
+    var pw = plannedWeeks.filter(function (w) { return w.weekStart === isoDateKey(getMonday(now)); })[0];
+    var agg = pw ? aggregateDayMacros(pw, dayName) : null;
+    var target = dailyKcalTarget(), t = goalTarget();
+    var card = document.createElement("div"); card.className = "card home-hero"; card.id = "homeHero";
+    var head = document.createElement("div"); head.className = "hh-head";
+    var eb = document.createElement("span"); eb.className = "eyebrow"; eb.textContent = "Vandaag";
+    var kc = document.createElement("span"); kc.className = "hh-kcal";
+    kc.innerHTML = "<b>" + (agg ? agg.kcal : 0) + "</b>" + (target ? " / " + target + " kcal" : " kcal");
+    head.appendChild(eb); head.appendChild(kc); card.appendChild(head);
+    if (target) {
+      var bar = document.createElement("div"); bar.className = "hh-bar";
+      bar.setAttribute("role", "img"); bar.setAttribute("aria-label", (agg ? agg.kcal : 0) + " van " + target + " kcal gepland");
+      var fill = document.createElement("span"); fill.style.width = Math.min(100, Math.round((agg ? agg.kcal : 0) / target * 100)) + "%"; bar.appendChild(fill);
+      card.appendChild(bar);
+      if (agg) {
+        var mac = document.createElement("div"); mac.className = "hh-macros";
+        [["Eiwit", agg.eiwitG, Math.round(target * t.eiwit / 100 / 4)], ["Koolh.", agg.khG, Math.round(target * t.kh / 100 / 4)], ["Vet", agg.vetG, Math.round(target * t.vet / 100 / 9)]].forEach(function (m) {
+          var sp = document.createElement("span"); sp.innerHTML = m[0] + " <b>" + m[1] + "</b>/" + m[2] + " g"; mac.appendChild(sp);
+        });
+        card.appendChild(mac);
+      }
+    }
+    var rows = [];
+    if (pw) PLAN_SLOTS.forEach(function (slot) {
+      var a = pw.slots[dayName + "|" + slot]; if (!a) return;
+      var res = resolveAssignedDish(a); if (res) rows.push({ slot: slot, a: a, dish: res.day });
+    });
+    if (!rows.length) {
+      var empty = document.createElement("div"); empty.className = "hh-empty";
+      empty.textContent = hasAnyDishes() ? "Nog niets gepland. Kies wat je vandaag eet; je dagdoel vult zich vanzelf." : "Je hebt nog geen gerechten. Laat Balanza er een paar bedenken die passen bij je doel.";
+      card.appendChild(empty);
+      var go = document.createElement("button"); go.type = "button"; go.className = "primary-btn"; go.id = "planTodayBtn";
+      if (hasAnyDishes()) {
+        go.textContent = "Plan vandaag";
+        go.onclick = function () { var w = pw || addOrOpenPlannedWeek(getMonday(new Date())); goto("planday", { planWeekId: w.id, planDayName: dayName, tab: "plannen" }); };
+      } else {
+        go.textContent = "Maak mijn eerste gerechten";
+        go.onclick = function () { goto("prefs"); };
+      }
+      card.appendChild(go);
+    } else {
+      var hr = now.getHours(), nextSet = false;
+      var list = document.createElement("div"); list.className = "hh-meals";
+      rows.forEach(function (r) {
+        var row = document.createElement("button"); row.type = "button"; row.className = "hh-meal";
+        var isNext = !nextSet && hr < SLOT_HOURS[r.slot] && r.a.cooked === undefined;
+        if (isNext) { nextSet = true; row.classList.add("next"); }
+        if (r.a.cooked === true) row.classList.add("done");
+        row.appendChild(homeThumb(r.dish, SLOT_TO_MEALTYPE[r.slot]));
+        var tx = document.createElement("span"); tx.className = "hh-meal-txt";
+        var sm = document.createElement("small"); sm.textContent = (isNext ? "Straks · " : "") + r.slot + " · " + r.dish.kcal + " kcal";
+        var b = document.createElement("b"); b.textContent = r.dish.name;
+        tx.appendChild(sm); tx.appendChild(b); row.appendChild(tx);
+        var st = document.createElement("span"); st.className = "hh-meal-go"; st.setAttribute("aria-hidden", "true"); st.textContent = r.a.cooked === true ? "✓" : "›"; row.appendChild(st);
+        row.onclick = function () { goto("day", { weekId: r.a.weekId, dayId: r.a.dayId, dayServings: r.a.servings || 1, dayBackView: "weeks", dayBackWeekId: null, dayBackDayName: null }); };
+        list.appendChild(row);
+      });
+      card.appendChild(list);
+    }
+    main.appendChild(card);
+  }
+  function renderWeekStrip(main, offset) {
+    var monday = getMonday(new Date()); monday.setDate(monday.getDate() + 7 * (offset || 0));
+    var pwk = plannedWeeks.filter(function (w) { return w.weekStart === isoDateKey(monday); })[0];
+    var todayIdx = offset ? -1 : (new Date().getDay() + 6) % 7;
+    var card = document.createElement("div"); card.className = "card week-strip"; card.id = offset ? "nextWeekStrip" : "weekStrip";
+    var head = document.createElement("div"); head.className = "ws-head";
+    var eb = document.createElement("span"); eb.className = "eyebrow"; eb.textContent = offset ? "Volgende week" : "Deze week";
+    var planned = 0;
+    var days = document.createElement("div"); days.className = "ws-days";
+    PLAN_DAYS.forEach(function (dn, i) {
+      var n = 0, cooked = 0;
+      if (pwk) PLAN_SLOTS.forEach(function (sl) { var a = pwk.slots[dn + "|" + sl]; if (a) { n++; if (a.cooked === true) cooked++; } });
+      if (n) planned++;
+      var d = new Date(monday); d.setDate(monday.getDate() + i);
+      var allDone = n > 0 && cooked === n;
+      var b = document.createElement("button"); b.type = "button"; b.className = "ws-day" + (n ? " planned" : "") + (allDone ? " cooked" : "") + (i === todayIdx ? " today" : "") + (i < todayIdx ? " past" : "");
+      b.setAttribute("aria-label", dn + " " + d.getDate() + ": " + (n ? n + (n === 1 ? " maaltijd" : " maaltijden") + " gepland" + (cooked ? ", " + cooked + " gekookt" : "") : "nog niets gepland"));
+      b.innerHTML = '<span class="ws-dn">' + dn.slice(0, 2) + '</span><span class="ws-dot">' + (allDone ? "✓" : n ? n : d.getDate()) + '</span>';
+      b.onclick = function () { needDishesThen(function () { var w = pwk || addOrOpenPlannedWeek(monday); goto("planday", { planWeekId: w.id, planDayName: dn, tab: "plannen" }); }); };
+      days.appendChild(b);
+    });
+    var sum = document.createElement("span"); sum.className = "ws-sum"; sum.textContent = planned + " van 7 dagen gepland";
+    head.appendChild(eb); head.appendChild(sum); card.appendChild(head); card.appendChild(days);
+    var foot = document.createElement("button"); foot.type = "button"; foot.className = "ws-open"; foot.id = offset ? "nextWeekOpen" : "weekOpen";
+    foot.textContent = planned ? "Hele week bekijken ›" : "Week plannen ›";
+    foot.onclick = function () { needDishesThen(function () { var w = pwk || addOrOpenPlannedWeek(monday); goto("planweek", { planWeekId: w.id }); }); };
+    card.appendChild(foot);
+    main.appendChild(card);
+  }
+  // "Voor jou": alles wat aandacht vraagt (melding, gekookt?, reis, conceptweek, terugblik, seizoen) op één plek, één tegelijk.
+  function renderForYou(main) {
+    var pool = document.createElement("div");
+    try {
+      renderInboxNudge(pool);
+      renderCookedCard(pool);
+      renderJourneyNudges(pool, function () { return true; });
+      var nextKey = mondayKeyOffset(1), nw = weekByStart(nextKey);
+      if (coachOn("draft") && nw && nw.draft && draftKeysLeft(nw).length) {
+        nudgeCard(pool, { id: "draftHomeCard", tone: "accent", icon: iconSvg("calendar", 20), title: "Je volgende week staat klaar",
+          text: draftKeysLeft(nw).length + " maaltijden voorgesteld met je eigen gerechten. Bekijk, wissel en keur goed.",
+          actions: [{ label: "Bekijken", primary: true, id: "draftHomeGo", onClick: function () { goto("planweek", { planWeekId: nw.id }); } }] });
+      } else if (coachOn("draft") && [5, 6, 0].indexOf(new Date().getDay()) > -1 && hasAnyDishes() && !readOnlyMode() && nextWeekNeedsPlan() && lsGet("balanza_prepweek_skip") !== nextKey) {
+        nudgeCard(pool, { id: "prepWeekCard", icon: iconSvg("calendar", 20), title: "Volgende week alvast klaarzetten?",
+          text: "Balanza vult hem in één tik met je eigen gerechten. Daarna wissel je wat je wilt.",
+          actions: [{ label: "Zet klaar", primary: true, id: "prepWeekGo", onClick: prepareNextWeek }],
+          onClose: function () { lsSet("balanza_prepweek_skip", nextKey); render(); } });
+      }
+      renderRecapHomeCard(pool);
+      var lay = homeLayout().visible;
+      if (lay.indexOf("reis") === -1 && HOME_TILES.reis.available()) renderJourneyTile(pool);
+      if (lay.indexOf("seizoen") === -1 && HOME_TILES.seizoen.available()) renderSeasonCard(pool);
+    } catch (e) {}
+    var items = Array.prototype.slice.call(pool.childNodes);
+    if (!items.length) return;
+    // Eén hoofdknop per scherm: staat "Plan vandaag" er al, dan worden de knoppen hier rustiger.
+    if (main.querySelector("#planTodayBtn")) items.forEach(function (it) {
+      Array.prototype.forEach.call(it.querySelectorAll(".primary-btn"), function (b) { b.classList.remove("primary-btn"); b.classList.add("ghost-btn"); });
+    });
+    var wrap = document.createElement("div"); wrap.className = "foryou"; wrap.id = "forYou";
+    var head = document.createElement("div"); head.className = "fy-head";
+    var eb = document.createElement("span"); eb.className = "eyebrow"; eb.textContent = "Voor jou";
+    head.appendChild(eb);
+    var slot = document.createElement("div"); slot.className = "fy-slot";
+    var idx = Math.min(state.forYouIdx || 0, items.length - 1);
+    function show() {
+      slot.innerHTML = ""; slot.appendChild(items[idx]);
+      items[idx].classList.add("fy-in");
+      if (nx) nx.textContent = (idx + 1) + " van " + items.length + " ›";
+    }
+    var nx = null;
+    if (items.length > 1) {
+      nx = document.createElement("button"); nx.type = "button"; nx.className = "fy-next"; nx.id = "forYouNext"; nx.setAttribute("aria-label", "Volgende suggestie");
+      nx.onclick = function () { idx = (idx + 1) % items.length; state.forYouIdx = idx; show(); };
+      head.appendChild(nx);
+    }
+    wrap.appendChild(head); wrap.appendChild(slot);
+    show();
+    main.appendChild(wrap);
+  }
+
   function renderWeeks() {
     var app = document.getElementById("app");
     app.innerHTML = "";
@@ -4454,7 +4675,6 @@
       main.appendChild(accBanner);
     }
 
-    if (!state.homeEdit && !state.generating) renderHomeNudges(main);
     setTimeout(scheduleOpener, 0);
 
     if (state.homeEdit) {
@@ -4496,10 +4716,12 @@
   }
 
   // ---------- Startscherm: eigen indeling ----------
-  var HOME_DEFAULT_ORDER = ["vandaag", "reis", "week", "seizoen", "foto", "recent", "community", "boodschappen", "uitleg", "genereren", "volgendeweek", "tip"];
-  var HOME_DEFAULT_HIDDEN = ["genereren", "volgendeweek", "tip"];
+  // Versie 2 (rustiger startscherm): oude indelingen beginnen één keer opnieuw vanaf de nieuwe standaard.
+  var HOME_LAYOUT_V = 2;
+  var HOME_DEFAULT_ORDER = ["vandaag", "week", "voorjou", "recent", "reis", "seizoen", "volgendeweek", "foto", "genereren", "community", "boodschappen", "tip", "uitleg"];
+  var HOME_DEFAULT_HIDDEN = ["reis", "seizoen", "volgendeweek", "foto", "genereren", "community", "boodschappen", "tip", "uitleg"];
   function homeLayout() {
-    var hl = prefs.homeLayout && typeof prefs.homeLayout === "object" ? prefs.homeLayout : null;
+    var hl = prefs.homeLayout && typeof prefs.homeLayout === "object" && prefs.homeLayout.v === HOME_LAYOUT_V ? prefs.homeLayout : null;
     var order = hl && Array.isArray(hl.order) ? hl.order.filter(function (id) { return HOME_TILES[id]; }) : [];
     var hidden = hl && Array.isArray(hl.hidden) ? hl.hidden.filter(function (id) { return HOME_TILES[id]; }) : HOME_DEFAULT_HIDDEN.slice();
     HOME_DEFAULT_ORDER.forEach(function (id) {   // nieuwe tegels komen er vanzelf bij, op hun standaardplek en -zichtbaarheid
@@ -4510,12 +4732,12 @@
     return { order: order, hidden: hidden, visible: order.filter(function (id) { return hidden.indexOf(id) === -1; }) };
   }
   function saveHomeLayout(order, hidden) {
-    prefs.homeLayout = { order: order.slice(), hidden: hidden.slice() };
+    prefs.homeLayout = { v: HOME_LAYOUT_V, order: order.slice(), hidden: hidden.slice() };
     savePrefs();
   }
   function needDishesThen(fn) {
     if (!hasAnyDishes()) {
-      askConfirm("Let op: er zijn nog geen recepten beschikbaar. Navigeer naar gerechten ontwerpen.", function () { goto("prefs"); }, "Ok", "Nee");
+      askConfirm("Je hebt nog geen gerechten om in te plannen. Zullen we er eerst een paar maken die passen bij je doel?", function () { goto("prefs"); }, "Gerechten maken", "Later");
       return;
     }
     fn();
@@ -4552,12 +4774,14 @@
     return b;
   }
   var HOME_TILES = {
-    vandaag: { label: "Vandaag", desc: "Calorieën en macro's van vandaag, met je maaltijden", available: function () { return true; },
-      render: function (main) { renderHomeToday(main, "tile"); } },
-    week: { label: "Huidige week", desc: "Hoe ver je week is ingepland", available: function () { return true; },
-      render: function (main) { homeWeekCard(main, getMonday(new Date()), "Huidige week"); } },
+    vandaag: { label: "Vandaag", desc: "Wat je vandaag eet, met je calorieën en macro's", available: function () { return true; },
+      render: function (main) { renderHomeHero(main); } },
+    week: { label: "Deze week", desc: "Je week in één oogopslag: wat er gepland en gekookt is", available: function () { return true; },
+      render: function (main) { renderWeekStrip(main, 0); } },
+    voorjou: { label: "Voor jou", desc: "Eén suggestie tegelijk: berichten, je reis, terugblik en seizoen", available: function () { return !state.generating; },
+      render: function (main) { renderForYou(main); } },
     volgendeweek: { label: "Volgende week", desc: "Alvast vooruit plannen", available: function () { return true; },
-      render: function (main) { var m = getMonday(new Date()); m.setDate(m.getDate() + 7); homeWeekCard(main, m, "Volgende week"); } },
+      render: function (main) { renderWeekStrip(main, 1); } },
     reis: { label: "Jouw reis", desc: "Je fase, focus en uitdaging van deze week", available: function () { return journeyOn() && !journey().quiet; },
       render: function (main) { renderJourneyTile(main); } },
     seizoen: { label: "Seizoen en momenten", desc: "Wat nu lekker is, en feestdagen waar je iets bijzonders voor kookt", available: function () { return !!window.appSeason && moduleOn("generate") && coachOn("season"); },
@@ -4591,8 +4815,8 @@
         var list = cache ? cache.days.slice() : [];
         homeSection(main, "Recente gerechten");
         if (!list.length) {
-          homeActionCard(main, "homeRecentEmpty", iconSvg("sliders", 22), "Nog geen gerechten", "Ontwerp je eerste gerechten of maak er een van een foto.", function () { goto("prefs"); });
-          return;
+          return;   // zonder gerechten wijst de kaart Vandaag de weg
+
         }
         list.sort(function (a, b) { return dishCreatedAt(b) - dishCreatedAt(a); });
         var row = document.createElement("div");
@@ -4601,6 +4825,7 @@
           var c = document.createElement("button");
           c.type = "button"; c.className = "recent-card";
           c.innerHTML = '<span class="rc-meal"></span><b></b><span class="rc-meta"></span>';
+          c.insertBefore(homeThumb(d, d.mealType), c.firstChild);
           c.querySelector(".rc-meal").textContent = d.mealType || "";
           c.querySelector("b").textContent = d.name;
           c.querySelector(".rc-meta").textContent = d.kcal + " kcal · Balans " + computeBalance(d.kh, d.eiwit, d.vet) + "%";
@@ -5117,7 +5342,7 @@
       var photoCard = document.createElement("button");
       photoCard.type = "button"; photoCard.className = "photo-card"; photoCard.id = "photoCardBtn";
       photoCard.innerHTML = '<span class="photo-card-ic">' + iconSvg("camera", 22) + '</span><span class="photo-card-txt"><b>Gerecht van foto</b>' +
-        '<span>Maak een foto van je bord of van een recept. Balanza maakt er een gerecht van, op jouw manier.</span></span><span class="photo-card-go" aria-hidden="true">›</span>';
+        (freshHint("photo") ? '<span>Maak een foto van je bord of van een recept. Balanza maakt er een gerecht van, op jouw manier.</span>' : '') + '</span><span class="photo-card-go" aria-hidden="true">›</span>';
       photoCard.disabled = !!state.generating || quotaBlocked();
       photoCard.onclick = pickDishPhoto;
       lockEl(photoCard, "Een gerecht van een foto maken");
@@ -5371,13 +5596,14 @@
             var reset = document.createElement("button"); reset.type = "button"; reset.className = "ghost-btn"; reset.id = "tasteReset";
             reset.textContent = "Smaakgeschiedenis wissen";
             reset.onclick = function () {
-              askConfirm("Alle duimpjes wissen? Je gerechten blijven gewoon bewaard.", function () {
-                var changedDays = [];
-                WEEKS.forEach(function (w) { w.days.forEach(function (d) { if (d.rating) { delete d.rating; changedDays.push(d); } }); });
-                updateStoredDishesInDb(changedDays);
-                showToast("Je smaakgeschiedenis is gewist.");
-                render();
-              }, "Wissen");
+              var changedDays = [];
+              WEEKS.forEach(function (w) { w.days.forEach(function (d) { if (d.rating) { changedDays.push([d, d.rating]); delete d.rating; } }); });
+              updateStoredDishesInDb(changedDays.map(function (x) { return x[0]; }));
+              render();
+              showUndoToast("Smaakgeschiedenis gewist", function () {
+                changedDays.forEach(function (x) { x[0].rating = x[1]; });
+                updateStoredDishesInDb(changedDays.map(function (x) { return x[0]; })); render();
+              });
             };
             c.appendChild(reset);
           }
@@ -6854,7 +7080,7 @@
         var t = planTargetFor(days[pick.i]), slot = slotForMoment(t.pw, t.d, pick.m);
         assignDishTo(t.pw, t.d, slot, item);
         closeSheet(ov);
-        showToast("“" + day.name + "” staat op " + (pick.i === 0 ? "vandaag" : PLAN_DAYS[(days[pick.i].getDay() + 6) % 7].toLowerCase()) + " (" + pick.m.toLowerCase() + ").");
+        showToast("“" + day.name + "” staat op " + (pick.i === 0 ? "vandaag" : PLAN_DAYS[(days[pick.i].getDay() + 6) % 7].toLowerCase()) + " (" + pick.m.toLowerCase() + ").", "ok");
         render();
       };
       wrap.appendChild(l1); wrap.appendChild(grid); wrap.appendChild(l2); wrap.appendChild(moms); wrap.appendChild(hint); wrap.appendChild(go); wrap.appendChild(back);
@@ -7724,7 +7950,7 @@
           sb.innerHTML = '<span class="pe-plus" aria-hidden="true">+</span><span class="pe-txt"><b></b><small></small></span>';
           sb.querySelector("b").textContent = it.day.name;
           sb.querySelector("small").textContent = it.day.kcal + " kcal · Balans " + computeBalance(it.day.kh, it.day.eiwit, it.day.vet) + "%";
-          sb.onclick = function () { assignSlot(pw, key, it); render(); };
+          sb.onclick = function () { assignSlot(pw, key, it); render(); showToast("“" + it.day.name + "” ingepland", "ok"); };
           lockEl(sb, "Je planning aanpassen");
           box.appendChild(sb);
         });
@@ -11017,6 +11243,15 @@
   function mondayKeyOffset(weeks) { var m = getMonday(new Date()); m.setDate(m.getDate() + 7 * weeks); return isoDateKey(m); }
   function dayNameOf(date) { return PLAN_DAYS[(date.getDay() + 6) % 7]; }
   function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  // Uitleg alleen de eerste paar dagen dat je iets ziet; daarna weet je het en blijft het scherm rustig.
+  var HINT_DAYS = 3;
+  function freshHint(key) {
+    var k = "balanza_hint_" + key, v = { n: 0, d: "" };
+    try { v = JSON.parse(lsGet(k) || "null") || v; } catch (e) {}
+    var today = todayKeyLocal();
+    if (v.d !== today) { v.n = (v.n || 0) + 1; v.d = today; lsSet(k, JSON.stringify(v)); }
+    return v.n <= HINT_DAYS;
+  }
   function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
   function nudgeCard(main, opts) {
     var box = document.createElement("div");
@@ -11122,7 +11357,7 @@
     var n = cookedCountTotal();
     showToast(!cooked ? "Genoteerd. Geen punt, volgende keer beter." :
       rating === 1 ? "Lekker! Balanza plant dit vaker in." + (n % 5 === 0 ? " Al " + n + " keer zelf gekookt." : "") :
-      rating === -1 ? "Jammer. Dit gerecht komt niet meer vanzelf in je week." : "Genoteerd: gekookt.");
+      rating === -1 ? "Jammer. Dit gerecht komt niet meer vanzelf in je week." : "Genoteerd: gekookt.", cooked && rating !== -1 ? "ok" : undefined);
   }
   function cookedCountTotal() {
     var n = 0;
@@ -11466,10 +11701,13 @@
   function renderLeftoversCard(main, pw) {
     if (!coachOn("leftovers")) return;
     var list = leftoverList(), packs = packLeftoversFor(pw).filter(function (p) { return !list.some(function (l) { return l.t.toLowerCase() === p.t; }); });
-    var open = state.leftoversOpen || list.length > 0;
+    var open = !!state.leftoversOpen;   // ingeklapt tot je erop tikt: de week zelf staat voorop
     if (!open) {
       var link = document.createElement("button"); link.type = "button"; link.className = "comm-foot-link leftover-link"; link.id = "leftoverOpen";
-      link.textContent = "🥕 Iets dat op moet? Restjes toevoegen" + (packs.length ? " (" + packs.length + " voorstel" + (packs.length === 1 ? "" : "len") + ")" : "");
+      var nSugg = list.length ? leftoverSuggestions(pw).length : 0;
+      link.textContent = list.length
+        ? "🥕 Op te maken: " + list.map(function (l) { return l.t; }).slice(0, 3).join(", ") + (list.length > 3 ? " +" + (list.length - 3) : "") + (nSugg ? " · " + nSugg + (nSugg === 1 ? " gerecht past" : " gerechten passen") : "") + " ›"
+        : "🥕 Iets dat op moet? Restjes toevoegen" + (packs.length ? " (" + packs.length + " voorstel" + (packs.length === 1 ? "" : "len") + ")" : "");
       link.onclick = function () { state.leftoversOpen = true; render(); };
       main.appendChild(link);
       return;
@@ -11510,8 +11748,8 @@
       goto("prefs", { tab: "ontwerpen" });
     } });
     nudgeCard(main, { id: "leftoverCard", icon: "🥕", title: "Op te maken",
-      text: list.length ? "Restjes blijven " + LEFTOVER_DAYS + " dagen staan. Balanza plant gerechten die ze gebruiken eerder in." : "Wat moet er op? Balanza zoekt gerechten die het gebruiken.",
-      actions: actions, body: body, onClose: list.length ? null : function () { state.leftoversOpen = false; render(); } });
+      text: freshHint("leftovers") ? (list.length ? "Restjes blijven " + LEFTOVER_DAYS + " dagen staan. Balanza plant gerechten die ze gebruiken eerder in." : "Wat moet er op? Balanza zoekt gerechten die het gebruiken.") : "",
+      actions: actions, body: body, onClose: function () { state.leftoversOpen = false; render(); } });
   }
   // Bij automatisch invullen gaan gerechten met restjes voor (de volgorde blijft verder gelijk).
   function preferLeftovers(pool) {
@@ -12290,7 +12528,10 @@
         '<form class="chat-form" id="chatForm"><input class="textinput" id="chatInput" maxlength="500" autocomplete="off" placeholder="Typ je vraag of wens…" aria-label="Bericht aan Balanza"><button type="submit" class="primary-btn small" id="chatSend">Stuur</button></form><div class="chat-foot">Mis je een functie? Vraag het hier, dan maken we er samen een idee van.</div></div>';
       document.body.appendChild(ov);
       document.getElementById("chatClose").onclick = closeChat;
-      document.getElementById("chatClear").onclick = function () { askConfirm("Het gesprek op dit toestel wissen?", clearChat, "Wissen", "Annuleren"); };
+      document.getElementById("chatClear").onclick = function () {
+        var backup = chat.msgs.slice(); clearChat();
+        showUndoToast("Gesprek gewist", function () { chat.msgs = backup; saveChat(); paintChat(); });
+      };
       ov.addEventListener("click", function (e) { if (e.target === ov) closeChat(); });
       ov.addEventListener("keydown", function (e) { if (e.key === "Escape") closeChat(); });
       document.getElementById("chatForm").onsubmit = function (e) { if (e && e.preventDefault) e.preventDefault(); cancelAutoSend(); stopVoice(true); var i = document.getElementById("chatInput"); var v = i.value.trim(); if (v) { i.value = ""; chat.lastVoice = ""; sendChat(v); } };
@@ -13128,7 +13369,7 @@
 
   function needDishesThen(fn) {
     if (!hasAnyDishes()) {
-      askConfirm("Let op: er zijn nog geen recepten beschikbaar. Navigeer naar gerechten ontwerpen.", function () { goto("prefs", { tab: "ontwerpen" }); }, "Ok", "Nee");
+      askConfirm("Je hebt nog geen gerechten om in te plannen. Zullen we er eerst een paar maken die passen bij je doel?", function () { goto("prefs", { tab: "ontwerpen" }); }, "Gerechten maken", "Later");
       return;
     }
     fn();

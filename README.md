@@ -43,6 +43,21 @@ van het e-mailadres, of "Gast" bij een anoniem profiel). Tikken opent het accoun
 Het menu sluit met Escape of door ernaast te tikken. De knoppen "Reset app" en "Uitloggen" staan
 daarom niet meer onderaan het startscherm.
 
+**Startscherm (v2):** rustig en op ongeveer één scherm, met één hoofdknop.
+- **Vandaag**: wat je vandaag eet (met foto als die er is), "Straks" bij de volgende maaltijd, ✓ bij gekookt, plus een smalle
+  kcal-balk en eiwit/koolhydraten/vet. Niets gepland: één knop *Plan vandaag* (of *Maak mijn eerste gerechten* zonder gerechten).
+- **Deze week**: zeven dagbolletjes (aantal geplande maaltijden, ✓ als alles gekookt is); tik op een dag om hem te plannen.
+- **Voor jou**: berichten over ideeën, "gekookt?", mijlpalen, conceptweek, terugblik, je reis en het seizoen op één plek,
+  één tegelijk met een knop *1 van N ›*. Staat *Plan vandaag* er al, dan zijn de knoppen hier rustiger.
+- **Recente gerechten**: horizontale rij, met foto als die er is.
+- Boodschappenlijst, Gerecht van foto, Community, Hoe werkt Balanza, Volgende week, Snel genereren en Tip van de dag staan
+  standaard uit (ze zitten al in de tabbalk of het menu) en zijn terug te zetten via *Startscherm aanpassen*. Bestaande
+  eigen indelingen beginnen één keer opnieuw vanaf deze standaard (`homeLayout.v = 2`).
+- Uitleg onder kaarten (zoals bij Gerecht van foto en Restjes) staat er alleen de eerste 3 dagen dat je hem ziet.
+- Restjes in de planner zijn ingeklapt tot één regel ("Op te maken: spinazie · 1 gerecht past ›").
+- Wissen van het chatgesprek en de smaakgeschiedenis gaat zonder vraag, met *Ongedaan maken* in de melding.
+- Inplannen en "gekookt" geven een melding met een groen vinkje (en een korte tik op telefoons die dat ondersteunen).
+
 **Mijn profiel:** grote avatar, naam, e-mailadres, aantallen (gerechten, weken planning, gedeelde
 lijsten), sinds wanneer je lid bent, en de naam wijzigen. Anonieme gebruikers krijgen een uitnodiging
 om een account aan te maken.
