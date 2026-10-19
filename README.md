@@ -62,6 +62,24 @@ daarom niet meer onderaan het startscherm.
 - Wissen van het chatgesprek en de smaakgeschiedenis gaat zonder vraag, met *Ongedaan maken* in de melding.
 - Inplannen en "gekookt" geven een melding met een groen vinkje (en een korte tik op telefoons die dat ondersteunen).
 
+**Dagelijks (bij Vandaag op Start):**
+- **Anders gegeten** (`/api/estimate`): beschrijf of fotografeer wat je at; de AI (assistent-model) schat kcal en macro's, die je kunt
+  aanpassen. Kies "In plaats van" een geplande maaltijd of "Extra". Het telt mee in je dag (meters, balk, planner); opgeslagen in
+  `plannedWeeks[].extra[dag]` met `who` (in een huishouden ziet ieder alleen zijn eigen). Max 30 schattingen per uur per gebruiker.
+- **Uit eten**: restaurantnaam (met eerdere restaurants als suggestie) en optioneel je locatie, afgerond op ±100 m. Balanza onthoudt
+  wat je er at (`prefs.places`, max 30) en stelt de volgende keer restaurants binnen 250 m voor, met "Hetzelfde als vorige keer".
+  Er wordt geen kaart- of plaatsendienst aangeroepen.
+- **Wat past nog?**: wat er van je dagdoel over is, met passende gerechten uit je eigen bibliotheek en simpele snacks (gefilterd op
+  voedingsstijl, lactose- en glutenvrij en uitsluitingen). Een snack aantikken legt hem vast als gegeten.
+- **Voorbereiding**: bij het diner van vandaag (tot 17:00) een tip als vlees uit de vriezer halen, peulvruchten weken, marineren of
+  een lange bereidingstijd. Dezelfde tip komt als **ochtendbericht** (melding `morning-prep`, standaard 08:00, alleen als er iets
+  voor te bereiden valt; instelbaar onder Meldingen).
+- **Water** (standaard uit): 8 glaasjes om aan te tikken, opgeslagen per dag in `prefs.water`.
+- Alles aan/uit onder *Begeleiding*: "Ik at iets anders / Wat past nog?", "Ochtendbericht met voorbereiding", "Water bijhouden".
+
+**Gerecht van foto → "Wat ligt er in huis?"**: een foto van je koelkast of voorraad; Balanza herkent de ingrediënten en maakt er
+één gerecht van dat bij je doel past (aangevuld met basisvoorraad).
+
 **Mijn profiel:** grote avatar, naam, e-mailadres, aantallen (gerechten, weken planning, gedeelde
 lijsten), sinds wanneer je lid bent, en de naam wijzigen. Anonieme gebruikers krijgen een uitnodiging
 om een account aan te maken.

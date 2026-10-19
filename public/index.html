@@ -1392,6 +1392,39 @@
   .g-lbl { font-size: 12.5px; font-weight: 600; color: var(--ink); margin-top: -8px; }
   .g-lbl em { font-style: normal; font-weight: 700; color: #D2563C; font-size: 11.5px; }
   @media (prefers-reduced-motion: reduce) { .g-val { transition: none; } }
+  .hh-prep { font-size: 13.5px; line-height: 1.45; padding: 10px 12px; border-radius: 12px; background: var(--bg); color: var(--ink); }
+  .hh-prep::before { content: "\23F0  "; }
+  .hh-acts { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 2px; }
+  .hh-acts .ghost-btn { flex: 1 1 0; width: auto; min-width: 0; margin: 0; white-space: nowrap; }
+  .hh-link { appearance: none; border: 0; background: none; font: inherit; font-size: 14px; font-weight: 600; color: var(--accent2); padding: 4px 0; cursor: pointer; align-self: center; }
+  .hh-meal.replaced .hh-meal-txt b { text-decoration: line-through; color: var(--muted); }
+  .hh-meal.extra .hh-meal-go { font-size: 18px; }
+  .water-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-top: 6px; flex-wrap: wrap; }
+  .water-lbl { font-size: 13px; color: var(--muted); }
+  .water-lbl b { color: var(--ink); }
+  .water-glasses { display: flex; gap: 3px; flex-wrap: wrap; }
+  .water-g { appearance: none; border: 0; background: none; padding: 2px; cursor: pointer; width: 26px; height: 30px; }
+  .water-g svg { width: 100%; height: 100%; }
+  .water-g path { fill: none; stroke: #5DA9D6; stroke-width: 1.5; stroke-linejoin: round; }
+  .water-g .wf { fill: #5DA9D6; stroke: none; opacity: 0; transition: opacity .2s ease; }
+  .water-g.full .wf { opacity: .85; }
+  .sheet-pad { display: flex; flex-direction: column; gap: 10px; padding-bottom: 8px; }
+  .op-seg { margin-bottom: 4px; }
+  .op-row { display: flex; gap: 8px; align-items: center; }
+  .op-row .textinput { flex: 1; min-width: 0; }
+  .op-row .ghost-btn { flex: none; white-space: nowrap; }
+  .op-preview { width: 100%; max-height: 160px; object-fit: cover; border-radius: 12px; }
+  .op-near { display: flex; flex-direction: column; gap: 6px; }
+  .op-near:empty { display: none; }
+  .op-place { appearance: none; border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 12px; padding: 10px 12px; text-align: left; font: inherit; cursor: pointer; }
+  .op-place b { display: block; font-size: 14.5px; }
+  .op-place small { display: block; font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+  .op-result { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 14px; background: var(--bg); }
+  .op-name { font-weight: 700; }
+  .op-kcal { display: flex; align-items: center; gap: 8px; font-size: 15px; color: var(--muted); }
+  .op-kcal input { width: 110px; font: inherit; font-size: 22px; font-weight: 700; padding: 6px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
+  .op-mac { font-size: 13px; color: var(--muted); }
+  .op-note { font-size: 13.5px; color: var(--muted); margin: 0; line-height: 1.45; }
   .hh-meals { display: flex; flex-direction: column; margin-top: 4px; border-top: 1px solid var(--line); }
   .hh-meal { appearance: none; border: 0; border-bottom: 1px solid var(--line); background: none; padding: 11px 2px; display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; gap: 12px;
     align-items: center; text-align: left; font-family: inherit; color: var(--ink); cursor: pointer; }
@@ -3588,6 +3621,12 @@
         row2.appendChild(timeInput("notifyTodayTime", np.planTodayTime, "Tijd voor de dagherinnering", function (v) { save({ planTodayTime: v }); paint(); }));
         box.appendChild(row2);
       }
+      box.appendChild(toggle("notifyMorning", "Ochtendbericht", "Om " + (np.morningTime || "08:00") + " wat je vanavond eet, alleen als er iets voor te bereiden valt (bijv. vlees uit de vriezer)", np.morning !== false, function () { save({ morning: !(np.morning !== false) }); paint(); }));
+      if (np.morning !== false) {
+        var rowM = document.createElement("div"); rowM.className = "notify-when";
+        rowM.appendChild(timeInput("notifyMorningTime", np.morningTime || "08:00", "Tijd voor het ochtendbericht", function (v) { save({ morningTime: v }); paint(); }));
+        box.appendChild(rowM);
+      }
       box.appendChild(toggle("notifyCooked", "Na het eten: was het lekker?", "Om " + (np.cookedTime || "20:30") + " één vraag over het diner van vandaag, zodat Balanza je smaak leert", np.cookedCheck !== false, function () { save({ cookedCheck: !(np.cookedCheck !== false) }); paint(); }));
       if (np.cookedCheck !== false) {
         var row3 = document.createElement("div"); row3.className = "notify-when";
@@ -4518,13 +4557,15 @@
     var pw = plannedWeeks.filter(function (w) { return w.weekStart === isoDateKey(getMonday(now)); })[0];
     var agg = pw ? aggregateDayMacros(pw, dayName) : null;
     var target = dailyKcalTarget(), t = goalTarget();
+    var repl = pw ? replacedSlots(pw, dayName) : {}, extras = pw ? dayExtras(pw, dayName) : [];
     var rows = [];
     if (pw) PLAN_SLOTS.forEach(function (slot) {
       var a = pw.slots[dayName + "|" + slot]; if (!a) return;
-      var res = resolveAssignedDish(a); if (res) rows.push({ slot: slot, a: a, dish: res.day, mt: SLOT_TO_MEALTYPE[slot] });
+      var res = resolveAssignedDish(a); if (res) rows.push({ slot: slot, a: a, dish: res.day, mt: SLOT_TO_MEALTYPE[slot], replacedBy: repl[dayName + "|" + slot] || null });
     });
-    var card = document.createElement("div"); card.className = "card home-hero" + (rows.length ? "" : " is-empty"); card.id = "homeHero";
-    if (!rows.length) {
+    var tools = coachOn("daytools");
+    var card = document.createElement("div"); card.className = "card home-hero" + (rows.length || extras.length ? "" : " is-empty"); card.id = "homeHero";
+    if (!rows.length && !extras.length) {
       var art = document.createElement("div"); art.className = "hh-art"; art.setAttribute("aria-hidden", "true");
       art.innerHTML = '<svg viewBox="0 0 200 120"><circle cx="100" cy="62" r="44" class="pl1"/><circle cx="100" cy="62" r="31" class="pl2"/>' +
         '<path d="M38 26v28M32 26v12a6 6 0 0 0 12 0V26M38 54v42" class="cut"/><path d="M162 26c-8 6-8 26 0 32v38" class="cut"/></svg>';
@@ -4541,64 +4582,396 @@
         go.onclick = function () { var w = pw || addOrOpenPlannedWeek(getMonday(new Date())); goto("planday", { planWeekId: w.id, planDayName: dayName, tab: "plannen" }); };
       } else { go.textContent = "Maak mijn eerste gerechten"; go.onclick = function () { goto("prefs"); }; }
       card.appendChild(go);
+      if (tools && moduleOn("generate")) {
+        var al = document.createElement("button"); al.type = "button"; al.className = "hh-link"; al.id = "offPlanEmpty"; al.textContent = "Al iets gegeten? Leg het vast";
+        al.onclick = function () { openOffPlanSheet(null); };
+        card.appendChild(al);
+      }
+      renderWaterRow(card);
       main.appendChild(card);
       return;
     }
-    // De uitgelichte maaltijd: de eerstvolgende die nog moet komen, anders de laatste van vandaag.
-    var feat = rows.filter(function (r) { return hr < SLOT_HOURS[r.slot] && r.a.cooked === undefined; })[0] || rows[rows.length - 1];
     var open = function (r) { goto("day", { weekId: r.a.weekId, dayId: r.a.dayId, dayServings: r.a.servings || 1, dayBackView: "weeks", dayBackWeekId: null, dayBackDayName: null }); };
-    var ph = document.createElement("button"); ph.type = "button"; ph.className = "hh-photo"; ph.id = "heroMeal";
-    ph.style.setProperty("--meal", (MEAL_THUMBS[feat.mt] || MEAL_THUMBS.Snack)[1]);
-    var emo = document.createElement("span"); emo.className = "hh-emoji"; emo.setAttribute("aria-hidden", "true"); emo.textContent = MEAL_EMOJI[feat.mt] || "🍽️"; ph.appendChild(emo);
-    if (wantsImages()) {
-      var img = document.createElement("img"); img.alt = ""; img.style.display = "none";
-      img.onload = function () { ph.classList.add("has-img"); };
-      ph.appendChild(img);
-      try { loadDishImageInto(feat.dish, img); } catch (er) {}
+    var live = rows.filter(function (r) { return !r.replacedBy; });
+    // De uitgelichte maaltijd: de eerstvolgende die nog moet komen, anders de laatste van vandaag.
+    var feat = live.filter(function (r) { return hr < SLOT_HOURS[r.slot] && r.a.cooked === undefined; })[0] || live[live.length - 1] || null;
+    if (feat) {
+      var ph = document.createElement("button"); ph.type = "button"; ph.className = "hh-photo"; ph.id = "heroMeal";
+      ph.style.setProperty("--meal", (MEAL_THUMBS[feat.mt] || MEAL_THUMBS.Snack)[1]);
+      var emo = document.createElement("span"); emo.className = "hh-emoji"; emo.setAttribute("aria-hidden", "true"); emo.textContent = MEAL_EMOJI[feat.mt] || "🍽️"; ph.appendChild(emo);
+      if (wantsImages()) {
+        var img = document.createElement("img"); img.alt = ""; img.style.display = "none";
+        img.onload = function () { ph.classList.add("has-img"); };
+        ph.appendChild(img);
+        try { loadDishImageInto(feat.dish, img); } catch (er) {}
+      }
+      var when = feat.a.cooked === true ? "Gekookt" : hr >= SLOT_HOURS[feat.slot] ? "Eerder vandaag" : feat.slot === "Diner" ? (hr < 16 ? "Vanavond" : "Straks") : hr < SLOT_HOURS[feat.slot] - 3 ? "Straks" : "Nu";
+      var cap = document.createElement("span"); cap.className = "hh-cap";
+      var chip = document.createElement("span"); chip.className = "hh-chip"; chip.textContent = when + " – " + feat.slot.toLowerCase();
+      var nm = document.createElement("b"); nm.textContent = feat.dish.name;
+      var meta = document.createElement("small");
+      meta.textContent = [feat.dish.kcal + " kcal", feat.dish.eiwitG ? feat.dish.eiwitG + " g eiwit" : "", feat.dish.bereidingstijd ? feat.dish.bereidingstijd + " min" : ""].filter(Boolean).join("   ");
+      cap.appendChild(chip); cap.appendChild(nm); cap.appendChild(meta); ph.appendChild(cap);
+      ph.onclick = function () { open(feat); };
+      card.appendChild(ph);
     }
-    var when = feat.a.cooked === true ? "Gekookt" : feat.slot === "Diner" ? (hr < 16 ? "Vanavond" : "Straks") : hr < SLOT_HOURS[feat.slot] - 3 ? "Straks" : "Nu";
-    var cap = document.createElement("span"); cap.className = "hh-cap";
-    var chip = document.createElement("span"); chip.className = "hh-chip"; chip.textContent = when + " – " + feat.slot.toLowerCase();
-    var nm = document.createElement("b"); nm.textContent = feat.dish.name;
-    var meta = document.createElement("small");
-    meta.textContent = [feat.dish.kcal + " kcal", feat.dish.eiwitG ? feat.dish.eiwitG + " g eiwit" : "", feat.dish.bereidingstijd ? feat.dish.bereidingstijd + " min" : ""].filter(Boolean).join("   ");
-    cap.appendChild(chip); cap.appendChild(nm); cap.appendChild(meta); ph.appendChild(cap);
-    ph.onclick = function () { open(feat); };
-    card.appendChild(ph);
     var body = document.createElement("div"); body.className = "hh-body";
+    // Voorbereiding voor vanavond (zelfde tip als in het ochtendbericht)
+    if (feat && feat.slot === "Diner" && hr < 17 && feat.a.cooked === undefined && coachOn("morning")) {
+      var tip = prepTipFor(feat.dish);
+      if (tip) { var pt = document.createElement("div"); pt.className = "hh-prep"; pt.id = "heroPrep"; pt.textContent = tip; body.appendChild(pt); }
+    }
     if (target) {
       var line = document.createElement("div"); line.className = "hh-line";
       var kc = agg ? agg.kcal : 0;
-      line.innerHTML = '<span><b>' + kc + '</b> van ' + target + ' kcal gepland</span><span class="hh-pct">' + Math.min(999, Math.round(kc / target * 100)) + '%</span>';
+      line.innerHTML = '<span><b>' + kc + '</b> van ' + target + ' kcal</span><span class="hh-pct">' + Math.min(999, Math.round(kc / target * 100)) + '%</span>';
       body.appendChild(line);
       var bar = document.createElement("div"); bar.className = "hh-bar"; bar.setAttribute("aria-hidden", "true");
       // De balk is opgebouwd uit de maaltijden van vandaag, elk in de kleur van zijn moment.
-      rows.forEach(function (r) {
+      live.forEach(function (r) {
         var seg = document.createElement("span"); seg.style.width = Math.max(1, Math.min(100, r.dish.kcal / target * 100)) + "%"; seg.style.background = MEAL_DOT[r.mt] || MEAL_DOT.Snack;
         if (r.a.cooked !== true) seg.className = "todo"; bar.appendChild(seg);
+      });
+      extras.forEach(function (x) {
+        var seg = document.createElement("span"); seg.style.width = Math.max(1, Math.min(100, (x.kcal || 0) / target * 100)) + "%"; seg.style.background = "#8C8C8C"; bar.appendChild(seg);
       });
       body.appendChild(bar);
       if (agg) body.appendChild(macroGauges([["Eiwit", agg.eiwitG, Math.round(target * t.eiwit / 100 / 4), "eiwit"],
         ["Koolhydraten", agg.khG, Math.round(target * t.kh / 100 / 4), "kh"], ["Vet", agg.vetG, Math.round(target * t.vet / 100 / 9), "vet"]]));
     }
-    var others = rows.filter(function (r) { return r !== feat; });
-    if (others.length) {
-      var list = document.createElement("div"); list.className = "hh-meals";
-      others.forEach(function (r) {
-        var row = document.createElement("button"); row.type = "button"; row.className = "hh-meal" + (r.a.cooked === true ? " done" : "");
-        var dot = document.createElement("i"); dot.style.background = MEAL_DOT[r.mt] || MEAL_DOT.Snack; row.appendChild(dot);
-        var tx = document.createElement("span"); tx.className = "hh-meal-txt";
-        var b = document.createElement("b"); b.textContent = r.dish.name;
-        var sm = document.createElement("small"); sm.textContent = r.slot + ", " + r.dish.kcal + " kcal";
-        tx.appendChild(b); tx.appendChild(sm); row.appendChild(tx);
-        var st = document.createElement("span"); st.className = "hh-meal-go"; st.setAttribute("aria-hidden", "true"); st.textContent = r.a.cooked === true ? "✓" : "›"; row.appendChild(st);
-        row.onclick = function () { open(r); };
-        list.appendChild(row);
-      });
-      body.appendChild(list);
+    var list = document.createElement("div"); list.className = "hh-meals";
+    rows.filter(function (r) { return r !== feat; }).forEach(function (r) {
+      var row = document.createElement("button"); row.type = "button"; row.className = "hh-meal" + (r.a.cooked === true ? " done" : "") + (r.replacedBy ? " replaced" : "");
+      var dot = document.createElement("i"); dot.style.background = MEAL_DOT[r.mt] || MEAL_DOT.Snack; row.appendChild(dot);
+      var tx = document.createElement("span"); tx.className = "hh-meal-txt";
+      var b = document.createElement("b"); b.textContent = r.dish.name;
+      var sm = document.createElement("small"); sm.textContent = r.replacedBy ? r.slot + ": anders gegeten" : r.slot + ", " + r.dish.kcal + " kcal";
+      tx.appendChild(b); tx.appendChild(sm); row.appendChild(tx);
+      var st = document.createElement("span"); st.className = "hh-meal-go"; st.setAttribute("aria-hidden", "true"); st.textContent = r.a.cooked === true ? "✓" : "›"; row.appendChild(st);
+      row.onclick = function () { open(r); };
+      list.appendChild(row);
+    });
+    extras.forEach(function (x) {
+      var row = document.createElement("button"); row.type = "button"; row.className = "hh-meal extra"; row.id = "extra-" + x.id;
+      var dot = document.createElement("i"); dot.style.background = "#8C8C8C"; row.appendChild(dot);
+      var tx = document.createElement("span"); tx.className = "hh-meal-txt";
+      var b = document.createElement("b"); b.textContent = x.name;
+      var sm = document.createElement("small"); sm.textContent = (x.place ? "Bij " + x.place : x.replaces ? x.replaces.split("|")[1] + ", anders gegeten" : "Extra") + ", " + x.kcal + " kcal";
+      tx.appendChild(b); tx.appendChild(sm); row.appendChild(tx);
+      var st = document.createElement("span"); st.className = "hh-meal-go"; st.setAttribute("aria-hidden", "true"); st.textContent = "×"; row.appendChild(st);
+      row.setAttribute("aria-label", x.name + " weghalen");
+      row.onclick = function () { removeExtra(pw, dayName, x); };
+      list.appendChild(row);
+    });
+    if (list.childNodes.length) body.appendChild(list);
+    if (tools && moduleOn("generate")) {
+      var acts = document.createElement("div"); acts.className = "hh-acts";
+      var a1 = document.createElement("button"); a1.type = "button"; a1.className = "ghost-btn small"; a1.id = "offPlanBtn"; a1.textContent = "Anders gegeten";
+      a1.onclick = function () { openOffPlanSheet(feat ? dayName + "|" + feat.slot : null); };
+      acts.appendChild(a1);
+      if (target) {
+        var a2 = document.createElement("button"); a2.type = "button"; a2.className = "ghost-btn small"; a2.id = "fitBtn"; a2.textContent = "Wat past nog?";
+        a2.onclick = openFitSheet; acts.appendChild(a2);
+      }
+      body.appendChild(acts);
     }
+    renderWaterRow(body);
     card.appendChild(body);
     main.appendChild(card);
+  }
+  // ---- Voorbereidingstip (zelfde regels als het ochtendbericht op de server) ----
+  var PREP_FROZEN_RE = /\b(kipfilet|kippendij\w*|kippenpoot\w*|kip|gehakt|rundergehakt|kipgehakt|biefstuk|steak|varkenshaas|karbonade|zalm\w*|kabeljauw|koolvis|tilapia|pangasius|garnalen|scampi|kalkoen\w*|riblappen|stoofvlees|lamsvlees|shoarma)\b/i;
+  function prepTipFor(dish) {
+    if (!dish) return "";
+    var ing = (dish.ingredienten || []).map(function (x) { return typeof x === "string" ? x : (x && x.tekst) || ""; }).join(" ; ");
+    var steps = (dish.steps || []).map(function (x) { return (x && (x.title + " " + x.content)) || ""; }).join(" ");
+    var tips = [];
+    var dried = /gedroogde (bonen|kikkererwten|linzen|witte bonen|kidneybonen)/i.exec(ing);
+    if (dried) tips.push("Zet de gedroogde " + dried[1].toLowerCase() + " nu alvast in de week.");
+    if (/marineer|marinade|laten marineren/i.test(steps)) tips.push("Maak de marinade vanochtend al, dan trekt de smaak goed in.");
+    var fz = PREP_FROZEN_RE.exec(ing);
+    if (fz) tips.push("Ligt de " + fz[1].toLowerCase() + " in de vriezer? Leg hem nu in de koelkast om te ontdooien.");
+    var mins = Number(dish.bereidingstijd) || 0;
+    if (mins >= 60) tips.push("Reken op ongeveer " + mins + " minuten, dus begin op tijd.");
+    return tips.slice(0, 2).join(" ");
+  }
+  // ---- Water (optioneel): glaasjes van 250 ml, standaard 8 per dag ----
+  var WATER_GOAL = 8;
+  function waterToday() { var w = prefs.water; return w && w.d === todayKeyLocal() ? Math.max(0, Math.min(16, Number(w.n) || 0)) : 0; }
+  var waterSaveT = null;
+  function renderWaterRow(parent) {
+    if (!coachOn("water")) return;
+    var n = waterToday();
+    var row = document.createElement("div"); row.className = "water-row"; row.id = "waterRow";
+    var lbl = document.createElement("span"); lbl.className = "water-lbl"; lbl.innerHTML = "<b>" + (n * 0.25).toFixed(n % 4 ? 2 : 1).replace(".", ",").replace(/,?0+$/, "") + " L</b> water";
+    row.appendChild(lbl);
+    var glasses = document.createElement("div"); glasses.className = "water-glasses";
+    for (var i = 0; i < Math.max(WATER_GOAL, n); i++) (function (i) {
+      var g = document.createElement("button"); g.type = "button"; g.className = "water-g" + (i < n ? " full" : "");
+      g.setAttribute("aria-label", (i + 1) + " glas" + (i ? "zen" : "") + " water");
+      g.innerHTML = '<svg viewBox="0 0 20 24" aria-hidden="true"><path d="M3 3h14l-1.6 17.2a2 2 0 0 1-2 1.8H6.6a2 2 0 0 1-2-1.8z"/><path class="wf" d="M4.4 9h11.2l-1.1 11.1a1 1 0 0 1-1 .9H6.5a1 1 0 0 1-1-.9z"/></svg>';
+      g.onclick = function () {
+        var cur = waterToday(), next = i < cur ? i : i + 1;   // tik op een vol glas: terug tot daar; op een leeg glas: tot en met dat glas
+        prefs.water = { d: todayKeyLocal(), n: next };
+        clearTimeout(waterSaveT); waterSaveT = setTimeout(savePrefs, 800);
+        var r = document.getElementById("waterRow"); if (r && r.parentNode) { var tmp = document.createElement("div"); renderWaterRow(tmp); r.parentNode.replaceChild(tmp.firstChild, r); }
+        if (next === WATER_GOAL && cur < WATER_GOAL) showToast("2 liter water vandaag. Lekker bezig.", "ok");
+      };
+      glasses.appendChild(g);
+    })(i);
+    row.appendChild(glasses);
+    parent.appendChild(row);
+  }
+  // ---- "Ik at iets anders" en "Uit eten" ----
+  function removeExtra(pw, dayName, x) {
+    var list = pw.extra && pw.extra[dayName] ? pw.extra[dayName] : [], idx = list.indexOf(x);
+    if (idx === -1) return;
+    list.splice(idx, 1); savePlannedWeeks(); render();
+    showUndoToast("“" + x.name + "” weggehaald", function () { pw.extra[dayName].splice(idx, 0, x); savePlannedWeeks(); render(); });
+  }
+  function addExtra(entry) {
+    var now = new Date(), dayName = PLAN_DAYS[(now.getDay() + 6) % 7];
+    var pw = addOrOpenPlannedWeek(getMonday(now));
+    pw.extra = pw.extra && typeof pw.extra === "object" ? pw.extra : {};
+    pw.extra[dayName] = Array.isArray(pw.extra[dayName]) ? pw.extra[dayName] : [];
+    entry.id = "x" + Date.now(); entry.at = now.toISOString(); entry.who = meId();
+    pw.extra[dayName].push(entry);
+    savePlannedWeeks();
+    render();
+  }
+  function openSimpleSheet(id, title, meta) {
+    var ov = document.getElementById(id);
+    if (!ov) {
+      ov = document.createElement("div"); ov.id = id; ov.className = "sheet-overlay";
+      ov.innerHTML = '<div class="sheet" role="dialog" aria-modal="true" aria-labelledby="' + id + 'T"><span class="sheet-grip" aria-hidden="true"></span>' +
+        '<div class="sheet-head"><b id="' + id + 'T"></b><span class="' + id + 'M"></span></div><div class="' + id + 'B sheet-pad"></div></div>';
+      document.body.appendChild(ov);
+      ov.addEventListener("click", function (e) { if (e.target === ov) closeSheet(ov); });
+      ov.addEventListener("keydown", function (e) { if (e.key === "Escape") closeSheet(ov); });
+    }
+    document.getElementById(id + "T").textContent = title;
+    ov.querySelector("." + id + "M").textContent = meta || "";
+    var body = ov.querySelector("." + id + "B"); body.innerHTML = "";
+    ov.classList.add("active");
+    return { ov: ov, body: body };
+  }
+  function placesList() { return Array.isArray(prefs.places) ? prefs.places : []; }
+  function distM(a, b) {
+    var R = 6371000, toR = Math.PI / 180, dLat = (b.lat - a.lat) * toR, dLng = (b.lng - a.lng) * toR;
+    var h = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(a.lat * toR) * Math.cos(b.lat * toR) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+    return 2 * R * Math.asin(Math.sqrt(h));
+  }
+  function rememberPlace(name, pos, entry) {
+    var list = placesList().filter(function (p) { return p.n.toLowerCase() !== name.toLowerCase(); });
+    var prev = placesList().filter(function (p) { return p.n.toLowerCase() === name.toLowerCase(); })[0];
+    var item = { n: name, at: todayKeyLocal(), last: { name: entry.name, kcal: entry.kcal, eiwitG: entry.eiwitG, khG: entry.khG, vetG: entry.vetG } };
+    if (pos) { item.lat = pos.lat; item.lng = pos.lng; } else if (prev && prev.lat != null) { item.lat = prev.lat; item.lng = prev.lng; }
+    list.unshift(item);
+    prefs.places = list.slice(0, 30);
+    savePrefs();
+  }
+  function getPosition() {
+    return new Promise(function (resolve, reject) {
+      if (!navigator.geolocation) return reject(new Error("Je toestel deelt geen locatie."));
+      navigator.geolocation.getCurrentPosition(function (p) {
+        resolve({ lat: Math.round(p.coords.latitude * 1000) / 1000, lng: Math.round(p.coords.longitude * 1000) / 1000 });   // afgerond op ±100 m
+      }, function () { reject(new Error("Geen locatie. Geef Balanza toestemming in je instellingen, of typ de naam.")); }, { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 });
+    });
+  }
+  function openOffPlanSheet(defaultReplace) {
+    var now = new Date(), dayName = PLAN_DAYS[(now.getDay() + 6) % 7];
+    var pw = plannedWeeks.filter(function (w) { return w.weekStart === isoDateKey(getMonday(now)); })[0];
+    var sh = openSimpleSheet("offPlanSheet", "Ik at iets anders", "Telt mee in je dag");
+    var body = sh.body;
+    var st = { mode: "thuis", replace: defaultReplace, image: null, place: "", pos: null };
+    var repl = pw ? replacedSlots(pw, dayName) : {};
+    var openSlots = [];
+    if (pw) PLAN_SLOTS.forEach(function (sl) { var k = dayName + "|" + sl, a = pw.slots[k]; if (a && !repl[k] && a.cooked !== true) openSlots.push(k); });
+    if (st.replace && openSlots.indexOf(st.replace) === -1) st.replace = null;
+    function paint() {
+      body.innerHTML = "";
+      var seg = document.createElement("div"); seg.className = "seg op-seg";
+      [["thuis", "Thuis of onderweg"], ["uit", "Uit eten"]].forEach(function (m) {
+        var b = document.createElement("button"); b.type = "button"; b.className = "ghost-btn"; b.id = "opMode-" + m[0]; b.textContent = m[1];
+        b.setAttribute("aria-pressed", st.mode === m[0] ? "true" : "false");
+        b.onclick = function () { st.mode = m[0]; paint(); if (m[0] === "uit") nearby(); };
+        seg.appendChild(b);
+      });
+      body.appendChild(seg);
+      if (st.mode === "uit") {
+        var pl = document.createElement("div"); pl.className = "photo-label"; pl.textContent = "Waar?"; body.appendChild(pl);
+        var pr = document.createElement("div"); pr.className = "op-row";
+        var pi = document.createElement("input"); pi.className = "textinput"; pi.id = "opPlace"; pi.placeholder = "Naam van het restaurant"; pi.maxLength = 60; pi.value = st.place;
+        pi.setAttribute("list", "opPlaces"); pi.oninput = function () { st.place = pi.value; };
+        var dl = document.createElement("datalist"); dl.id = "opPlaces";
+        placesList().forEach(function (p) { var o = document.createElement("option"); o.value = p.n; dl.appendChild(o); });
+        var lb = document.createElement("button"); lb.type = "button"; lb.className = "ghost-btn small"; lb.id = "opLocate";
+        lb.textContent = st.pos ? "📍 ✓" : "📍 Hier";
+        lb.setAttribute("aria-label", st.pos ? "Locatie toegevoegd" : "Mijn locatie toevoegen"); lb.title = "Locatie (afgerond op ongeveer 100 meter) om dit restaurant de volgende keer terug te vinden";
+        lb.onclick = function () { lb.disabled = true; getPosition().then(function (p) { st.pos = p; nearby(); paint(); }, function (e) { lb.disabled = false; showToast(e.message); }); };
+        pr.appendChild(pi); pr.appendChild(dl); pr.appendChild(lb); body.appendChild(pr);
+        var near = document.createElement("div"); near.id = "opNear"; near.className = "op-near"; body.appendChild(near);
+        paintNear(near);
+      }
+      var wl = document.createElement("div"); wl.className = "photo-label"; wl.textContent = "Wat at je?"; body.appendChild(wl);
+      var tr = document.createElement("div"); tr.className = "op-row";
+      var ti = document.createElement("input"); ti.className = "textinput"; ti.id = "opText"; ti.maxLength = 300;
+      ti.placeholder = st.mode === "uit" ? "Bijv. pasta carbonara en een tiramisu" : "Bijv. 2 pizzapunten en een cola";
+      ti.value = st.text || ""; ti.oninput = function () { st.text = ti.value; };
+      var pb = document.createElement("button"); pb.type = "button"; pb.className = "ghost-btn small"; pb.id = "opPhoto"; pb.textContent = st.image ? "📷 Foto ✓" : "📷 Foto";
+      pb.onclick = function () {
+        var inp = document.createElement("input"); inp.type = "file"; inp.accept = "image/*"; inp.style.display = "none";
+        inp.onchange = function () { var f = inp.files && inp.files[0]; if (inp.parentNode) inp.parentNode.removeChild(inp); if (!f) return;
+          compressPhoto(f).then(function (url) { st.image = url; paint(); }, function (e) { showToast(e && e.message ? e.message : "Deze foto kon niet worden geopend."); }); };
+        document.body.appendChild(inp); inp.click();
+      };
+      tr.appendChild(ti); tr.appendChild(pb); body.appendChild(tr);
+      if (st.image) { var im = document.createElement("img"); im.className = "op-preview"; im.src = st.image; im.alt = "Jouw foto"; body.appendChild(im); }
+      if (openSlots.length) {
+        var rl = document.createElement("div"); rl.className = "photo-label"; rl.textContent = "In plaats van"; body.appendChild(rl);
+        var chips = document.createElement("div"); chips.className = "chiprow";
+        openSlots.concat([null]).forEach(function (k) {
+          var c = document.createElement("button"); c.type = "button"; c.className = "chip" + (st.replace === k ? " selected" : "");
+          if (k) { var res = resolveAssignedDish(pw.slots[k]); c.textContent = k.split("|")[1] + (res ? ": " + res.day.name : ""); } else c.textContent = "Extra, naast mijn plan";
+          c.onclick = function () { st.replace = k; paint(); };
+          chips.appendChild(c);
+        });
+        body.appendChild(chips);
+      }
+      var go = document.createElement("button"); go.type = "button"; go.className = "primary-btn"; go.id = "opGo"; go.textContent = "Schatten en toevoegen";
+      go.onclick = function () { estimate(go); };
+      body.appendChild(go);
+      var nt = document.createElement("p"); nt.className = "photo-note"; nt.textContent = "Balanza schat de voedingswaarde; je kunt de kcal daarna aanpassen. Je foto wordt niet bewaard.";
+      body.appendChild(nt);
+    }
+    function paintNear(box) {
+      if (!box) return;
+      box.innerHTML = "";
+      var list = placesList();
+      if (st.pos) list = list.filter(function (p) { return p.lat != null && distM(st.pos, p) < 250; });
+      list.slice(0, 4).forEach(function (p) {
+        var b = document.createElement("button"); b.type = "button"; b.className = "op-place";
+        b.innerHTML = "<b></b><small></small>";
+        b.querySelector("b").textContent = p.n;
+        b.querySelector("small").textContent = p.last ? "Vorige keer: " + p.last.name + ", " + p.last.kcal + " kcal" : "";
+        b.onclick = function () { st.place = p.n; st.lastOf = p; paint(); };
+        box.appendChild(b);
+      });
+      if (st.lastOf && st.lastOf.last) {
+        var same = document.createElement("button"); same.type = "button"; same.className = "ghost-btn small"; same.id = "opSame";
+        same.textContent = "Hetzelfde als vorige keer (" + st.lastOf.last.kcal + " kcal)";
+        same.onclick = function () { var l = st.lastOf.last; confirmAdd({ name: l.name, kcal: l.kcal, eiwitG: l.eiwitG, khG: l.khG, vetG: l.vetG }); };
+        box.appendChild(same);
+      }
+    }
+    function nearby() { var n = document.getElementById("opNear"); paintNear(n); }
+    function estimate(btn) {
+      var text = (st.text || "").trim();
+      if (!text && !st.image) { showToast("Beschrijf kort wat je at, of maak een foto."); return; }
+      if (st.mode === "uit" && st.place) text = (text ? text + " " : "") + "(gegeten bij restaurant " + st.place + ")";
+      var payload = { text: text };
+      if (st.image) { var m = String(st.image).match(/^data:(image\/[a-z]+);base64,(.+)$/); if (m) payload.image = { mediaType: m[1], data: m[2] }; }
+      btn.disabled = true; btn.textContent = "Even schatten…";
+      fetch("/api/estimate", { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, authHeaders()), body: JSON.stringify(payload) })
+        .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { if (!r.ok) throw new Error(d.message || "Schatten lukte even niet."); return d; }); })
+        .then(function (d) { confirmAdd(d); })
+        .catch(function (e) { btn.disabled = false; btn.textContent = "Schatten en toevoegen"; showToast(e.message); });
+    }
+    function confirmAdd(d) {
+      body.innerHTML = "";
+      var box = document.createElement("div"); box.className = "op-result"; box.id = "opResult";
+      var nmI = document.createElement("input"); nmI.className = "textinput op-name"; nmI.value = d.name || "Iets anders"; nmI.maxLength = 60; nmI.setAttribute("aria-label", "Naam");
+      var kr = document.createElement("label"); kr.className = "op-kcal";
+      var kI = document.createElement("input"); kI.type = "number"; kI.inputMode = "numeric"; kI.min = 0; kI.max = 5000; kI.value = d.kcal || 0; kI.id = "opKcal";
+      kr.appendChild(kI); kr.appendChild(document.createTextNode(" kcal"));
+      var mac = document.createElement("div"); mac.className = "op-mac";
+      mac.textContent = "Eiwit " + (d.eiwitG || 0) + " g, koolhydraten " + (d.khG || 0) + " g, vet " + (d.vetG || 0) + " g";
+      box.appendChild(nmI); box.appendChild(kr); box.appendChild(mac);
+      if (d.note) { var n = document.createElement("p"); n.className = "op-note"; n.textContent = d.note; box.appendChild(n); }
+      body.appendChild(box);
+      var ok = document.createElement("button"); ok.type = "button"; ok.className = "primary-btn"; ok.id = "opAdd"; ok.textContent = "Toevoegen aan vandaag";
+      ok.onclick = function () {
+        var kcal = Math.max(0, Math.min(5000, Math.round(Number(kI.value) || 0))), f = d.kcal ? kcal / d.kcal : 1;   // kcal aangepast: macro's schalen mee
+        var entry = { name: String(nmI.value || d.name || "Iets anders").trim().slice(0, 60), kcal: kcal, eiwitG: Math.round((d.eiwitG || 0) * f), khG: Math.round((d.khG || 0) * f), vetG: Math.round((d.vetG || 0) * f), replaces: st.replace || null };
+        if (st.mode === "uit" && st.place.trim()) { entry.place = st.place.trim().slice(0, 60); rememberPlace(entry.place, st.pos, entry); }
+        closeSheet(sh.ov);
+        addExtra(entry);
+        showToast(entry.place ? "Ingecheckt bij " + entry.place + ". Je dag is bijgewerkt." : "Toegevoegd. Je dag is bijgewerkt.", "ok");
+      };
+      body.appendChild(ok);
+      var back = document.createElement("button"); back.type = "button"; back.className = "autofill-cancel"; back.textContent = "Terug"; back.onclick = paint;
+      body.appendChild(back);
+    }
+    paint();
+    if (st.mode === "uit") nearby();
+  }
+  // ---- "Trek? Wat past nog": wat er van je dag over is, en wat daarbij past ----
+  var SIMPLE_SNACKS = [
+    ["Magere kwark met een handje bessen", 160, 20, 14, 1, ["zuivel"]], ["Twee gekookte eieren", 150, 13, 1, 10, ["ei"]],
+    ["Handje ongezouten noten (25 g)", 160, 5, 3, 14, ["noten"]], ["Appel met 1 el pindakaas", 190, 4, 22, 9, ["pinda"]],
+    ["Skyr naturel (150 g)", 95, 16, 6, 0, ["zuivel"]], ["Hüttenkäse met komkommer", 120, 13, 5, 5, ["zuivel"]],
+    ["Edamame (100 g)", 120, 11, 9, 5, ["soja"]], ["Rijstwafel met hummus en tomaat", 110, 4, 15, 4, []],
+    ["Banaan", 105, 1, 24, 0, []], ["Wortel en paprika met tzatziki", 90, 4, 9, 4, ["zuivel"]],
+    ["Volkoren cracker met kipfilet", 110, 10, 12, 2, ["vlees", "gluten"]], ["Sojayoghurt met havermout", 150, 7, 20, 4, ["soja", "gluten"]]
+  ];
+  function snackAllowed(tags) {
+    var ds = String(prefs.dietStyle || "").toLowerCase(), h = healthList(), ex = String(prefs.exclude || "").toLowerCase();
+    if (/vegan/.test(ds) && tags.some(function (t) { return ["zuivel", "ei", "vlees"].indexOf(t) > -1; })) return false;
+    if (/vegetar/.test(ds) && tags.indexOf("vlees") > -1) return false;
+    if (h.indexOf("lactosevrij") > -1 && tags.indexOf("zuivel") > -1) return false;
+    if (h.indexOf("glutenvrij") > -1 && tags.indexOf("gluten") > -1) return false;
+    if (/noot|noten/.test(ex) && tags.indexOf("noten") > -1) return false;
+    if (/pinda/.test(ex) && tags.indexOf("pinda") > -1) return false;
+    return true;
+  }
+  function openFitSheet() {
+    var now = new Date(), dayName = PLAN_DAYS[(now.getDay() + 6) % 7];
+    var pw = plannedWeeks.filter(function (w) { return w.weekStart === isoDateKey(getMonday(now)); })[0];
+    var agg = (pw ? aggregateDayMacros(pw, dayName) : null) || { kcal: 0, eiwitG: 0, khG: 0, vetG: 0 };
+    var target = dailyKcalTarget(), t = goalTarget();
+    var leftK = target - agg.kcal, leftE = Math.round(target * t.eiwit / 100 / 4) - agg.eiwitG;
+    var sh = openSimpleSheet("fitSheet", "Wat past nog?", leftK > 0 ? "Nog " + leftK + " kcal" + (leftE > 0 ? " en " + leftE + " g eiwit" : "") + " over vandaag" : "Je dagdoel is vandaag al bereikt");
+    var body = sh.body;
+    if (leftK <= 80) {
+      var p = document.createElement("p"); p.className = "op-note";
+      p.textContent = "Je zit vandaag op of boven je dagdoel. Heb je echt trek? Kies dan iets lichts, zoals groente met een dip, een kop bouillon of thee.";
+      body.appendChild(p);
+      return;
+    }
+    // Score: past in de kcal die over zijn, en hoe meer van het eiwit dat nog mist, hoe beter.
+    function score(k, e) { if (k > leftK * 1.1) return -1; var s = 1 - Math.abs(leftK * 0.5 - k) / Math.max(leftK, 1); if (leftE > 0) s += Math.min(e, leftE) / leftE; return s; }
+    var own = [];
+    var byT = collectExistingByType(), allItems = [];
+    Object.keys(byT).forEach(function (k) { allItems = allItems.concat(byT[k]); });
+    allItems.forEach(function (it) {
+      var d = it.day; if (d.rating === -1) return;
+      var e = d.eiwitG || Math.round(d.kcal * d.eiwit / 400), sc = score(d.kcal, e);
+      if (sc >= 0) own.push({ it: it, k: d.kcal, e: e, sc: sc + (d.mealType === "Snack" ? 0.3 : 0) + (d.rating === 1 ? 0.2 : 0) });
+    });
+    own.sort(function (a, b) { return b.sc - a.sc; });
+    var simple = SIMPLE_SNACKS.filter(function (x) { return snackAllowed(x[5]); }).map(function (x) { return { x: x, sc: score(x[1], x[2]) }; })
+      .filter(function (o) { return o.sc >= 0; }).sort(function (a, b) { return b.sc - a.sc; });
+    if (own.length) {
+      var l1 = document.createElement("div"); l1.className = "photo-label"; l1.textContent = "Uit je eigen gerechten"; body.appendChild(l1);
+      own.slice(0, 3).forEach(function (o) {
+        var b = document.createElement("button"); b.type = "button"; b.className = "op-place fit-own";
+        b.innerHTML = "<b></b><small></small>"; b.querySelector("b").textContent = o.it.day.name;
+        b.querySelector("small").textContent = o.it.day.mealType + ", " + o.k + " kcal, " + o.e + " g eiwit";
+        b.onclick = function () { closeSheet(sh.ov); openDishSheet(o.it); };
+        body.appendChild(b);
+      });
+    }
+    if (simple.length) {
+      var l2 = document.createElement("div"); l2.className = "photo-label"; l2.textContent = "Snel en simpel"; body.appendChild(l2);
+      simple.slice(0, 4).forEach(function (o) {
+        var x = o.x, b = document.createElement("button"); b.type = "button"; b.className = "op-place fit-simple";
+        b.innerHTML = "<b></b><small></small>"; b.querySelector("b").textContent = x[0];
+        b.querySelector("small").textContent = x[1] + " kcal, " + x[2] + " g eiwit · tik als je het neemt";
+        b.onclick = function () { closeSheet(sh.ov); addExtra({ name: x[0], kcal: x[1], eiwitG: x[2], khG: x[3], vetG: x[4], replaces: null }); showToast("Genoteerd: " + x[0].toLowerCase() + ".", "ok"); };
+        body.appendChild(b);
+      });
+    }
+    if (!own.length && !simple.length) { var p2 = document.createElement("p"); p2.className = "op-note"; p2.textContent = "Ik vond niets dat precies past. Een stuk fruit of groente kan altijd."; body.appendChild(p2); }
   }
   // Drie meters (270°) voor eiwit, koolhydraten en vet: hoeveel gram van je dagdoel er vandaag gepland is.
   // Ze lopen één keer vol bij het openen; boven je doel kleurt de meter warm met hoeveel je erover zit.
@@ -5454,7 +5827,7 @@
       var photoCard = document.createElement("button");
       photoCard.type = "button"; photoCard.className = "photo-card"; photoCard.id = "photoCardBtn";
       photoCard.innerHTML = '<span class="photo-card-ic">' + iconSvg("camera", 22) + '</span><span class="photo-card-txt"><b>Gerecht van foto</b>' +
-        (freshHint("photo") ? '<span>Maak een foto van je bord of van een recept. Balanza maakt er een gerecht van, op jouw manier.</span>' : '') + '</span><span class="photo-card-go" aria-hidden="true">›</span>';
+        (freshHint("photo") ? '<span>Maak een foto van je bord, een recept of je koelkast. Balanza maakt er een gerecht van, op jouw manier.</span>' : '') + '</span><span class="photo-card-go" aria-hidden="true">›</span>';
       photoCard.disabled = !!state.generating || quotaBlocked();
       photoCard.onclick = pickDishPhoto;
       lockEl(photoCard, "Een gerecht van een foto maken");
@@ -6245,7 +6618,8 @@
       var modes = document.getElementById("photoModes");
       modes.innerHTML = "";
       [["balanza", "Balanza-versie", "Hetzelfde gerecht, afgestemd op je doel (" + String(prefs.goal || "Onderhoud").split(" (")[0].toLowerCase() + ")" + (prefs.dietStyle && prefs.dietStyle !== "Omnivoor" ? " en " + prefs.dietStyle.toLowerCase() : "")],
-       ["origineel", "Zoals op de foto", "Zo dicht mogelijk bij het origineel, met eerlijk uitgerekende macro's"]].forEach(function (m) {
+       ["origineel", "Zoals op de foto", "Zo dicht mogelijk bij het origineel, met eerlijk uitgerekende macro's"],
+       ["koelkast", "Wat ligt er in huis?", "Een foto van je koelkast of voorraad: Balanza maakt er een gerecht van dat bij je doel past"]].forEach(function (m) {
         var b = document.createElement("button");
         b.type = "button"; b.className = "photo-mode" + (mode === m[0] ? " selected" : ""); b.id = "photoMode-" + m[0];
         b.setAttribute("aria-pressed", mode === m[0] ? "true" : "false");
@@ -7513,11 +7887,25 @@
     return null;
   }
 
+  // Wat je anders at dan gepland ("Ik at iets anders"): pw.extra[dag] = [{ id, name, kcal, eiwitG, khG, vetG, replaces, place }].
+  // In een gedeeld huishouden is de planning samen, maar wat je anders at is van jou alleen.
+  function meId() { return (window.authToken && window.USER_ID) || window.anonId || "me"; }
+  function dayExtras(pw, d) {
+    var all = pw && pw.extra && Array.isArray(pw.extra[d]) ? pw.extra[d] : [];
+    return all.filter(function (x) { return !x.who || x.who === meId(); });
+  }
+  function replacedSlots(pw, d) { var r = {}; dayExtras(pw, d).forEach(function (x) { if (x.replaces) r[x.replaces] = x; }); return r; }
   function aggregateDayMacros(pw, d) {
     var totalKcal = 0, totalKhG = 0, totalEiwitG = 0, totalVetG = 0, totalBalans = 0, count = 0;
+    var repl = replacedSlots(pw, d), extras = dayExtras(pw, d);
+    extras.forEach(function (x) {
+      totalKcal += Number(x.kcal) || 0; totalKhG += Number(x.khG) || 0; totalEiwitG += Number(x.eiwitG) || 0; totalVetG += Number(x.vetG) || 0;
+      var k = Number(x.kcal) || 1;
+      totalBalans += computeBalance(Math.round((x.khG || 0) * 400 / k), Math.round((x.eiwitG || 0) * 400 / k), Math.round((x.vetG || 0) * 900 / k)); count++;
+    });
     PLAN_SLOTS.forEach(function (m) {
       var assigned = pw.slots[d + "|" + m];
-      if (!assigned) return;
+      if (!assigned || repl[d + "|" + m]) return;
       var resolved = resolveAssignedDish(assigned);
       if (!resolved) return;
       var day = resolved.day;
@@ -11315,6 +11703,9 @@
   // Begeleiding: de gebruiker zet elk onderdeel zelf aan of uit (Instellingen → Begeleiding). Standaard staat alles aan.
   var COACH_OPTIONS = [
     ["draft", "Week alvast klaarzetten", "Een voorstel voor je week met je eigen gerechten; jij keurt goed of wisselt", "autoWeek"],
+    ["daytools", "Ik at iets anders / Wat past nog?", "Knoppen bij Vandaag om vast te leggen wat je anders at (ook uit eten) en te zien wat er nog past", null],
+    ["morning", "Ochtendbericht met voorbereiding", "Alleen als er iets voor te bereiden valt, zoals vlees uit de vriezer halen", "morning"],
+    ["water", "Water bijhouden", "Glaasjes bij Vandaag om aan te tikken (standaard uit)", null],
     ["cooked", "Na het eten: was het lekker?", "Eén vraag na het diner, zodat Balanza je smaak leert", "cookedCheck"],
     ["recap", "Weekterugblik", "Op maandag je vorige week in cijfers", "recap"],
     ["leftovers", "Restjes opmaken", "Bij het plannen: wat moet er op, en welke gerechten gebruiken dat", null],
@@ -11327,7 +11718,11 @@
     ["voiceSend", "Na inspreken vanzelf versturen", "Na een korte pauze gaat je ingesproken bericht vanzelf weg; tik op de tekst om eerst iets aan te passen", null],
     ["voice", "Inspreken", "Een microfoonknop in de chat en bij je wens; je browser zet je stem om in tekst die je eerst kunt aanpassen", null]
   ];
-  function coachOn(k) { return !(prefs.coach && prefs.coach[k] === false); }
+  var COACH_DEFAULT_OFF = ["water"];
+  function coachOn(k) {
+    if (prefs.coach && typeof prefs.coach[k] === "boolean") return prefs.coach[k];
+    return COACH_DEFAULT_OFF.indexOf(k) === -1;
+  }
   function setCoach(k, on) {
     prefs.coach = Object.assign({}, prefs.coach || {}); prefs.coach[k] = !!on; savePrefs();
     var opt = COACH_OPTIONS.filter(function (o) { return o[0] === k; })[0];
@@ -12914,6 +13309,8 @@
         cheeseMode: prefs.cheeseMode === "geen" ? "geen" : "hardekaas",
         leftovers: Array.isArray(prefs.leftovers) ? prefs.leftovers.slice(-20) : [],
         coach: prefs.coach && typeof prefs.coach === "object" ? prefs.coach : {},
+        water: prefs.water && typeof prefs.water === "object" ? { d: String(prefs.water.d || "").slice(0, 10), n: Number(prefs.water.n) || 0 } : null,
+        places: Array.isArray(prefs.places) ? prefs.places.slice(0, 30) : [],
         journey: prefs.journey && typeof prefs.journey === "object" ? prefs.journey : {},
         ageGroup: AGE_GROUPS.some(function (g) { return g[0] === prefs.ageGroup; }) ? prefs.ageGroup : "",
         student: student(),
@@ -13289,7 +13686,7 @@
               return;
             }
             var pdata = psnap.data() || {};
-            ["name", "bringListLink", "cuisines", "flavors", "level", "dietStyle", "health", "leftovers", "coach", "journey", "ageGroup", "student", "sugarMode", "cheeseMode", "familyMode", "equipment", "exclude", "count", "mealTypes", "gender", "heightCm", "weightKg", "age", "activityLevel", "goal", "homeLayout", "mealCounts", "withImages", "pantry", "communityName"].forEach(function (k) {
+            ["name", "bringListLink", "cuisines", "flavors", "level", "dietStyle", "health", "leftovers", "coach", "water", "places", "journey", "ageGroup", "student", "sugarMode", "cheeseMode", "familyMode", "equipment", "exclude", "count", "mealTypes", "gender", "heightCm", "weightKg", "age", "activityLevel", "goal", "homeLayout", "mealCounts", "withImages", "pantry", "communityName"].forEach(function (k) {
               if (pdata[k] !== undefined) prefs[k] = deepClone(pdata[k]);
             });
             if (enforceAgeRules()) savePrefs();

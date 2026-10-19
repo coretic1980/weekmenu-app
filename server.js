@@ -1399,6 +1399,35 @@ dietStyleInstructionText(p.dietStyle) +
 // ---------- Gerecht van foto ----------
 var PHOTO_MEALTYPES = ["Ontbijt", "Lunch", "Diner", "Snack"];
 var PHOTO_MEDIA = ["image/jpeg", "image/png", "image/webp"];
+// Koelkastfoto: herken wat er ligt en maak er één gerecht van dat bij het doel past.
+function buildFridgePrompt(p, mealType) {
+  var types = mealType && PHOTO_MEALTYPES.indexOf(mealType) > -1 ? [mealType] : ["Diner"];
+  var equipTxt = (p.equipment && p.equipment.length) ? p.equipment.join(", ") : "standaard fornuis en oven";
+  var excludeTxt = (p.exclude && String(p.exclude).trim()) ? String(p.exclude).trim() : "geen";
+  return "Je bent een voedingskundige chef-kok. Op de foto staat de inhoud van een koelkast, voorraadkast of een aanrecht met ingrediënten.\n" +
+    "Als er GEEN eten of ingrediënten op de foto staan, geef dan alleen dit terug: {\"error\": \"geen_ingredienten\"}\n\n" +
+    "Anders: herken de bruikbare ingrediënten en maak er precies één lekker, zelf te bereiden recept van (per 1 persoon).\n" +
+    "- Gebruik vooral wat je ziet. Je mag aanvullen met basisvoorraad die bijna iedereen heeft (olie, zout, peper, gedroogde kruiden, bouillon, ui, knoflook), en hooguit één ander ingrediënt; noem dat dan in \"benodigdheden\".\n" +
+    "- Vermeld in \"herkend\" kort welke ingrediënten je op de foto zag (max 200 tekens).\n" +
+    goalInstructionText(p.goal, p.dietStyle) + "\n" +
+    "- Stem de portie af op het maaltijdmoment: " + types.map(function (mt) { return mt + " (" + mealtypeGuideText(mt, p.goal) + ")"; }).join("; ") + "\n" +
+    buildBodyProfileLine(p) +
+    dietHardRuleText(p.dietStyle) + healthHardRuleText(p) + dietStyleInstructionText(p.dietStyle) + familyModeInstructionText(p.familyMode) +
+    "- Beschikbare apparatuur (gebruik bij de bereiding alleen wat er is): " + equipTxt + "\n" +
+    "- Uitgesloten ingrediënten: " + excludeTxt + "\n" +
+    "- Culinair niveau van de stappen: " + (p.level || "Home-style") + "\n" +
+    INGREDIENT_SPECIFICITY_LINE +
+    "Geef de naam in het Nederlands en beschrijvend. \"aanpassingen\" = een lege lijst []. " +
+    "Geef ALLEEN geldig JSON terug: een array met EXACT 1 object, exact dit schema, geen markdown, geen uitleg erbuiten:\n" +
+    '[{"name": "gerechtnaam", "herkend": "wat er op de foto ligt", "aanpassingen": [], "mealType": "' + types[0] + '", "kcal": 600, "kh_g": 50, "eiwit_g": 48, "vet_g": 22, ' +
+    '"bereidingstijd_minuten": 30, "foto_zoekterm": "grilled salmon asparagus", "benodigdheden": "korte tekst met keukenapparatuur", "ingredienten": ' + nevoIngredientSchema() + ', ' +
+    '"steps": [{"title": "korte staptitel", "content": "volledige instructie", "timer_seconds": 300}]}]\n' +
+    '"mealType" moet exact zijn: ' + types[0] + ". " +
+    "\"bereidingstijd_minuten\" is de totale realistische bereidingstijd in hele minuten. " + FOTO_TERM_LINE +
+    "Houd het beknopt: hoogstens 6 bereidingsstappen van 1 tot 3 zinnen, \"benodigdheden\" in één korte regel. " +
+    "timer_seconds alleen toevoegen bij stappen met wachttijd; anders weglaten." +
+    nevoPromptText(true);
+}
 function buildPhotoPrompt(p, mode, mealType) {
   var types = mealType && PHOTO_MEALTYPES.indexOf(mealType) > -1 ? [mealType] : PHOTO_MEALTYPES;
   var equipTxt = (p.equipment && p.equipment.length) ? p.equipment.join(", ") : "standaard fornuis en oven";
@@ -1454,18 +1483,18 @@ function runPhotoAction(body, params) {
   var data = img && typeof img.data === "string" ? img.data : "";
   if (PHOTO_MEDIA.indexOf(mediaType) === -1 || !data) return Promise.reject(photoBadRequest("Kies een foto (JPG, PNG of WebP)."));
   if (data.length > 1400000 || !/^[A-Za-z0-9+/=]+$/.test(data.slice(0, 2000))) return Promise.reject(photoBadRequest("Deze foto is te groot of ongeldig. Probeer een andere."));
-  var mode = body.mode === "origineel" ? "origineel" : "balanza";
+  var mode = body.mode === "origineel" ? "origineel" : body.mode === "koelkast" ? "koelkast" : "balanza";
   var mealType = PHOTO_MEALTYPES.indexOf(body.mealType) > -1 ? body.mealType : null;
   var post = function (parsed) {
     if (parsed && !Array.isArray(parsed) && typeof parsed === "object" && parsed.error) {
-      throw photoBadRequest("Op deze foto herkennen we geen gerecht of recept. Probeer een duidelijkere foto van je bord of van het recept.");
+      throw photoBadRequest(mode === "koelkast" ? "Op deze foto herkennen we geen ingrediënten. Probeer een foto waarop je koelkast of voorraad goed te zien is." : "Op deze foto herkennen we geen gerecht of recept. Probeer een duidelijkere foto van je bord of van het recept.");
     }
     var list = Array.isArray(parsed) ? parsed.slice(0, 1) : [parsed];
     list.forEach(function (d) { if (d && mealType) d.mealType = mealType; });
     return applyNevoToParsed(list);
   };
   // Eén bijstelronde en een kortere tijdslimiet: bij een foto telt snelheid zwaarder dan het laatste procentje Balans.
-  return generateWithBalansRetry(buildPhotoPrompt(params, mode, mealType), mode === "balanza" ? params.goal : null, post, dietRulesFromParams(params),
+  return generateWithBalansRetry(mode === "koelkast" ? buildFridgePrompt(params, mealType) : buildPhotoPrompt(params, mode, mealType), mode !== "origineel" ? params.goal : null, post, dietRulesFromParams(params),
     { image: { mediaType: mediaType, data: data }, repairRounds: 1, timeBudgetMs: 45000 });
 }
 
@@ -3344,7 +3373,7 @@ function notifyJobFinished(job) {
 // Elke paar minuten kijkt de server (en/of een externe cron via /api/cron/notify) wie er nu een melding moet krijgen.
 // Tijden zijn Nederlandse tijd; een melding gaat binnen 3 uur na het gekozen tijdstip de deur uit, anders slaan we hem over.
 var NOTIFY_TZ = "Europe/Amsterdam";
-var NOTIFY_DEFAULTS = { planWeek: true, planWeekDay: 0, planWeekTime: "19:00", autoWeek: true, planToday: true, planTodayTime: "09:00", community: true,
+var NOTIFY_DEFAULTS = { planWeek: true, planWeekDay: 0, planWeekTime: "19:00", autoWeek: true, planToday: true, planTodayTime: "09:00", community: true, morning: true, morningTime: "08:00",
   cookedCheck: true, cookedTime: "20:30", recap: true };
 var RECAP_TIME = "10:00", TRIAL_RECAP_TIME = "18:00";
 var NOTIFY_WINDOW_MIN = 180;
@@ -3360,12 +3389,35 @@ function hhmmToMin(v) { return Number(v.slice(0, 2)) * 60 + Number(v.slice(3, 5)
 function cleanNotifyPrefs(p) {
   var out = Object.assign({}, NOTIFY_DEFAULTS);
   if (!p || typeof p !== "object") return out;
-  ["planWeek", "autoWeek", "planToday", "community", "cookedCheck", "recap"].forEach(function (k) { if (typeof p[k] === "boolean") out[k] = p[k]; });
+  ["planWeek", "autoWeek", "planToday", "community", "cookedCheck", "recap", "morning"].forEach(function (k) { if (typeof p[k] === "boolean") out[k] = p[k]; });
+  if (validHHMM(p.morningTime)) out.morningTime = p.morningTime;
   if (validHHMM(p.cookedTime)) out.cookedTime = p.cookedTime;
   if (Number.isInteger(p.planWeekDay) && p.planWeekDay >= 0 && p.planWeekDay <= 6) out.planWeekDay = p.planWeekDay;
   if (validHHMM(p.planWeekTime)) out.planWeekTime = p.planWeekTime;
   if (validHHMM(p.planTodayTime)) out.planTodayTime = p.planTodayTime;
   return out;
+}
+// ---- Voorbereidingstip voor vanavond (zelfde regels als in de app) ----
+function findDishIn(dishesDoc, id) {
+  var found = null;
+  if (dishesDoc && typeof dishesDoc === "object") Object.keys(dishesDoc).forEach(function (mt) {
+    if (!found && Array.isArray(dishesDoc[mt])) found = dishesDoc[mt].filter(function (d) { return d && d.id === id; })[0] || null;
+  });
+  return found;
+}
+var PREP_FROZEN_RE = /\b(kipfilet|kippendij\w*|kippenpoot\w*|kip|gehakt|rundergehakt|kipgehakt|biefstuk|steak|varkenshaas|karbonade|zalm\w*|kabeljauw|koolvis|tilapia|pangasius|garnalen|scampi|kalkoen\w*|riblappen|stoofvlees|lamsvlees|shoarma)\b/i;
+function prepTipFor(dish) {
+  var ing = (Array.isArray(dish.ingredienten) ? dish.ingredienten : []).map(function (x) { return typeof x === "string" ? x : (x && x.tekst) || ""; }).join(" ; ");
+  var steps = (Array.isArray(dish.steps) ? dish.steps : []).map(function (x) { return (x && (x.title + " " + x.content)) || ""; }).join(" ");
+  var tips = [];
+  var dried = /gedroogde (bonen|kikkererwten|linzen|witte bonen|kidneybonen)/i.exec(ing);
+  if (dried) tips.push("Zet de gedroogde " + dried[1].toLowerCase() + " nu alvast in de week.");
+  if (/marineer|marinade|laten marineren/i.test(steps)) tips.push("Maak de marinade vanochtend al, dan trekt de smaak goed in.");
+  var fz = PREP_FROZEN_RE.exec(ing);
+  if (fz) tips.push("Ligt de " + fz[1].toLowerCase() + " in de vriezer? Leg hem nu in de koelkast om te ontdooien.");
+  var mins = Number(dish.bereidingstijd || dish.bereidingstijd_minuten) || 0;
+  if (mins >= 60) tips.push("Reken op ongeveer " + mins + " minuten, dus begin op tijd.");
+  return tips.slice(0, 2).join(" ");
 }
 // Datum en tijd zoals in Nederland, los van de tijdzone van de server.
 var notifyFmt = new Intl.DateTimeFormat("en-GB", { timeZone: NOTIFY_TZ, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", weekday: "short", hourCycle: "h23" });
@@ -3518,6 +3570,20 @@ function notifyTickUser(uid, ctx) {
       st.todaySentOn = now.date; changed = true;
       if (!(wToday && wToday.slots && wToday.slots[dayName + "|Diner"])) jobs.push({ kind: "remind-today", payload: { title: "Wat eten we vanavond?", tag: "balanza-today",
         body: "Je hebt voor vanavond nog geen diner gepland. Tik voor een gerecht dat past bij je dag.", url: "/?open=plan&week=" + monToday + "&day=" + dayName } });
+    }
+    // 2b. Ochtend: vanavond eet je X, en dit kun je nu al doen (alleen als er echt iets voor te bereiden valt)
+    if (np.morning && canPlan && inWindow(now.minutes, np.morningTime) && st.morningSentOn !== now.date) {
+      var din = wToday && wToday.slots ? wToday.slots[dayName + "|Diner"] : null;
+      if (din && din.dayId && !din.leftover) {
+        st.morningSentOn = now.date; changed = true;
+        var prevExtra = extra;
+        extra = prevExtra.then(function () { return dbGetDoc("data/users/" + dataUid + "/dishes"); }).then(function (dr) {
+          var dish = dr && dr.exists ? findDishIn(dr.value, din.dayId) : null;
+          var tip = dish ? prepTipFor(dish) : "";
+          if (tip) jobs.push({ kind: "morning-prep", payload: { title: "Vanavond: " + String(dish.name || din.name).slice(0, 60), tag: "balanza-morning",
+            body: tip, url: "/?open=plan&week=" + monToday + "&day=" + dayName } });
+        }).catch(function () {});
+      }
     }
     // 3. Na het eten: gekookt, en was het lekker? (voedt de smaakgeschiedenis)
     if (np.cookedCheck && inWindow(now.minutes, np.cookedTime) && st.cookedSentOn !== now.date) {
@@ -4083,7 +4149,8 @@ var ASSISTANT_VIEWS = { weeks: "Start", plan: "Plannen", library: "Gerechten", s
 var ASSISTANT_TILES = { vandaag: "Vandaag", reis: "Jouw reis", week: "Huidige week", seizoen: "Seizoen", foto: "Gerecht van foto", recent: "Recente gerechten",
   community: "Community", boodschappen: "Boodschappenlijst", uitleg: "Hoe werkt Balanza", genereren: "Snel genereren", volgendeweek: "Volgende week", tip: "Tip van de dag" };
 var ASSISTANT_COACH = { draft: "Week alvast klaarzetten", cooked: "Na het eten: was het lekker?", recap: "Weekterugblik", leftovers: "Restjes opmaken",
-  season: "Seizoen en feestdagen", journey: "Jouw reis", challenge: "Weekuitdaging", milestones: "Mijlpalen", progress: "Voortgang bijhouden", voice: "Inspreken (spraakinvoer)" };
+  season: "Seizoen en feestdagen", journey: "Jouw reis", challenge: "Weekuitdaging", milestones: "Mijlpalen", progress: "Voortgang bijhouden", voice: "Inspreken (spraakinvoer)",
+  morning: "Ochtendbericht met voorbereiding", daytools: "Ik at iets anders / Wat past nog?", water: "Water bijhouden" };
 var ASSISTANT_NOTIFY = { planWeek: "Melding: plan je week", planToday: "Melding: diner van vandaag", community: "Melding: nieuwe recepten",
   cookedCheck: "Melding: na het eten", recap: "Melding: weekterugblik", autoWeek: "Week automatisch klaarzetten" };
 var A_CUISINES = ["Italiaans", "Aziatisch", "Mediterraan", "Midden-Oosters", "Nederlands", "Mexicaans", "Indiaas", "Thais", "Japans", "Koreaans", "Frans", "Grieks", "Spaans", "Marokkaans", "Vietnamees", "Amerikaans"];
@@ -4268,6 +4335,53 @@ function handleAssistant(req, res) {
   });
 }
 
+
+// ---------- "Ik at iets anders": voedingswaarde schatten van een foto of korte beschrijving ----------
+var estimateLimiter = makeHourlyLimiter(30);
+function buildEstimatePrompt(text, hasImage) {
+  return "Je bent een voedingskundige. Schat de voedingswaarde van wat de gebruiker at" + (hasImage ? " (zie de foto)" : "") + ".\n" +
+    (text ? "Beschrijving van de gebruiker: \"" + text + "\"\n" : "") +
+    "- Ga uit van precies wat beschreven of zichtbaar is, met realistische Nederlandse porties. Dranken met calorieën tellen mee.\n" +
+    "- Is het geen eten of drinken, geef dan alleen: {\"error\": \"geen_eten\"}\n" +
+    "Geef ALLEEN JSON: {\"name\": korte Nederlandse naam (max 40 tekens), \"kcal\": getal, \"eiwit_g\": getal, \"kh_g\": getal, \"vet_g\": getal, " +
+    "\"mealType\": \"Ontbijt\"|\"Lunch\"|\"Diner\"|\"Snack\", \"note\": één korte, vriendelijke zin zonder oordeel (bijv. wat je morgen kunt doen)}";
+}
+function handleEstimate(req, res) {
+  var t0 = Date.now(), ip = clientIp(req), settingsRef = null;
+  getSettings().then(function (s) {
+    settingsRef = s;
+    if (!effectiveModules(s).generate) { sendJSON(res, 503, moduleOffBody("generate", s)); return undefined; }
+    return resolveUser(req);
+  }).then(function (user) {
+    if (user === undefined) return;
+    if (!user) return sendUnauthorized(res);
+    if (!ANTHROPIC_API_KEY) return sendJSON(res, 500, { code: "not_configured", message: "Schatten is op deze server nog niet ingesteld." });
+    if (!estimateLimiter("e:" + user.uid)) return sendJSON(res, 429, { code: "rate_limited", message: "Je hebt al veel geschat dit uur. Probeer het straks opnieuw." });
+    return readBody(req).then(function (body) {
+      var text = String(body && body.text || "").replace(/[\r\n]+/g, " ").trim().slice(0, 300);
+      var img = body && body.image, image = null;
+      if (img && typeof img === "object") {
+        if (PHOTO_MEDIA.indexOf(img.mediaType) === -1 || typeof img.data !== "string" || img.data.length > 1400000 || !/^[A-Za-z0-9+/=]+$/.test(img.data.slice(0, 2000))) return sendJSON(res, 400, { code: "bad_request", message: "Deze foto is te groot of ongeldig." });
+        image = { mediaType: img.mediaType, data: img.data };
+      }
+      if (!text && !image) return sendJSON(res, 400, { code: "bad_request", message: "Beschrijf wat je at of maak een foto." });
+      var usage = newUsage();
+      return usageCtx.run(usage, function () { return callAnthropicOnce(buildEstimatePrompt(text, !!image), ASSISTANT_MODEL, 600, image); }).then(function (p) {
+        return recordAccounting(user.uid, "estimate", usage, 0, true).then(function () {
+          if (!p || p.error) return sendJSON(res, 422, { code: "not_food", message: "Hier herken ik geen eten in. Probeer een andere foto of beschrijf het kort." });
+          var n = function (v, max) { v = Math.round(Number(v) || 0); return Math.max(0, Math.min(max, v)); };
+          var out = { name: cleanText(p.name, 40) || cleanText(text, 40) || "Iets anders", kcal: n(p.kcal, 5000), eiwitG: n(p.eiwit_g, 400), khG: n(p.kh_g, 800), vetG: n(p.vet_g, 400),
+            mealType: PHOTO_MEALTYPES.indexOf(p.mealType) > -1 ? p.mealType : null, note: cleanText(p.note, 160) };
+          logRequest({ ts: new Date().toISOString(), type: "estimate", action: image ? "foto" : "tekst", durationMs: Date.now() - t0, ok: true, status: 200, uid: user.uid, ip: ip });
+          sendJSON(res, 200, out);
+        });
+      }, function (e) { return recordAccounting(user.uid, "estimate", usage, 0, false).then(function () { throw e; }); });
+    });
+  }).catch(function (err) {
+    logRequest({ ts: new Date().toISOString(), type: "estimate", action: "schatten", durationMs: Date.now() - t0, ok: false, status: 502, error: err && err.message, ip: ip });
+    sendJSON(res, 502, { code: "error", message: "Schatten lukte even niet. Probeer het zo opnieuw." });
+  });
+}
 
 // ---------- Ideeën van gebruikers (uit de chat) en berichten terug ----------
 //   suggestions/<id>  { id, uid, email, name, createdAt, status: new|accepted|rejected, title, area, userStory, problem, proposal,
@@ -5692,7 +5806,7 @@ function sanitizePrefsPatch(patch) {
       case "voiceName": case "voiceStyle": break;   // voorlezen is verwijderd; oude waarden negeren
       case "coach":
         if (!v || typeof v !== "object" || Array.isArray(v)) errors.push("Begeleiding moet een object zijn.");
-        else { clean.coach = {}; Object.keys(v).slice(0, 20).forEach(function (k) { if (/^[a-z]{2,20}$/.test(k) && typeof v[k] === "boolean") clean.coach[k] = v[k]; }); }
+        else { clean.coach = {}; Object.keys(v).slice(0, 20).forEach(function (k) { if (/^[a-zA-Z]{2,20}$/.test(k) && typeof v[k] === "boolean") clean.coach[k] = v[k]; }); }
         break;
       case "leftovers":
         if (!Array.isArray(v) || v.length > 20) errors.push("Restjes moet een lijst van maximaal 20 items zijn.");
@@ -6876,6 +6990,7 @@ var server = http.createServer(function (req, res) {
   if (req.method === "POST" && url.pathname === "/api/cron/notify") return handleCronNotify(req, res);
   if (req.method === "POST" && url.pathname === "/api/tips") return handleTips(req, res);
   if (req.method === "POST" && url.pathname === "/api/assistant") return handleAssistant(req, res);
+  if (req.method === "POST" && url.pathname === "/api/estimate") return handleEstimate(req, res);
   if ((req.method === "GET" || req.method === "POST") && url.pathname === "/api/suggestions") return handleSuggestions(req, res);
   if ((req.method === "GET" && url.pathname === "/api/inbox") || (req.method === "POST" && url.pathname === "/api/inbox/read")) return handleInbox(req, res);
   if (req.method === "POST" && url.pathname === "/api/auth/register") return guardedRegister(req, res);
