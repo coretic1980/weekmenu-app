@@ -44,9 +44,13 @@ Het menu sluit met Escape of door ernaast te tikken. De knoppen "Reset app" en "
 daarom niet meer onderaan het startscherm.
 
 **Startscherm (v2):** rustig en op ongeveer één scherm, met één hoofdknop.
-- **Vandaag**: wat je vandaag eet (met foto als die er is), "Straks" bij de volgende maaltijd, ✓ bij gekookt, plus een smalle
-  kcal-balk en eiwit/koolhydraten/vet. Niets gepland: één knop *Plan vandaag* (of *Maak mijn eerste gerechten* zonder gerechten).
-- **Deze week**: zeven dagbolletjes (aantal geplande maaltijden, ✓ als alles gekookt is); tik op een dag om hem te plannen.
+- **Vandaag**: de eerstvolgende maaltijd groot als foto (zonder foto: kleurvlak van het moment met een groot icoon), met
+  "Vanavond/Straks/Nu – diner". Daaronder een kcal-balk opgebouwd uit de maaltijden van vandaag (elk in de kleur van zijn moment,
+  lichter tot hij gekookt is), eiwit/koolhydraten/vet als drie blokjes en de overige maaltijden als rustige lijst.
+  Niets gepland: een kleine illustratie, een vraag die past bij het tijdstip en één knop *Plan vandaag* (of *Maak mijn eerste gerechten*).
+- **Je week**: zeven dagen met datum en drie stipjes (ontbijt, lunch, diner in hun kleur); vandaag is gevuld, ✓ als alles gekookt is.
+  Tik op een dag om hem te plannen; *Hele week* rechtsboven.
+- Koppen op Start zijn rustige titels ("Je week", "Voor jou", "Laatst gemaakt") in plaats van labels in hoofdletters.
 - **Voor jou**: berichten over ideeën, "gekookt?", mijlpalen, conceptweek, terugblik, je reis en het seizoen op één plek,
   één tegelijk met een knop *1 van N ›*. Staat *Plan vandaag* er al, dan zijn de knoppen hier rustiger.
 - **Recente gerechten**: horizontale rij, met foto als die er is.

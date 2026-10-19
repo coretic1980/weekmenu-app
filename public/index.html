@@ -1348,59 +1348,87 @@
 
 
   /* ---- Startscherm v2 ---- */
-  .home-hero { display: flex; flex-direction: column; gap: 12px; padding: 18px; border-radius: 20px; }
-  .hh-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
-  .hh-head .eyebrow { margin: 0; }
-  .hh-kcal { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
-  .hh-kcal b { font-family: "Fraunces", serif; font-size: 22px; color: var(--ink); }
-  .hh-bar { height: 8px; border-radius: 999px; background: rgba(26, 20, 12, 0.09); overflow: hidden; }
-  .hh-bar span { display: block; height: 100%; border-radius: 999px; background: var(--accent2); transition: width .6s ease; }
-  .hh-macros { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; margin-top: -4px; }
-  .hh-macros b { color: var(--ink); }
-  .hh-empty { font-size: 14px; color: var(--muted); line-height: 1.45; }
-  .hh-meals { display: flex; flex-direction: column; gap: 8px; margin-top: 2px; }
-  .hh-meal { appearance: none; border: 1px solid var(--line); background: var(--surface); border-radius: 14px; padding: 8px 12px 8px 8px; display: grid;
-    grid-template-columns: 52px minmax(0, 1fr) auto; gap: 12px; align-items: center; text-align: left; font-family: inherit; color: var(--ink); cursor: pointer; }
-  .hh-meal.next { border-color: var(--accent2); box-shadow: 0 0 0 1px var(--accent2) inset; }
-  .hh-meal.done { opacity: .7; }
-  .hh-meal-txt small { display: block; font-size: 11.5px; color: var(--muted); font-weight: 600; }
-  .hh-meal.next .hh-meal-txt small { color: var(--accent2); }
-  .hh-meal-txt b { display: block; font-family: "Fraunces", serif; font-weight: 600; font-size: 15.5px; line-height: 1.25; margin-top: 1px; }
-  .hh-meal-go { font-size: 20px; color: var(--muted); padding: 0 2px; }
-  .hh-meal.done .hh-meal-go { color: var(--accent2); font-size: 16px; font-weight: 700; }
+  .home-h { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 6px 2px -8px; }
+  .home-h h2 { margin: 0; font-family: "Fraunces", serif; font-weight: 600; font-size: 20px; letter-spacing: -0.005em; color: var(--ink); }
+  .home-h-link { appearance: none; border: 0; background: none; padding: 4px 2px; font: inherit; font-size: 14px; font-weight: 600; color: var(--accent2); cursor: pointer; }
+  .home-sec { display: flex; flex-direction: column; gap: 16px; }
+
+  .home-hero { padding: 0; overflow: hidden; border-radius: 26px; display: flex; flex-direction: column; }
+  .hh-photo { appearance: none; border: 0; padding: 0; position: relative; display: block; width: 100%; aspect-ratio: 16 / 11; max-height: 340px; cursor: pointer;
+    background: var(--meal); overflow: hidden; text-align: left; font-family: inherit; color: #fff; }
+  .hh-photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transform: scale(1.02); }
+  .hh-photo::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,0) 35%, rgba(12,8,4,.72) 100%); }
+  .hh-emoji { position: absolute; right: -6%; top: -8%; font-size: 170px; line-height: 1; opacity: .9; transform: rotate(-12deg); filter: drop-shadow(0 18px 30px rgba(0,0,0,.18)); }
+  .hh-photo.has-img .hh-emoji { display: none; }
+  .hh-cap { position: absolute; left: 0; right: 0; bottom: 0; z-index: 1; padding: 18px 20px 18px; display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+  .hh-chip { font-size: 12.5px; font-weight: 700; padding: 5px 10px; border-radius: 999px; background: rgba(255,255,255,.22); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); margin-bottom: 4px; }
+  .hh-cap b { font-family: "Fraunces", serif; font-weight: 700; font-size: 27px; line-height: 1.08; letter-spacing: -0.01em; text-wrap: balance; text-shadow: 0 1px 12px rgba(0,0,0,.25); }
+  .hh-cap small { font-size: 13px; opacity: .9; white-space: pre; font-variant-numeric: tabular-nums; }
+  .hh-body { padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 10px; }
+  .hh-line { display: flex; justify-content: space-between; align-items: baseline; font-size: 13.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .hh-line b { color: var(--ink); font-size: 15px; }
+  .hh-pct { font-weight: 700; color: var(--ink); }
+  .hh-bar { display: flex; gap: 3px; height: 10px; border-radius: 999px; background: rgba(26, 20, 12, 0.07); overflow: hidden; }
+  .hh-bar span { display: block; height: 100%; border-radius: 3px; }
+  .hh-bar span.todo { opacity: .45; }
+  .hh-macros { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 2px; }
+  .hh-macros span { display: flex; flex-wrap: wrap; align-items: baseline; gap: 1px 2px; padding: 9px 10px; border-radius: 12px; background: var(--bg); font-variant-numeric: tabular-nums; }
+  .hh-macros b { font-size: 16px; color: var(--ink); }
+  .hh-macros small { font-size: 12px; color: var(--muted); }
+  .hh-macros i { flex-basis: 100%; font-style: normal; font-size: 11.5px; color: var(--muted); }
+  .hh-meals { display: flex; flex-direction: column; margin-top: 4px; border-top: 1px solid var(--line); }
+  .hh-meal { appearance: none; border: 0; border-bottom: 1px solid var(--line); background: none; padding: 11px 2px; display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; gap: 12px;
+    align-items: center; text-align: left; font-family: inherit; color: var(--ink); cursor: pointer; }
+  .hh-meal:last-child { border-bottom: 0; padding-bottom: 2px; }
+  .hh-meal > i { width: 10px; height: 10px; border-radius: 50%; }
+  .hh-meal-txt b { display: block; font-weight: 600; font-size: 15px; line-height: 1.25; }
+  .hh-meal-txt small { display: block; font-size: 12.5px; color: var(--muted); margin-top: 1px; }
+  .hh-meal.done .hh-meal-txt b { color: var(--muted); }
+  .hh-meal-go { font-size: 20px; color: var(--muted); }
+  .hh-meal.done .hh-meal-go { color: #2E9A5C; font-size: 16px; font-weight: 800; }
+  .home-hero.is-empty { padding: 22px 20px 20px; gap: 10px; align-items: stretch; }
+  .hh-art { height: 92px; margin: -4px 0 2px; }
+  .hh-art svg { height: 100%; width: auto; display: block; }
+  .hh-art .pl1 { fill: var(--bg); }
+  .hh-art .pl2 { fill: none; stroke: var(--line); stroke-width: 2; }
+  .hh-art .cut { fill: none; stroke: var(--accent2); stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+  .hh-q { margin: 0; font-family: "Fraunces", serif; font-weight: 700; font-size: 25px; line-height: 1.15; letter-spacing: -0.01em; }
+  .hh-empty { margin: 0 0 6px; font-size: 14.5px; color: var(--muted); line-height: 1.5; max-width: 34ch; }
   .hh-thumb { position: relative; width: 52px; height: 52px; border-radius: 12px; overflow: hidden; display: flex; align-items: center; justify-content: center;
     font-size: 10px; font-weight: 700; letter-spacing: .06em; color: #1A140C; flex: none; }
   .hh-thumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
   .hh-thumb.has-img span { visibility: hidden; }
-  .week-strip { display: flex; flex-direction: column; gap: 12px; padding: 16px 16px 10px; }
-  .ws-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
-  .ws-head .eyebrow { margin: 0; }
-  .ws-sum { font-size: 12.5px; color: var(--muted); }
-  .ws-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
-  .ws-day { appearance: none; border: 0; background: none; padding: 2px 0; display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; font-family: inherit; color: var(--muted); }
-  .ws-dn { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
-  .ws-dot { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700;
-    border: 1.5px dashed var(--line); color: var(--muted); font-variant-numeric: tabular-nums; transition: transform .15s ease; }
-  .ws-day:active .ws-dot { transform: scale(.92); }
-  .ws-day.planned .ws-dot { border: 0; background: var(--bg); color: var(--ink); }
-  .ws-day.cooked .ws-dot { background: var(--accent2); color: var(--accent2-ink); }
-  .ws-day.today .ws-dn { color: var(--ink); }
-  .ws-day.today .ws-dot { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--accent2); }
-  .ws-day.past:not(.planned) .ws-dot { opacity: .45; }
-  .ws-open { appearance: none; border: 0; border-top: 1px solid var(--line); background: none; font: inherit; font-size: 13.5px; font-weight: 700; color: var(--accent2);
-    padding: 11px 0 4px; cursor: pointer; text-align: center; }
-  .foryou { display: flex; flex-direction: column; gap: 8px; }
-  .fy-head { display: flex; align-items: center; justify-content: space-between; }
-  .fy-head .eyebrow { margin: 0; }
-  .fy-next { appearance: none; border: 1px solid var(--line); background: none; border-radius: 999px; padding: 4px 11px; font: inherit; font-size: 12px; font-weight: 700;
+
+  .week-strip { padding: 14px 10px 12px; display: flex; flex-direction: column; gap: 10px; }
+  .ws-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
+  .ws-day { appearance: none; border: 0; background: none; padding: 8px 0 9px; border-radius: 16px; display: flex; flex-direction: column; align-items: center; gap: 5px;
+    cursor: pointer; font-family: inherit; color: var(--muted); transition: transform .15s ease; }
+  .ws-day:active { transform: scale(.94); }
+  .ws-dn { font-size: 12px; font-weight: 600; }
+  .ws-num { font-family: "Fraunces", serif; font-size: 19px; font-weight: 600; color: var(--ink); line-height: 1; min-height: 19px; font-variant-numeric: tabular-nums; }
+  .ws-day.past:not(.planned) .ws-num { color: var(--muted); opacity: .6; }
+  .ws-dots { display: flex; gap: 3px; }
+  .ws-dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--line); }
+  .ws-day.today { background: var(--accent); color: var(--accent-ink); }
+  .ws-day.today .ws-num { color: var(--accent-ink); }
+  .ws-day.today .ws-dots i:not([style]) { background: rgba(255,255,255,.25); }
+  .ws-day.cooked .ws-num { color: #2E9A5C; font-family: inherit; font-weight: 800; }
+  .ws-day.today.cooked .ws-num { color: var(--accent-ink); }
+  .ws-sum { font-size: 13px; color: var(--muted); text-align: center; padding-top: 2px; }
+
+  .foryou { display: flex; flex-direction: column; gap: 16px; }
+  .fy-next { appearance: none; border: 1px solid var(--line); background: none; border-radius: 999px; padding: 5px 12px; font: inherit; font-size: 12.5px; font-weight: 600;
     color: var(--muted); cursor: pointer; font-variant-numeric: tabular-nums; }
   .fy-next:hover { color: var(--ink); border-color: var(--accent2); }
   .fy-slot > * { margin: 0 !important; }
   .fy-in { animation: fyIn .25s ease; }
-  @keyframes fyIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
-  .recent-card .hh-thumb { display: none; width: 100%; height: 84px; border-radius: 10px; margin-bottom: 4px; }
+  @keyframes fyIn { from { opacity: 0; transform: translateX(8px); } to { opacity: 1; transform: none; } }
+  .recent-card .hh-thumb { display: none; width: calc(100% + 26px); height: 96px; border-radius: 0; margin: -13px -13px 6px; }
   .recent-card .hh-thumb.has-img { display: flex; }
-  @media (prefers-reduced-motion: reduce) { .fy-in, .hh-bar span, .ws-dot { animation: none; transition: none; } }
+  .recent-card { overflow: hidden; }
+  .recent-card .rc-meal { display: flex; align-items: center; gap: 6px; text-transform: none; letter-spacing: 0; font-size: 12px; font-weight: 600; color: var(--muted); }
+  .recent-card .rc-meal i { width: 8px; height: 8px; border-radius: 50%; }
+  @media (prefers-reduced-motion: reduce) { .fy-in, .ws-day { animation: none; transition: none; } }
   /* Zwevende tabbalk */
   @media (max-width: 700px), (max-height: 500px) and (orientation: landscape) {
     body.has-tabbar .tabbar {
@@ -4459,97 +4487,144 @@
     }
     return wrap;
   }
+  var MEAL_EMOJI = { Ontbijt: "🥣", Lunch: "🥗", Diner: "🍲", Snack: "🍎" };
+  var MEAL_DOT = { Ontbijt: "#E2B04F", Lunch: "#4FA872", Diner: "#D2774D", Snack: "#9B84C9" };
+  function homeHead(main, title, action) {
+    var h = document.createElement("div"); h.className = "home-h";
+    var t = document.createElement("h2"); t.textContent = title; h.appendChild(t);
+    if (action) h.appendChild(action);
+    main.appendChild(h);
+    return h;
+  }
+  // Grote kaart bovenaan: de eerstvolgende maaltijd van vandaag als foto, de rest klein eronder.
   function renderHomeHero(main) {
-    var now = new Date(), dayName = PLAN_DAYS[(now.getDay() + 6) % 7];
+    var now = new Date(), dayName = PLAN_DAYS[(now.getDay() + 6) % 7], hr = now.getHours();
     var pw = plannedWeeks.filter(function (w) { return w.weekStart === isoDateKey(getMonday(now)); })[0];
     var agg = pw ? aggregateDayMacros(pw, dayName) : null;
     var target = dailyKcalTarget(), t = goalTarget();
-    var card = document.createElement("div"); card.className = "card home-hero"; card.id = "homeHero";
-    var head = document.createElement("div"); head.className = "hh-head";
-    var eb = document.createElement("span"); eb.className = "eyebrow"; eb.textContent = "Vandaag";
-    var kc = document.createElement("span"); kc.className = "hh-kcal";
-    kc.innerHTML = "<b>" + (agg ? agg.kcal : 0) + "</b>" + (target ? " / " + target + " kcal" : " kcal");
-    head.appendChild(eb); head.appendChild(kc); card.appendChild(head);
-    if (target) {
-      var bar = document.createElement("div"); bar.className = "hh-bar";
-      bar.setAttribute("role", "img"); bar.setAttribute("aria-label", (agg ? agg.kcal : 0) + " van " + target + " kcal gepland");
-      var fill = document.createElement("span"); fill.style.width = Math.min(100, Math.round((agg ? agg.kcal : 0) / target * 100)) + "%"; bar.appendChild(fill);
-      card.appendChild(bar);
-      if (agg) {
-        var mac = document.createElement("div"); mac.className = "hh-macros";
-        [["Eiwit", agg.eiwitG, Math.round(target * t.eiwit / 100 / 4)], ["Koolh.", agg.khG, Math.round(target * t.kh / 100 / 4)], ["Vet", agg.vetG, Math.round(target * t.vet / 100 / 9)]].forEach(function (m) {
-          var sp = document.createElement("span"); sp.innerHTML = m[0] + " <b>" + m[1] + "</b>/" + m[2] + " g"; mac.appendChild(sp);
-        });
-        card.appendChild(mac);
-      }
-    }
     var rows = [];
     if (pw) PLAN_SLOTS.forEach(function (slot) {
       var a = pw.slots[dayName + "|" + slot]; if (!a) return;
-      var res = resolveAssignedDish(a); if (res) rows.push({ slot: slot, a: a, dish: res.day });
+      var res = resolveAssignedDish(a); if (res) rows.push({ slot: slot, a: a, dish: res.day, mt: SLOT_TO_MEALTYPE[slot] });
     });
+    var card = document.createElement("div"); card.className = "card home-hero" + (rows.length ? "" : " is-empty"); card.id = "homeHero";
     if (!rows.length) {
-      var empty = document.createElement("div"); empty.className = "hh-empty";
-      empty.textContent = hasAnyDishes() ? "Nog niets gepland. Kies wat je vandaag eet; je dagdoel vult zich vanzelf." : "Je hebt nog geen gerechten. Laat Balanza er een paar bedenken die passen bij je doel.";
-      card.appendChild(empty);
+      var art = document.createElement("div"); art.className = "hh-art"; art.setAttribute("aria-hidden", "true");
+      art.innerHTML = '<svg viewBox="0 0 200 120"><circle cx="100" cy="62" r="44" class="pl1"/><circle cx="100" cy="62" r="31" class="pl2"/>' +
+        '<path d="M38 26v28M32 26v12a6 6 0 0 0 12 0V26M38 54v42" class="cut"/><path d="M162 26c-8 6-8 26 0 32v38" class="cut"/></svg>';
+      card.appendChild(art);
+      var q = document.createElement("h2"); q.className = "hh-q";
+      q.textContent = hasAnyDishes() ? (hr < 11 ? "Wat eet je vandaag?" : hr < 16 ? "Wat eet je vanavond?" : "Nog even plannen voor vanavond?") : "Laten we beginnen";
+      card.appendChild(q);
+      var e = document.createElement("p"); e.className = "hh-empty";
+      e.textContent = hasAnyDishes() ? "Kies uit je eigen gerechten; Balanza houdt je dagdoel" + (target ? " van " + target + " kcal" : "") + " bij." : "Balanza bedenkt een paar gerechten die passen bij je doel en wat jij lekker vindt.";
+      card.appendChild(e);
       var go = document.createElement("button"); go.type = "button"; go.className = "primary-btn"; go.id = "planTodayBtn";
       if (hasAnyDishes()) {
         go.textContent = "Plan vandaag";
         go.onclick = function () { var w = pw || addOrOpenPlannedWeek(getMonday(new Date())); goto("planday", { planWeekId: w.id, planDayName: dayName, tab: "plannen" }); };
-      } else {
-        go.textContent = "Maak mijn eerste gerechten";
-        go.onclick = function () { goto("prefs"); };
-      }
+      } else { go.textContent = "Maak mijn eerste gerechten"; go.onclick = function () { goto("prefs"); }; }
       card.appendChild(go);
-    } else {
-      var hr = now.getHours(), nextSet = false;
-      var list = document.createElement("div"); list.className = "hh-meals";
+      main.appendChild(card);
+      return;
+    }
+    // De uitgelichte maaltijd: de eerstvolgende die nog moet komen, anders de laatste van vandaag.
+    var feat = rows.filter(function (r) { return hr < SLOT_HOURS[r.slot] && r.a.cooked === undefined; })[0] || rows[rows.length - 1];
+    var open = function (r) { goto("day", { weekId: r.a.weekId, dayId: r.a.dayId, dayServings: r.a.servings || 1, dayBackView: "weeks", dayBackWeekId: null, dayBackDayName: null }); };
+    var ph = document.createElement("button"); ph.type = "button"; ph.className = "hh-photo"; ph.id = "heroMeal";
+    ph.style.setProperty("--meal", (MEAL_THUMBS[feat.mt] || MEAL_THUMBS.Snack)[1]);
+    var emo = document.createElement("span"); emo.className = "hh-emoji"; emo.setAttribute("aria-hidden", "true"); emo.textContent = MEAL_EMOJI[feat.mt] || "🍽️"; ph.appendChild(emo);
+    if (wantsImages()) {
+      var img = document.createElement("img"); img.alt = ""; img.style.display = "none";
+      img.onload = function () { ph.classList.add("has-img"); };
+      ph.appendChild(img);
+      try { loadDishImageInto(feat.dish, img); } catch (er) {}
+    }
+    var when = feat.a.cooked === true ? "Gekookt" : feat.slot === "Diner" ? (hr < 16 ? "Vanavond" : "Straks") : hr < SLOT_HOURS[feat.slot] - 3 ? "Straks" : "Nu";
+    var cap = document.createElement("span"); cap.className = "hh-cap";
+    var chip = document.createElement("span"); chip.className = "hh-chip"; chip.textContent = when + " – " + feat.slot.toLowerCase();
+    var nm = document.createElement("b"); nm.textContent = feat.dish.name;
+    var meta = document.createElement("small");
+    meta.textContent = [feat.dish.kcal + " kcal", feat.dish.eiwitG ? feat.dish.eiwitG + " g eiwit" : "", feat.dish.bereidingstijd ? feat.dish.bereidingstijd + " min" : ""].filter(Boolean).join("   ");
+    cap.appendChild(chip); cap.appendChild(nm); cap.appendChild(meta); ph.appendChild(cap);
+    ph.onclick = function () { open(feat); };
+    card.appendChild(ph);
+    var body = document.createElement("div"); body.className = "hh-body";
+    if (target) {
+      var line = document.createElement("div"); line.className = "hh-line";
+      var kc = agg ? agg.kcal : 0;
+      line.innerHTML = '<span><b>' + kc + '</b> van ' + target + ' kcal gepland</span><span class="hh-pct">' + Math.min(999, Math.round(kc / target * 100)) + '%</span>';
+      body.appendChild(line);
+      var bar = document.createElement("div"); bar.className = "hh-bar"; bar.setAttribute("aria-hidden", "true");
+      // De balk is opgebouwd uit de maaltijden van vandaag, elk in de kleur van zijn moment.
       rows.forEach(function (r) {
-        var row = document.createElement("button"); row.type = "button"; row.className = "hh-meal";
-        var isNext = !nextSet && hr < SLOT_HOURS[r.slot] && r.a.cooked === undefined;
-        if (isNext) { nextSet = true; row.classList.add("next"); }
-        if (r.a.cooked === true) row.classList.add("done");
-        row.appendChild(homeThumb(r.dish, SLOT_TO_MEALTYPE[r.slot]));
+        var seg = document.createElement("span"); seg.style.width = Math.max(1, Math.min(100, r.dish.kcal / target * 100)) + "%"; seg.style.background = MEAL_DOT[r.mt] || MEAL_DOT.Snack;
+        if (r.a.cooked !== true) seg.className = "todo"; bar.appendChild(seg);
+      });
+      body.appendChild(bar);
+      if (agg) {
+        var mac = document.createElement("div"); mac.className = "hh-macros";
+        [["Eiwit", agg.eiwitG, Math.round(target * t.eiwit / 100 / 4)], ["Koolhydraten", agg.khG, Math.round(target * t.kh / 100 / 4)], ["Vet", agg.vetG, Math.round(target * t.vet / 100 / 9)]].forEach(function (m) {
+          var sp = document.createElement("span"); sp.innerHTML = '<b>' + m[1] + '</b><small>/' + m[2] + ' g</small><i>' + m[0] + '</i>'; mac.appendChild(sp);
+        });
+        body.appendChild(mac);
+      }
+    }
+    var others = rows.filter(function (r) { return r !== feat; });
+    if (others.length) {
+      var list = document.createElement("div"); list.className = "hh-meals";
+      others.forEach(function (r) {
+        var row = document.createElement("button"); row.type = "button"; row.className = "hh-meal" + (r.a.cooked === true ? " done" : "");
+        var dot = document.createElement("i"); dot.style.background = MEAL_DOT[r.mt] || MEAL_DOT.Snack; row.appendChild(dot);
         var tx = document.createElement("span"); tx.className = "hh-meal-txt";
-        var sm = document.createElement("small"); sm.textContent = (isNext ? "Straks · " : "") + r.slot + " · " + r.dish.kcal + " kcal";
         var b = document.createElement("b"); b.textContent = r.dish.name;
-        tx.appendChild(sm); tx.appendChild(b); row.appendChild(tx);
+        var sm = document.createElement("small"); sm.textContent = r.slot + ", " + r.dish.kcal + " kcal";
+        tx.appendChild(b); tx.appendChild(sm); row.appendChild(tx);
         var st = document.createElement("span"); st.className = "hh-meal-go"; st.setAttribute("aria-hidden", "true"); st.textContent = r.a.cooked === true ? "✓" : "›"; row.appendChild(st);
-        row.onclick = function () { goto("day", { weekId: r.a.weekId, dayId: r.a.dayId, dayServings: r.a.servings || 1, dayBackView: "weeks", dayBackWeekId: null, dayBackDayName: null }); };
+        row.onclick = function () { open(r); };
         list.appendChild(row);
       });
-      card.appendChild(list);
+      body.appendChild(list);
     }
+    card.appendChild(body);
     main.appendChild(card);
   }
   function renderWeekStrip(main, offset) {
     var monday = getMonday(new Date()); monday.setDate(monday.getDate() + 7 * (offset || 0));
     var pwk = plannedWeeks.filter(function (w) { return w.weekStart === isoDateKey(monday); })[0];
     var todayIdx = offset ? -1 : (new Date().getDay() + 6) % 7;
-    var card = document.createElement("div"); card.className = "card week-strip"; card.id = offset ? "nextWeekStrip" : "weekStrip";
-    var head = document.createElement("div"); head.className = "ws-head";
-    var eb = document.createElement("span"); eb.className = "eyebrow"; eb.textContent = offset ? "Volgende week" : "Deze week";
-    var planned = 0;
-    var days = document.createElement("div"); days.className = "ws-days";
+    var openWeek = function () { needDishesThen(function () { var w = pwk || addOrOpenPlannedWeek(monday); goto("planweek", { planWeekId: w.id }); }); };
+    var link = document.createElement("button"); link.type = "button"; link.className = "home-h-link"; link.id = offset ? "nextWeekOpen" : "weekOpen";
+    var wrap = document.createElement("section"); wrap.className = "home-sec";
+    var planned = 0, cells = [];
     PLAN_DAYS.forEach(function (dn, i) {
-      var n = 0, cooked = 0;
-      if (pwk) PLAN_SLOTS.forEach(function (sl) { var a = pwk.slots[dn + "|" + sl]; if (a) { n++; if (a.cooked === true) cooked++; } });
+      var n = 0, cooked = 0, mts = [];
+      if (pwk) PLAN_SLOTS.forEach(function (sl) { var a = pwk.slots[dn + "|" + sl]; if (a) { n++; if (a.cooked === true) cooked++; var mt = SLOT_TO_MEALTYPE[sl]; if (mts.indexOf(mt) === -1) mts.push(mt); } });
       if (n) planned++;
-      var d = new Date(monday); d.setDate(monday.getDate() + i);
-      var allDone = n > 0 && cooked === n;
-      var b = document.createElement("button"); b.type = "button"; b.className = "ws-day" + (n ? " planned" : "") + (allDone ? " cooked" : "") + (i === todayIdx ? " today" : "") + (i < todayIdx ? " past" : "");
-      b.setAttribute("aria-label", dn + " " + d.getDate() + ": " + (n ? n + (n === 1 ? " maaltijd" : " maaltijden") + " gepland" + (cooked ? ", " + cooked + " gekookt" : "") : "nog niets gepland"));
-      b.innerHTML = '<span class="ws-dn">' + dn.slice(0, 2) + '</span><span class="ws-dot">' + (allDone ? "✓" : n ? n : d.getDate()) + '</span>';
-      b.onclick = function () { needDishesThen(function () { var w = pwk || addOrOpenPlannedWeek(monday); goto("planday", { planWeekId: w.id, planDayName: dn, tab: "plannen" }); }); };
+      cells.push({ dn: dn, i: i, n: n, cooked: cooked, mts: mts });
+    });
+    link.textContent = planned ? "Hele week" : "Plannen";
+    link.onclick = openWeek;
+    homeHead(wrap, offset ? "Volgende week" : "Je week", link);
+    var card = document.createElement("div"); card.className = "card week-strip"; card.id = offset ? "nextWeekStrip" : "weekStrip";
+    var days = document.createElement("div"); days.className = "ws-days";
+    cells.forEach(function (c) {
+      var d = new Date(monday); d.setDate(monday.getDate() + c.i);
+      var allDone = c.n > 0 && c.cooked === c.n;
+      var b = document.createElement("button"); b.type = "button";
+      b.className = "ws-day" + (c.n ? " planned" : "") + (allDone ? " cooked" : "") + (c.i === todayIdx ? " today" : "") + (c.i < todayIdx ? " past" : "");
+      b.setAttribute("aria-label", c.dn + " " + d.getDate() + ": " + (c.n ? c.n + (c.n === 1 ? " maaltijd" : " maaltijden") + " gepland" + (c.cooked ? ", " + c.cooked + " gekookt" : "") : "nog niets gepland"));
+      var dots = ["Ontbijt", "Lunch", "Diner"].map(function (mt) { return '<i' + (c.mts.indexOf(mt) > -1 ? ' style="background:' + MEAL_DOT[mt] + '"' : '') + '></i>'; }).join("");
+      b.innerHTML = '<span class="ws-dn">' + c.dn.slice(0, 2).toLowerCase() + '</span><span class="ws-num">' + (allDone ? "✓" : d.getDate()) + '</span><span class="ws-dots">' + dots + '</span>';
+      b.onclick = function () { needDishesThen(function () { var w = pwk || addOrOpenPlannedWeek(monday); goto("planday", { planWeekId: w.id, planDayName: c.dn, tab: "plannen" }); }); };
       days.appendChild(b);
     });
-    var sum = document.createElement("span"); sum.className = "ws-sum"; sum.textContent = planned + " van 7 dagen gepland";
-    head.appendChild(eb); head.appendChild(sum); card.appendChild(head); card.appendChild(days);
-    var foot = document.createElement("button"); foot.type = "button"; foot.className = "ws-open"; foot.id = offset ? "nextWeekOpen" : "weekOpen";
-    foot.textContent = planned ? "Hele week bekijken ›" : "Week plannen ›";
-    foot.onclick = function () { needDishesThen(function () { var w = pwk || addOrOpenPlannedWeek(monday); goto("planweek", { planWeekId: w.id }); }); };
-    card.appendChild(foot);
-    main.appendChild(card);
+    card.appendChild(days);
+    var sum = document.createElement("div"); sum.className = "ws-sum";
+    sum.textContent = planned === 7 ? "Je hele week staat. Mooi." : planned ? planned + " van de 7 dagen gepland" : "Nog niets gepland. Tik op een dag om te beginnen.";
+    card.appendChild(sum);
+    wrap.appendChild(card);
+    main.appendChild(wrap);
   }
   // "Voor jou": alles wat aandacht vraagt (melding, gekookt?, reis, conceptweek, terugblik, seizoen) op één plek, één tegelijk.
   function renderForYou(main) {
@@ -4581,8 +4656,8 @@
       Array.prototype.forEach.call(it.querySelectorAll(".primary-btn"), function (b) { b.classList.remove("primary-btn"); b.classList.add("ghost-btn"); });
     });
     var wrap = document.createElement("div"); wrap.className = "foryou"; wrap.id = "forYou";
-    var head = document.createElement("div"); head.className = "fy-head";
-    var eb = document.createElement("span"); eb.className = "eyebrow"; eb.textContent = "Voor jou";
+    var head = document.createElement("div"); head.className = "home-h fy-head";
+    var eb = document.createElement("h2"); eb.textContent = "Voor jou";
     head.appendChild(eb);
     var slot = document.createElement("div"); slot.className = "fy-slot";
     var idx = Math.min(state.forYouIdx || 0, items.length - 1);
@@ -4813,7 +4888,7 @@
       render: function (main) {
         var cache = WEEKS.filter(function (w) { return w.id === "cache"; })[0];
         var list = cache ? cache.days.slice() : [];
-        homeSection(main, "Recente gerechten");
+        homeHead(main, "Laatst gemaakt");
         if (!list.length) {
           return;   // zonder gerechten wijst de kaart Vandaag de weg
 
@@ -4824,11 +4899,12 @@
         list.slice(0, 10).forEach(function (d) {
           var c = document.createElement("button");
           c.type = "button"; c.className = "recent-card";
-          c.innerHTML = '<span class="rc-meal"></span><b></b><span class="rc-meta"></span>';
+          c.innerHTML = '<span class="rc-meal"><i></i><span></span></span><b></b><span class="rc-meta"></span>';
           c.insertBefore(homeThumb(d, d.mealType), c.firstChild);
-          c.querySelector(".rc-meal").textContent = d.mealType || "";
+          c.querySelector(".rc-meal i").style.background = MEAL_DOT[d.mealType] || MEAL_DOT.Snack;
+          c.querySelector(".rc-meal span").textContent = d.mealType || "";
           c.querySelector("b").textContent = d.name;
-          c.querySelector(".rc-meta").textContent = d.kcal + " kcal · Balans " + computeBalance(d.kh, d.eiwit, d.vet) + "%";
+          c.querySelector(".rc-meta").textContent = d.kcal + " kcal, balans " + computeBalance(d.kh, d.eiwit, d.vet) + "%";
           c.onclick = function () { goto("day", { weekId: "cache", dayId: d.id, dayServings: null, dayBackView: "weeks", dayBackWeekId: null, dayBackDayName: null }); };
           row.appendChild(c);
         });
