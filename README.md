@@ -82,6 +82,7 @@ Alle wijzigingen gelden direct, zonder herstart.
 | --- | --- |
 | **Overzicht** | Kengetallen (gebruikers, actief, nieuw, generaties tegen de daglimiet, fouten, reactietijd, inloggen), grafieken van de laatste 14 dagen, laatste fouten, welke onderdelen aan staan, aandachtspunten. |
 | **Gebruikers** | Zoeken, filteren, sorteren en bladeren; gebruikers aanmaken, wijzigen, blokkeren, exporteren, wissen en verwijderen, ook meerdere tegelijk. |
+| **Gerechten** | Alle gerechten van alle gebruikers: zoeken, filteren op maaltijd en bron (gegenereerd, van foto, community), sorteren op nieuwste of balans, en per gerecht ingrediënten, macro's en bereiding bekijken (alleen lezen). Ook per gebruiker onder *Gegevens*; bij een huishouden staan de gerechten bij wie het huishouden startte. |
 | **Activiteit** | Het verzoeklogboek met zoeken en filters (soort, uitkomst, actie, gebruiker, IP, datum, minimale duur) en CSV-export. |
 | **Gedeelde lijsten** | Alle gedeelde boodschappenlijsten bekijken, verwijderen, en verlopen lijsten opruimen. |
 | **Instellingen** | Inloggen verplicht, onderdelen aan/uit, limieten, onderhoudsmodus en een mededeling aan alle gebruikers. |

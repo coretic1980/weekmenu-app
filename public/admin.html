@@ -508,7 +508,7 @@
   // =====================================================================================
   // Toestand, navigatie en het grote geheel
   // =====================================================================================
-  var TABS = [["overzicht", "Overzicht"], ["gebruikers", "Gebruikers"], ["activiteit", "Activiteit"], ["lijsten", "Gedeelde lijsten"], ["community", "Community"], ["voorstellen", "Voorstellen"], ["instellingen", "Instellingen"], ["audit", "Auditlog"], ["systeem", "Systeem"]];
+  var TABS = [["overzicht", "Overzicht"], ["gebruikers", "Gebruikers"], ["gerechten", "Gerechten"], ["activiteit", "Activiteit"], ["lijsten", "Gedeelde lijsten"], ["community", "Community"], ["voorstellen", "Voorstellen"], ["instellingen", "Instellingen"], ["audit", "Auditlog"], ["systeem", "Systeem"]];
   var meta = { settings: null };   // instellingen incl. beschrijvingen van modules en keuzelijsten (één keer opgehaald)
   var viewSeq = 0;                 // verouderde antwoorden negeren als je alweer ergens anders bent
   var refreshTimer = null;
@@ -519,6 +519,7 @@
   var A = { q: "", action: "", from: "", to: "", page: 1, pageSize: 50 };
   var S = { q: "", status: "", page: 1, pageSize: 25 };
   var C = { q: "", status: "", page: 1, pageSize: 25 };
+  var GD = { q: "", meal: "", source: "", sort: "new", page: 1, pageSize: 25 };
 
   function signOutLocal(message) {
     token = null; try { sessionStorage.removeItem(TOKEN_KEY); } catch (e) {}
@@ -1191,6 +1192,15 @@
     var mealRows = Object.keys(dishes).filter(function (k) { return Array.isArray(dishes[k]); }).map(function (k) { return h("tr", {}, h("td", { text: k }), h("td", { text: String(dishes[k].length) })); });
     var weeks = d.plannedWeeks && Array.isArray(d.plannedWeeks.list) ? d.plannedWeeks.list : (Array.isArray(d.plannedWeeks) ? d.plannedWeeks : []);
     function jsonBlock(title, value) { return h("details", { style: { marginTop: "10px" } }, h("summary", { text: title }), h("pre", { text: JSON.stringify(value, null, 2) })); }
+    var ownerUid = d.dishesOwner || u.uid, dishRows = [];
+    Object.keys(dishes).forEach(function (k) { if (Array.isArray(dishes[k])) dishes[k].forEach(function (x) {
+      if (!x || typeof x !== "object") return;
+      var gm = /^gen(\d{12,14})_/.exec(String(x.id || ""));
+      dishRows.push({ id: String(x.id || ""), name: x.name || "Naamloos", mealType: x.mealType || k, kcal: Math.round(x.kcal || 0), balans: x.balans || 0, rating: x.rating || 0,
+        source: x.vanFoto ? "foto" : x.fromCommunity ? "community" : gm ? "gegenereerd" : "eigen", createdAt: gm ? new Date(Number(gm[1])).toISOString() : null, ownerUid: ownerUid });
+    }); });
+    dishRows.sort(function (a, b) { return (Date.parse(b.createdAt || 0) || 0) - (Date.parse(a.createdAt || 0) || 0); });
+    if (dishRows.length) panes.gegevens.appendChild(card("Gerechten (" + dishRows.length + ")", d.dishesOwner ? h("div", { class: "hint", style: { marginBottom: "8px" }, text: "Gedeeld huishouden: dit zijn de gerechten van het huishouden." }) : null, dishTable(dishRows, false)));
     panes.gegevens.appendChild(card("Gegevens van de gebruiker", mealRows.length ? table([th("Maaltijdsoort"), th("Opgeslagen gerechten")], mealRows) : h("div", { class: "muted", text: "Nog geen opgeslagen gerechten." }),
       h("div", { class: "muted", style: { marginTop: "10px" }, text: plural(weeks.length, "ingeplande week", "ingeplande weken") + "." }),
       d.prefs ? jsonBlock("Ruwe voorkeuren (JSON)", d.prefs) : null, d.dishes ? jsonBlock("Ruwe gerechten (JSON)", d.dishes) : null));
@@ -1413,6 +1423,79 @@
       ], [del, block, hide, close], true);
     }).catch(function (e) { if (!e.silent) toast(e.message, "bad"); });
   }
+
+  // =====================================================================================
+  // Gerechten: alles wat gebruikers hebben gemaakt of bewaard (alleen bekijken)
+  // =====================================================================================
+  var DISH_SOURCES = { gegenereerd: "Gegenereerd", foto: "Van foto", community: "Uit community", eigen: "Eigen/ouder" };
+  function balansBadge(b) { return badge("Balans " + Math.round(b || 0) + "%", b >= 85 ? "good" : b >= 70 ? "" : "warn"); }
+  function openDishDetail(uid, id) {
+    api("/api/admin/dish" + qs({ uid: uid, id: id })).then(function (d) {
+      var dish = d.dish || {};
+      var close = h("button", { class: "ghost", text: "Sluiten" }); close.onclick = closeModal;
+      var toUser = h("button", { class: "ghost", text: "Naar gebruiker" }); toUser.onclick = function () { closeModal(); navigate("#/gebruikers/" + encodeURIComponent(d.ownerUid)); };
+      var mac = "KH " + Math.round(dish.kh || 0) + "% · eiwit " + Math.round(dish.eiwit || 0) + "% · vet " + Math.round(dish.vet || 0) + "%" +
+        (dish.khG ? " (" + Math.round(dish.khG) + " / " + Math.round(dish.eiwitG || 0) + " / " + Math.round(dish.vetG || 0) + " g)" : "");
+      var gm = /^gen(\d{12,14})_/.exec(String(dish.id || ""));
+      openModal(dish.name || "Gerecht", [
+        h("dl", { class: "kv", style: { marginBottom: "12px" } },
+          h("dt", { text: "Maaltijd" }), h("dd", { text: (dish.mealType || "—") + " · " + Math.round(dish.kcal || 0) + " kcal" + (dish.bereidingstijd ? " · " + dish.bereidingstijd + " min" : "") }),
+          h("dt", { text: "Macro's" }), h("dd", { text: mac }),
+          h("dt", { text: "Balans" }), h("dd", {}, balansBadge(dish.balans), " ", dish.macroBron === "nevo" ? badge("NEVO-berekend", "good") : badge("schatting", "")),
+          h("dt", { text: "Gemaakt" }), h("dd", { text: gm ? fmtDate(new Date(Number(gm[1])).toISOString()) : "—" }),
+          h("dt", { text: "Oordeel" }), h("dd", { text: dish.rating === 1 ? "♥ Favoriet" : dish.rating === -1 ? "Niet lekker" : "—" }),
+          dish.benodigdheden ? h("dt", { text: "Benodigdheden" }) : null, dish.benodigdheden ? h("dd", { text: dish.benodigdheden }) : null,
+          dish.profile && dish.profile.goal ? h("dt", { text: "Doel bij maken" }) : null, dish.profile && dish.profile.goal ? h("dd", { text: dish.profile.goal }) : null),
+        h("h3", { text: "Ingrediënten" }), h("ul", {}, (dish.ingredienten || []).map(function (x) { return h("li", { text: typeof x === "string" ? x : (x && x.tekst) || "" }); })),
+        h("h3", { text: "Bereiding" }), h("ol", {}, (dish.steps || []).map(function (x) { return h("li", {}, x.title ? h("strong", { text: x.title + ": " }) : null, x.content || ""); })),
+        dish.aanpassingen && dish.aanpassingen.length ? h("h3", { text: "Aanpassingen" }) : null,
+        dish.aanpassingen && dish.aanpassingen.length ? h("ul", {}, dish.aanpassingen.map(function (x) { return h("li", { text: x }); })) : null
+      ], [toUser, close], true);
+    }).catch(function (e) { if (!e.silent) toast(e.message, "bad"); });
+  }
+  function dishTable(rows, withOwner) {
+    return table([th("Gerecht"), withOwner ? th("Gebruiker") : null, th("Balans"), th("Bron"), th("Gemaakt")].filter(Boolean), rows.map(function (r) {
+      var tr = h("tr", { class: "clickable dishRow" },
+        h("td", {}, h("strong", { text: r.name }), h("span", { class: "sub", text: r.mealType + " · " + r.kcal + " kcal" + (r.rating === 1 ? " · ♥" : r.rating === -1 ? " · niet lekker" : "") })),
+        withOwner ? h("td", { text: r.ownerName || r.ownerEmail || shortUid(r.ownerUid) }, h("span", { class: "sub", text: (r.ownerName && r.ownerEmail ? r.ownerEmail : "") + (r.members > 1 ? (r.ownerName && r.ownerEmail ? " · " : "") + "huishouden van " + r.members : "") })) : null,
+        h("td", {}, balansBadge(r.balans)),
+        h("td", { text: DISH_SOURCES[r.source] || r.source }),
+        h("td", { class: "nowrap", text: r.createdAt ? relTime(r.createdAt) : "—" }));
+      tr.onclick = function () { openDishDetail(r.ownerUid, r.id); };
+      return tr;
+    }));
+  }
+  VIEWS.gerechten = function (view, route, ctx) {
+    var seq = 0;
+    var results = h("div", { id: "dishResults" });
+    var q = h("input", { type: "search", id: "gdQ", class: "grow", placeholder: "Zoek op gerecht, naam of e-mail…", "aria-label": "Zoeken in gerechten" }); q.value = GD.q;
+    q.oninput = debounce(function () { GD.q = q.value.trim(); GD.page = 1; load(); }, 300);
+    var mealSel = select([["", "Alle maaltijden"], ["Ontbijt", "Ontbijt"], ["Lunch", "Lunch"], ["Diner", "Diner"], ["Snack", "Snack"]], GD.meal, function (v) { GD.meal = v; GD.page = 1; load(); }, "Maaltijd"); mealSel.id = "gdMeal";
+    var srcSel = select([["", "Elke bron"], ["gegenereerd", "Gegenereerd"], ["foto", "Van foto"], ["community", "Uit community"], ["eigen", "Eigen/ouder"]], GD.source, function (v) { GD.source = v; GD.page = 1; load(); }, "Bron"); srcSel.id = "gdSource";
+    var sortSel = select([["new", "Nieuwste eerst"], ["balans", "Hoogste balans"], ["balansLaag", "Laagste balans"], ["name", "Naam"]], GD.sort, function (v) { GD.sort = v; GD.page = 1; load(); }, "Sorteren"); sortSel.id = "gdSort";
+    var counts = h("div", { class: "hint", id: "dishCounts" });
+    view.appendChild(h("div", { class: "page-head" }, h("h2", { text: "Gerechten" })));
+    view.appendChild(h("div", { class: "hint", style: { marginTop: "-6px", marginBottom: "10px" }, text: "Alle gerechten die gebruikers hebben gemaakt of bewaard. Tik op een gerecht voor ingrediënten en bereiding. Gerechten van een huishouden staan bij degene die het huishouden startte." }));
+    view.appendChild(h("div", { class: "toolbar" }, q, mealSel, srcSel, sortSel));
+    view.appendChild(counts);
+    view.appendChild(results);
+    function load() {
+      var my = ++seq;
+      return api("/api/admin/dishes" + qs({ q: GD.q, meal: GD.meal, source: GD.source, sort: GD.sort, page: GD.page, pageSize: GD.pageSize })).then(function (d) {
+        if (my !== seq || !ctx.alive()) return;
+        if (d.page !== GD.page) GD.page = d.page;
+        var t = d.totals || {};
+        counts.textContent = plural(t.all || 0, "gerecht", "gerechten") + " in totaal · " + (t.week || 0) + " nieuw in de laatste 7 dagen" +
+          (t.byMeal ? " · " + Object.keys(t.byMeal).sort().map(function (k) { return k + " " + t.byMeal[k]; }).join(", ") : "");
+        clear(results);
+        if (!d.dishes.length) { results.appendChild(empty(GD.q || GD.meal || GD.source ? "Geen gerechten gevonden met deze filters." : "Er zijn nog geen gerechten opgeslagen.")); return; }
+        results.appendChild(dishTable(d.dishes, true));
+        results.appendChild(pager(d, function (p) { GD.page = p; load(); }, ["gerecht", "gerechten"]));
+      }).catch(function (e) { if (!e.silent && my === seq) { clear(results); results.appendChild(errorBox("Kon de gerechten niet laden: " + e.message)); } });
+    }
+    reloadHook = load;
+    return load();
+  };
 
   VIEWS.community = function (view, route, ctx) {
     var seq = 0;

@@ -5467,8 +5467,8 @@ function adminPlanState(doc, s, isAccount, now) {
 function buildSummary(account, blocked, noteDoc, settings) {
   var uid = account.uid;
   return Promise.all([
-    dbGetDoc("data/users/" + uid + "/prefs"), dbGetDoc("data/users/" + uid + "/dishes"),
-    dbGetDoc("data/users/" + uid + "/plannedWeeks"), dbGetDoc("data/users/" + uid + "/meta"),
+    dbGetDoc("data/users/" + uid + "/prefs"), adminDataDoc(uid, "dishes"),
+    adminDataDoc(uid, "plannedWeeks"), dbGetDoc("data/users/" + uid + "/meta"),
     dbGetDoc("billing/" + uid), householdOf(uid).catch(function () { return null; })
   ]).then(function (res) {
     var hh = res[5];
@@ -5880,10 +5880,16 @@ function listSummary(token, doc) {
     expiresAt: doc.expiresAt ? new Date(doc.expiresAt).toISOString() : null, expired: !!(doc.expiresAt && doc.expiresAt < Date.now()), rev: doc.rev || 1 };
 }
 
+// Gerechten en planning van een huishouden staan bij degene die het huishouden startte; de admin leest ze daar.
+function adminDataDoc(uid, sub) {
+  return dataOwnerUid(uid, sub).then(function (owner) {
+    return dbGetDoc("data/users/" + owner + "/" + sub).then(function (r) { r.owner = owner; return r; });
+  });
+}
 function handleAdminUserDetail(req, res, uid) {
   return needSummary(uid).then(function (user) {
     return Promise.all([
-      dbGetDoc("data/users/" + uid + "/prefs"), dbGetDoc("data/users/" + uid + "/dishes"), dbGetDoc("data/users/" + uid + "/plannedWeeks"),
+      dbGetDoc("data/users/" + uid + "/prefs"), adminDataDoc(uid, "dishes"), adminDataDoc(uid, "plannedWeeks"),
       listsOfUser(uid), getRecentLogs(LOG_CAP), withLocation(user), quotaState(uid), getBillingDoc(uid)
     ]).then(function (r) {
       var logs = r[4].filter(function (l) { return l.uid === uid; }).slice(0, 50).map(cleanLogRow);
@@ -5894,6 +5900,7 @@ function handleAdminUserDetail(req, res, uid) {
         user: r[5],
         prefs: r[0].exists ? r[0].value : null,
         dishes: r[1].exists ? r[1].value : null,
+        dishesOwner: r[1].owner !== uid ? r[1].owner : null,   // gedeeld huishouden: de gerechten staan bij deze gebruiker
         plannedWeeks: r[2].exists ? r[2].value : null,
         lists: r[3],
         logs: logs
@@ -6385,6 +6392,8 @@ function handleAdminApi(req, res, url) {
     else if (sub && method === "POST") run = function () { return handleAdminUserAction(req, res, uid, sub); };
   }
   else if (method === "GET" && p === "/api/admin/community") run = function () { return handleAdminCommunity(req, res, url); };
+  else if (method === "GET" && p === "/api/admin/dishes") run = function () { return handleAdminDishes(req, res, url); };
+  else if (method === "GET" && p === "/api/admin/dish") run = function () { return handleAdminDishDetail(req, res, url); };
   else if ((m = p.match(/^\/api\/admin\/community\/([A-Za-z0-9_-]{6,30})(?:\/([a-z-]+))?$/))) {
     var cid = m[1], cact = m[2];
     if (!cact && method === "GET") run = function () { return handleAdminCommunityDetail(req, res, cid); };
@@ -6619,6 +6628,72 @@ function handleAdminCommunity(req, res, url) {
     var pg = paginate(rows, q, 25);
     sendJSON(res, 200, { recipes: pg.rows, total: pg.total, page: pg.page, pageSize: pg.pageSize, pages: pg.pages,
       reportedCount: r[0].filter(function (x) { return (x.reports || []).length; }).length, hiddenCount: r[0].filter(function (x) { return x.hidden; }).length });
+  });
+}
+// ---- Gerechten van alle gebruikers (alleen lezen) ----
+function dishCreatedAt(d) {
+  var m = /^gen(\d{12,14})_/.exec(String(d && d.id || ""));
+  if (m) return new Date(Number(m[1])).toISOString();
+  return d && d.createdAt ? String(d.createdAt) : null;
+}
+function dishSource(d) {
+  if (d.vanFoto) return "foto";
+  if (d.fromCommunity) return "community";
+  if (/^gen/.test(String(d.id || ""))) return "gegenereerd";
+  return "eigen";
+}
+function adminDishRow(d, mealType, owner) {
+  return { id: String(d.id || ""), name: String(d.name || "Naamloos"), mealType: d.mealType || mealType, kcal: Math.round(Number(d.kcal) || 0),
+    kh: Number(d.kh) || 0, eiwit: Number(d.eiwit) || 0, vet: Number(d.vet) || 0, balans: Number(d.balans) || 0,
+    rating: d.rating === 1 ? 1 : d.rating === -1 ? -1 : 0, source: dishSource(d), createdAt: dishCreatedAt(d),
+    ownerUid: owner.uid, ownerName: owner.name || null, ownerEmail: owner.email || null, members: owner.members || 1 };
+}
+function handleAdminDishes(req, res, url) {
+  var q = url.searchParams;
+  return loadUserSummaries().then(function (list) {
+    var byUid = {};
+    list.forEach(function (u) { byUid[u.uid] = u; });
+    return mapLimit(list, 10, function (u) {
+      return dbGetDoc("data/users/" + u.uid + "/dishes").then(function (r) { return { u: u, dishes: r.exists && r.value && typeof r.value === "object" ? r.value : null }; }, function () { return { u: u, dishes: null }; });
+    }).then(function (docs) {
+      var rows = [];
+      docs.forEach(function (x) {
+        if (!x.dishes) return;
+        var owner = { uid: x.u.uid, name: x.u.name, email: x.u.email, members: x.u.household ? x.u.household.size : 1 };
+        Object.keys(x.dishes).forEach(function (mt) {
+          if (!Array.isArray(x.dishes[mt])) return;
+          x.dishes[mt].forEach(function (d) { if (d && typeof d === "object") rows.push(adminDishRow(d, mt, owner)); });
+        });
+      });
+      var weekAgo = Date.now() - 7 * DAY_MS;
+      var totals = { all: rows.length, week: rows.filter(function (r) { return r.createdAt && Date.parse(r.createdAt) > weekAgo; }).length, byMeal: {}, bySource: {} };
+      rows.forEach(function (r) { totals.byMeal[r.mealType] = (totals.byMeal[r.mealType] || 0) + 1; totals.bySource[r.source] = (totals.bySource[r.source] || 0) + 1; });
+      var text = (q.get("q") || "").trim().toLowerCase(), meal = q.get("meal") || "", source = q.get("source") || "", sort = q.get("sort") || "new";
+      rows = rows.filter(function (r) {
+        if (meal && r.mealType !== meal) return false;
+        if (source && r.source !== source) return false;
+        if (text && [r.name, r.ownerName, r.ownerEmail, r.ownerUid].join(" ").toLowerCase().indexOf(text) === -1) return false;
+        return true;
+      });
+      rows.sort(function (a, b) {
+        if (sort === "balans") return b.balans - a.balans;
+        if (sort === "balansLaag") return a.balans - b.balans;
+        if (sort === "name") return a.name.localeCompare(b.name, "nl");
+        return (Date.parse(b.createdAt || 0) || 0) - (Date.parse(a.createdAt || 0) || 0);
+      });
+      var pg = paginate(rows, q, 25);
+      sendJSON(res, 200, { dishes: pg.rows, total: pg.total, page: pg.page, pageSize: pg.pageSize, pages: pg.pages, totals: totals });
+    });
+  });
+}
+function handleAdminDishDetail(req, res, url) {
+  var uid = url.searchParams.get("uid") || "", id = url.searchParams.get("id") || "";
+  if (!/^[A-Za-z0-9_-]{1,80}$/.test(uid) || !id) return sendJSON(res, 400, { code: "bad_request", message: "Onbekend gerecht." });
+  return adminDataDoc(uid, "dishes").then(function (r) {
+    var all = r.exists && r.value && typeof r.value === "object" ? r.value : {}, found = null;
+    Object.keys(all).forEach(function (mt) { if (!found && Array.isArray(all[mt])) found = all[mt].filter(function (d) { return d && String(d.id) === id; })[0] || null; });
+    if (!found) throw HttpError(404, "not_found", "Gerecht niet gevonden.");
+    sendJSON(res, 200, { dish: found, ownerUid: r.owner });
   });
 }
 function handleAdminCommunityDetail(req, res, id) {
