@@ -1376,6 +1376,22 @@
   .hh-macros b { font-size: 16px; color: var(--ink); }
   .hh-macros small { font-size: 12px; color: var(--muted); }
   .hh-macros i { flex-basis: 100%; font-style: normal; font-size: 11.5px; color: var(--muted); }
+  .gauges { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin: 4px 0 -2px; }
+  .gauge { position: relative; display: flex; flex-direction: column; align-items: center; --g: #3A7BD5; }
+  .gauge.g-eiwit { --g: #3A7BD5; } .gauge.g-kh { --g: #D9941E; } .gauge.g-vet { --g: #1E9C8A; }
+  :root:not([data-theme="light"]) .gauge.g-eiwit { --g: #4C86D8; }
+  .gauge svg { width: 100%; max-width: 96px; aspect-ratio: 1; display: block; }
+  .gauge circle { fill: none; stroke-width: 7; stroke-linecap: round; }
+  .g-track { stroke: rgba(26, 20, 12, 0.08); }
+  .g-val { stroke: var(--g); transition: stroke-dashoffset 1.1s cubic-bezier(.22, 1, .36, 1); }
+  .gauge.over .g-val { stroke: #D2563C; }
+  .g-num { position: absolute; top: 0; left: 0; right: 0; aspect-ratio: 1; max-width: 96px; margin: 0 auto; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    font-variant-numeric: tabular-nums; line-height: 1; padding-top: 2px; }
+  .g-num b { font-family: "Fraunces", serif; font-size: 21px; font-weight: 700; color: var(--ink); }
+  .g-num small { font-size: 11px; color: var(--muted); margin-top: 3px; }
+  .g-lbl { font-size: 12.5px; font-weight: 600; color: var(--ink); margin-top: -8px; }
+  .g-lbl em { font-style: normal; font-weight: 700; color: #D2563C; font-size: 11.5px; }
+  @media (prefers-reduced-motion: reduce) { .g-val { transition: none; } }
   .hh-meals { display: flex; flex-direction: column; margin-top: 4px; border-top: 1px solid var(--line); }
   .hh-meal { appearance: none; border: 0; border-bottom: 1px solid var(--line); background: none; padding: 11px 2px; display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; gap: 12px;
     align-items: center; text-align: left; font-family: inherit; color: var(--ink); cursor: pointer; }
@@ -4562,13 +4578,8 @@
         if (r.a.cooked !== true) seg.className = "todo"; bar.appendChild(seg);
       });
       body.appendChild(bar);
-      if (agg) {
-        var mac = document.createElement("div"); mac.className = "hh-macros";
-        [["Eiwit", agg.eiwitG, Math.round(target * t.eiwit / 100 / 4)], ["Koolhydraten", agg.khG, Math.round(target * t.kh / 100 / 4)], ["Vet", agg.vetG, Math.round(target * t.vet / 100 / 9)]].forEach(function (m) {
-          var sp = document.createElement("span"); sp.innerHTML = '<b>' + m[1] + '</b><small>/' + m[2] + ' g</small><i>' + m[0] + '</i>'; mac.appendChild(sp);
-        });
-        body.appendChild(mac);
-      }
+      if (agg) body.appendChild(macroGauges([["Eiwit", agg.eiwitG, Math.round(target * t.eiwit / 100 / 4), "eiwit"],
+        ["Koolhydraten", agg.khG, Math.round(target * t.kh / 100 / 4), "kh"], ["Vet", agg.vetG, Math.round(target * t.vet / 100 / 9), "vet"]]));
     }
     var others = rows.filter(function (r) { return r !== feat; });
     if (others.length) {
@@ -4588,6 +4599,31 @@
     }
     card.appendChild(body);
     main.appendChild(card);
+  }
+  // Drie meters (270°) voor eiwit, koolhydraten en vet: hoeveel gram van je dagdoel er vandaag gepland is.
+  // Ze lopen één keer vol bij het openen; boven je doel kleurt de meter warm met hoeveel je erover zit.
+  var gaugesAnimated = false;
+  function macroGauges(list) {
+    var wrap = document.createElement("div"); wrap.className = "gauges";
+    var r = 30, C = 2 * Math.PI * r, L = C * 0.75;
+    var animate = !gaugesAnimated && !(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+    gaugesAnimated = true;
+    list.forEach(function (m) {
+      var val = m[1] || 0, goal = m[2] || 0, frac = goal ? val / goal : 0, over = goal && val > goal * 1.1;
+      var g = document.createElement("div"); g.className = "gauge g-" + m[3] + (over ? " over" : "");
+      g.setAttribute("role", "img"); g.setAttribute("aria-label", m[0] + ": " + val + " van " + goal + " gram");
+      var shown = Math.min(1, frac) * L;
+      g.innerHTML = '<svg viewBox="0 0 80 80" aria-hidden="true">' +
+        '<circle cx="40" cy="40" r="' + r + '" class="g-track" stroke-dasharray="' + L.toFixed(1) + ' ' + C.toFixed(1) + '" transform="rotate(135 40 40)"/>' +
+        '<circle cx="40" cy="40" r="' + r + '" class="g-val" stroke-dasharray="' + L.toFixed(1) + ' ' + C.toFixed(1) + '" stroke-dashoffset="' + (animate ? L : L - shown).toFixed(1) + '" transform="rotate(135 40 40)"/>' +
+        '</svg><div class="g-num"><b>' + val + '</b><small>/' + goal + ' g</small></div><div class="g-lbl">' + m[0] + (over ? ' <em>+' + (val - goal) + '</em>' : '') + '</div>';
+      if (animate) {
+        var arc = g.querySelector(".g-val");
+        requestAnimationFrame(function () { requestAnimationFrame(function () { arc.style.strokeDashoffset = (L - shown).toFixed(1); }); });
+      }
+      wrap.appendChild(g);
+    });
+    return wrap;
   }
   function renderWeekStrip(main, offset) {
     var monday = getMonday(new Date()); monday.setDate(monday.getDate() + 7 * (offset || 0));

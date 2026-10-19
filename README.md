@@ -46,7 +46,7 @@ daarom niet meer onderaan het startscherm.
 **Startscherm (v2):** rustig en op ongeveer één scherm, met één hoofdknop.
 - **Vandaag**: de eerstvolgende maaltijd groot als foto (zonder foto: kleurvlak van het moment met een groot icoon), met
   "Vanavond/Straks/Nu – diner". Daaronder een kcal-balk opgebouwd uit de maaltijden van vandaag (elk in de kleur van zijn moment,
-  lichter tot hij gekookt is), eiwit/koolhydraten/vet als drie blokjes en de overige maaltijden als rustige lijst.
+  lichter tot hij gekookt is), eiwit/koolhydraten/vet als drie meters (270°, lopen één keer vol bij openen; boven 110% van je doel kleurt de meter rood met "+x") en de overige maaltijden als rustige lijst.
   Niets gepland: een kleine illustratie, een vraag die past bij het tijdstip en één knop *Plan vandaag* (of *Maak mijn eerste gerechten*).
 - **Je week**: zeven dagen met datum en drie stipjes (ontbijt, lunch, diner in hun kleur); vandaag is gevuld, ✓ als alles gekookt is.
   Tik op een dag om hem te plannen; *Hele week* rechtsboven.
