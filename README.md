@@ -103,6 +103,10 @@ en bovenaan Start staat een kaart "Nieuw bericht van Balanza" met het begin van 
 (inbox) komen ook als bericht in de chat; meldingen daarover openen direct de chat (`/?open=chat`). Ongelezen wordt bepaald met
 een tijdstempel per bericht (`balanza_chat_seen_at`), zodat het ook klopt als het gesprek langer is dan 50 berichten.
 
+**Balans-keurmerk:** de score staat overal als keurmerk: een gekartelde zegel met de weegschaal van het Balanza-logo.
+Groot (met het getal en "BALANS" erin) op de foto van het uitgelichte gerecht, naast de titel op de receptpagina en in de
+gerechtenlijst; klein (zegel + percentage) in regels en labels. Zegelkleur volgt de schaal (groen, geel, oranje, rood).
+
 **Balans-score overal, in kleur:** 75–100% groen, 50–74% geel, 25–49% oranje, 0–24% rood (`balClass()`; admin gebruikt
 dezelfde kleuren). Te zien bij: het uitgelichte gerecht en elke maaltijd op Start, de dag als geheel (op de macro's van alles
 samen), het weekgemiddelde in *Je week*, de weekplanner (per dag en per gerecht), de dagkaart en snacks in de planner,

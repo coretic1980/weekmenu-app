@@ -1473,11 +1473,31 @@
   @media (prefers-reduced-motion: reduce) { .eat-btn { transition: none; } }
   .bal-pill { display: inline-flex; align-items: center; padding: 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; }
   /* Balans-kleuren: 75-100 groen, 50-74 geel, 25-49 oranje, 0-24 rood */
-  .b-green { --bc: #1A7F4B; --bb: #DDF3E5; }
-  .b-yellow { --bc: #8A6A00; --bb: #FFF4C2; }
-  .b-orange { --bc: #B4530A; --bb: #FFE4CC; }
-  .b-red { --bc: #B42318; --bb: #FDE2DE; }
+  .b-green { --bc: #1A7F4B; --bb: #DDF3E5; --sf: #1F8A55; --st: #FFFFFF; }
+  .b-yellow { --bc: #7A5D00; --bb: #FFF4C2; --sf: #F2C230; --st: #3D2E00; }
+  .b-orange { --bc: #B4530A; --bb: #FFE4CC; --sf: #E8742A; --st: #FFFFFF; }
+  .b-red { --bc: #B42318; --bb: #FDE2DE; --sf: #C8321F; --st: #FFFFFF; }
   .bal-pill { background: var(--bb); color: var(--bc); }
+  .bal-seal { display: inline-flex; align-items: center; gap: 4px; padding: 2px 9px 2px 3px; border-radius: 999px; background: var(--bb); color: var(--bc);
+    font-size: 12px; font-weight: 800; line-height: 1; white-space: nowrap; font-variant-numeric: tabular-nums; vertical-align: middle; }
+  .bal-seal .seal-ic { width: 20px; height: 20px; flex: none; }
+  .bal-seal .seal-bg, .bal-seal-big .seal-bg { fill: var(--sf); }
+  .bal-seal .seal-glyph { fill: none; stroke: var(--st); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .bal-seal.inline { font-size: 11.5px; padding: 1px 7px 1px 2px; margin-left: 2px; }
+  .bal-seal.inline .seal-ic { width: 17px; height: 17px; }
+  .bal-seal.mini { margin-left: 6px; padding: 1px 6px 1px 2px; font-size: 11px; }
+  .bal-seal.mini .seal-ic { width: 16px; height: 16px; }
+  .bal-seal-big { display: inline-block; flex: none; width: 58px; height: 58px; filter: drop-shadow(0 3px 6px rgba(0,0,0,.18)); }
+  .bal-seal-big svg { width: 100%; height: 100%; display: block; }
+  .bal-seal-big .seal-ring { fill: none; stroke: var(--st); stroke-opacity: .5; stroke-width: 1.6; stroke-dasharray: 2.5 2.5; }
+  .bal-seal-big .seal-glyph { fill: none; stroke: var(--st); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+  .bal-seal-big .seal-num { fill: var(--st); font: 800 25px "Public Sans", system-ui, sans-serif; letter-spacing: -0.5px; }
+  .bal-seal-big .seal-pct { font-size: 11px; font-weight: 800; }
+  .bal-seal-big .seal-lbl { fill: var(--st); fill-opacity: .9; font: 800 8.5px "Public Sans", system-ui, sans-serif; letter-spacing: 1.4px; }
+  .bal-seal-big.on-photo { position: absolute; top: 14px; left: 14px; z-index: 2; width: 64px; height: 64px; }
+  .bal-seal-big.lib-seal { width: 46px; height: 46px; filter: none; }
+  .dish-title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  .dish-title-row .bal-seal-big { width: 66px; height: 66px; margin-top: -4px; }
   .bal-txt { color: var(--bc); font-weight: 700; }
   .tag.balans.b-green, .tag.balans.b-yellow, .tag.balans.b-orange, .tag.balans.b-red { background: var(--bb); color: var(--bc); }
   .res-bal.b-green, .res-bal.b-yellow, .res-bal.b-orange, .res-bal.b-red { background: var(--bb); color: var(--bc); }
@@ -1489,8 +1509,9 @@
   .wk-pill { font-size: 11px; padding: 2px 8px; }
   .wk-sum-top .bal-pill { color: var(--bc); }
   .hh-line { gap: 8px; }
-  .hh-line .bal-pill { margin-left: auto; }
-  .dp-head .bal-pill { margin-left: 8px; }
+  .hh-line .hh-pct { margin-left: auto; }
+  .hh-line .bal-pill, .hh-line .bal-seal { margin-left: 4px; }
+  .dp-head .bal-pill, .dp-head .bal-seal { margin-left: 8px; }
   .wk-meal { position: relative; }
   .wk-bal { font-style: normal; font-size: 11.5px; font-weight: 700; color: var(--muted); margin-left: 6px; font-variant-numeric: tabular-nums; }
   .hh-meals { display: flex; flex-direction: column; margin-top: 4px; border-top: 1px solid var(--line); }
@@ -2829,6 +2850,7 @@
     if (day.mealType && !(opts && opts.hideMealType)) items.unshift(["neutral", day.mealType]);
     if (day.macroBron === "nevo") items.push(["nevo", "NEVO-berekend"]);
     items.forEach(function (it) {
+      if (it[0].indexOf("balans") === 0) { if (!(opts && opts.hideBalans)) wrap.appendChild(balPill(computeBalance(day.kh, day.eiwit, day.vet))); return; }
       var t = document.createElement("span");
       t.className = "tag " + it[0];
       t.textContent = it[1];
@@ -4791,8 +4813,8 @@
       var chip = document.createElement("span"); chip.className = "hh-chip"; chip.textContent = when + " – " + feat.slot.toLowerCase();
       var nm = document.createElement("b"); nm.textContent = feat.dish.name;
       var meta = document.createElement("small");
-      meta.textContent = [feat.dish.kcal + " kcal", feat.dish.eiwitG ? feat.dish.eiwitG + " g eiwit" : "", feat.dish.bereidingstijd ? feat.dish.bereidingstijd + " min" : ""].filter(Boolean).join("   ") + "   ";
-      meta.appendChild(balPill(dishBal(feat.dish), "heroBal"));
+      meta.textContent = [feat.dish.kcal + " kcal", feat.dish.eiwitG ? feat.dish.eiwitG + " g eiwit" : "", feat.dish.bereidingstijd ? feat.dish.bereidingstijd + " min" : ""].filter(Boolean).join("   ");
+      var hs = balSeal(dishBal(feat.dish), "heroBal"); hs.classList.add("on-photo"); ph.appendChild(hs);
       cap.appendChild(chip); cap.appendChild(nm); cap.appendChild(meta); ph.appendChild(cap);
       ph.onclick = function () { open(feat); };
       card.appendChild(ph);
@@ -4818,7 +4840,7 @@
       var line = document.createElement("div"); line.className = "hh-line";
       var kc = agg ? agg.kcal : 0;
       line.innerHTML = '<span><b>' + kc + '</b> van ' + target + ' kcal</span><span class="hh-pct">' + Math.min(999, Math.round(kc / target * 100)) + '%</span>';
-      var db = dayBal(agg); if (db !== null) line.insertBefore(balPill(db, "dayBal"), line.lastChild);
+      var db = dayBal(agg); if (db !== null) line.appendChild(balPill(db, "dayBal"));
       body.appendChild(line);
       var bar = document.createElement("div"); bar.className = "hh-bar"; bar.setAttribute("aria-hidden", "true");
       // De balk is opgebouwd uit de maaltijden van vandaag, elk in de kleur van zijn moment.
@@ -6516,7 +6538,7 @@
       open.onclick = function () { goto("day", { weekId: "cache", dayId: d.id, dayServings: null, dayBackView: "genresult", dayBackWeekId: null, dayBackDayName: null }); };
       card.appendChild(open);
       var side = document.createElement("div"); side.className = "res-side";
-      var badge = document.createElement("span"); badge.className = "res-bal " + balClass(bal); badge.textContent = "Balans " + bal + "%";
+      var badge = balPill(bal);
       side.appendChild(badge);
       var acts = document.createElement("div"); acts.className = "res-acts";
       var regen = document.createElement("button"); regen.type = "button"; regen.className = "res-btn"; regen.disabled = !!state.genRegenId || off;
@@ -6626,17 +6648,44 @@
   function gramsBal(kcal, khG, eiwitG, vetG) { var k = Number(kcal) || 0; if (!k) return 0; return computeBalance(Math.round(khG * 400 / k), Math.round(eiwitG * 400 / k), Math.round(vetG * 900 / k)); }
   // Kleuren voor de Balans-score: 75-100 groen, 50-74 geel, 25-49 oranje, 0-24 rood.
   function balClass(v) { v = Number(v) || 0; return v >= 75 ? "b-green" : v >= 50 ? "b-yellow" : v >= 25 ? "b-orange" : "b-red"; }
-  // Voegt "balans 88%" in kleur toe aan een regel tekst (na de bestaande tekst).
-  function appendBal(el, v, sep, cap) {
-    if (sep) el.appendChild(document.createTextNode(sep));
-    var sp = document.createElement("span"); sp.className = "bal-txt " + balClass(v); sp.textContent = (cap ? "Balans " : "balans ") + v + "%";
-    el.appendChild(sp);
+  // ---- Balans-keurmerk: een gekartelde zegel met de weegschaal van Balanza, in de kleur van de score ----
+  var SEAL_PATH = (function () {   // 24 punten, afwisselend buiten- en binnenrand: een klassieke keurmerk-rand
+    var pts = [], n = 24;
+    for (var k = 0; k < n; k++) { var a = (k / n) * Math.PI * 2 - Math.PI / 2, r = k % 2 ? 43 : 48; pts.push((50 + r * Math.cos(a)).toFixed(2) + " " + (50 + r * Math.sin(a)).toFixed(2)); }
+    return "M" + pts.join(" L") + " Z";
+  })();
+  var SEAL_SCALE = '<path d="M12 4v16M7 20h10M5 8h14"/><path d="M5 8l-3 6a3 3 0 0 0 6 0zM19 8l-3 6a3 3 0 0 0 6 0z"/>';
+  function sealSvg(v, big) {
+    if (!big) return '<svg class="seal-ic" viewBox="0 0 100 100" aria-hidden="true"><path d="' + SEAL_PATH + '" class="seal-bg"/>' +
+      '<g transform="translate(22 21) scale(2.35)" class="seal-glyph">' + SEAL_SCALE + '</g></svg>';
+    return '<svg class="seal-big" viewBox="0 0 100 100" aria-hidden="true"><path d="' + SEAL_PATH + '" class="seal-bg"/>' +
+      '<circle cx="50" cy="50" r="35" class="seal-ring"/>' +
+      '<g transform="translate(39.2 18) scale(0.9)" class="seal-glyph">' + SEAL_SCALE + '</g>' +
+      '<text x="50" y="61" text-anchor="middle" class="seal-num">' + v + '<tspan class="seal-pct" dx="1" dy="-7">%</tspan></text>' +
+      '<text x="50" y="75" text-anchor="middle" class="seal-lbl">BALANS</text></svg>';
+  }
+  // Klein keurmerk (in een regel of label): zegel + percentage.
+  function balPill(v, id) {
+    v = Math.round(Number(v) || 0);
+    var sp = document.createElement("span"); sp.className = "bal-seal " + balClass(v); if (id) sp.id = id;
+    sp.title = "Balans-keurmerk: hoe dicht de verdeling van koolhydraten, eiwit en vet bij je doel ligt";
+    sp.setAttribute("aria-label", "Balans " + v + " procent");
+    sp.innerHTML = sealSvg(v) + "<b>" + v + "%</b>";
     return sp;
   }
-  function balPill(v, id) {
-    var sp = document.createElement("span"); sp.className = "bal-pill " + balClass(v); if (id) sp.id = id;
-    sp.title = "Balans-score: hoe dicht de verdeling van koolhydraten, eiwit en vet bij je doel ligt";
-    sp.textContent = "Balans " + v + "%";
+  // Groot keurmerk (bij een gerecht of op een foto): zegel met het getal erin.
+  function balSeal(v, id) {
+    v = Math.round(Number(v) || 0);
+    var sp = document.createElement("span"); sp.className = "bal-seal-big " + balClass(v); if (id) sp.id = id;
+    sp.setAttribute("role", "img"); sp.setAttribute("aria-label", "Balans-keurmerk " + v + " procent");
+    sp.title = "Balans-keurmerk: hoe dicht de verdeling van koolhydraten, eiwit en vet bij je doel ligt";
+    sp.innerHTML = sealSvg(v, true);
+    return sp;
+  }
+  function appendBal(el, v, sep) {
+    if (sep) el.appendChild(document.createTextNode(sep));
+    var sp = balPill(v); sp.classList.add("inline");
+    el.appendChild(sp);
     return sp;
   }
   function computeBalance(khPct, eiwitPct, vetPct, target) {
@@ -8076,8 +8125,7 @@
       }
       open.appendChild(txt);
       var bal = computeBalance(d.kh, d.eiwit, d.vet) || 0;
-      var ring = document.createElement("span"); ring.className = "lib-bal " + balClass(bal);
-      ring.textContent = bal; ring.setAttribute("aria-label", "Balans " + bal + " procent"); ring.title = "Balans-score";
+      var ring = balSeal(bal); ring.classList.add("lib-seal");
       open.appendChild(ring);
       open.onclick = librarySelect.on
         ? function () { if (librarySelect.ids[d.id]) delete librarySelect.ids[d.id]; else librarySelect.ids[d.id] = true; render(); }
@@ -8336,7 +8384,7 @@
           b.innerHTML = "<small></small><span></span>";
           b.querySelector("small").textContent = sl;
           b.querySelector("span").textContent = r ? r.day.name + (a.leftover ? " (restje)" : "") : (past ? "\u2014" : "+ Kies een gerecht");
-          if (r) { var wbv = dishBal(r.day), wb = document.createElement("em"); wb.className = "wk-bal " + balClass(wbv); wb.textContent = wbv + "%"; wb.title = "Balans-score"; b.appendChild(wb); }
+          if (r) { var wb = balPill(dishBal(r.day)); wb.classList.add("mini"); b.appendChild(wb); }
           if (r) b.onclick = function () { goto("day", { weekId: r.week.id, dayId: r.day.id, dayServings: a.servings || 1, dayBackView: "planweek", dayBackWeekId: pw.id, dayBackDayName: dn }); };
           else if (!past) { b.onclick = function () { goto("planpick", { pickFilter: null, planWeekId: pw.id, planSlotKey: dn + "|" + sl }); }; lockEl(b, "Je planning aanpassen"); }
           else b.disabled = true;
@@ -9041,10 +9089,7 @@
         stats.appendChild(kc);
         if (d.balans != null) {
           var bp = document.createElement("span");
-          var dbv = computeBalance(d.kh, d.eiwit, d.vet);
-          bp.className = "tag balans " + balClass(dbv);
-          bp.title = "Balans-score";
-          bp.textContent = dbv + "%";
+          bp = balPill(computeBalance(d.kh, d.eiwit, d.vet));
           stats.appendChild(bp);
         }
         stats.classList.add("mobile-only");
@@ -11506,9 +11551,14 @@
     h2.style.fontSize = "26px";
     h2.style.margin = "0";
     h2.textContent = day.name;
-    main.appendChild(h2);
+    if (day.prep) main.appendChild(h2);
+    else {
+      var tr = document.createElement("div"); tr.className = "dish-title-row";
+      tr.appendChild(h2); tr.appendChild(balSeal(computeBalance(day.kh, day.eiwit, day.vet), "dishSeal"));
+      main.appendChild(tr);
+    }
 
-    main.appendChild(macroTags(day));
+    main.appendChild(macroTags(day, { hideBalans: !day.prep }));   // het grote keurmerk staat al naast de titel
     if (!day.prep) main.appendChild(nevoCreditLine(day));
 
     if (day.vanFoto && (day.herkend || (day.aanpassingen && day.aanpassingen.length))) {
