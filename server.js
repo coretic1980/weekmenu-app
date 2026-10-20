@@ -1158,16 +1158,22 @@ var PROTEIN_RE = {
   schaal: /\b(garnal\w*|gamba\w*|scampi|kreeft\w*|krab\w*|mossel\w*|oester\w*|sint[- ]jakobsschelp\w*|coquille\w*|inktvis\w*|calamari|octopus|kokkel\w*|langoustine\w*|surimi|rivierkreeft\w*|vongole)\b/i
 };
 // rund-regex vangt ook kalf (kalfsvlees is rund); dat is goed: wie geen rund eet, eet meestal ook geen kalf.
-function cleanProteinOut(v, style) {
+// Oude "wat wil je niet eten"-termen tellen ook mee (voor apps die nog niet zijn bijgewerkt).
+var EXCLUDE_TO_PROTEIN = { "vis": ["witvis", "vettevis", "schaal"], "schaal- en schelpdieren": ["schaal"], "schaaldieren": ["schaal"], "schelpdieren": ["schaal"],
+  "varkensvlees": ["varken"], "varken": ["varken"], "rundvlees": ["rund"], "kip": ["kip"], "kalkoen": ["kalkoen"], "lamsvlees": ["lam"],
+  "gevogelte": ["kip", "kalkoen", "eend"], "vlees": ["varken", "rund", "kalf", "lam", "wild"] };
+function cleanProteinOut(v, style, exclude) {
   if (style === "Vegetarisch" || style === "Veganistisch") return [];
-  return (Array.isArray(v) ? v : []).filter(function (k, i, a) { return PROTEIN_KEYS.indexOf(k) > -1 && a.indexOf(k) === i; });
+  var list = (Array.isArray(v) ? v : []).slice();
+  excludeTokensServer(exclude).forEach(function (t) { (EXCLUDE_TO_PROTEIN[t] || []).forEach(function (k) { list.push(k); }); });
+  return list.filter(function (k, i, a) { return PROTEIN_KEYS.indexOf(k) > -1 && a.indexOf(k) === i; });
 }
 // Eén object met alle harde eetregels; generateWithBalansRetry accepteert ook nog een losse voedingsstijl (tekst).
 function dietRulesFromParams(p) {
   p = p || {};
   var style = typeof p.dietStyle === "string" ? p.dietStyle : "";
   return { style: style, health: healthWithExclude(p.health, p.exclude), sugarMode: cleanSugarMode(p.sugarMode),
-    cheeseMode: cleanCheeseMode(p.cheeseMode), exclude: typeof p.exclude === "string" ? p.exclude.trim().slice(0, 300) : "", proteinOut: cleanProteinOut(p.proteinOut, style) };
+    cheeseMode: cleanCheeseMode(p.cheeseMode), exclude: typeof p.exclude === "string" ? p.exclude.trim().slice(0, 300) : "", proteinOut: cleanProteinOut(p.proteinOut, style, p.exclude) };
 }
 function asDietRules(v) {
   if (v && typeof v === "object") return { style: v.style || "", health: cleanHealth(v.health), sugarMode: cleanSugarMode(v.sugarMode), cheeseMode: cleanCheeseMode(v.cheeseMode), exclude: v.exclude || "", proteinOut: cleanProteinOut(v.proteinOut, v.style) };
@@ -3525,7 +3531,7 @@ function buildDraftWeek(weeksList, dishesDoc, prefs, mondayKey, today) {
   var meals = (Array.isArray(prefs.mealTypes) && prefs.mealTypes.length ? prefs.mealTypes : ["Diner"]).filter(function (m) { return DRAFT_MAIN.indexOf(m) > -1; });
   if (!meals.length) meals = ["Diner"];
   var terms = activeLeftovers(prefs, today);
-  var pRules = { health: [], proteinOut: cleanProteinOut(prefs.proteinOut, prefs.dietStyle) };   // wat je niet (meer) eet, komt ook niet in je conceptweek
+  var pRules = { health: [], proteinOut: cleanProteinOut(prefs.proteinOut, prefs.dietStyle, prefs.exclude) };   // wat je niet (meer) eet, komt ook niet in je conceptweek
   var pools = {};
   meals.forEach(function (m) {
     var arr = dishesDoc && Array.isArray(dishesDoc[m]) ? dishesDoc[m] : [];
@@ -6435,6 +6441,7 @@ function settingsPayload(s) {
     planGateableModules: PLAN_GATEABLE_MODULES,
     prefOptions: { goals: Object.keys(GOAL_TARGETS), diets: TIP_DIETS, mealTypes: PREF_MEALTYPES,
       health: HEALTH_KEYS.map(function (k) { return [k, HEALTH_LABELS[k]]; }),
+      proteins: PROTEIN_KEYS.map(function (k) { return [k, PROTEIN_LABEL[k]]; }),
       sugarModes: [["natuurlijk", "Natuurlijke zoetmiddelen met mate"], ["strikt", "Alleen fruit en dadels"]],
       cheeseModes: [["hardekaas", "Harde kaas mag met mate"], ["geen", "Helemaal geen kaas"]] } };
 }

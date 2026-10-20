@@ -1125,6 +1125,12 @@
       return { k: p[0], cb: cb, node: h("label", { class: "row small" }, cb, h("span", { text: p[1].charAt(0).toUpperCase() + p[1].slice(1) })) };
     });
     ctl.health = { changed: function () { return healthBoxes.some(function (x) { return x.cb.checked !== x.cb._orig; }); }, value: function () { return healthBoxes.filter(function (x) { return x.cb.checked; }).map(function (x) { return x.k; }); } };
+    // Vlees, gevogelte en vis: aangevinkt = eet de gebruiker NIET
+    var protBoxes = (opts.proteins || []).map(function (p) {
+      var cb = h("input", { type: "checkbox", id: "p_prot_" + p[0] }); cb.checked = Array.isArray(P.proteinOut) && P.proteinOut.indexOf(p[0]) > -1; cb._orig = cb.checked;
+      return { k: p[0], cb: cb, node: h("label", { class: "row small" }, cb, h("span", { text: p[1].charAt(0).toUpperCase() + p[1].slice(1) })) };
+    });
+    ctl.proteinOut = { changed: function () { return protBoxes.some(function (x) { return x.cb.checked !== x.cb._orig; }); }, value: function () { return protBoxes.filter(function (x) { return x.cb.checked; }).map(function (x) { return x.k; }); } };
     function modeSel(key, label, pairs, def) {
       var cur = P[key] || def;
       var el = select(pairs, cur, function () {}, label); el.id = "p_" + key;
@@ -1149,7 +1155,8 @@
       h("div", { class: "muted small", text: "Gezond eten (harde regels)" }), h("div", { class: "row", style: { margin: "6px 0 10px", flexWrap: "wrap" } }, healthBoxes.map(function (x) { return x.node; })),
       h("div", { class: "form-grid" }, modeSel("sugarMode", "Bij geen geraffineerde suiker", opts.sugarModes || [["natuurlijk", "natuurlijk"], ["strikt", "strikt"]], "natuurlijk"),
         modeSel("cheeseMode", "Bij lactosevrij", opts.cheeseModes || [["hardekaas", "hardekaas"], ["geen", "geen"]], "hardekaas")),
-      txt("exclude", "Wil niet eten (uitsluiten)", 300), h("div", { class: "hint", text: "Staat Gluten of Lactose bij de uitsluitingen, dan geldt glutenvrij of lactosevrij ook als harde regel." }),
+      h("div", { class: "muted small", text: "Eet geen (vlees, gevogelte en vis; harde regel, niet bij vegetarisch/veganistisch)" }), h("div", { class: "row", style: { margin: "6px 0 10px", flexWrap: "wrap" } }, protBoxes.map(function (x) { return x.node; })),
+      txt("exclude", "Wil niet eten (overige uitsluitingen)", 300), h("div", { class: "hint", text: "Vlees, vis, lactose en gluten staan hierboven. Oude termen (zoals Vis of Lactose) in dit veld tellen nog wel mee als harde regel." }),
       h("div", { class: "form-grid" }, lst("cuisines", "Keukens"), lst("flavors", "Smaken"), lst("equipment", "Keukenapparatuur")),
       h("div", { class: "muted small", text: "Maaltijdsoorten" }), h("div", { class: "row", style: { margin: "6px 0 14px" } }, mealBoxes.map(function (x) { return x.node; })), savePrefs,
       h("div", { class: "hint", text: d.prefs ? "Alleen gewijzigde velden worden opgeslagen; de rest blijft zoals de gebruiker het had." : "Deze gebruiker heeft nog geen voorkeuren opgeslagen; alles wat je invult wordt nieuw." })));

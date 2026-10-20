@@ -2333,8 +2333,29 @@
   var ACTIVITY_LEVELS = ["Zittend", "Licht actief", "Gemiddeld actief", "Zeer actief"];
 
   // Veelvoorkomende allergenen en afkeuren, als snelkeuze bovenop het vrije tekstveld voor "iets anders".
-  var EXCLUDE_COMMON = ["Pinda's", "Noten", "Schaal- en schelpdieren", "Lactose", "Gluten", "Ei",
-    "Soja", "Sesam", "Vis", "Varkensvlees", "Champignons", "Koriander", "Ui en knoflook"];
+  // Vlees, vis, lactose en gluten staan niet meer hier: die hebben een eigen plek (Vlees, gevogelte en vis / Gezond eten).
+  var EXCLUDE_COMMON = ["Pinda's", "Noten", "Ei", "Soja", "Sesam", "Selderij", "Mosterd", "Champignons", "Koriander", "Ui en knoflook"];
+  // Oude of zelf getypte termen die nu een eigen plek hebben, worden daarheen verplaatst (één plek per keuze).
+  var EXCLUDE_MOVE = {
+    "lactose": { h: "lactosevrij" }, "zuivel lactose": { h: "lactosevrij" }, "gluten": { h: "glutenvrij" },
+    "vis": { p: ["witvis", "vettevis", "schaal"] }, "schaal- en schelpdieren": { p: ["schaal"] }, "schaaldieren": { p: ["schaal"] }, "schelpdieren": { p: ["schaal"] },
+    "garnalen": { p: ["schaal"] }, "varkensvlees": { p: ["varken"] }, "varken": { p: ["varken"] }, "rundvlees": { p: ["rund"] }, "rund": { p: ["rund"] },
+    "kalfsvlees": { p: ["kalf"] }, "lamsvlees": { p: ["lam"] }, "lam": { p: ["lam"] }, "wild": { p: ["wild"] }, "kip": { p: ["kip"] }, "kalkoen": { p: ["kalkoen"] },
+    "eend": { p: ["eend"] }, "gevogelte": { p: ["kip", "kalkoen", "eend"] }, "vlees": { p: ["varken", "rund", "kalf", "lam", "wild"] },
+    "zalm": { p: ["vettevis"] }, "vette vis": { p: ["vettevis"] }, "witvis": { p: ["witvis"] }
+  };
+  function migrateExcludeTerms() {
+    var moved = false, keep = [];
+    excludeTokens().forEach(function (t) {
+      var m = EXCLUDE_MOVE[t.toLowerCase()];
+      if (!m) { keep.push(t); return; }
+      moved = true;
+      if (m.h) { if (!Array.isArray(prefs.health)) prefs.health = []; if (prefs.health.indexOf(m.h) === -1) prefs.health.push(m.h); }
+      if (m.p && !meatFree()) { if (!Array.isArray(prefs.proteinOut)) prefs.proteinOut = []; m.p.forEach(function (k) { if (prefs.proteinOut.indexOf(k) === -1) prefs.proteinOut.push(k); }); }
+    });
+    if (moved) prefs.exclude = keep.join(", ");
+    return moved;
+  }
   function excludeTokens() {
     return String(prefs.exclude || "").split(",").map(function (s) { return s.trim(); }).filter(Boolean);
   }
@@ -2354,13 +2375,7 @@
       chip.textContent = term;
       chip.onclick = function () {
         var cur = excludeTokens();
-        if (excludeHasTerm(cur, term)) {
-          cur = cur.filter(function (t) { return t.toLowerCase() !== term.toLowerCase(); });
-          // "Gluten"/"Lactose" uitzetten zet ook het gekoppelde gezondheidsfilter uit
-          Object.keys(HEALTH_EXCLUDE_TERM).forEach(function (k) {
-            if (HEALTH_EXCLUDE_TERM[k].toLowerCase() === term.toLowerCase() && Array.isArray(prefs.health)) prefs.health = prefs.health.filter(function (x) { return x !== k; });
-          });
-        }
+        if (excludeHasTerm(cur, term)) cur = cur.filter(function (t) { return t.toLowerCase() !== term.toLowerCase(); });
         else cur.push(term);
         prefs.exclude = cur.join(", ");
         onToggle();
@@ -2372,7 +2387,7 @@
     var customHint = document.createElement("div");
     customHint.className = "field-hint";
     customHint.style.marginTop = "10px";
-    customHint.textContent = "Nog iets anders? Vul het hieronder aan, gescheiden door een komma.";
+    customHint.textContent = "Nog iets anders? Vul het hieronder aan, gescheiden door een komma. Vlees, vis, lactose en gluten stel je hierboven in.";
     main.appendChild(customHint);
 
     var customTokens = excludeTokens().filter(function (t) { return !excludeHasTerm(EXCLUDE_COMMON, t); });
@@ -2381,9 +2396,11 @@
     customInp.type = "text";
     customInp.value = customTokens.join(", ");
     customInp.placeholder = "Bijv. kokos, blauwe kaas";
+    customInp.onchange = function () { if (migrateExcludeTerms()) { showToast("Staat nu bij Vlees, gevogelte en vis of Gezond eten."); onToggle(); } };
     customInp.oninput = function (e) {
       var common = excludeTokens().filter(function (t) { return excludeHasTerm(EXCLUDE_COMMON, t); });
-      var extra = e.target.value.split(",").map(function (s) { return s.trim(); }).filter(Boolean);
+      var extra = e.target.value.split(",").map(function (s) { return s.trim(); }).filter(Boolean)
+        .filter(function (t, i, arr) { return !excludeHasTerm(common, t) && arr.findIndex(function (x) { return x.toLowerCase() === t.toLowerCase(); }) === i; });
       prefs.exclude = common.concat(extra).join(", ");
     };
     main.appendChild(customInp);
@@ -2404,14 +2421,8 @@
   function healthHas(k) { return healthList().indexOf(k) > -1; }
   function healthToggle(k) {
     if (!Array.isArray(prefs.health)) prefs.health = [];
-    var on = healthHas(k), term = HEALTH_EXCLUDE_TERM[k];
-    if (on) {
-      prefs.health = prefs.health.filter(function (x) { return x !== k; });
-      if (term) prefs.exclude = excludeTokens().filter(function (t) { return t.toLowerCase() !== term.toLowerCase(); }).join(", ");
-    } else {
-      prefs.health.push(k);
-      if (term && !excludeHasTerm(excludeTokens(), term)) prefs.exclude = excludeTokens().concat([term]).join(", ");
-    }
+    if (healthHas(k)) prefs.health = prefs.health.filter(function (x) { return x !== k; });
+    else prefs.health.push(k);
   }
   // Wat naar de server gaat: de gekozen filters, plus glutenvrij als "Gluten" bij "wat wil je niet eten" staat.
   function healthList() {
@@ -13854,7 +13865,8 @@
             ["name", "bringListLink", "cuisines", "flavors", "level", "dietStyle", "health", "leftovers", "coach", "water", "places", "proteinOut", "journey", "ageGroup", "student", "sugarMode", "cheeseMode", "familyMode", "equipment", "exclude", "count", "mealTypes", "gender", "heightCm", "weightKg", "age", "activityLevel", "goal", "homeLayout", "mealCounts", "withImages", "pantry", "communityName"].forEach(function (k) {
               if (pdata[k] !== undefined) prefs[k] = deepClone(pdata[k]);
             });
-            if (enforceAgeRules()) savePrefs();
+            var mig = migrateExcludeTerms();
+            if (enforceAgeRules() || mig) savePrefs();
             render();
           }).catch(function () {});
 

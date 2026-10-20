@@ -68,6 +68,9 @@ schelpdieren). Standaard staat alles aan; tik weg wat je niet eet, of gebruik "G
 bij vegetarisch of veganistisch. Het is een harde regel: de prompt krijgt "EET DIT NIET", de NEVO-lijst wordt gefilterd en elk
 gerecht wordt gecontroleerd (met herstelronde), net als de gezondheidsfilters. Bestaande gerechten met iets wat je niet eet, plant
 Balanza niet meer automatisch in (planner, conceptweek), en community-suggesties houden er rekening mee. Admin kan het aanpassen.
+*Wat wil je niet eten?* bevat geen vlees, vis, lactose of gluten meer (die hebben een eigen plek). Oude of zelf getypte termen
+zoals "Vis", "Varkensvlees", "kip", "Lactose" of "Gluten" worden bij het openen van de app (en bij typen) automatisch verplaatst
+naar *Vlees, gevogelte en vis* of *Gezond eten*; de server telt oude termen in `exclude` voor de zekerheid ook nog mee.
 
 **Nieuwe berichten in de chat:** de chatknop toont een rood getal met het aantal ongelezen berichten (en pulseert twee keer),
 en bovenaan Start staat een kaart "Nieuw bericht van Balanza" met het begin van het bericht en *Lees*. Antwoorden op ideeën
