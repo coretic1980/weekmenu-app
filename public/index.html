@@ -1438,6 +1438,10 @@
   .op-kcal { display: flex; align-items: center; gap: 8px; font-size: 15px; color: var(--muted); }
   .op-kcal input { width: 110px; font: inherit; font-size: 22px; font-weight: 700; padding: 6px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
   .op-mac { font-size: 13px; color: var(--muted); }
+  .protein-editor { display: flex; flex-direction: column; gap: 6px; }
+  .pe-group-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font-size: 13px; font-weight: 700; color: var(--ink); margin-top: 6px; }
+  .pe-all { appearance: none; border: 0; background: none; font: inherit; font-size: 12.5px; font-weight: 600; color: var(--accent2); cursor: pointer; padding: 2px 0; }
+  .pe-chip.off { text-decoration: line-through; opacity: .65; }
   .op-err { margin: 0; padding: 10px 12px; border-radius: 12px; background: #FBE9E4; color: #8A2E1C; font-size: 13.5px; line-height: 1.45; }
   .op-note { font-size: 13.5px; color: var(--muted); margin: 0; line-height: 1.45; }
   .hh-meals { display: flex; flex-direction: column; margin-top: 4px; border-top: 1px solid var(--line); }
@@ -2425,6 +2429,89 @@
     }
     return HEALTH_OPTIONS.filter(function (o) { return l.indexOf(o[0]) > -1; }).map(function (o) { return o[1].toLowerCase(); }).join(", ");
   }
+  // ---- Vlees, gevogelte en vis: standaard eet je alles; tik weg wat je niet eet ----
+  var PROTEIN_GROUPS = [
+    ["Vlees", [["varken", "Varken"], ["rund", "Rund"], ["kalf", "Kalf"], ["lam", "Lam en geit"], ["wild", "Wild"]]],
+    ["Gevogelte", [["kip", "Kip"], ["kalkoen", "Kalkoen"], ["eend", "Eend en gans"]]],
+    ["Vis", [["witvis", "Witvis", "kabeljauw, koolvis, schol"], ["vettevis", "Vette vis", "zalm, makreel, tonijn, haring"], ["schaal", "Schaal- en schelpdieren", "garnalen, mosselen, inktvis"]]]
+  ];
+  function meatFree() { return prefs.dietStyle === "Vegetarisch" || prefs.dietStyle === "Veganistisch"; }
+  function proteinOutList() {
+    if (meatFree()) return [];
+    var keys = [];
+    PROTEIN_GROUPS.forEach(function (g) { g[1].forEach(function (x) { keys.push(x[0]); }); });
+    return (Array.isArray(prefs.proteinOut) ? prefs.proteinOut : []).filter(function (k) { return keys.indexOf(k) > -1; });
+  }
+  function proteinSummary() {
+    var out = proteinOutList(); if (!out.length) return "";
+    var labels = [];
+    PROTEIN_GROUPS.forEach(function (g) {
+      var keys = g[1].map(function (x) { return x[0]; });
+      if (keys.every(function (k) { return out.indexOf(k) > -1; })) labels.push(g[0].toLowerCase());
+      else g[1].forEach(function (x) { if (out.indexOf(x[0]) > -1) labels.push(x[1].toLowerCase()); });
+    });
+    return "zonder " + labels.join(", ");
+  }
+  function renderProteinEditor(main, onChange) {
+    if (meatFree()) return;
+    if (!Array.isArray(prefs.proteinOut)) prefs.proteinOut = [];
+    var wrap = document.createElement("div"); wrap.className = "protein-editor"; wrap.id = "proteinEditor";
+    PROTEIN_GROUPS.forEach(function (g) {
+      var keys = g[1].map(function (x) { return x[0]; });
+      var allOut = keys.every(function (k) { return prefs.proteinOut.indexOf(k) > -1; });
+      var head = document.createElement("div"); head.className = "pe-group-head";
+      var t = document.createElement("span"); t.textContent = g[0]; head.appendChild(t);
+      var all = document.createElement("button"); all.type = "button"; all.className = "pe-all"; all.id = "pe-all-" + g[0].toLowerCase();
+      all.textContent = allOut ? "Toch wel " + g[0].toLowerCase() : "Geen " + g[0].toLowerCase();
+      all.onclick = function () {
+        prefs.proteinOut = prefs.proteinOut.filter(function (k) { return keys.indexOf(k) === -1; });
+        if (!allOut) prefs.proteinOut = prefs.proteinOut.concat(keys);
+        onChange();
+      };
+      head.appendChild(all); wrap.appendChild(head);
+      var row = document.createElement("div"); row.className = "chiprow";
+      g[1].forEach(function (x) {
+        var on = prefs.proteinOut.indexOf(x[0]) === -1;
+        var c = document.createElement("button"); c.type = "button"; c.className = "chip pe-chip" + (on ? " selected" : " off"); c.id = "pe-" + x[0];
+        c.setAttribute("aria-pressed", on ? "true" : "false");
+        c.textContent = (on ? "\u2713 " : "") + x[1];
+        if (x[2]) c.title = x[2];
+        c.onclick = function () {
+          if (on) prefs.proteinOut = prefs.proteinOut.concat([x[0]]);
+          else prefs.proteinOut = prefs.proteinOut.filter(function (k) { return k !== x[0]; });
+          onChange();
+        };
+        row.appendChild(c);
+      });
+      wrap.appendChild(row);
+    });
+    var out = proteinOutList();
+    if (out.length) {
+      var note = document.createElement("div"); note.className = "acc-sub"; note.style.marginTop = "6px";
+      note.textContent = "Balanza gebruikt dit nooit meer in nieuwe gerechten (ook niet als bouillon, saus of beleg) en plant je bestaande gerechten daarmee niet meer automatisch in.";
+      wrap.appendChild(note);
+    }
+    main.appendChild(wrap);
+  }
+  function dishHasProteinOut(d) {
+    var out = proteinOutList(); if (!out.length || !d) return false;
+    var txt = (d.ingredienten || []).map(function (x) { return typeof x === "string" ? x : ((x && x.tekst) || "") + " " + ((x && x.nevo) || ""); }).join(" ; ").toLowerCase()
+      .replace(/\b(vegetarisch\w*|vegan\w*|plantaardig\w*|vega)\s+\w+/g, " ");
+    return out.some(function (k) { return PROTEIN_RE_CLIENT[k] && PROTEIN_RE_CLIENT[k].test(txt); });
+  }
+  var PROTEIN_RE_CLIENT = {
+    varken: /\b(varken\w*|\w*spek\w*|bacon|ham|hammen|\w+ham|chorizo|salami|pancetta|prosciutto|speklap\w*|karbonade\w*|procureur|spareribs?|ribbetjes|rookworst|braadworst|half[- ]om[- ]half|carnitas|pulled pork|mortadella|cervelaat|guanciale|lardon\w*)\b/i,
+    rund: /\b(rund\w*|biefstuk\w*|ossenhaas|entrecote|rib-?eye|sukade|riblap\w*|kogelbiefstuk|rosbief|carpaccio|tartaar|bavette|hamburger\w*|half[- ]om[- ]half|ossenstaart|stoofvlees|runder\w*|kalfs?\w*|steak|t-bone|picanha)\b/i,
+    kalf: /\b(kalf\w*|kalfs\w*|vitello\w*)\b/i,
+    lam: /\b(lam|lams\w*|lamsvlees|schaap\w*|schapen\w*|geitenvlees|geitenbout|mutton)\b/i,
+    wild: /\b(hert\w*|ree|reebout|reerug|wildzwijn\w*|everzwijn\w*|haas|hazen\w*|konijn\w*|fazant\w*|parelhoen\w*|wildstoof\w*)\b/i,
+    kip: /\b(kip\w*|kippe\w*|haantje\w*|poulet\w*|chicken)\b/i,
+    kalkoen: /\b(kalkoen\w*)\b/i,
+    eend: /\b(eend\w*|eende\w*|gans|ganzen\w*)\b/i,
+    witvis: /\b(kabeljauw\w*|koolvis\w*|schelvis\w*|wijting\w*|tilapia\w*|pangasius\w*|heek\w*|schol\w*|zeebaars\w*|zeebrasem\w*|dorade\w*|tarbot\w*|griet|witvis\w*|vissticks?|lekkerbek\w*|kibbeling\w*|pollak|vispakket\w*|visfilet\w*)\b/i,
+    vettevis: /\b(zalm\w*|makreel\w*|haring\w*|sardien\w*|sardine\w*|ansjovis\w*|forel\w*|tonijn\w*|paling\w*|sprot\w*|bokking\w*|zwaardvis\w*|vissaus)\b/i,
+    schaal: /\b(garnal\w*|gamba\w*|scampi|kreeft\w*|krab\w*|mossel\w*|oester\w*|sint[- ]jakobsschelp\w*|coquille\w*|inktvis\w*|calamari|octopus|kokkel\w*|langoustine\w*|surimi|rivierkreeft\w*|vongole)\b/i
+  };
   function renderHealthEditor(main, onToggle) {
     if (!Array.isArray(prefs.health)) prefs.health = [];
     var presetOn = HEALTHY_PRESET.every(healthHas);
@@ -2848,7 +2935,7 @@
   function requestTips() {
     return claude.use("sample").then(function (sample) {
       if (!sample) throw new Error("niet beschikbaar");
-      return sample.json({ action: "tips", params: { goal: prefs.goal, dietStyle: prefs.dietStyle, health: healthList(), exclude: prefs.exclude, familyMode: prefs.familyMode, ageGroup: prefs.ageGroup || "", age: prefs.age, avoid: recentTipTexts() } }, { modelTier: "default" });
+      return sample.json({ action: "tips", params: { goal: prefs.goal, dietStyle: prefs.dietStyle, health: healthList(), proteinOut: proteinOutList(), exclude: prefs.exclude, familyMode: prefs.familyMode, ageGroup: prefs.ageGroup || "", age: prefs.age, avoid: recentTipTexts() } }, { modelTier: "default" });
     });
   }
 
@@ -5671,6 +5758,10 @@
       chipGroupSingle(dietPairs, prefs.dietStyle, function (d) { prefs.dietStyle = d; });
       var wWarn2 = dietGoalWarningEl(prefs.goal, prefs.dietStyle);
       if (wWarn2) { main.appendChild(wWarn2); main.appendChild(goalNoteEl(prefs.goal, prefs.dietStyle)); }
+      if (!meatFree()) {
+        labelEl("Vlees, gevogelte en vis", "Standaard eet je alles. Tik weg wat je niet eet; dat komt nooit in je gerechten.");
+        renderProteinEditor(main, render);
+      }
       labelEl("Gezond eten", "Optioneel en te combineren met je voedingsstijl. Ook dit zijn harde regels: elk gerecht wordt hierop gecontroleerd.");
       renderHealthEditor(main, render);
     } else if (state.wizardStep === 3) {
@@ -5846,7 +5937,7 @@
     var w = genWish();
     var p = {
       mealTypes: prefs.mealTypes, count: prefs.count, mealCounts: mealCounts(),
-      cuisines: prefs.cuisines, flavors: prefs.flavors, level: prefs.level, dietStyle: prefs.dietStyle, health: healthList(), sugarMode: prefs.sugarMode || "natuurlijk", cheeseMode: prefs.cheeseMode || "hardekaas", familyMode: prefs.familyMode, ageGroup: prefs.ageGroup || "", student: studentParams(),
+      cuisines: prefs.cuisines, flavors: prefs.flavors, level: prefs.level, dietStyle: prefs.dietStyle, health: healthList(), proteinOut: proteinOutList(), sugarMode: prefs.sugarMode || "natuurlijk", cheeseMode: prefs.cheeseMode || "hardekaas", familyMode: prefs.familyMode, ageGroup: prefs.ageGroup || "", student: studentParams(),
       equipment: prefs.equipment, exclude: prefs.exclude, goal: prefs.goal, gender: prefs.gender, heightCm: prefs.heightCm,
       weightKg: prefs.weightKg, age: prefs.age, activityLevel: prefs.activityLevel,
       wish: { tags: w.tags.slice(), text: String(w.text || "").slice(0, 200) },
@@ -6064,11 +6155,15 @@
           chips(c, ACTIVITY_LEVELS, function (a) { return prefs.activityLevel === a; }, function (a) { prefs.activityLevel = a; });
         } },
       { id: "dieet", title: "Voedingsstijl, gezond & uitsluitingen", icon: "leaf",
-        summary: (prefs.dietStyle || "Geen voorkeur") + (healthSummary() ? " · " + healthSummary() : "") + (excludeSummary() ? " · " + excludeSummary() : ""),
+        summary: (prefs.dietStyle || "Geen voorkeur") + (proteinSummary() ? " · " + proteinSummary() : "") + (healthSummary() ? " · " + healthSummary() : "") + (excludeSummary() ? " · " + excludeSummary() : ""),
         body: function (c) {
           label(c, "Voedingsstijl", "Een harde regel: gerechten die hier niet aan voldoen worden nooit voorgesteld.");
           chips(c, [["", "Geen voorkeur"]].concat(DIET_STYLES.map(function (d) { return [d, d]; })), function (d) { return prefs.dietStyle === d; }, function (d) { prefs.dietStyle = d; });
           var warn = dietGoalWarningEl(prefs.goal, prefs.dietStyle); if (warn) c.appendChild(warn);
+          if (!meatFree()) {
+            label(c, "Vlees, gevogelte en vis", "Standaard eet je alles. Tik weg wat je niet eet; dat komt nooit in je gerechten.");
+            renderProteinEditor(c, function () { changed(true); });
+          }
           label(c, "Gezond eten", "Te combineren met je voedingsstijl. Ook een harde regel: gerechten die niet voldoen worden nooit voorgesteld.");
           renderHealthEditor(c, function () { changed(true); });
           label(c, "Wat wil je niet eten?", "Allergieën of dingen die je niet lust — deze ingrediënten worden nooit voorgesteld.");
@@ -6705,7 +6800,7 @@
     goto("weeks");
     var meals = ["Ontbijt", "Lunch", "Diner", "Snack"];
     var params = {
-      cuisines: prefs.cuisines, flavors: prefs.flavors, level: prefs.level, dietStyle: prefs.dietStyle, health: healthList(), sugarMode: prefs.sugarMode || "natuurlijk", cheeseMode: prefs.cheeseMode || "hardekaas", familyMode: prefs.familyMode, ageGroup: prefs.ageGroup || "", student: studentParams(),
+      cuisines: prefs.cuisines, flavors: prefs.flavors, level: prefs.level, dietStyle: prefs.dietStyle, health: healthList(), proteinOut: proteinOutList(), sugarMode: prefs.sugarMode || "natuurlijk", cheeseMode: prefs.cheeseMode || "hardekaas", familyMode: prefs.familyMode, ageGroup: prefs.ageGroup || "", student: studentParams(),
       equipment: prefs.equipment, exclude: prefs.exclude, goal: prefs.goal, gender: prefs.gender, heightCm: prefs.heightCm,
       weightKg: prefs.weightKg, age: prefs.age, activityLevel: prefs.activityLevel
     };
@@ -11425,7 +11520,7 @@
         benodigdheden: day.benodigdheden,
         steps: day.steps.map(function (s) { return s.title + ": " + s.content; })
       };
-      sample.json({ action: "variation", current: variationCurrent, kind: kind, params: { goal: prefs.goal, dietStyle: prefs.dietStyle, health: healthList(), sugarMode: prefs.sugarMode || "natuurlijk", cheeseMode: prefs.cheeseMode || "hardekaas", exclude: prefs.exclude, familyMode: prefs.familyMode, ageGroup: prefs.ageGroup || "", age: prefs.age, student: studentParams() } }, { modelTier: "default" }).then(function (d) {
+      sample.json({ action: "variation", current: variationCurrent, kind: kind, params: { goal: prefs.goal, dietStyle: prefs.dietStyle, health: healthList(), proteinOut: proteinOutList(), sugarMode: prefs.sugarMode || "natuurlijk", cheeseMode: prefs.cheeseMode || "hardekaas", exclude: prefs.exclude, familyMode: prefs.familyMode, ageGroup: prefs.ageGroup || "", age: prefs.age, student: studentParams() } }, { modelTier: "default" }).then(function (d) {
         var kcal = Number(d.kcal) || 0;
         var khG = Number(d.kh_g) || 0;
         var eiwitG = Number(d.eiwit_g) || 0;
@@ -11559,7 +11654,7 @@
     WEEKS.forEach(function (w) {
       w.days.forEach(function (d) {
         if (d.prep || !d.mealType || !byType[d.mealType]) return;
-        if (seenIds[d.id]) return;
+        if (seenIds[d.id] || dishHasProteinOut(d)) return;   // wat je niet (meer) eet, plant Balanza niet vanzelf in
         seenIds[d.id] = true;
         byType[d.mealType].push({ week: w, day: d });
       });
@@ -13071,7 +13166,7 @@
     PLAN_MEALS.forEach(function (m) { dishes[m] = byType[m].length; });
     var cw = weekByStart(mondayKeyOffset(0)), nw = weekByStart(mondayKeyOffset(1));
     var j = prefs.journey || {};
-    return { goal: prefs.goal, dietStyle: prefs.dietStyle || "", health: healthList(), exclude: prefs.exclude || "", mealTypes: prefs.mealTypes, count: prefs.count,
+    return { goal: prefs.goal, dietStyle: prefs.dietStyle || "", health: healthList(), proteinOut: proteinOutList(), exclude: prefs.exclude || "", mealTypes: prefs.mealTypes, count: prefs.count,
       cuisines: prefs.cuisines, flavors: prefs.flavors, level: prefs.level, familyMode: !!prefs.familyMode, student: student(), coach: prefs.coach || {},
       journey: { pace: j.pace || "normaal", tone: j.tone || "coach", quiet: !!j.quiet }, tone: j.tone || "coach", theme: currentTheme, homeTiles: homeLayout().visible,
       view: state.view, dishes: dishes, mealsThisWeek: cw ? Object.keys(cw.slots).length : 0, mealsNextWeek: nw ? Object.keys(nw.slots).length : 0,
@@ -13373,13 +13468,14 @@
         flavors: prefs.flavors,
         level: prefs.level,
         dietStyle: prefs.dietStyle,
-        health: healthList(),
+        health: healthList(), proteinOut: proteinOutList(),
         sugarMode: prefs.sugarMode === "strikt" ? "strikt" : "natuurlijk",
         cheeseMode: prefs.cheeseMode === "geen" ? "geen" : "hardekaas",
         leftovers: Array.isArray(prefs.leftovers) ? prefs.leftovers.slice(-20) : [],
         coach: prefs.coach && typeof prefs.coach === "object" ? prefs.coach : {},
         water: prefs.water && typeof prefs.water === "object" ? { d: String(prefs.water.d || "").slice(0, 10), n: Number(prefs.water.n) || 0 } : null,
         places: Array.isArray(prefs.places) ? prefs.places.slice(0, 30) : [],
+        proteinOut: Array.isArray(prefs.proteinOut) ? prefs.proteinOut.slice(0, 20) : [],
         journey: prefs.journey && typeof prefs.journey === "object" ? prefs.journey : {},
         ageGroup: AGE_GROUPS.some(function (g) { return g[0] === prefs.ageGroup; }) ? prefs.ageGroup : "",
         student: student(),
@@ -13720,7 +13816,7 @@
       if (!sample) return;
       busyStart("Gerechten worden aangevuld op de achtergrond…");
       var bgParams2 = {
-        cuisines: prefs.cuisines, flavors: prefs.flavors, level: prefs.level, dietStyle: prefs.dietStyle, health: healthList(), sugarMode: prefs.sugarMode || "natuurlijk", cheeseMode: prefs.cheeseMode || "hardekaas", familyMode: prefs.familyMode, ageGroup: prefs.ageGroup || "", student: studentParams(),
+        cuisines: prefs.cuisines, flavors: prefs.flavors, level: prefs.level, dietStyle: prefs.dietStyle, health: healthList(), proteinOut: proteinOutList(), sugarMode: prefs.sugarMode || "natuurlijk", cheeseMode: prefs.cheeseMode || "hardekaas", familyMode: prefs.familyMode, ageGroup: prefs.ageGroup || "", student: studentParams(),
         equipment: prefs.equipment, exclude: prefs.exclude, goal: prefs.goal, gender: prefs.gender, heightCm: prefs.heightCm,
         weightKg: prefs.weightKg, age: prefs.age, activityLevel: prefs.activityLevel
       };
@@ -13755,7 +13851,7 @@
               return;
             }
             var pdata = psnap.data() || {};
-            ["name", "bringListLink", "cuisines", "flavors", "level", "dietStyle", "health", "leftovers", "coach", "water", "places", "journey", "ageGroup", "student", "sugarMode", "cheeseMode", "familyMode", "equipment", "exclude", "count", "mealTypes", "gender", "heightCm", "weightKg", "age", "activityLevel", "goal", "homeLayout", "mealCounts", "withImages", "pantry", "communityName"].forEach(function (k) {
+            ["name", "bringListLink", "cuisines", "flavors", "level", "dietStyle", "health", "leftovers", "coach", "water", "places", "proteinOut", "journey", "ageGroup", "student", "sugarMode", "cheeseMode", "familyMode", "equipment", "exclude", "count", "mealTypes", "gender", "heightCm", "weightKg", "age", "activityLevel", "goal", "homeLayout", "mealCounts", "withImages", "pantry", "communityName"].forEach(function (k) {
               if (pdata[k] !== undefined) prefs[k] = deepClone(pdata[k]);
             });
             if (enforceAgeRules()) savePrefs();

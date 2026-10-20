@@ -62,6 +62,13 @@ daarom niet meer onderaan het startscherm.
 - Wissen van het chatgesprek en de smaakgeschiedenis gaat zonder vraag, met *Ongedaan maken* in de melding.
 - Inplannen en "gekookt" geven een melding met een groen vinkje (en een korte tik op telefoons die dat ondersteunen).
 
+**Vlees, gevogelte en vis uitsluiten** (`prefs.proteinOut`): onder *Voedingsstijl, gezond & uitsluitingen* (en in de wizard) staan
+Vlees (varken, rund, kalf, lam en geit, wild), Gevogelte (kip, kalkoen, eend en gans) en Vis (witvis, vette vis, schaal- en
+schelpdieren). Standaard staat alles aan; tik weg wat je niet eet, of gebruik "Geen vlees/gevogelte/vis" per groep. Niet zichtbaar
+bij vegetarisch of veganistisch. Het is een harde regel: de prompt krijgt "EET DIT NIET", de NEVO-lijst wordt gefilterd en elk
+gerecht wordt gecontroleerd (met herstelronde), net als de gezondheidsfilters. Bestaande gerechten met iets wat je niet eet, plant
+Balanza niet meer automatisch in (planner, conceptweek), en community-suggesties houden er rekening mee. Admin kan het aanpassen.
+
 **Nieuwe berichten in de chat:** de chatknop toont een rood getal met het aantal ongelezen berichten (en pulseert twee keer),
 en bovenaan Start staat een kaart "Nieuw bericht van Balanza" met het begin van het bericht en *Lees*. Antwoorden op ideeën
 (inbox) komen ook als bericht in de chat; meldingen daarover openen direct de chat (`/?open=chat`). Ongelezen wordt bepaald met

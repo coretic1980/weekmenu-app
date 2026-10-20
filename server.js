@@ -1127,24 +1127,64 @@ function healthWithExclude(health, exclude) {
   excludeTokensServer(exclude).forEach(function (t) { var k = EXCLUDE_TO_HEALTH[t]; if (k && list.indexOf(k) === -1) list.push(k); });
   return list;
 }
+// ---- Vlees, gevogelte en vis die iemand niet eet (prefs.proteinOut). Standaard eet je alles; bij vegetarisch/veganistisch telt dit niet. ----
+var PROTEIN_GROUPS = [
+  ["Vlees", [["varken", "Varken"], ["rund", "Rund"], ["kalf", "Kalf"], ["lam", "Lam en geit"], ["wild", "Wild"]]],
+  ["Gevogelte", [["kip", "Kip"], ["kalkoen", "Kalkoen"], ["eend", "Eend en gans"]]],
+  ["Vis", [["witvis", "Witvis"], ["vettevis", "Vette vis"], ["schaal", "Schaal- en schelpdieren"]]]
+];
+var PROTEIN_KEYS = [].concat.apply([], PROTEIN_GROUPS.map(function (g) { return g[1].map(function (x) { return x[0]; }); }));
+var PROTEIN_LABEL = {}; PROTEIN_GROUPS.forEach(function (g) { g[1].forEach(function (x) { PROTEIN_LABEL[x[0]] = x[1].toLowerCase(); }); });
+var PROTEIN_TEXT = {
+  varken: "varkensvlees en alles daarvan (spek, bacon, ham, parmaham, chorizo, salami, pancetta, worst van varkensvlees, half-om-half gehakt, karbonade, varkenshaas, spareribs)",
+  rund: "rundvlees (biefstuk, ossenhaas, entrecote, rundergehakt, half-om-half gehakt, riblappen, rosbief, hamburgers van rund, carpaccio)",
+  kalf: "kalfsvlees", lam: "lams-, schapen- en geitenvlees", wild: "wild (hert, ree, wildzwijn, haas, konijn, fazant, parelhoen)",
+  kip: "kip (kipfilet, kippendij, kipgehakt, kippenbouillon)", kalkoen: "kalkoen (kalkoenfilet, kalkoengehakt, kalkoenfilet als beleg)", eend: "eend en gans",
+  witvis: "witvis (kabeljauw, koolvis, schelvis, wijting, tilapia, pangasius, heek, schol, zeebaars, dorade, tarbot, lekkerbek, kibbeling)",
+  vettevis: "vette vis (zalm, makreel, haring, sardines, ansjovis, forel, tonijn, paling, bokking)",
+  schaal: "schaal- en schelpdieren (garnalen, gamba's, kreeft, krab, mosselen, oesters, sint-jakobsschelpen, inktvis, octopus, surimi)"
+};
+var PROTEIN_RE = {
+  varken: /\b(varken\w*|\w*spek\w*|bacon|ham|hammen|\w+ham|chorizo|salami|pancetta|prosciutto|speklap\w*|karbonade\w*|procureur|spareribs?|ribbetjes|rookworst|braadworst|half[- ]om[- ]half|carnitas|pulled pork|mortadella|cervelaat|guanciale|lardon\w*)\b/i,
+  rund: /\b(rund\w*|biefstuk\w*|ossenhaas|entrecote|rib-?eye|sukade|riblap\w*|kogelbiefstuk|rosbief|carpaccio|tartaar|bavette|hamburger\w*|half[- ]om[- ]half|ossenstaart|stoofvlees|runder\w*|kalfs?\w*|steak|t-bone|picanha)\b/i,
+  kalf: /\b(kalf\w*|kalfs\w*|vitello\w*)\b/i,
+  lam: /\b(lam|lams\w*|lamsvlees|schaap\w*|schapen\w*|geitenvlees|geitenbout|mutton)\b/i,
+  wild: /\b(hert\w*|ree|reebout|reerug|wildzwijn\w*|everzwijn\w*|haas|hazen\w*|konijn\w*|fazant\w*|parelhoen\w*|wildstoof\w*)\b/i,
+  kip: /\b(kip\w*|kippe\w*|haantje\w*|poulet\w*|chicken)\b/i,
+  kalkoen: /\b(kalkoen\w*)\b/i,
+  eend: /\b(eend\w*|eende\w*|gans|ganzen\w*)\b/i,
+  witvis: /\b(kabeljauw\w*|koolvis\w*|schelvis\w*|wijting\w*|tilapia\w*|pangasius\w*|heek\w*|schol\w*|zeebaars\w*|zeebrasem\w*|dorade\w*|tarbot\w*|griet|witvis\w*|vissticks?|lekkerbek\w*|kibbeling\w*|pollak|vispakket\w*|visfilet\w*)\b/i,
+  vettevis: /\b(zalm\w*|makreel\w*|haring\w*|sardien\w*|sardine\w*|ansjovis\w*|forel\w*|tonijn\w*|paling\w*|sprot\w*|bokking\w*|zwaardvis\w*|vissaus)\b/i,
+  schaal: /\b(garnal\w*|gamba\w*|scampi|kreeft\w*|krab\w*|mossel\w*|oester\w*|sint[- ]jakobsschelp\w*|coquille\w*|inktvis\w*|calamari|octopus|kokkel\w*|langoustine\w*|surimi|rivierkreeft\w*|vongole)\b/i
+};
+// rund-regex vangt ook kalf (kalfsvlees is rund); dat is goed: wie geen rund eet, eet meestal ook geen kalf.
+function cleanProteinOut(v, style) {
+  if (style === "Vegetarisch" || style === "Veganistisch") return [];
+  return (Array.isArray(v) ? v : []).filter(function (k, i, a) { return PROTEIN_KEYS.indexOf(k) > -1 && a.indexOf(k) === i; });
+}
 // Eén object met alle harde eetregels; generateWithBalansRetry accepteert ook nog een losse voedingsstijl (tekst).
 function dietRulesFromParams(p) {
   p = p || {};
-  return { style: typeof p.dietStyle === "string" ? p.dietStyle : "", health: healthWithExclude(p.health, p.exclude), sugarMode: cleanSugarMode(p.sugarMode),
-    cheeseMode: cleanCheeseMode(p.cheeseMode), exclude: typeof p.exclude === "string" ? p.exclude.trim().slice(0, 300) : "" };
+  var style = typeof p.dietStyle === "string" ? p.dietStyle : "";
+  return { style: style, health: healthWithExclude(p.health, p.exclude), sugarMode: cleanSugarMode(p.sugarMode),
+    cheeseMode: cleanCheeseMode(p.cheeseMode), exclude: typeof p.exclude === "string" ? p.exclude.trim().slice(0, 300) : "", proteinOut: cleanProteinOut(p.proteinOut, style) };
 }
 function asDietRules(v) {
-  if (v && typeof v === "object") return { style: v.style || "", health: cleanHealth(v.health), sugarMode: cleanSugarMode(v.sugarMode), cheeseMode: cleanCheeseMode(v.cheeseMode), exclude: v.exclude || "" };
-  return { style: typeof v === "string" ? v : "", health: [], sugarMode: "natuurlijk", cheeseMode: "hardekaas", exclude: "" };
+  if (v && typeof v === "object") return { style: v.style || "", health: cleanHealth(v.health), sugarMode: cleanSugarMode(v.sugarMode), cheeseMode: cleanCheeseMode(v.cheeseMode), exclude: v.exclude || "", proteinOut: cleanProteinOut(v.proteinOut, v.style) };
+  return { style: typeof v === "string" ? v : "", health: [], sugarMode: "natuurlijk", cheeseMode: "hardekaas", exclude: "", proteinOut: [] };
 }
 function hasHealth(rules, k) { return !!(rules && rules.health && rules.health.indexOf(k) > -1); }
-function healthChecked(rules) { return hasHealth(rules, "puur") || hasHealth(rules, "suikervrij") || hasHealth(rules, "glutenvrij") || hasHealth(rules, "lactosevrij"); }
+function hasProteinOut(rules) { return !!(rules && rules.proteinOut && rules.proteinOut.length); }
+function healthChecked(rules) { return hasHealth(rules, "puur") || hasHealth(rules, "suikervrij") || hasHealth(rules, "glutenvrij") || hasHealth(rules, "lactosevrij") || hasProteinOut(rules); }
 function rulesActive(rules) { return !!(DIET_FORBIDDEN_TEXT[rules.style] || healthChecked(rules)); }
 
 function healthHardRuleText(p) {
   var rules = p && p.style !== undefined ? asDietRules(p) : dietRulesFromParams(p);   // params of een regels-object
-  if (!rules.health.length) return "";
+  if (!rules.health.length && !hasProteinOut(rules)) return "";
   var lines = [];
+  if (hasProteinOut(rules)) lines.push("EET DIT NIET (harde eis): " + rules.proteinOut.map(function (k) { return PROTEIN_TEXT[k]; }).join("; ") +
+    ". Ook niet als bouillon, saus of beleg. Kies een andere eiwitbron die de gebruiker wel eet" +
+    (PROTEIN_KEYS.every(function (k) { return rules.proteinOut.indexOf(k) > -1; }) ? " (peulvruchten, tofu, tempeh, eieren, zuivel)" : "") + ".");
   if (hasHealth(rules, "glutenvrij")) lines.push("GLUTENVRIJ (harde eis): geen tarwe, spelt, rogge, gerst, kamut, bulgur, couscous, seitan, gewone pasta, noedels van tarwe, brood, wraps, " +
     "pita, paneermeel, bloem, gewone sojasaus of ketjap. Gebruik rijst, quinoa, boekweit, gierst, aardappel, zoete aardappel, maïs(tortilla), rijst- of glasnoedels, " +
     "glutenvrije pasta, tamari en glutenvrije havermout. Noem bij haver en pasta expliciet \"glutenvrij\".");
@@ -1190,6 +1230,10 @@ function dishHealthViolations(d, rules) {
   var hits = [];
   parts.forEach(function (t) {
     var txt = t.toLowerCase();
+    if (hasProteinOut(rules)) {
+      var plantTxt = txt.replace(/\b(vegetarisch\w*|vegan\w*|plantaardig\w*|vega)\s+\w+/g, " ");   // "vegetarische kipstuckjes" is geen kip
+      rules.proteinOut.some(function (k) { var m = plantTxt.match(PROTEIN_RE[k]); if (m) { hits.push({ woord: m[0], regel: "p:" + k }); return true; } return false; });
+    }
     if (hasHealth(rules, "glutenvrij") && !/\b(glutenvrij\w*|zonder gluten)\b/.test(txt)) {
       var gm = txt.replace(GLUTEN_SAFE_RE, " ").match(GLUTEN_RE);
       if (gm) hits.push({ woord: gm[0], regel: "glutenvrij" });
@@ -1216,7 +1260,7 @@ function dishHealthViolations(d, rules) {
 // Alle overtredingen (voedingsstijl en gezondheidsfilters) als korte tekst, bijv. "kip (niet vegetarisch)".
 function dishRuleViolations(d, rules) {
   var out = dishDietViolations(d, rules.style).map(function (w) { return w + " (niet " + String(rules.style).toLowerCase() + ")"; });
-  dishHealthViolations(d, rules).forEach(function (h) { out.push(h.woord + " (niet " + HEALTH_LABELS[h.regel] + ")"); });
+  dishHealthViolations(d, rules).forEach(function (h) { out.push(h.woord + (h.regel.indexOf("p:") === 0 ? " (eet geen " + PROTEIN_LABEL[h.regel.slice(2)] + ")" : " (niet " + HEALTH_LABELS[h.regel] + ")")); });
   return out;
 }
 function ruleViolationCount(parsed, rules) {
@@ -3481,11 +3525,12 @@ function buildDraftWeek(weeksList, dishesDoc, prefs, mondayKey, today) {
   var meals = (Array.isArray(prefs.mealTypes) && prefs.mealTypes.length ? prefs.mealTypes : ["Diner"]).filter(function (m) { return DRAFT_MAIN.indexOf(m) > -1; });
   if (!meals.length) meals = ["Diner"];
   var terms = activeLeftovers(prefs, today);
+  var pRules = { health: [], proteinOut: cleanProteinOut(prefs.proteinOut, prefs.dietStyle) };   // wat je niet (meer) eet, komt ook niet in je conceptweek
   var pools = {};
   meals.forEach(function (m) {
     var arr = dishesDoc && Array.isArray(dishesDoc[m]) ? dishesDoc[m] : [];
     var seen = {};
-    pools[m] = arr.filter(function (d) { if (!d || !d.id || d.prep || d.rating === -1 || seen[d.id]) return false; seen[d.id] = 1; return true; })
+    pools[m] = arr.filter(function (d) { if (!d || !d.id || d.prep || d.rating === -1 || seen[d.id]) return false; if (pRules.proteinOut.length && dishHealthViolations(d, pRules).length) return false; seen[d.id] = 1; return true; })
       .map(function (d) { return { d: d, score: (d.rating === 1 ? 3 : 0) + dishUsesTerms(d, terms) * 2 + Math.random() * 1.5 + (dishTs(d) / 1e13) }; });
   });
   if (!pools.Diner && !meals.some(function (m) { return pools[m].length; })) return null;
@@ -5804,7 +5849,10 @@ function sanitizePrefsPatch(patch) {
         if (!v || typeof v !== "object" || Array.isArray(v)) errors.push("Budgetmodus moet een object zijn.");
         else clean.student = { on: v.on === true, budget: STUDENT_BUDGETS.indexOf(Number(v.budget)) > -1 ? Number(v.budget) : 35, onePan: v.onePan === true, quick: v.quick !== false };
         break;
-      case "voiceName": case "voiceStyle": break;   // voorlezen is verwijderd; oude waarden negeren
+      case "voiceName": case "voiceStyle": break;
+      case "proteinOut":
+        if (!Array.isArray(v) || v.some(function (x) { return PROTEIN_KEYS.indexOf(x) === -1; })) errors.push("Onbekende soort vlees, gevogelte of vis."); else clean.proteinOut = cleanProteinOut(v, "");
+        break;   // voorlezen is verwijderd; oude waarden negeren
       case "coach":
         if (!v || typeof v !== "object" || Array.isArray(v)) errors.push("Begeleiding moet een object zijn.");
         else { clean.coach = {}; Object.keys(v).slice(0, 20).forEach(function (k) { if (/^[a-zA-Z]{2,20}$/.test(k) && typeof v[k] === "boolean") clean.coach[k] = v[k]; }); }
