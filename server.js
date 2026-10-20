@@ -1428,7 +1428,7 @@ dietStyleInstructionText(p.dietStyle) +
     familyModeInstructionText(p.familyMode) +
     "- Beschikbare apparatuur (mag je gebruiken, niet elk gerecht hoeft alles te gebruiken): " + equipTxt + "\n" +
     "- Uitgesloten ingrediënten: " + excludeTxt + "\n" +
-    wishInstructionText(p) + tasteInstructionText(p) + seasonInstructionText() + studentInstructionText(p) + youthInstructionText(p) +
+    wishInstructionText(p) + existingInstructionText(p) + tasteInstructionText(p) + seasonInstructionText() + studentInstructionText(p) + youthInstructionText(p) +
     buildBodyProfileLine(p) +
     goalInstructionText(p.goal, p.dietStyle) +
     "Gebruik reële, haalbare porties en ingrediënten die passen " +
@@ -1576,6 +1576,13 @@ function wishInstructionText(p) {
   if (tags.indexOf("nieuw") > -1 && avoid.length) out += "- Maak andere gerechten dan deze recente: " + avoid.join("; ") + ".\n";
   return out;
 }
+// Wat de gebruiker al heeft: geen bijna-dubbele gerechten maken (vervuilt de lijst).
+function existingInstructionText(p) {
+  var names = cleanShortList(p && p.existingNames, 60, 70);
+  if (!names.length) return "";
+  return "- DEZE GERECHTEN HEEFT DE GEBRUIKER AL. Maak niets dat erop lijkt: niet dezelfde combinatie van hoofdingrediënt en bereiding, " +
+    "en geen bijna-gelijke naam (bijv. \"Kip teriyaki met rijst\" en \"Teriyakikip met zilvervliesrijst\" zijn hetzelfde). Kies echt andere gerechten: " + names.join("; ") + ".\n";
+}
 function tasteInstructionText(p) {
   var likes = cleanShortList(p && p.likes, 15, 80), dislikes = cleanShortList(p && p.dislikes, 15, 80);
   if (!likes.length && !dislikes.length) return "";
@@ -1594,7 +1601,7 @@ function buildBackgroundGeneratePrompt(needed, p) {
   return "Je bent een voedingskundige chef-kok. Genereer in totaal " + totalCount + " macro-gebalanceerde " +
     "gerechten (per 1 persoon), verdeeld als: " + countTxt + ". Precies deze aantallen per maaltijdmoment.\n" +
     dietHardRuleText(p.dietStyle) + healthHardRuleText(p) +
-    wishInstructionText(p) + tasteInstructionText(p) + seasonInstructionText() + studentInstructionText(p) + youthInstructionText(p) +
+    wishInstructionText(p) + existingInstructionText(p) + tasteInstructionText(p) + seasonInstructionText() + studentInstructionText(p) + youthInstructionText(p) +
     "- Uitgesloten ingrediënten: " + ((p.exclude && String(p.exclude).trim()) ? String(p.exclude).trim() : "geen") + "\n" +
     "- Keukenstijl: " + cuisineTxt + "\n- Smaakprofiel: " + flavorTxt + "\n- Culinair niveau: " + (p.level || "Home-style") + "\n" +
     dietStyleInstructionText(p.dietStyle) +

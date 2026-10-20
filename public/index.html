@@ -5953,7 +5953,8 @@
       weightKg: prefs.weightKg, age: prefs.age, activityLevel: prefs.activityLevel,
       wish: { tags: w.tags.slice(), text: String(w.text || "").slice(0, 200) },
       likes: ratedDishNames(1), dislikes: ratedDishNames(-1),
-      avoidNames: w.tags.indexOf("nieuw") > -1 ? recentDishNames(30) : []
+      avoidNames: w.tags.indexOf("nieuw") > -1 ? recentDishNames(30) : [],
+      existingNames: existingDishNames(60)
     };
     return Object.assign(p, extra || {});
   }
@@ -6285,6 +6286,10 @@
   // Wat je met ✕ hebt weggezet, wordt pas verwijderd als je het resultaatscherm verlaat (tot dan kun je het terugdraaien).
   function commitGenDiscards() {
     var dis = state.genDiscard || {};
+    // Gerechten die op iets bestaands leken maar die je toch wilde houden: nu pas bewaren.
+    var sim = state.genSimilar || {}, keepSim = Object.keys(sim).filter(function (id) { return !dis[id]; });
+    if (keepSim.length) { var byId = {}; genResultDays().forEach(function (d) { byId[d.id] = d; }); persistDishesToDb(keepSim.map(function (id) { return byId[id]; }).filter(Boolean)); }
+    state.genSimilar = {};
     var ids = Object.keys(dis).filter(function (id) { return dis[id]; });
     if (!ids.length) return;
     ids.forEach(function (id) {
@@ -6309,16 +6314,20 @@
       var list = extractDishArray(result);
       if (!list || !list.length) throw new Error("Geen gerecht ontvangen.");
       var nd = dishesFromGenerated(list.slice(0, 1), [day.mealType])[0];
+      var ndSim = splitDuplicates([nd]).dupes[0];
       var cache = WEEKS.filter(function (w) { return w.id === "cache"; })[0];
       if (cache) {
         var i = cache.days.indexOf(day);
         if (i > -1) cache.days.splice(i, 1, nd); else cache.days.push(nd);
       }
       deleteDishFromDb(day.id);
-      persistDishesToDb([nd]);
+      if (state.genSimilar) delete state.genSimilar[day.id];
+      if (ndSim) { state.genDiscard = state.genDiscard || {}; state.genDiscard[nd.id] = true; state.genSimilar = state.genSimilar || {}; state.genSimilar[nd.id] = ndSim.like.name; }
+      else persistDishesToDb([nd]);
       state.genResultIds = (state.genResultIds || []).map(function (id) { return id === day.id ? nd.id : id; });
       state.genNew = state.genNew || {}; state.genNew[nd.id] = true;
       if (state.genDiscard) delete state.genDiscard[day.id];
+      if (ndSim) showToast("Ook dit gerecht lijkt op \u201c" + ndSim.like.name + "\u201d. Tik op \u21bb voor een ander of houd het toch.");
       if (wantsImages()) fetchImageForDish(nd).then(function () { persistDishImageUpdate(nd); if (state.view === "genresult") render(); });
       refreshQuota();
     }).catch(function (e) {
@@ -6386,7 +6395,7 @@
       open.innerHTML = '<span class="res-meal"></span><b></b><small></small>';
       open.querySelector(".res-meal").textContent = d.mealType + (state.genNew && state.genNew[d.id] ? " · nieuw" : "");
       open.querySelector("b").textContent = d.name;
-      open.querySelector("small").textContent = off ? "Wordt niet bewaard" : d.kcal + " kcal" + (d.bereidingstijd ? " · " + d.bereidingstijd + " min" : "") + (d.macroBron === "nevo" ? " · NEVO" : "");
+      open.querySelector("small").textContent = off && state.genSimilar && state.genSimilar[d.id] ? "Lijkt op \u201c" + state.genSimilar[d.id] + "\u201d dat je al hebt, dus niet bewaard" : off ? "Wordt niet bewaard" : d.kcal + " kcal" + (d.bereidingstijd ? " · " + d.bereidingstijd + " min" : "") + (d.macroBron === "nevo" ? " · NEVO" : "");
       open.onclick = function () { goto("day", { weekId: "cache", dayId: d.id, dayServings: null, dayBackView: "genresult", dayBackWeekId: null, dayBackDayName: null }); };
       card.appendChild(open);
       var side = document.createElement("div"); side.className = "res-side";
@@ -6898,12 +6907,14 @@
         var days = dishesFromGenerated(list, mealTypesSel);
         stopGenTicker();
         busyEnd();
+        var split = splitDuplicates(days);
         addToCacheLibrary(days);
-        persistDishesToDb(days);
+        persistDishesToDb(split.fresh);   // wat lijkt op iets wat je al hebt, wordt pas bewaard als je dat zelf kiest
         refreshQuota();
         state.generating = false;
         state.genResultIds = days.map(function (d) { return d.id; });
-        state.genDiscard = {}; state.genNew = {};
+        state.genDiscard = {}; state.genNew = {}; state.genSimilar = {};
+        split.dupes.forEach(function (x) { state.genDiscard[x.day.id] = true; state.genSimilar[x.day.id] = x.like.name; });
         state.genWish = { tags: [], text: "" };   // een wens geldt voor één keer
         // Sfeerfoto's op de achtergrond: niet op wachten.
         if (withImages) {
@@ -11803,7 +11814,7 @@
             var list = extractDishArray(result);
             if (!list || !list.length) throw new Error("Onverwacht antwoordformaat.");
 
-            var days = dishesFromAiList(list, "auto");
+            var days = splitDuplicates(dishesFromAiList(list, "auto")).fresh;   // wat al bestaat, plant Balanza gewoon uit je eigen lijst
             var monday = new Date(pw.weekStart);
             var newWeek = {
               id: "auto" + Date.now(),
@@ -13779,6 +13790,62 @@
     });
   }
 
+  // ---- Lijkt dit gerecht op iets wat je al hebt? (voorkomt dubbele gerechten in je lijst) ----
+  var SIM_STOP = ["met", "en", "in", "van", "de", "het", "een", "op", "uit", "aan", "bij", "voor", "of", "la", "le", "stijl", "style", "snelle", "snel", "lichte", "licht",
+    "gezonde", "gezond", "romige", "romig", "krokante", "krokant", "verse", "vers", "huisgemaakte", "zelfgemaakte", "balanza", "versie", "heerlijke", "simpele", "makkelijke", "uit de oven"];
+  var SIM_ING_SKIP = ["olie", "olijfolie", "zonnebloemolie", "zout", "peper", "zwarte", "knoflook", "teen", "tenen", "ui", "uien", "water", "kruiden", "peterselie", "bieslook",
+    "koriander", "basilicum", "citroensap", "azijn", "bouillon", "bouillonblokje", "boter", "bakspray", "paprikapoeder", "komijn", "kerriepoeder", "oregano", "tijm", "rozemarijn"];
+  function simNorm(s) { return String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, ""); }
+  function simTokens(s) { return simNorm(s).split(/[^a-z0-9]+/).filter(function (t) { return t.length > 2 && SIM_STOP.indexOf(t) === -1 && !/^\d+$/.test(t); }); }
+  function fuzzyJaccard(a, b) {
+    if (!a.length || !b.length) return 0;
+    var matched = 0, used = {};
+    a.forEach(function (x) {
+      for (var i = 0; i < b.length; i++) {
+        if (used[i]) continue;
+        var y = b[i];
+        if (x === y || (x.length >= 4 && y.length >= 4 && (x.indexOf(y) > -1 || y.indexOf(x) > -1))) { matched++; used[i] = 1; break; }
+      }
+    });
+    return matched / (a.length + b.length - matched);
+  }
+  function simIngredients(d) {
+    return (d.ingredienten || []).map(function (x) {
+      var t = typeof x === "string" ? x : (x && x.tekst) || "";
+      var g = Number((/^\s*(\d+(?:[.,]\d+)?)\s*(g|gram|ml)\b/i.exec(t) || [])[1] || 0) || (/^\s*\d/.test(t) ? 20 : 0);
+      var words = simNorm(t).replace(/^\s*[\d.,\/]+\s*(g|gram|kg|ml|l|el|tl|stuk\w*|teen\w*|blik\w*|pot\w*|bos\w*|snuf\w*|handje|handvol|plak\w*|blaadjes?)?\b/, " ")
+        .split(/[^a-z]+/).filter(function (w) { return w.length > 2 && SIM_ING_SKIP.indexOf(w) === -1 && SIM_STOP.indexOf(w) === -1; });
+      return { g: g, w: words.slice(0, 2) };
+    }).filter(function (x) { return x.w.length; }).sort(function (a, b) { return b.g - a.g; }).slice(0, 5)
+      .reduce(function (acc, x) { return acc.concat(x.w); }, []);
+  }
+  function dishLooksLike(a, b) {
+    if (!a || !b || a === b || (a.mealType && b.mealType && a.mealType !== b.mealType)) return false;
+    var n = fuzzyJaccard(simTokens(a.name), simTokens(b.name));
+    if (n >= 0.75) return true;
+    var ing = fuzzyJaccard(simIngredients(a), simIngredients(b));
+    return (n >= 0.5 && ing >= 0.45) || (0.6 * n + 0.4 * ing) >= 0.62;
+  }
+  function allLibraryDishes() {
+    var out = [], seen = {};
+    WEEKS.forEach(function (w) { w.days.forEach(function (d) { if (d && !d.prep && d.id && !seen[d.id]) { seen[d.id] = 1; out.push(d); } }); });
+    return out;
+  }
+  function existingDishNames(n) {
+    var list = allLibraryDishes();
+    list.sort(function (a, b) { return dishCreatedAt(b) - dishCreatedAt(a); });
+    return list.slice(0, n).map(function (d) { return d.name; });
+  }
+  // Splitst nieuwe gerechten in echt nieuw en "lijkt op iets wat je al hebt" (ook binnen dezelfde lading).
+  function splitDuplicates(days) {
+    var pool = allLibraryDishes(), fresh = [], dupes = [];
+    (days || []).forEach(function (d) {
+      var like = null;
+      for (var i = 0; i < pool.length; i++) { if (pool[i].id !== d.id && dishLooksLike(d, pool[i])) { like = pool[i]; break; } }
+      if (like) dupes.push({ day: d, like: like }); else { fresh.push(d); pool.push(d); }
+    });
+    return { fresh: fresh, dupes: dupes };
+  }
   function addToCacheLibrary(daysList) {
     if (!daysList || !daysList.length) return;
     var cacheWeek = WEEKS.filter(function (w) { return w.id === "cache"; })[0];
@@ -13835,10 +13902,10 @@
         busyEnd();
         var list = extractDishArray(result);
         if (!list || !list.length) return;
-        var days = dishesFromAiList(list, "bg");
+        var sp = splitDuplicates(dishesFromAiList(list, "bg")), days = sp.fresh;
         addToCacheLibrary(days);
         persistDishesToDb(days);
-        showToast(days.length + " nieuwe gerechten zijn toegevoegd aan je bibliotheek.");
+        showToast(days.length + " nieuwe gerechten zijn toegevoegd aan je bibliotheek." + (sp.dupes.length ? " " + sp.dupes.length + " leken op gerechten die je al had en zijn niet bewaard." : ""));
         render();
       }).catch(function () { busyEnd(); });
     });
@@ -14290,12 +14357,13 @@
         if (!J.claim(id)) return;   // een ander tabblad was er eerder bij
         var list = extractDishArray(result);
         if (!list || !list.length) throw new Error("Onverwacht antwoordformaat.");
-        var days = dishesFromGenerated(list, Array.isArray(rec.mealTypes) && rec.mealTypes.length ? rec.mealTypes : ["Diner"]);
+        var spJ = splitDuplicates(dishesFromGenerated(list, Array.isArray(rec.mealTypes) && rec.mealTypes.length ? rec.mealTypes : ["Diner"]));
+        var days = spJ.fresh;
         return Promise.resolve(rec.withImages ? Promise.all(days.map(fetchImageForDish)) : null).then(function () {
           addToCacheLibrary(days);
           persistDishesToDb(days);
           refreshQuota();
-          showToast(days.length + (days.length === 1 ? " gerecht is" : " gerechten zijn") + " klaar en toegevoegd aan de lijst met opgeslagen gerechten.");
+          showToast(days.length + (days.length === 1 ? " gerecht is" : " gerechten zijn") + " klaar en toegevoegd aan de lijst met opgeslagen gerechten." + (spJ.dupes.length ? " " + spJ.dupes.length + " leken op wat je al had en zijn niet bewaard." : ""));
           render();
         });
       }).catch(function (e) {

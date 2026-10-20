@@ -62,6 +62,13 @@ daarom niet meer onderaan het startscherm.
 - Wissen van het chatgesprek en de smaakgeschiedenis gaat zonder vraag, met *Ongedaan maken* in de melding.
 - Inplannen en "gekookt" geven een melding met een groen vinkje (en een korte tik op telefoons die dat ondersteunen).
 
+**Geen dubbele gerechten:** bij elk genereren krijgt de AI de namen van je bestaande gerechten mee (max. 60) met de opdracht
+niets te maken dat erop lijkt. Daarna vergelijkt de app elk nieuw gerecht met je lijst (zelfde maaltijdmoment; naam en
+hoofdingrediënten, met woorddelen zoals "rijst" in "zilvervliesrijst"). Lijkt het erop, dan staat het in het resultaatscherm als
+"Lijkt op … dat je al hebt, dus niet bewaard"; met "Toch bewaren" houd je het. Bij automatisch aanvullen (week vullen, achtergrond,
+hervatte opdrachten) worden lijkende gerechten stil overgeslagen en gebruikt Balanza je bestaande gerecht. Foto-gerechten en
+community-recepten worden niet tegengehouden (die kies je bewust).
+
 **Vlees, gevogelte en vis uitsluiten** (`prefs.proteinOut`): onder *Voedingsstijl, gezond & uitsluitingen* (en in de wizard) staan
 Vlees (varken, rund, kalf, lam en geit, wild), Gevogelte (kip, kalkoen, eend en gans) en Vis (witvis, vette vis, schaal- en
 schelpdieren). Standaard staat alles aan; tik weg wat je niet eet, of gebruik "Geen vlees/gevogelte/vis" per groep. Niet zichtbaar
