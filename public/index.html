@@ -672,8 +672,9 @@
   .recent-card { flex: none; width: 168px; scroll-snap-align: start; display: flex; flex-direction: column; gap: 4px; text-align: left; padding: 13px; border-radius: 14px;
     border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; cursor: pointer; box-shadow: var(--card-shadow); }
   .recent-card .rc-meal { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--accent2); }
-  .recent-card b { font-size: 14px; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 36px; }
-  .recent-card .rc-meta { font-size: 12px; color: var(--muted); }
+  .recent-card > b { font-size: 14px; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 36px; }
+  .recent-card .rc-meta { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .ws-streak { margin-top: 6px; text-align: center; font-size: 12.5px; font-weight: 600; color: var(--accent2, var(--accent)); }
   .tip-of-day { margin-bottom: 14px; }
   .tip-of-day .tod-label { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--accent2); margin-bottom: 6px; }
   .tip-of-day p { margin: 0; font-size: 14.5px; line-height: 1.55; }
@@ -4780,11 +4781,21 @@
       e.textContent = hasAnyDishes() ? "Kies uit je eigen gerechten; Balanza houdt je dagdoel" + (target ? " van " + target + " kcal" : "") + " bij." : "Balanza bedenkt een paar gerechten die passen bij je doel en wat jij lekker vindt.";
       card.appendChild(e);
       var go = document.createElement("button"); go.type = "button"; go.className = "primary-btn"; go.id = "planTodayBtn";
-      if (hasAnyDishes()) {
-        go.textContent = "Plan vandaag";
-        go.onclick = function () { var w = pw || addOrOpenPlannedWeek(getMonday(new Date())); goto("planday", { planWeekId: w.id, planDayName: dayName, tab: "plannen" }); };
+      var planToday = function () { var w = pw || addOrOpenPlannedWeek(getMonday(new Date())); goto("planday", { planWeekId: w.id, planDayName: dayName, tab: "plannen" }); };
+      // Week nog (bijna) leeg? Dan is één tik voor de hele rest van de week de snelste weg terug in het ritme.
+      var weekEmpty = hasAnyDishes() && !readOnlyMode() && restOfWeekDinners(pw) <= 1 && coachOn("draft");
+      if (weekEmpty) {
+        q.textContent = state.welcomeBack ? "Fijn dat je er weer bent" : "Zullen we je week vullen?";
+        e.textContent = "Balanza vult de rest van je week met gerechten die je al kent. Jij wisselt wat je niet zint.";
+        go.textContent = "Vul mijn week"; go.id = "fillWeekBtn"; go.onclick = fillThisWeek;
+      } else if (hasAnyDishes()) {
+        go.textContent = "Plan vandaag"; go.onclick = planToday;
       } else { go.textContent = "Maak mijn eerste gerechten"; go.onclick = function () { goto("prefs"); }; }
       card.appendChild(go);
+      if (weekEmpty) {
+        var pt = document.createElement("button"); pt.type = "button"; pt.className = "hh-link"; pt.id = "planTodayBtn"; pt.textContent = "Liever alleen vandaag kiezen";
+        pt.onclick = planToday; card.appendChild(pt);
+      }
       if (tools && moduleOn("generate")) {
         var al = document.createElement("button"); al.type = "button"; al.className = "hh-link"; al.id = "offPlanEmpty"; al.textContent = "Al iets gegeten? Leg het vast";
         al.onclick = function () { openOffPlanSheet(null); };
@@ -5308,6 +5319,12 @@
       (!balN && planned === 7 ? ". Mooi." : "");
     if (balN) { sum.appendChild(document.createTextNode(", gemiddelde ")); var wsb = appendBal(sum, Math.round(balSum / balN), ""); wsb.id = "weekBal"; }
     card.appendChild(sum);
+    var streak = offset ? 0 : planStreak();
+    if (streak >= 2) {
+      var st = document.createElement("div"); st.className = "ws-streak"; st.id = "planStreak";
+      st.textContent = planned >= 3 ? streak + "e week op rij dat je plant" : "Al " + streak + " weken op rij gepland. Deze week ook?";
+      card.appendChild(st);
+    }
     wrap.appendChild(card);
     main.appendChild(wrap);
   }
@@ -5328,6 +5345,7 @@
           actions: [{ label: "Zet klaar", primary: true, id: "prepWeekGo", onClick: prepareNextWeek }],
           onClose: function () { lsSet("balanza_prepweek_skip", nextKey); render(); } });
       }
+      renderPushAskCard(pool);
       renderRecapHomeCard(pool);
       var lay = homeLayout().visible;
       if (lay.indexOf("reis") === -1 && HOME_TILES.reis.available()) renderJourneyTile(pool);
@@ -5590,7 +5608,7 @@
           c.querySelector(".rc-meal span").textContent = d.mealType || "";
           c.querySelector("b").textContent = d.name;
           c.querySelector(".rc-meta").textContent = d.kcal + " kcal";
-          appendBal(c.querySelector(".rc-meta"), computeBalance(d.kh, d.eiwit, d.vet), ", ");
+          appendBal(c.querySelector(".rc-meta"), dishBal(d), "");
           c.onclick = function () { goto("day", { weekId: "cache", dayId: d.id, dayServings: null, dayBackView: "weeks", dayBackWeekId: null, dayBackDayName: null }); };
           row.appendChild(c);
         });
@@ -12192,6 +12210,57 @@
     goto("planweek", { planWeekId: pw.id });
   }
 
+  // Hoeveel diners staan er nog voor vandaag en de rest van deze week?
+  function restOfWeekDinners(pw) {
+    if (!pw) return 0;
+    var todayIdx = (new Date().getDay() + 6) % 7;
+    return PLAN_DAYS.filter(function (d, i) { return i >= todayIdx && pw.slots[d + "|Diner"]; }).length;
+  }
+  // Op Start bij een lege week: de rest van deze week in één tik, als voorstel dat je nog kunt wisselen.
+  function fillThisWeek() {
+    if (requirePlus("Je week automatisch invullen")) return;
+    var pw = openOrCreateWeek(getMonday(new Date()));
+    var before = {}; Object.keys(pw.slots).forEach(function (k) { before[k] = 1; });
+    var meals = loadAutofillMeals().filter(function (x) { return MAIN_SLOTS.indexOf(x) > -1; });
+    generateAutoWeek(pw, true, meals.length ? meals : ["Diner"], { range: "rest", fit: !!dailyKcalTarget() });
+    var added = Object.keys(pw.slots).filter(function (k) { return !before[k]; });
+    if (added.length) { pw.draft = { createdAt: new Date().toISOString(), createdOn: todayKeyLocal(), keys: added }; savePlannedWeeks(); }
+    state.welcomeBack = null;
+    goto("planweek", { planWeekId: pw.id });
+  }
+  // Hoeveel weken op rij (tot en met deze of vorige week) er minstens 3 dagen gepland waren.
+  function planStreak() {
+    var n = 0, i = 0;
+    var planned = function (key) {
+      var w = weekByStart(key); if (!w) return false;
+      return PLAN_DAYS.filter(function (d) { return PLAN_SLOTS.some(function (sl) { return w.slots[d + "|" + sl]; }); }).length >= 3;
+    };
+    if (!planned(mondayKeyOffset(0))) i = -1;   // deze week nog niet ingevuld: de reeks telt tot vorige week
+    while (planned(mondayKeyOffset(i))) { n++; i--; if (n > 104) break; }
+    return n;
+  }
+  // Een seintje op het juiste moment is wat mensen terugbrengt; vraag het pas als er iets gepland staat, en maar één keer.
+  function renderPushAskCard(main) {
+    if (lsGet("balanza_push_ask")) return;
+    var pw = weekByStart(mondayKeyOffset(0));
+    if (!pw || !Object.keys(pw.slots || {}).length) return;
+    var s = pushSupport();
+    if (!s.ok && s.reason === "ios-install") {
+      nudgeCard(main, { id: "installCard", icon: iconSvg("bell", 20), title: "Zet Balanza op je beginscherm",
+        text: "Dan opent hij als app en kan Balanza je seintjes sturen. Tik in Safari op Deel en kies “Zet op beginscherm”.",
+        onClose: function () { lsSet("balanza_push_ask", "ios"); render(); } });
+      return;
+    }
+    if (!s.ok || Notification.permission !== "default") return;
+    nudgeCard(main, { id: "pushAskCard", icon: iconSvg("bell", 20), title: "Een seintje op het juiste moment?",
+      text: "Bijvoorbeeld als er vlees uit de vriezer moet, of op maandag je weekterugblik. Hooguit één per dag, en je zet ze zelf weer uit.",
+      actions: [{ label: "Zet meldingen aan", primary: true, id: "pushAskGo", onClick: function () {
+        lsSet("balanza_push_ask", "1");
+        enablePush().then(function () { showToast("Meldingen staan aan.", "ok"); render(); }, function (e) { showToast(friendlyNetError(e)); render(); });
+      } }],
+      onClose: function () { lsSet("balanza_push_ask", "later"); render(); } });
+  }
+
   // ---------- 2. Na het eten: gekookt, en was het lekker? ----------
   // Kijkt naar het diner van vandaag (vanaf 17:00) en anders dat van gisteren (tot 14:00).
   function pendingCookedCheck() {
@@ -12842,7 +12911,7 @@
     if (!journeyOn() || !prefs.goal) return 0;
     var j = journey(), n = 0;
     if (j.quiet) return 0;
-    if (room() && state.welcomeBack && hasAnyDishes() && !readOnlyMode()) {
+    if (room() && state.welcomeBack && hasAnyDishes() && !readOnlyMode() && restOfWeekDinners(weekByStart(mondayKeyOffset(0))) > 1) {
       nudgeCard(holder, { id: "welcomeBackCard", tone: "accent", icon: "👋", title: say("welcome"),
         text: "Balanza vult alleen je diners voor de rest van de week, met gerechten die je al kent. Meer hoeft niet.",
         actions: [{ label: "Vul mijn diners", primary: true, id: "welcomeGo", onClick: startSimpleWeek }],
