@@ -199,7 +199,12 @@ function normalizeSettings(raw) {
     limits: limits,
     billing: { enabled: b.enabled === true, plusMonthlyCents: intIn(b.plusMonthlyCents, 100, 99900, 399), plusYearlyCents: intIn(b.plusYearlyCents, 100, 999900, 3499), plusDishCap: intIn(b.plusDishCap, 0, 100000, 150), termsUrl: cleanTermsUrl(b.termsUrl), trialEnabled: b.trialEnabled === true, trialDays: intIn(b.trialDays, 1, 60, 7) },
     maintenance: { enabled: m.enabled === true, message: cleanText(m.message, 300) },
-    announcement: { enabled: a.enabled === true, message: cleanText(a.message, 300), level: a.level === "warning" ? "warning" : "info" }
+    announcement: { enabled: a.enabled === true, message: cleanText(a.message, 300), level: a.level === "warning" ? "warning" : "info" },
+    privacy: (function () {
+      var pv = raw.privacy && typeof raw.privacy === "object" ? raw.privacy : {};
+      return { company: cleanText(pv.company, 120), address: cleanText(pv.address, 200), kvk: cleanText(pv.kvk, 20), email: cleanText(pv.email, 120),
+        version: intIn(pv.version, 1, 999, 1), updatedOn: /^\d{4}-\d{2}-\d{2}$/.test(pv.updatedOn || "") ? pv.updatedOn : "2026-10-20" };
+    })()
   };
 }
 function effectiveModules(s) {
@@ -227,7 +232,7 @@ function getSettings() {
 function mergeSettings(cur, patch) {
   var next = JSON.parse(JSON.stringify(cur));
   if (typeof patch.authRequired === "boolean") next.authRequired = patch.authRequired;
-  ["modules", "planOnly", "limits", "maintenance", "announcement", "billing"].forEach(function (k) {
+  ["modules", "planOnly", "limits", "maintenance", "announcement", "billing", "privacy"].forEach(function (k) {
     if (patch[k]) Object.keys(patch[k]).forEach(function (kk) { next[k][kk] = patch[k][kk]; });
   });
   return next;
@@ -316,6 +321,18 @@ function validateSettingsPatch(body) {
     if (a.enabled !== undefined) { if (typeof a.enabled !== "boolean") return { error: "announcement.enabled moet true of false zijn." }; patch.announcement.enabled = a.enabled; n++; }
     if (a.message !== undefined) { if (typeof a.message !== "string") return { error: "De mededeling moet tekst zijn." }; patch.announcement.message = cleanText(a.message, 300); n++; }
     if (a.level !== undefined) { if (a.level !== "info" && a.level !== "warning") return { error: "Het type mededeling moet 'info' of 'warning' zijn." }; patch.announcement.level = a.level; n++; }
+  }
+  if (body.privacy !== undefined) {
+    var pv = body.privacy;
+    if (!pv || typeof pv !== "object" || Array.isArray(pv)) return { error: "privacy moet een object zijn." };
+    patch.privacy = {};
+    var PV = { company: 120, address: 200, kvk: 20, email: 120 };
+    for (var pk2 of Object.keys(pv)) {
+      if (PV[pk2]) { if (typeof pv[pk2] !== "string") return { error: "Privacy: " + pk2 + " moet tekst zijn." }; patch.privacy[pk2] = cleanText(pv[pk2], PV[pk2]); n++; }
+      else if (pk2 === "version") { if (typeof pv.version !== "number" || Math.floor(pv.version) !== pv.version || pv.version < 1 || pv.version > 999) return { error: "De versie van de privacyverklaring moet een geheel getal zijn." }; patch.privacy.version = pv.version; patch.privacy.updatedOn = todayKey(); n++; }
+      else return { error: "Onbekende privacy-instelling: " + pk2 + "." };
+    }
+    if (patch.privacy.email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(patch.privacy.email)) return { error: "Het e-mailadres voor privacyvragen is ongeldig." };
   }
   if (!n) return { error: "Geen geldige wijzigingen ontvangen." };
   return { patch: patch };
@@ -2719,6 +2736,30 @@ function handleAccountLogoutOthers(req, res) {
   });
 }
 
+// ---- Toestemming: privacyverklaring gelezen + uitdrukkelijke toestemming voor gezondheidsgegevens (AVG art. 9) ----
+// consent/<uid> = { version, health: true, at, ip }. Wie een nieuwere versie nog niet zag, krijgt de vraag opnieuw.
+function handleConsent(req, res) {
+  return resolveUser(req).then(function (user) {
+    if (!user) return sendUnauthorized(res);
+    if (req.method === "GET") return dbGetDoc("consent/" + user.uid).then(function (r) { sendJSON(res, 200, { consent: r.exists ? r.value : null }); });
+    return readBody(req).then(function (body) {
+      return getSettings().then(function (s) {
+        if (body && body.withdraw === true) {
+          return dbDeleteDoc("consent/" + user.uid).then(function () {
+            logEvent("privacy", "consent-withdraw", true, 200, { uid: user.uid });
+            sendJSON(res, 200, { consent: null });
+          });
+        }
+        if (!body || body.privacy !== true || body.health !== true) return sendJSON(res, 400, { code: "bad_request", message: "Vink beide vakjes aan om verder te gaan." });
+        var doc = { version: s.privacy.version, health: true, at: new Date().toISOString(), ip: clientIp(req) };
+        return dbSetDoc("consent/" + user.uid, doc).then(function () {
+          logEvent("privacy", "consent", true, 200, { uid: user.uid, version: doc.version });
+          sendJSON(res, 200, { consent: doc });
+        });
+      });
+    });
+  }).catch(function () { sendJSON(res, 500, { code: "error", message: "Opslaan lukte niet. Probeer het opnieuw." }); });
+}
 function handleAccountDelete(req, res) {
   return withAccountUser(req, res, { sensitive: true, needAccount: true }, function (user) {
     return readBody(req).then(function (body) {
@@ -6066,7 +6107,7 @@ function handleAdminUserDetail(req, res, uid) {
   return needSummary(uid).then(function (user) {
     return Promise.all([
       dbGetDoc("data/users/" + uid + "/prefs"), adminDataDoc(uid, "dishes"), adminDataDoc(uid, "plannedWeeks"),
-      listsOfUser(uid), getRecentLogs(LOG_CAP), withLocation(user), quotaState(uid), getBillingDoc(uid)
+      listsOfUser(uid), getRecentLogs(LOG_CAP), withLocation(user), quotaState(uid), getBillingDoc(uid), dbGetDoc("consent/" + uid)
     ]).then(function (r) {
       var logs = r[4].filter(function (l) { return l.uid === uid; }).slice(0, 50).map(cleanLogRow);
       var q = r[6];
@@ -6076,7 +6117,8 @@ function handleAdminUserDetail(req, res, uid) {
         user: r[5],
         prefs: r[0].exists ? r[0].value : null,
         dishes: r[1].exists ? r[1].value : null,
-        dishesOwner: r[1].owner !== uid ? r[1].owner : null,   // gedeeld huishouden: de gerechten staan bij deze gebruiker
+        dishesOwner: r[1].owner !== uid ? r[1].owner : null,
+        consent: r[8].exists && r[8].value ? { version: r[8].value.version, at: r[8].value.at, health: !!r[8].value.health } : null,   // gedeeld huishouden: de gerechten staan bij deze gebruiker
         plannedWeeks: r[2].exists ? r[2].value : null,
         lists: r[3],
         logs: logs
@@ -6100,6 +6142,7 @@ function deleteUserEverywhere(user) {
   }).then(function () {
     var paths = ["data/users/" + uid + "/prefs", "data/users/" + uid + "/dishes", "data/users/" + uid + "/plannedWeeks", "data/users/" + uid + "/meta", "listsIndex/" + uid, "adminMeta/" + uid, "push/" + uid, "quota/" + uid, "billing/" + uid, "notify/" + uid, "inbox/" + uid, "assistant/" + uid];
     if (user.email) paths.push("auth/users/" + user.email);
+    paths.push("consent/" + uid, "notify/" + uid, "inbox/" + uid, "assistant/" + uid);
     return Promise.all(paths.map(dbDeleteDoc));
   }).then(function () {
     // Een verwijderd account houdt zijn 'ingetrokken'-stempel: zijn uid komt nooit terug, dus oude sessies blijven ongeldig.
@@ -6416,6 +6459,8 @@ function handleAdminSystem(req, res) {
     var mem = process.memoryUsage();
     var checks = [
       { key: "storage", label: "Opslag", ok: storage.ok && mongoConnected, detail: (mongoConnected ? "MongoDB (blijvend)" : "Lokaal bestand: data gaat verloren bij een herstart of nieuwe deploy") + (storage.ok ? ", antwoordtijd " + storage.ms + " ms" : ", FOUT: " + storage.error) },
+      { key: "privacy", label: "Privacyverklaring (bedrijfsnaam en e-mail)", ok: !!(both.settings.privacy.company && both.settings.privacy.email),
+        detail: both.settings.privacy.company && both.settings.privacy.email ? "ingevuld · versie " + both.settings.privacy.version : "nog niet ingevuld: vul ze in bij Instellingen > Privacy, anders staat er een placeholder op /privacy" },
       { key: "anthropic", label: "AI-sleutel (ANTHROPIC_API_KEY)", ok: !!ANTHROPIC_API_KEY, detail: ANTHROPIC_API_KEY ? "ingesteld" : "niet ingesteld: genereren werkt niet" },
       { key: "adminPassword", label: "Beheerderswachtwoord", ok: ADMIN_PASSWORD.length >= 12, detail: ADMIN_PASSWORD.length >= 12 ? "sterk genoeg" : "korter dan 12 tekens: kies een langer wachtwoord (ADMIN_PASSWORD)" },
       { key: "sessionSecret", label: "Sessiegeheim (SESSION_SECRET)", ok: !!process.env.SESSION_SECRET, detail: process.env.SESSION_SECRET ? "vast ingesteld" : "niet ingesteld: iedereen wordt uitgelogd bij een herstart" },
@@ -6455,7 +6500,7 @@ function settingsPayload(s) {
 function diffSettings(cur, next) {
   var out = [];
   if (cur.authRequired !== next.authRequired) out.push({ sleutel: "authRequired", van: cur.authRequired, naar: next.authRequired });
-  ["modules", "planOnly", "limits", "maintenance", "announcement", "billing"].forEach(function (k) {
+  ["modules", "planOnly", "limits", "maintenance", "announcement", "billing", "privacy"].forEach(function (k) {
     Object.keys(next[k]).forEach(function (kk) { if (cur[k][kk] !== next[k][kk]) out.push({ sleutel: k + "." + kk, van: cur[k][kk], naar: next[k][kk] }); });
   });
   return out;
@@ -6924,7 +6969,8 @@ function handleConfig(req, res) {
       legacyOrigins: canonicalOrigin() ? legacyOrigins() : [],
       maintenance: s.maintenance.enabled ? { enabled: true, message: s.maintenance.message || "De app is tijdelijk in onderhoud." } : { enabled: false },
       announcement: s.announcement.enabled && s.announcement.message ? { enabled: true, message: s.announcement.message, level: s.announcement.level } : { enabled: false },
-      season: seasonInfo()
+      season: seasonInfo(),
+      privacy: { version: s.privacy.version, updatedOn: s.privacy.updatedOn, company: s.privacy.company, address: s.privacy.address, kvk: s.privacy.kvk, email: s.privacy.email }
     });
   });
 }
@@ -7070,6 +7116,7 @@ var server = http.createServer(function (req, res) {
   if (req.method === "POST" && url.pathname === "/api/account/change-email") return handleAccountChangeEmail(req, res);
   if (req.method === "POST" && url.pathname === "/api/account/logout-others") return handleAccountLogoutOthers(req, res);
   if (req.method === "POST" && url.pathname === "/api/account/delete") return handleAccountDelete(req, res);
+  if (url.pathname === "/api/consent" && (req.method === "GET" || req.method === "POST")) return handleConsent(req, res);
   if (req.method === "POST" && url.pathname === "/api/auth/login") return handleAuthLogin(req, res);
   if (req.method === "POST" && url.pathname === "/api/auth/forgot-password") return guardedForgot(req, res);
   if (req.method === "POST" && url.pathname === "/api/auth/reset-password") return guardedReset(req, res);
@@ -7098,6 +7145,7 @@ var server = http.createServer(function (req, res) {
   if (req.method === "GET" && url.pathname === "/admin") return serveFile(req, res, "admin.html");
   if (req.method === "GET" && (url.pathname === "/" || url.pathname === "/index.html")) return serveStatic(req, res);
   if (req.method === "GET" && url.pathname === "/welkom") return serveFile(req, res, "welkom.html");
+  if (req.method === "GET" && (url.pathname === "/privacy" || url.pathname === "/privacy/")) return serveFile(req, res, "privacy.html");
 
   res.writeHead(404, { "Content-Type": "text/plain" });
   res.end("Not found");

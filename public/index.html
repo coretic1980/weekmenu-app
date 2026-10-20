@@ -1442,6 +1442,14 @@
   .pe-group-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font-size: 13px; font-weight: 700; color: var(--ink); margin-top: 6px; }
   .pe-all { appearance: none; border: 0; background: none; font: inherit; font-size: 12.5px; font-weight: 600; color: var(--accent2); cursor: pointer; padding: 2px 0; }
   .pe-chip.off { text-decoration: line-through; opacity: .65; }
+  .consent-overlay { z-index: 150; background: rgba(12, 30, 22, 0.55); }
+  .consent-box { max-width: 440px; display: flex; flex-direction: column; gap: 12px; text-align: left; max-height: 90vh; overflow-y: auto; }
+  .consent-box h2 { margin: 0; font-family: "Fraunces", serif; font-size: 23px; }
+  .consent-box a { color: var(--accent2); font-weight: 600; }
+  .consent-box p { margin: 0; font-size: 14.5px; line-height: 1.5; color: var(--muted); }
+  .consent-check { display: flex; gap: 10px; align-items: flex-start; font-size: 14.5px; line-height: 1.45; padding: 10px 12px; border-radius: 12px; background: var(--bg); cursor: pointer; }
+  .consent-check input { width: 20px; height: 20px; flex: none; margin-top: 1px; accent-color: var(--accent2); }
+  .consent-err { margin: 0; padding: 10px 12px; border-radius: 12px; background: #FBE9E4; color: #8A2E1C; font-size: 13.5px; }
   .op-err { margin: 0; padding: 10px 12px; border-radius: 12px; background: #FBE9E4; color: #8A2E1C; font-size: 13.5px; line-height: 1.45; }
   .op-note { font-size: 13.5px; color: var(--muted); margin: 0; line-height: 1.45; }
   .hh-meals { display: flex; flex-direction: column; margin-top: 4px; border-top: 1px solid var(--line); }
@@ -3028,7 +3036,7 @@
       authState.busy = false;
       authState.anonStatus = undefined;   // het anonieme profiel bestaat niet meer
       goto("weeks");
-      initPersistence();
+      initPersistence(); setTimeout(checkConsent, 600);
       if (takeAnon) showToast(upgradeDoneMessage(data.migrated));
     }).catch(function (e) {
       authState.busy = false;
@@ -3096,7 +3104,7 @@
       authState.resetToken = null;
       try { window.history.replaceState({}, "", window.location.pathname); } catch (e) {}
       goto("weeks");
-      initPersistence();
+      initPersistence(); setTimeout(checkConsent, 600);
     }).catch(function (e) {
       authState.busy = false;
       authState.error = e.message;
@@ -3949,6 +3957,7 @@
     if (journeyOn()) accButton(mine, "settingsJourney", "sparkle", "Jouw reis", function () { goto("journey"); });
     accButton(mine, "settingsGuide", "help", "Hoe werkt Balanza", function () { goto("guide"); });
 
+    renderPrivacySettings(main);
     var bringCard = accCard(main, "Bring!");
     var bringSub = document.createElement("div"); bringSub.className = "acc-sub";
     bringSub.textContent = "De link naar je eigen Bring!-lijst, voor \u201cImporteer in Bring!\u201d op het boodschappenscherm. Laat leeg om hem te verwijderen.";
@@ -4295,7 +4304,7 @@
     if (trialDays) titles.register = "Probeer " + trialDays + " dagen gratis";
     var subtitles = {
       login: "Log in om je gerechten en planning te zien.",
-      register: trialDays ? "Alle functies, geen betaalgegevens nodig. Daarna kies je zelf of je Plus neemt." : "Je gegevens worden bewaard onder dit account.",
+      register: (trialDays ? "Alle functies, geen betaalgegevens nodig. Daarna kies je zelf of je Plus neemt." : "Je gegevens worden bewaard onder dit account."),
       forgot: "Vul je e-mailadres in, dan sturen we je een link.",
       reset: "Kies een nieuw wachtwoord voor je account."
     };
@@ -13911,6 +13920,70 @@
     });
   }
 
+  // ---------- Privacy: akkoord met de privacyverklaring + uitdrukkelijke toestemming voor gezondheidsgegevens ----------
+  var consentState = { checked: false, doc: null };
+  function privacyVersion() { return (window.appPrivacy && window.appPrivacy.version) || 1; }
+  function checkConsent() {
+    if (!window.authToken && window.authRequired) return;
+    fetch("/api/consent", { headers: authHeaders() }).then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
+      if (!d) return;
+      consentState.checked = true; consentState.doc = d.consent || null;
+      if (!d.consent || !d.consent.health || (d.consent.version || 0) < privacyVersion()) showConsent();
+    }).catch(function () {});
+  }
+  function showConsent() {
+    var ov = document.getElementById("consentOverlay");
+    if (!ov) {
+      ov = document.createElement("div"); ov.id = "consentOverlay"; ov.className = "confirm-overlay consent-overlay";
+      ov.setAttribute("role", "dialog"); ov.setAttribute("aria-modal", "true"); ov.setAttribute("aria-labelledby", "consentTitle");
+      document.body.appendChild(ov);
+    }
+    var updated = consentState.doc && consentState.doc.version < privacyVersion();
+    ov.innerHTML = '<div class="confirm-box consent-box"><h2 id="consentTitle">' + (updated ? "Onze privacyverklaring is bijgewerkt" : "Jouw privacy") + '</h2>' +
+      '<p>Balanza gebruikt je gegevens alleen om de app voor jou te laten werken. We verkopen niets en tonen geen advertenties.</p>' +
+      '<p>Een deel daarvan zijn <b>gezondheidsgegevens</b>, zoals je gewicht, lengte, allergieën en dieetwensen. Die hebben we nodig om je gerechten en doelen te berekenen, en daarvoor vragen we je uitdrukkelijke toestemming. Je kunt die altijd weer intrekken.</p>' +
+      '<label class="consent-check"><input type="checkbox" id="consentPrivacy"><span>Ik heb de <a href="/privacy" target="_blank" rel="noopener">privacyverklaring</a> gelezen.</span></label>' +
+      '<label class="consent-check"><input type="checkbox" id="consentHealth"><span>Ik geef Balanza toestemming om mijn gezondheidsgegevens te gebruiken voor mijn gerechten en doelen.</span></label>' +
+      '<p class="consent-err" id="consentErr" role="alert" hidden></p>' +
+      '<button type="button" class="primary-btn" id="consentOk" disabled>Akkoord en verder</button>' +
+      '<button type="button" class="autofill-cancel" id="consentNo">Liever niet</button></div>';
+    var c1 = ov.querySelector("#consentPrivacy"), c2 = ov.querySelector("#consentHealth"), ok = ov.querySelector("#consentOk");
+    function upd() { ok.disabled = !(c1.checked && c2.checked); }
+    c1.onchange = upd; c2.onchange = upd;
+    ok.onclick = function () {
+      ok.disabled = true; ok.textContent = "Even opslaan\u2026";
+      fetch("/api/consent", { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, authHeaders()), body: JSON.stringify({ privacy: true, health: true }) })
+        .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { if (!r.ok) throw new Error(d.message || "Opslaan lukte niet."); return d; }); })
+        .then(function (d) { consentState.doc = d.consent; ov.classList.remove("active"); showToast("Dank je. Je kunt dit altijd terugvinden bij Instellingen \u2192 Privacy.", "ok"); })
+        .catch(function (e) { var er = ov.querySelector("#consentErr"); er.hidden = false; er.textContent = e.message; ok.textContent = "Akkoord en verder"; upd(); });
+    };
+    ov.querySelector("#consentNo").onclick = function () {
+      var er = ov.querySelector("#consentErr"); er.hidden = false;
+      er.textContent = "Zonder deze toestemming kan Balanza je gerechten niet op jou afstemmen. Wil je geen gebruik maken van Balanza, dan kun je je account verwijderen via Instellingen \u2192 Account verwijderen.";
+    };
+    ov.classList.add("active");
+  }
+  function renderPrivacySettings(main) {
+    if (!window.authToken && window.authRequired) return;
+    var card = accCard(main, "Privacy");
+    var sub = document.createElement("div"); sub.className = "acc-sub"; sub.id = "privacyStatus";
+    var c = consentState.doc;
+    sub.textContent = c && c.health ? "Je gaf toestemming op " + new Date(c.at).toLocaleDateString("nl-NL", { day: "numeric", month: "long", year: "numeric" }) + " (privacyverklaring versie " + c.version + ")." : "Je hebt nog geen toestemming gegeven.";
+    card.appendChild(sub);
+    accButton(card, "privacyRead", "help", "Privacyverklaring lezen", function () { window.open("/privacy", "_blank", "noopener"); });
+    if (c && c.health) accButton(card, "privacyWithdraw", "trash", "Toestemming gezondheidsgegevens intrekken", function () {
+      askConfirm("Je toestemming intrekken? Balanza wist dan je lengte, gewicht, leeftijd, gezondheidsfilters, wat je niet eet, water en wat je anders at. Zonder toestemming kunnen we geen gerechten op jou afstemmen; we vragen het de volgende keer opnieuw.", function () {
+        ["heightCm", "weightKg", "age"].forEach(function (k) { prefs[k] = ""; });
+        prefs.health = []; prefs.proteinOut = []; prefs.exclude = ""; prefs.water = null; prefs.places = [];
+        if (prefs.journey && prefs.journey.log) prefs.journey.log = [];
+        plannedWeeks.forEach(function (w) { if (w.extra) delete w.extra; });
+        savePrefs(); savePlannedWeeks();
+        fetch("/api/consent", { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, authHeaders()), body: JSON.stringify({ withdraw: true }) })
+          .then(function () { consentState.doc = null; showToast("Je toestemming is ingetrokken en je gezondheidsgegevens zijn gewist."); render(); })
+          .catch(function () { showToast("Intrekken lukte niet. Probeer het opnieuw."); });
+      }, "Intrekken", "Annuleren");
+    });
+  }
   function initPersistence() {
     loadHousehold();
     loadInbox();
@@ -14324,6 +14397,7 @@
   }
   function applyRuntimeConfig(cfg) {
     window.appModules = cfg && cfg.modules && typeof cfg.modules === "object" ? cfg.modules : null;
+    window.appPrivacy = cfg && cfg.privacy && typeof cfg.privacy === "object" ? cfg.privacy : null;
     window.appPlanOnly = cfg && cfg.planOnly && typeof cfg.planOnly === "object" ? cfg.planOnly : null;
     window.appNotice = { maintenance: cfg ? cfg.maintenance || null : null, announcement: cfg ? cfg.announcement || null : null };
     window.appSeason = cfg && cfg.season && Array.isArray(cfg.season.produce) ? cfg.season : null;
@@ -14438,7 +14512,7 @@
       try { var pendingNotice = sessionStorage.getItem("weekmenu_notice"); if (pendingNotice) { sessionStorage.removeItem("weekmenu_notice"); setTimeout(function () { showToast(pendingNotice); }, 400); } } catch (e) {}
       lastConfigRefresh = Date.now();
       configLoaded = true;
-      if (window.authToken || !window.authRequired) { initPersistence(); recoverPendingJobs(); syncPush(); if (window.appTrial) refreshQuota(); }
+      if (window.authToken || !window.authRequired) { initPersistence(); recoverPendingJobs(); syncPush(); if (window.appTrial) refreshQuota(); setTimeout(checkConsent, 600); }
       render();
       if (window.authToken || !window.authRequired) handleStartLink();
       if (window.appBilling && (window.authToken || !window.authRequired)) { handleBillingReturn(); refreshBilling().then(render); }

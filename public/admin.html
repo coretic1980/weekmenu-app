@@ -986,6 +986,7 @@
         h("dt", { text: "Aantal logins" }), h("dd", { text: String(u.loginCount) })] : null,
       h("dt", { text: "Laatst actief" }), h("dd", { text: u.lastSeenAt ? fmtDate(u.lastSeenAt) + " (" + relTime(u.lastSeenAt) + ")" : "nooit" }),
       h("dt", { text: "Laatste IP-adres" }), h("dd", { text: (u.lastIp || "—") + (where ? " · " + where : "") }),
+      h("dt", { text: "Privacy-akkoord" }), h("dd", { text: d.consent ? "Ja, versie " + d.consent.version + " op " + fmtDate(d.consent.at) + (d.consent.health ? " (incl. gezondheidsgegevens)" : "") : "Nog niet gegeven" }),
       h("dt", { text: "Samen plannen" }), h("dd", { text: u.household ? "Huishouden van " + u.household.size + " personen" + (u.household.owner ? " (gestart door deze gebruiker; gerechten en planning staan bij hem)" : " (gerechten en planning komen van de starter)") : "Nee" }));
     var saveAcc = btn("Opslaan", "", "saveAccountBtn", function () {
       var patch = {};
@@ -1636,7 +1637,7 @@
   };
   function drawSettings(view, cfg, section) {
     var s = cfg.settings, defs = {};
-    var SECTIONS = [["toegang", "Toegang"], ["onderdelen", "Onderdelen"], ["limieten", "Limieten"], ["verdienmodel", "Verdienmodel"], ["communicatie", "Onderhoud en mededeling"]];
+    var SECTIONS = [["toegang", "Toegang"], ["onderdelen", "Onderdelen"], ["limieten", "Limieten"], ["verdienmodel", "Verdienmodel"], ["communicatie", "Onderhoud en mededeling"], ["privacy", "Privacy"]];
     var secs = {}; SECTIONS.forEach(function (x) { secs[x[0]] = []; });
     function put(key, node) { secs[key].push(node); }
     if (!secs[section]) section = prefGet("settingsSection") || "toegang";
@@ -1753,6 +1754,33 @@
       h("div", { class: "module", style: { padding: "0 0 12px" } }, h("div", {}, h("div", { class: "name", text: bs.trialEnabled ? "Staat aan" : "Staat uit" }), h("div", { class: "desc", text: bs.trialEnabled && !(bs.enabled && envOk) ? "Abonnementen staan nog uit: na de proef kan nog niemand Plus nemen." : "Proef van " + (bs.trialDays || 7) + " dagen per account." })), trialSw),
       h("div", { class: "form-grid" }, field("Aantal proefdagen", trialDaysIn, "1 t/m 60. Geldt ook voor lopende proeven (de einddatum schuift mee).")),
       saveTrial));
+
+    // privacy: wie is verantwoordelijk (komt op /privacy) en de versie van de verklaring
+    var pvS = s.privacy || {};
+    var pvC = h("input", { type: "text", id: "pvCompany", maxLength: 120, placeholder: "Bijv. Jouw Bedrijf B.V." }); pvC.value = pvS.company || "";
+    var pvA = h("input", { type: "text", id: "pvAddress", maxLength: 200, placeholder: "Straat 1, 1234 AB Plaats" }); pvA.value = pvS.address || "";
+    var pvK = h("input", { type: "text", id: "pvKvk", maxLength: 20, placeholder: "12345678" }); pvK.value = pvS.kvk || "";
+    var pvE = h("input", { type: "email", id: "pvEmail", maxLength: 120, placeholder: "privacy@jouwdomein.nl" }); pvE.value = pvS.email || "";
+    var pvSave = h("button", { id: "savePrivacyBtn", text: "Opslaan" });
+    pvSave.onclick = function () {
+      var patch = {};
+      [["company", pvC], ["address", pvA], ["kvk", pvK], ["email", pvE]].forEach(function (x) { if (x[1].value.trim() !== (pvS[x[0]] || "")) patch[x[0]] = x[1].value.trim(); });
+      if (!Object.keys(patch).length) return toast("Er is niets gewijzigd.");
+      apply({ privacy: patch }, "Privacygegevens opgeslagen.");
+    };
+    var pvBump = h("button", { class: "ghost", id: "bumpPrivacyBtn", text: "Nieuwe versie (opnieuw akkoord vragen)" });
+    pvBump.onclick = function () {
+      confirmDialog({ title: "Nieuwe versie van de privacyverklaring", confirmLabel: "Versie " + ((pvS.version || 1) + 1) + " publiceren",
+        message: "Alle gebruikers krijgen bij het openen van de app opnieuw de vraag om akkoord te gaan. Doe dit alleen bij een wezenlijke wijziging." })
+        .then(function (ok) { if (ok) apply({ privacy: { version: (pvS.version || 1) + 1 } }, "Versie " + ((pvS.version || 1) + 1) + " staat live."); });
+    };
+    put("privacy", card("Privacy",
+      h("div", { class: "hint", style: { marginTop: "-4px", marginBottom: "10px" }, text: "Deze gegevens staan in de privacyverklaring op /privacy. Gebruikers geven in de app akkoord op de verklaring en uitdrukkelijke toestemming voor gezondheidsgegevens; dat zie je per gebruiker onder Account." }),
+      h("dl", { class: "kv" }, h("dt", { text: "Huidige versie" }), h("dd", { text: "Versie " + (pvS.version || 1) + (pvS.updatedOn ? ", " + pvS.updatedOn : "") }),
+        h("dt", { text: "Bekijken" }), h("dd", {}, h("a", { href: "/privacy", target: "_blank", rel: "noopener", text: "/privacy" }))),
+      h("div", { style: { height: "10px" } }),
+      h("div", { class: "form-grid" }, field("Naam van het bedrijf", pvC), field("Adres", pvA), field("KvK-nummer", pvK), field("E-mail voor privacyvragen", pvE)),
+      h("div", { class: "row", style: { gap: "8px", flexWrap: "wrap" } }, pvSave, pvBump)));
 
     // onderhoud
     var mMsg = h("textarea", { id: "maintMsg", maxLength: 300, placeholder: "Bijvoorbeeld: We zijn zo terug! Er wordt onderhoud uitgevoerd." }); mMsg.value = s.maintenance.message;

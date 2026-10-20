@@ -62,6 +62,19 @@ daarom niet meer onderaan het startscherm.
 - Wissen van het chatgesprek en de smaakgeschiedenis gaat zonder vraag, met *Ongedaan maken* in de melding.
 - Inplannen en "gekookt" geven een melding met een groen vinkje (en een korte tik op telefoons die dat ondersteunen).
 
+**Privacy (AVG):**
+- **Privacyverklaring** op `/privacy` (ook gelinkt vanaf de welkomstpagina en in de app): welke gegevens, waarvoor, grondslag,
+  verwerkers (Anthropic, Render, database, Resend, Mollie, Google/Apple, pushdiensten, Unsplash, ipapi.co, GitHub), bewaartermijnen
+  en rechten. Bedrijfsnaam, adres, KvK en e-mail vul je in bij *Admin → Instellingen → Privacy*; zolang die leeg zijn staat er een
+  rode placeholder en meldt *Systeem* een aandachtspunt.
+- **Toestemming in de app:** bij het openen (na inloggen of registreren) vraagt Balanza akkoord met de verklaring én uitdrukkelijke
+  toestemming voor gezondheidsgegevens (AVG art. 9: gewicht, lengte, allergieën, dieetwensen). Opgeslagen in `consent/<uid>`
+  (versie, tijdstip, IP; endpoint `/api/consent`). Bij een nieuwe versie (*Nieuwe versie* in de admin) vraagt de app het opnieuw.
+- **Intrekken:** *Instellingen → Privacy → Toestemming gezondheidsgegevens intrekken* wist lengte, gewicht, leeftijd,
+  gezondheidsfilters, uitsluitingen, water, "anders gegeten" en restaurants; daarna vraagt de app het de volgende keer opnieuw.
+  De admin ziet per gebruiker of en wanneer er akkoord is gegeven. Bij het verwijderen van een account gaat het toestemmingsrecord mee.
+- Laat de tekst nog even controleren door iemand met juridische kennis; dit is een redelijke basis, geen juridisch advies.
+
 **Geen dubbele gerechten:** bij elk genereren krijgt de AI de namen van je bestaande gerechten mee (max. 60) met de opdracht
 niets te maken dat erop lijkt. Daarna vergelijkt de app elk nieuw gerecht met je lijst (zelfde maaltijdmoment; naam en
 hoofdingrediënten, met woorddelen zoals "rijst" in "zilvervliesrijst"). Lijkt het erop, dan staat het in het resultaatscherm als
