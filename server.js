@@ -2738,6 +2738,33 @@ function handleAccountLogoutOthers(req, res) {
 
 // ---- Toestemming: privacyverklaring gelezen + uitdrukkelijke toestemming voor gezondheidsgegevens (AVG art. 9) ----
 // consent/<uid> = { version, health: true, at, ip }. Wie een nieuwere versie nog niet zag, krijgt de vraag opnieuw.
+// true = toestemming gegeven of nog niet gevraagd; false = bewust zonder gezondheidsgegevens.
+function healthConsentOf(uid) {
+  return dbGetDoc("consent/" + uid).then(function (r) { return !(r.exists && r.value && r.value.health === false); }, function () { return true; });
+}
+var HEALTH_PREF_FIELDS = ["heightCm", "weightKg", "age", "health", "water"];
+function stripHealthData(subpath, value) {
+  if (!value || typeof value !== "object") return value;
+  var v = JSON.parse(JSON.stringify(value));
+  if (subpath === "prefs") {
+    HEALTH_PREF_FIELDS.forEach(function (k) { if (k in v) v[k] = k === "health" ? [] : k === "water" ? null : ""; });
+    if (v.coach && typeof v.coach === "object") { v.coach.water = false; v.coach.daytools = false; }
+    if (v.journey && Array.isArray(v.journey.log)) v.journey.log = v.journey.log.filter(function (x) { return x && x.m !== "gewicht"; });
+    if (v.journey && v.journey.metric === "gewicht") v.journey.metric = "";
+  } else if (subpath === "plannedWeeks") {
+    var list = Array.isArray(v.list) ? v.list : Array.isArray(v) ? v : [];
+    list.forEach(function (w) { if (w && w.extra) delete w.extra; });
+  }
+  return v;
+}
+function wipeHealthData(uid) {
+  return Promise.all(["prefs", "plannedWeeks"].map(function (sp) {
+    return dataOwnerUid(uid, sp).then(function (owner) {
+      var path = "data/users/" + (sp === "prefs" ? uid : owner) + "/" + sp;
+      return dbGetDoc(path).then(function (r) { if (r.exists && r.value) return dbSetDoc(path, stripHealthData(sp, r.value)); });
+    });
+  }));
+}
 function handleConsent(req, res) {
   return resolveUser(req).then(function (user) {
     if (!user) return sendUnauthorized(res);
@@ -2745,15 +2772,16 @@ function handleConsent(req, res) {
     return readBody(req).then(function (body) {
       return getSettings().then(function (s) {
         if (body && body.withdraw === true) {
-          return dbDeleteDoc("consent/" + user.uid).then(function () {
+          var wd = { version: s.privacy.version, health: false, at: new Date().toISOString(), ip: clientIp(req), withdrawn: true };
+          return dbSetDoc("consent/" + user.uid, wd).then(function () { return wipeHealthData(user.uid); }).then(function () {
             logEvent("privacy", "consent-withdraw", true, 200, { uid: user.uid });
-            sendJSON(res, 200, { consent: null });
+            sendJSON(res, 200, { consent: wd });
           });
         }
-        if (!body || body.privacy !== true || body.health !== true) return sendJSON(res, 400, { code: "bad_request", message: "Vink beide vakjes aan om verder te gaan." });
-        var doc = { version: s.privacy.version, health: true, at: new Date().toISOString(), ip: clientIp(req) };
-        return dbSetDoc("consent/" + user.uid, doc).then(function () {
-          logEvent("privacy", "consent", true, 200, { uid: user.uid, version: doc.version });
+        if (!body || body.privacy !== true || typeof body.health !== "boolean") return sendJSON(res, 400, { code: "bad_request", message: "Bevestig dat je de privacyverklaring hebt gelezen." });
+        var doc = { version: s.privacy.version, health: body.health, at: new Date().toISOString(), ip: clientIp(req) };
+        return dbSetDoc("consent/" + user.uid, doc).then(function () { return body.health ? null : wipeHealthData(user.uid); }).then(function () {
+          logEvent("privacy", body.health ? "consent" : "consent-no-health", true, 200, { uid: user.uid, version: doc.version });
           sendJSON(res, 200, { consent: doc });
         });
       });
@@ -4107,7 +4135,11 @@ function handleDbSet(req, res) {
       if (ALLOWED_SUBPATHS.indexOf(subpath) === -1) return sendJSON(res, 400, { message: "Ongeldig subpath." });
       var ip = clientIp(req);
       var trackIp = dbSetDoc("data/users/" + user.uid + "/meta", { lastIp: ip, lastSeenAt: new Date().toISOString(), email: user.email }).catch(function () {});
-      var write = dataOwnerUid(user.uid, subpath).then(function (owner) { return dbSetDoc("data/users/" + owner + "/" + subpath, body.value); });
+      // Geen toestemming voor gezondheidsgegevens: die velden worden ook niet opgeslagen.
+      var write = (subpath === "prefs" || subpath === "plannedWeeks" ? healthConsentOf(user.uid) : Promise.resolve(true)).then(function (ok) {
+        var value = ok ? body.value : stripHealthData(subpath, body.value);
+        return dataOwnerUid(user.uid, subpath).then(function (owner) { return dbSetDoc("data/users/" + owner + "/" + subpath, value); });
+      });
       return Promise.all([write, trackIp]).then(function () {
         sendJSON(res, 200, { ok: true });
       });

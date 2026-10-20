@@ -986,7 +986,7 @@
         h("dt", { text: "Aantal logins" }), h("dd", { text: String(u.loginCount) })] : null,
       h("dt", { text: "Laatst actief" }), h("dd", { text: u.lastSeenAt ? fmtDate(u.lastSeenAt) + " (" + relTime(u.lastSeenAt) + ")" : "nooit" }),
       h("dt", { text: "Laatste IP-adres" }), h("dd", { text: (u.lastIp || "—") + (where ? " · " + where : "") }),
-      h("dt", { text: "Privacy-akkoord" }), h("dd", { text: d.consent ? "Ja, versie " + d.consent.version + " op " + fmtDate(d.consent.at) + (d.consent.health ? " (incl. gezondheidsgegevens)" : "") : "Nog niet gegeven" }),
+      h("dt", { text: "Privacy-akkoord" }), h("dd", { text: d.consent ? "Ja, versie " + d.consent.version + " op " + fmtDate(d.consent.at) + (d.consent.health ? " (met gezondheidsgegevens)" : " (zonder gezondheidsgegevens: geen persoonlijke afstemming)") : "Nog niet gegeven" }),
       h("dt", { text: "Samen plannen" }), h("dd", { text: u.household ? "Huishouden van " + u.household.size + " personen" + (u.household.owner ? " (gestart door deze gebruiker; gerechten en planning staan bij hem)" : " (gerechten en planning komen van de starter)") : "Nee" }));
     var saveAcc = btn("Opslaan", "", "saveAccountBtn", function () {
       var patch = {};

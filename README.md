@@ -70,8 +70,14 @@ daarom niet meer onderaan het startscherm.
 - **Toestemming in de app:** bij het openen (na inloggen of registreren) vraagt Balanza akkoord met de verklaring én uitdrukkelijke
   toestemming voor gezondheidsgegevens (AVG art. 9: gewicht, lengte, allergieën, dieetwensen). Opgeslagen in `consent/<uid>`
   (versie, tijdstip, IP; endpoint `/api/consent`). Bij een nieuwe versie (*Nieuwe versie* in de admin) vraagt de app het opnieuw.
+- **Ook zonder toestemming bruikbaar:** het akkoord met de privacyverklaring is nodig, de toestemming voor gezondheidsgegevens
+  niet. Zonder die toestemming (`consent.health = false`) vraagt Balanza niet naar lengte, gewicht en leeftijd (geen dagdoel, gemiddelde
+  porties), zijn gezondheidsfilters (lactose-, glutenvrij e.d.), "Anders gegeten / Wat past nog?", water en gewicht bijhouden uit,
+  en heet de uitsluitingslijst "dingen die je niet lust". De server slaat die velden dan ook niet op (`stripHealthData`).
+  Op die plekken staat een korte uitleg met *Toestemming geven*.
 - **Intrekken:** *Instellingen → Privacy → Toestemming gezondheidsgegevens intrekken* wist lengte, gewicht, leeftijd,
-  gezondheidsfilters, uitsluitingen, water, "anders gegeten" en restaurants; daarna vraagt de app het de volgende keer opnieuw.
+  gezondheidsfilters, water, "anders gegeten" en het gewichtsverloop (ook op de server); Balanza werkt daarna verder zonder
+  persoonlijke afstemming. *Persoonlijke afstemming aanzetten* geeft de toestemming weer.
   De admin ziet per gebruiker of en wanneer er akkoord is gegeven. Bij het verwijderen van een account gaat het toestemmingsrecord mee.
 - Laat de tekst nog even controleren door iemand met juridische kennis; dit is een redelijke basis, geen juridisch advies.
 

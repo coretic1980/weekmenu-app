@@ -1449,6 +1449,8 @@
   .consent-box p { margin: 0; font-size: 14.5px; line-height: 1.5; color: var(--muted); }
   .consent-check { display: flex; gap: 10px; align-items: flex-start; font-size: 14.5px; line-height: 1.45; padding: 10px 12px; border-radius: 12px; background: var(--bg); cursor: pointer; }
   .consent-check input { width: 20px; height: 20px; flex: none; margin-top: 1px; accent-color: var(--accent2); }
+  .consent-note { margin: 0; padding: 10px 12px; border-radius: 12px; background: #FFF6E0; color: #6B4E0A !important; font-size: 13.5px; line-height: 1.45; }
+  .health-off { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; font-size: 13.5px; }
   .consent-err { margin: 0; padding: 10px 12px; border-radius: 12px; background: #FBE9E4; color: #8A2E1C; font-size: 13.5px; }
   .op-err { margin: 0; padding: 10px 12px; border-radius: 12px; background: #FBE9E4; color: #8A2E1C; font-size: 13.5px; line-height: 1.45; }
   .op-note { font-size: 13.5px; color: var(--muted); margin: 0; line-height: 1.45; }
@@ -2434,6 +2436,7 @@
   }
   // Wat naar de server gaat: de gekozen filters, plus glutenvrij als "Gluten" bij "wat wil je niet eten" staat.
   function healthList() {
+    if (!healthOk()) return [];
     var keys = HEALTH_OPTIONS.map(function (o) { return o[0]; });
     var list = (Array.isArray(prefs.health) ? prefs.health : []).filter(function (k) { return keys.indexOf(k) > -1; });
     Object.keys(HEALTH_EXCLUDE_TERM).forEach(function (k) { if (list.indexOf(k) === -1 && excludeHasTerm(excludeTokens(), HEALTH_EXCLUDE_TERM[k])) list.push(k); });
@@ -4501,6 +4504,7 @@
 
   // Geschatte dagbehoefte (Mifflin-St Jeor × activiteit × doel). Null als het profiel onvolledig is.
   function dailyKcalTarget() {
+    if (!healthOk()) return null;
     var w = Number(prefs.weightKg), h = Number(prefs.heightCm), a = Number(prefs.age);
     if (!w || !h || !a) return null;
     var base = 10 * w + 6.25 * h - 5 * a + (prefs.gender === "Man" ? 5 : prefs.gender === "Vrouw" ? -161 : -78);
@@ -5783,7 +5787,7 @@
         renderProteinEditor(main, render);
       }
       labelEl("Gezond eten", "Optioneel en te combineren met je voedingsstijl. Ook dit zijn harde regels: elk gerecht wordt hierop gecontroleerd.");
-      renderHealthEditor(main, render);
+      if (healthOk()) renderHealthEditor(main, render); else healthOffNote(main, "health");
     } else if (state.wizardStep === 3) {
       heading("Welke keuken en smaak spreken je aan?", "Mag je overslaan als je geen voorkeur hebt \u2014 dan houden we alle keukens en smaken open.");
       labelEl("Keukenstijl", "Bepaalt de stijl van de gerechten. Meerdere kiezen geeft meer afwisseling.");
@@ -5811,14 +5815,14 @@
       heading("Welke apparatuur heb je?", "Alleen gerechten die hiermee te maken zijn worden voorgesteld \u2014 zo krijg je nooit een recept dat om iets vraagt wat je niet hebt staan. Mag je overslaan; dan gaan we uit van een standaard fornuis en oven.");
       chipGroupMulti(EQUIPMENT, prefs.equipment);
     } else if (state.wizardStep === 6) {
-      heading("Wat wil je niet eten?", "Allergieën of dingen die je gewoon niet lust. Deze ingrediënten worden nooit voorgesteld \u2014 dat scheelt tijd bij het aanpassen achteraf. Mag je overslaan.");
+      heading("Wat wil je niet eten?", (healthOk() ? "Allergieën of dingen" : "Dingen") + " die je gewoon niet lust. Deze ingrediënten worden nooit voorgesteld \u2014 dat scheelt tijd bij het aanpassen achteraf. Mag je overslaan.");
       renderExcludeEditor(main, render);
     } else if (state.wizardStep === 7) {
       heading("Lichaamsprofiel", "Optioneel, maar wel de winst: hoe vollediger dit is ingevuld, hoe nauwkeuriger we de portiegrootte en calorieën op jou afstemmen in plaats van op een gemiddelde persoon.");
       var bioRow = document.createElement("div");
       bioRow.className = "segrow";
       bioRow.style.flexWrap = "wrap";
-      [["heightCm", "Lengte (cm)"], ["weightKg", "Gewicht (kg)"], ["age", "Leeftijd"]].forEach(function (pair) {
+      [["heightCm", "Lengte (cm)"], ["weightKg", "Gewicht (kg)"], ["age", "Leeftijd"]].filter(function () { return healthOk(); }).forEach(function (pair) {
         var inp = document.createElement("input");
         inp.className = "textinput";
         inp.type = "number";
@@ -5830,6 +5834,7 @@
         bioRow.appendChild(inp);
       });
       main.appendChild(bioRow);
+      if (!healthOk()) healthOffNote(main, "body");
       labelEl("Geslacht");
       chipGroupSingle([["", "Geen voorkeur"]].concat(GENDERS.map(function (g) { return [g, g]; })), prefs.gender, function (g) { prefs.gender = g; });
       labelEl("Activiteitsniveau");
@@ -6170,8 +6175,8 @@
           label(c, "Lichaamsprofiel", "Optioneel — stemt porties en calorieën af op jouw behoefte");
           chips(c, GENDERS, function (g) { return prefs.gender === g; }, function (g, on) { prefs.gender = on ? "" : g; });
           var bio = document.createElement("div"); bio.className = "segrow"; bio.style.flexWrap = "wrap";
-          numInput(bio, "heightCm", "Lengte (cm)"); numInput(bio, "weightKg", "Gewicht (kg)"); numInput(bio, "age", "Leeftijd");
-          c.appendChild(bio);
+          if (healthOk()) { numInput(bio, "heightCm", "Lengte (cm)"); numInput(bio, "weightKg", "Gewicht (kg)"); numInput(bio, "age", "Leeftijd"); c.appendChild(bio); }
+          else healthOffNote(c, "body");
           label(c, "Activiteitsniveau");
           chips(c, ACTIVITY_LEVELS, function (a) { return prefs.activityLevel === a; }, function (a) { prefs.activityLevel = a; });
         } },
@@ -6186,8 +6191,8 @@
             renderProteinEditor(c, function () { changed(true); });
           }
           label(c, "Gezond eten", "Te combineren met je voedingsstijl. Ook een harde regel: gerechten die niet voldoen worden nooit voorgesteld.");
-          renderHealthEditor(c, function () { changed(true); });
-          label(c, "Wat wil je niet eten?", "Allergieën of dingen die je niet lust — deze ingrediënten worden nooit voorgesteld.");
+          if (healthOk()) renderHealthEditor(c, function () { changed(true); }); else healthOffNote(c, "health");
+          label(c, "Wat wil je niet eten?", (healthOk() ? "Allergieën of dingen" : "Dingen") + " die je niet lust — deze ingrediënten worden nooit voorgesteld.");
           renderExcludeEditor(c, function () { changed(true); });
           var ex = c.querySelector("input.textinput:last-of-type");
           if (ex) { var prev = ex.oninput; ex.oninput = function (e) { prev(e); changed(false); }; }
@@ -11887,6 +11892,7 @@
   ];
   var COACH_DEFAULT_OFF = ["water"];
   function coachOn(k) {
+    if ((k === "water" || k === "daytools") && !healthOk()) return false;   // houdt bij wat je eet/drinkt: alleen met toestemming
     if (prefs.coach && typeof prefs.coach[k] === "boolean") return prefs.coach[k];
     return COACH_DEFAULT_OFF.indexOf(k) === -1;
   }
@@ -11904,6 +11910,7 @@
     p.textContent = "Balanza helpt je op weg, maar jij bepaalt hoeveel. Zet aan wat je fijn vindt.";
     card.appendChild(p);
     COACH_OPTIONS.forEach(function (o) {
+      if ((o[0] === "water" || o[0] === "daytools") && !healthOk()) return;
       var on = coachOn(o[0]);
       var b = document.createElement("button"); b.type = "button"; b.className = "sheet-toggle"; b.id = "coach-" + o[0];
       b.setAttribute("role", "switch"); b.setAttribute("aria-checked", on ? "true" : "false");
@@ -12709,7 +12716,7 @@
     var card = document.createElement("div"); card.className = "card journey-sec"; card.id = "journeyProgress";
     var hd = document.createElement("div"); hd.className = "eyebrow"; hd.textContent = "Wat je bijhoudt"; card.appendChild(hd);
     var row = document.createElement("div"); row.className = "chiprow";
-    JOURNEY_METRIC.filter(function (m) { return !(isMinor() && m[0] === "gewicht"); }).forEach(function (m) {
+    JOURNEY_METRIC.filter(function (m) { return !((isMinor() || !healthOk()) && m[0] === "gewicht"); }).forEach(function (m) {
       var c = document.createElement("button"); c.type = "button"; c.className = "chip" + ((j.metric || "") === m[0] ? " selected" : ""); c.textContent = m[1];
       c.onclick = function () { j.metric = m[0]; savePrefs(); render(); };
       row.appendChild(c);
@@ -13931,35 +13938,62 @@
       if (!d.consent || !d.consent.health || (d.consent.version || 0) < privacyVersion()) showConsent();
     }).catch(function () {});
   }
-  function showConsent() {
+  // Zonder toestemming voor gezondheidsgegevens werkt Balanza gewoon, maar zonder persoonlijke afstemming.
+  function healthOk() { return !(consentState.doc && consentState.doc.health === false); }
+  function healthOffNote(parent, what) {
+    var box = document.createElement("div"); box.className = "plainbox health-off"; box.id = "healthOff-" + (what || "x");
+    var t = document.createElement("div");
+    t.textContent = "Persoonlijke afstemming staat uit: je gaf geen toestemming voor gezondheidsgegevens. " + (what === "body" ? "Daarom vragen we niet naar lengte, gewicht en leeftijd en gebruiken we gemiddelde porties." : what === "health" ? "Daarom zijn filters zoals lactose- of glutenvrij niet beschikbaar." : "");
+    box.appendChild(t);
+    var b = document.createElement("button"); b.type = "button"; b.className = "ghost-btn small"; b.textContent = "Toestemming geven"; b.onclick = function () { showConsent(true); };
+    box.appendChild(b);
+    parent.appendChild(box);
+  }
+  function applyNoHealthLocally() {
+    ["heightCm", "weightKg", "age"].forEach(function (k) { prefs[k] = ""; });
+    prefs.health = []; prefs.water = null;
+    prefs.coach = Object.assign({}, prefs.coach || {}, { water: false, daytools: false });
+    if (prefs.journey && Array.isArray(prefs.journey.log)) prefs.journey.log = prefs.journey.log.filter(function (x) { return x && x.m !== "gewicht"; });
+    if (prefs.journey && prefs.journey.metric === "gewicht") prefs.journey.metric = "";
+    plannedWeeks.forEach(function (w) { if (w.extra) delete w.extra; });
+  }
+  function showConsent(grant) {
     var ov = document.getElementById("consentOverlay");
     if (!ov) {
       ov = document.createElement("div"); ov.id = "consentOverlay"; ov.className = "confirm-overlay consent-overlay";
       ov.setAttribute("role", "dialog"); ov.setAttribute("aria-modal", "true"); ov.setAttribute("aria-labelledby", "consentTitle");
       document.body.appendChild(ov);
     }
-    var updated = consentState.doc && consentState.doc.version < privacyVersion();
-    ov.innerHTML = '<div class="confirm-box consent-box"><h2 id="consentTitle">' + (updated ? "Onze privacyverklaring is bijgewerkt" : "Jouw privacy") + '</h2>' +
-      '<p>Balanza gebruikt je gegevens alleen om de app voor jou te laten werken. We verkopen niets en tonen geen advertenties.</p>' +
-      '<p>Een deel daarvan zijn <b>gezondheidsgegevens</b>, zoals je gewicht, lengte, allergieën en dieetwensen. Die hebben we nodig om je gerechten en doelen te berekenen, en daarvoor vragen we je uitdrukkelijke toestemming. Je kunt die altijd weer intrekken.</p>' +
-      '<label class="consent-check"><input type="checkbox" id="consentPrivacy"><span>Ik heb de <a href="/privacy" target="_blank" rel="noopener">privacyverklaring</a> gelezen.</span></label>' +
-      '<label class="consent-check"><input type="checkbox" id="consentHealth"><span>Ik geef Balanza toestemming om mijn gezondheidsgegevens te gebruiken voor mijn gerechten en doelen.</span></label>' +
+    var updated = !grant && consentState.doc && consentState.doc.version < privacyVersion();
+    ov.innerHTML = '<div class="confirm-box consent-box"><h2 id="consentTitle">' + (grant ? "Persoonlijke afstemming aanzetten" : updated ? "Onze privacyverklaring is bijgewerkt" : "Jouw privacy") + '</h2>' +
+      (grant ? "" : '<p>Balanza gebruikt je gegevens alleen om de app voor jou te laten werken. We verkopen niets en tonen geen advertenties.</p>') +
+      '<p>Wil je dat Balanza je gerechten en dagdoel op jou afstemt? Dan gebruiken we <b>gezondheidsgegevens</b>, zoals je lengte, gewicht, allergieën en dieetwensen. Daarvoor vragen we je uitdrukkelijke toestemming. Je kunt die altijd weer intrekken.</p>' +
+      (grant ? "" : '<label class="consent-check"><input type="checkbox" id="consentPrivacy"><span>Ik heb de <a href="/privacy" target="_blank" rel="noopener">privacyverklaring</a> gelezen.</span></label>') +
+      '<label class="consent-check"><input type="checkbox" id="consentHealth"' + (grant ? " checked" : "") + '><span>Ik geef Balanza toestemming om mijn gezondheidsgegevens te gebruiken voor mijn gerechten en doelen.</span></label>' +
+      '<p class="consent-note" id="consentNote" hidden>Zonder deze toestemming werkt Balanza ook, maar zonder persoonlijke afstemming: geen dagdoel op basis van lengte en gewicht, geen filters zoals lactose- of glutenvrij, en geen bijhouden van wat je anders at of van water. Je kunt het later aanzetten bij Instellingen → Privacy.</p>' +
       '<p class="consent-err" id="consentErr" role="alert" hidden></p>' +
       '<button type="button" class="primary-btn" id="consentOk" disabled>Akkoord en verder</button>' +
-      '<button type="button" class="autofill-cancel" id="consentNo">Liever niet</button></div>';
-    var c1 = ov.querySelector("#consentPrivacy"), c2 = ov.querySelector("#consentHealth"), ok = ov.querySelector("#consentOk");
-    function upd() { ok.disabled = !(c1.checked && c2.checked); }
-    c1.onchange = upd; c2.onchange = upd;
+      (grant ? '<button type="button" class="autofill-cancel" id="consentCancel">Annuleren</button>' : "") + '</div>';
+    var c1 = ov.querySelector("#consentPrivacy"), c2 = ov.querySelector("#consentHealth"), ok = ov.querySelector("#consentOk"), note = ov.querySelector("#consentNote");
+    function upd() {
+      ok.disabled = grant ? !c2.checked : !c1.checked;
+      note.hidden = grant || c2.checked || !c1.checked;
+      ok.textContent = !grant && !c2.checked ? "Verder zonder afstemming" : "Akkoord en verder";
+    }
+    if (c1) c1.onchange = upd; c2.onchange = upd; upd();
+    var cancel = ov.querySelector("#consentCancel"); if (cancel) cancel.onclick = function () { ov.classList.remove("active"); };
     ok.onclick = function () {
-      ok.disabled = true; ok.textContent = "Even opslaan\u2026";
-      fetch("/api/consent", { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, authHeaders()), body: JSON.stringify({ privacy: true, health: true }) })
+      var health = !!c2.checked;
+      ok.disabled = true; ok.textContent = "Even opslaan…";
+      fetch("/api/consent", { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, authHeaders()), body: JSON.stringify({ privacy: true, health: health }) })
         .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { if (!r.ok) throw new Error(d.message || "Opslaan lukte niet."); return d; }); })
-        .then(function (d) { consentState.doc = d.consent; ov.classList.remove("active"); showToast("Dank je. Je kunt dit altijd terugvinden bij Instellingen \u2192 Privacy.", "ok"); })
-        .catch(function (e) { var er = ov.querySelector("#consentErr"); er.hidden = false; er.textContent = e.message; ok.textContent = "Akkoord en verder"; upd(); });
-    };
-    ov.querySelector("#consentNo").onclick = function () {
-      var er = ov.querySelector("#consentErr"); er.hidden = false;
-      er.textContent = "Zonder deze toestemming kan Balanza je gerechten niet op jou afstemmen. Wil je geen gebruik maken van Balanza, dan kun je je account verwijderen via Instellingen \u2192 Account verwijderen.";
+        .then(function (d) {
+          consentState.doc = d.consent; ov.classList.remove("active");
+          if (!health) { applyNoHealthLocally(); savePrefs(); savePlannedWeeks(); }
+          showToast(health ? "Dank je. Balanza stemt je gerechten nu op jou af." : "Prima. Balanza werkt zonder persoonlijke afstemming; aanzetten kan altijd bij Instellingen → Privacy.", "ok");
+          render();
+        })
+        .catch(function (e) { var er = ov.querySelector("#consentErr"); er.hidden = false; er.textContent = e.message; upd(); });
     };
     ov.classList.add("active");
   }
@@ -13968,18 +14002,18 @@
     var card = accCard(main, "Privacy");
     var sub = document.createElement("div"); sub.className = "acc-sub"; sub.id = "privacyStatus";
     var c = consentState.doc;
-    sub.textContent = c && c.health ? "Je gaf toestemming op " + new Date(c.at).toLocaleDateString("nl-NL", { day: "numeric", month: "long", year: "numeric" }) + " (privacyverklaring versie " + c.version + ")." : "Je hebt nog geen toestemming gegeven.";
+    var when = c ? new Date(c.at).toLocaleDateString("nl-NL", { day: "numeric", month: "long", year: "numeric" }) : "";
+    sub.textContent = c && c.health ? "Persoonlijke afstemming staat aan: je gaf toestemming voor gezondheidsgegevens op " + when + " (privacyverklaring versie " + c.version + ")."
+      : c ? "Persoonlijke afstemming staat uit: je gaf geen toestemming voor gezondheidsgegevens" + (c.withdrawn ? " (ingetrokken op " + when + ")" : "") + ". Balanza werkt met gemiddelde porties en zonder gezondheidsfilters."
+      : "Je hebt nog geen keuze gemaakt.";
     card.appendChild(sub);
     accButton(card, "privacyRead", "help", "Privacyverklaring lezen", function () { window.open("/privacy", "_blank", "noopener"); });
+    if (c && !c.health) accButton(card, "privacyGrant", "check", "Persoonlijke afstemming aanzetten", function () { showConsent(true); });
     if (c && c.health) accButton(card, "privacyWithdraw", "trash", "Toestemming gezondheidsgegevens intrekken", function () {
-      askConfirm("Je toestemming intrekken? Balanza wist dan je lengte, gewicht, leeftijd, gezondheidsfilters, wat je niet eet, water en wat je anders at. Zonder toestemming kunnen we geen gerechten op jou afstemmen; we vragen het de volgende keer opnieuw.", function () {
-        ["heightCm", "weightKg", "age"].forEach(function (k) { prefs[k] = ""; });
-        prefs.health = []; prefs.proteinOut = []; prefs.exclude = ""; prefs.water = null; prefs.places = [];
-        if (prefs.journey && prefs.journey.log) prefs.journey.log = [];
-        plannedWeeks.forEach(function (w) { if (w.extra) delete w.extra; });
-        savePrefs(); savePlannedWeeks();
+      askConfirm("Je toestemming intrekken? Balanza wist dan je lengte, gewicht, leeftijd, gezondheidsfilters, water, wat je anders at en je gewichtsverloop. Balanza blijft werken, maar zonder persoonlijke afstemming.", function () {
         fetch("/api/consent", { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, authHeaders()), body: JSON.stringify({ withdraw: true }) })
-          .then(function () { consentState.doc = null; showToast("Je toestemming is ingetrokken en je gezondheidsgegevens zijn gewist."); render(); })
+          .then(function (r) { if (!r.ok) throw new Error(); return r.json(); })
+          .then(function (d) { consentState.doc = d.consent; applyNoHealthLocally(); savePrefs(); savePlannedWeeks(); showToast("Je toestemming is ingetrokken en je gezondheidsgegevens zijn gewist."); render(); })
           .catch(function () { showToast("Intrekken lukte niet. Probeer het opnieuw."); });
       }, "Intrekken", "Annuleren");
     });
