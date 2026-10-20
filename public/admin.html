@@ -1293,7 +1293,7 @@
       el.oninput = debounce(function () { L[key] = el.value.trim(); L.page = 1; load(); }, 350); return el;
     }
     var q = bind("lQ", "q", "Zoek in actie, melding, IP, gebruiker…", "grow", "search");
-    var typeSel = select([["", "Alle soorten"], ["generate", "AI (genereren)"], ["tips", "Tips"], ["auth", "Account (inloggen)"], ["push", "Meldingen (push)"], ["household", "Samen plannen"], ["estimate", "Schatten (iets anders gegeten)"], ["assistant", "Assistent (chat)"], ["suggestion", "Ideeën"], ["billing", "Betalingen"]], L.type, function (v) { L.type = v; L.page = 1; load(); }, "Soort"); typeSel.id = "lType";
+    var typeSel = select([["", "Alle soorten"], ["generate", "AI (genereren)"], ["tips", "Tips"], ["auth", "Account (inloggen)"], ["push", "Meldingen (push)"], ["household", "Samen plannen"], ["estimate", "Schatten (iets anders gegeten)"], ["news", "Voedingsnieuws"], ["privacy", "Privacy"], ["assistant", "Assistent (chat)"], ["suggestion", "Ideeën"], ["billing", "Betalingen"]], L.type, function (v) { L.type = v; L.page = 1; load(); }, "Soort"); typeSel.id = "lType";
     var statusSel = select([["", "Alle uitkomsten"], ["ok", "Gelukt"], ["error", "Fouten"]], L.status, function (v) { L.status = v; L.page = 1; load(); }, "Uitkomst"); statusSel.id = "lStatus";
     var uidIn = bind("lUid", "uid", "Gebruikers-ID", "", "text"), ipIn = bind("lIp", "ip", "IP-adres", "", "text");
     var fromIn = h("input", { type: "date", id: "lFrom", "aria-label": "Vanaf datum" }); fromIn.value = L.from; fromIn.onchange = function () { L.from = fromIn.value; L.page = 1; load(); };
@@ -1644,7 +1644,7 @@
   };
   function drawSettings(view, cfg, section) {
     var s = cfg.settings, defs = {};
-    var SECTIONS = [["toegang", "Toegang"], ["onderdelen", "Onderdelen"], ["limieten", "Limieten"], ["verdienmodel", "Verdienmodel"], ["communicatie", "Onderhoud en mededeling"], ["privacy", "Privacy"]];
+    var SECTIONS = [["toegang", "Toegang"], ["onderdelen", "Onderdelen"], ["limieten", "Limieten"], ["verdienmodel", "Verdienmodel"], ["communicatie", "Onderhoud en mededeling"], ["nieuws", "Voedingsnieuws"], ["privacy", "Privacy"]];
     var secs = {}; SECTIONS.forEach(function (x) { secs[x[0]] = []; });
     function put(key, node) { secs[key].push(node); }
     if (!secs[section]) section = prefGet("settingsSection") || "toegang";
@@ -1789,6 +1789,57 @@
       h("div", { class: "form-grid" }, field("Naam van het bedrijf", pvC), field("Adres", pvA), field("KvK-nummer", pvK), field("E-mail voor privacyvragen", pvE)),
       h("div", { class: "row", style: { gap: "8px", flexWrap: "wrap" } }, pvSave, pvBump)));
 
+    // voedingsnieuws: bronnen aan/uit, status van het ophalen en een eigen bericht
+    var nwS = s.news || { enabled: true };
+    var NEWS_SRC = [["voedingscentrum", "Voedingscentrum", "Alle nieuwsberichten (Schijf van Vijf, adviezen, peilingen)."], ["rivm", "RIVM", "Alleen berichten die over voeding en eten gaan."], ["wur", "Wageningen University & Research", "Alleen Nederlandstalige berichten over voeding en eten."]];
+    var nwStatus = h("div", { class: "hint", id: "newsStatus", text: "Status ophalen\u2026" });
+    var nwList = h("div", { id: "newsItems" });
+    function paintNews(d) {
+      nwStatus.textContent = d.fetchedAt ? "Laatst opgehaald: " + new Date(d.fetchedAt).toLocaleString("nl-NL") + ". Balanza haalt het nieuws elke 6 uur opnieuw op." : "Nog niet opgehaald. Dat gebeurt zodra iemand de app opent, of tik op Nu ophalen.";
+      nwList.innerHTML = "";
+      NEWS_SRC.forEach(function (x) {
+        var st = d.status && d.status[x[0]];
+        nwList.appendChild(h("div", { class: "small", style: { margin: "2px 0" }, text: x[1] + ": " + (!nwS["src_" + x[0]] ? "staat uit" : !st ? "nog niet geprobeerd" : st.ok ? st.n + (st.n === 1 ? " bericht" : " berichten") : "niet gelukt (" + st.error + ")") }));
+      });
+      if (d.items && d.items.length) {
+        nwList.appendChild(h("div", { class: "small muted", style: { margin: "10px 0 4px" }, text: "Nieuwste berichten" }));
+        d.items.slice(0, 6).forEach(function (it) {
+          nwList.appendChild(h("div", { class: "small", style: { margin: "3px 0" } }, h("a", { href: it.url, target: "_blank", rel: "noopener", text: it.title }), h("span", { class: "muted", text: " \u00b7 " + it.src })));
+        });
+      }
+    }
+    api("/api/admin/news").then(paintNews).catch(function () { nwStatus.textContent = "Kon de status niet ophalen."; });
+    var nwRefresh = h("button", { class: "ghost", id: "newsRefreshBtn", text: "Nu ophalen" });
+    nwRefresh.onclick = function () { nwRefresh.disabled = true; nwStatus.textContent = "Bezig met ophalen\u2026"; api("/api/admin/news/refresh", { method: "POST", body: {} }).then(function (d) { nwRefresh.disabled = false; paintNews(d); toast("Nieuws opgehaald."); }).catch(function (e) { nwRefresh.disabled = false; if (!e.silent) toast(e.message, "bad"); }); };
+    var srcRows = NEWS_SRC.map(function (x) {
+      var sw = switchBtn(nwS["src_" + x[0]] !== false, function (on) { var pt = {}; pt["src_" + x[0]] = on; apply({ news: pt }, x[1] + (on ? " staat aan." : " staat uit.")); }, x[1]);
+      sw.id = "newsSrc-" + x[0];
+      return h("div", { class: "module", style: { padding: "8px 0" } }, h("div", {}, h("div", { class: "name", text: x[1] }), h("div", { class: "desc", text: x[2] })), sw);
+    });
+    var nwSw = switchBtn(nwS.enabled !== false, function (on) { apply({ news: { enabled: on } }, on ? "Voedingsnieuws staat aan." : "Voedingsnieuws staat uit."); }, "Voedingsnieuws");
+    nwSw.id = "newsSwitch";
+    put("nieuws", card("Voedingsnieuws",
+      h("div", { class: "hint", style: { marginTop: "-4px", marginBottom: "10px" }, text: "Gebruikers zien hooguit één bericht per dag onder \u201cVoor jou\u201d: de kop, de bron en een link naar het artikel. Balanza vat niets zelf samen. Berichten over vlees of vis krijgen vegetariërs niet te zien, over alcohol geen minderjarigen. Gebruikers kunnen het zelf uitzetten bij Begeleiding." }),
+      h("div", { class: "module", style: { padding: "0 0 8px" } }, h("div", {}, h("div", { class: "name", text: nwS.enabled !== false ? "Staat aan" : "Staat uit" }), h("div", { class: "desc", text: "Voor iedereen aan of uit." })), nwSw),
+      h("div", {}, srcRows),
+      h("div", { style: { height: "8px" } }), nwStatus, nwList,
+      h("div", { class: "row", style: { gap: "8px", marginTop: "10px" } }, nwRefresh)));
+    var pinT = h("input", { type: "text", id: "newsPinTitle", maxLength: 160, placeholder: "Bijv. Nieuw: de vernieuwde Schijf van Vijf" }); pinT.value = nwS.pinTitle || "";
+    var pinU = h("input", { type: "url", id: "newsPinUrl", maxLength: 500, placeholder: "https://\u2026 (optioneel)" }); pinU.value = nwS.pinUrl || "";
+    var pinX = h("textarea", { id: "newsPinText", maxLength: 280, placeholder: "Korte toelichting (optioneel)" }); pinX.value = nwS.pinText || "";
+    var pinSave = h("button", { id: "newsPinSave", text: "Plaatsen" });
+    pinSave.onclick = function () {
+      if (!pinT.value.trim()) return toast("Geef het bericht een titel.", "bad");
+      apply({ news: { pinTitle: pinT.value.trim(), pinUrl: pinU.value.trim(), pinText: pinX.value.trim() } }, "Bericht geplaatst. Gebruikers zien het als eerstvolgende nieuwsbericht.");
+    };
+    var pinDel = h("button", { class: "ghost", id: "newsPinDel", text: "Weghalen" });
+    pinDel.onclick = function () { apply({ news: { pinTitle: "", pinUrl: "", pinText: "" } }, "Eigen bericht weggehaald."); };
+    put("nieuws", card("Eigen bericht of tip van de week",
+      h("div", { class: "hint", style: { marginTop: "-4px", marginBottom: "10px" }, text: nwS.pinTitle ? "Staat nu online sinds " + (nwS.pinAt ? new Date(nwS.pinAt).toLocaleDateString("nl-NL") : "onbekend") + ". Iedereen ziet het één keer, vóór de berichten van de bronnen." : "Een bericht van Balanza zelf. Iedereen ziet het één keer, vóór de berichten van de bronnen. Een nieuw bericht plaatsen vervangt het vorige." }),
+      h("div", { class: "form-grid" }, field("Titel", pinT), field("Link", pinU, "Moet met https:// beginnen.")),
+      field("Toelichting", pinX),
+      h("div", { class: "row", style: { gap: "8px", flexWrap: "wrap" } }, pinSave, nwS.pinTitle ? pinDel : null)));
+
     // onderhoud
     var mMsg = h("textarea", { id: "maintMsg", maxLength: 300, placeholder: "Bijvoorbeeld: We zijn zo terug! Er wordt onderhoud uitgevoerd." }); mMsg.value = s.maintenance.message;
     var offLabels = cfg.maintenanceOffModules.map(function (k) { return defs[k].label.toLowerCase(); }).join(", ");
@@ -1829,7 +1880,8 @@
       onderdelen: offCount ? offCount + " uit" : "Alles aan",
       limieten: s.limits.dailyGenerateCap + " per dag",
       verdienmodel: [s.billing.trialEnabled ? "Proef aan" : "Proef uit", s.billing.enabled ? "Plus aan" : "Plus uit"].join(" · "),
-      communicatie: s.maintenance.enabled ? "Onderhoud aan" : s.announcement.enabled ? "Mededeling aan" : "Niets actief"
+      communicatie: s.maintenance.enabled ? "Onderhoud aan" : s.announcement.enabled ? "Mededeling aan" : "Niets actief",
+      nieuws: s.news && s.news.enabled === false ? "Uit" : (["voedingscentrum", "rivm", "wur"].filter(function (k) { return !s.news || s.news["src_" + k] !== false; }).length + " bronnen aan") + (s.news && s.news.pinTitle ? " · eigen bericht" : "")
     };
     var warnKeys = { communicatie: s.maintenance.enabled, onderdelen: offCount > 0 };
     var nav = h("nav", { class: "settings-nav", id: "settingsNav", "aria-label": "Onderdelen van de instellingen" }, SECTIONS.map(function (x) {

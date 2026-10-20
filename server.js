@@ -177,6 +177,155 @@ function cleanNote(v, max) {
   return String(v == null ? "" : v).replace(/\r\n?/g, "\n").split("\n").map(function (l) { return l.replace(/[\u0000-\u001f\u007f\s]+/g, " ").trim(); }).join("\n").replace(/\n{3,}/g, "\n\n").trim().slice(0, max);
 }
 
+// ---- Voedingsnieuws: koppen uit een paar betrouwbare bronnen, met link naar het artikel (geen eigen samenvatting) ----
+var NEWS_SOURCES = [
+  { key: "voedingscentrum", name: "Voedingscentrum", feeds: ["https://feeds.feedburner.com/voedingscentrum"], page: "https://www.voedingscentrum.nl/nl/nieuws.aspx",
+    pageRe: /href="((?:https:\/\/www\.voedingscentrum\.nl)?\/nl\/nieuws\/[^"#?]+\.aspx)"[^>]*>([\s\S]*?)<\/a>/g, base: "https://www.voedingscentrum.nl", filter: false },
+  { key: "rivm", name: "RIVM", feeds: ["https://www.rivm.nl/nieuws/rss.xml"], filter: true },
+  { key: "wur", name: "Wageningen University & Research", feeds: ["https://www.wur.nl/nl/rss?contenttype=nieuws", "https://www.wur.nl/UK/rss?contenttype=nieuws"], filter: true }
+];
+// RIVM en WUR schrijven over veel meer dan eten: alleen berichten die over voeding gaan.
+var NEWS_TOPIC_RE = /voeding|voedsel|\beten\b|\beet\b|maaltijd|dieet|schijf van vijf|\bzout|suiker|vezels|groente|fruit|\bvlees|\bvis\b|alcohol|overgewicht|obesitas|gewicht|vitamine|eiwit|koolhydra|\bvet(ten)?\b|keuken|recept|supermarkt|lunch|ontbijt|diabetes|cholesterol|bloeddruk|\bdarm/i;
+var NEWS_TTL_MS = 6 * 3600 * 1000;
+var newsCache = { items: [], fetchedAt: 0, status: {}, loading: null };
+function cleanNewsUrl(v) {
+  var u = String(v == null ? "" : v).trim();
+  if (/^http:\/\//i.test(u)) u = "https://" + u.slice(7);
+  return /^https:\/\/[^\s"<>]+$/i.test(u) && u.length <= 500 ? u : "";
+}
+function newsDecode(t) {
+  return String(t || "").replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1").replace(/<[^>]+>/g, " ")
+    .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/<[^>]+>/g, " ")
+    .replace(/&#(\d+);/g, function (_, n) { return String.fromCharCode(Number(n)); })
+    .replace(/&#x([0-9a-f]+);/gi, function (_, n) { return String.fromCharCode(parseInt(n, 16)); })
+    .replace(/&nbsp;/g, " ").replace(/&quot;/g, '"').replace(/&apos;|&#039;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&")
+    .replace(/\s+/g, " ").trim();
+}
+function newsTag(block, tag) {
+  var m = block.match(new RegExp("<" + tag + "(?:\\s[^>]*)?>([\\s\\S]*?)<\\/" + tag + ">", "i"));
+  return m ? m[1] : "";
+}
+function parseNewsFeed(xml) {
+  var out = [], blocks = xml.match(/<item[\s>][\s\S]*?<\/item>/gi) || xml.match(/<entry[\s>][\s\S]*?<\/entry>/gi) || [];
+  blocks.forEach(function (b) {
+    var link = newsDecode(newsTag(b, "feedburner:origLink")) || newsDecode(newsTag(b, "link"));
+    if (!link) { var lm = b.match(/<link[^>]+href="([^"]+)"/i); if (lm) link = lm[1]; }
+    if (!link) link = newsDecode(newsTag(b, "guid"));
+    var date = newsTag(b, "pubDate") || newsTag(b, "published") || newsTag(b, "updated") || newsTag(b, "dc:date");
+    var d = date ? new Date(newsDecode(date)) : null;
+    out.push({ title: newsDecode(newsTag(b, "title")), url: link, date: d && !isNaN(d) ? d.toISOString() : "", text: newsDecode(newsTag(b, "description") || newsTag(b, "summary")) });
+  });
+  return out;
+}
+function parseNewsPage(html, src) {
+  var out = [], seen = {}, m;
+  src.pageRe.lastIndex = 0;
+  while ((m = src.pageRe.exec(html)) && out.length < 30) {
+    var url = m[1].indexOf("http") === 0 ? m[1] : src.base + m[1];
+    var title = newsDecode(m[2]);
+    if (seen[url] || title.length < 12) continue;
+    seen[url] = 1; out.push({ title: title, url: url, date: "", text: "" });
+  }
+  return out;
+}
+function newsFetchText(url) {
+  var ctl = new AbortController(), t = setTimeout(function () { ctl.abort(); }, 10000);
+  if (process.env.NEWS_TEST_URL) url = process.env.NEWS_TEST_URL + "/" + encodeURIComponent(url);   // alleen voor tests
+  return fetch(url, { signal: ctl.signal, headers: { "User-Agent": "Balanza/1.0 (voedingsnieuws)", "Accept": "application/rss+xml, application/atom+xml, application/xml, text/xml, text/html;q=0.8" } })
+    .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.text(); })
+    .finally(function () { clearTimeout(t); });
+}
+// Labels waarmee de app berichten overslaat die niet bij iemand passen (bijv. vlees bij vegetariërs).
+function newsTags(title, text) {
+  var all = (title + " " + text).toLowerCase(), tags = [];
+  if (/\bvlees|rundvlees|varkens|\bkip\b|worst|vleeswaren/.test(all)) tags.push("vlees");
+  if (/\bvis\b|zalm|haring|makreel|tonijn/.test(all)) tags.push("vis");
+  if (/alcohol|\bbier\b|\bwijn\b/.test(all)) tags.push("alcohol");
+  if (/zwanger|moedermelk|borstvoeding|\bbaby/.test(all)) tags.push("zwanger");
+  return tags;
+}
+// Alleen Nederlandstalige koppen: Engelse koppen (met typisch Engelse woorden en geen Nederlandse) vallen af.
+function looksDutch(t) { return !/\b(the|and|of|with|for|how|why|what|new|study)\b/i.test(t) || /\b(de|het|een|en|van|voor|met|op|te|is|bij|niet|meer|minder)\b/i.test(t); }
+function fetchNewsSource(src) {
+  var tryFeed = function (i) {
+    if (i >= src.feeds.length) return Promise.reject(new Error("geen werkende feed"));
+    return newsFetchText(src.feeds[i]).then(function (xml) {
+      var items = parseNewsFeed(xml);
+      if (!items.length) throw new Error("lege feed");
+      return items;
+    }).catch(function (e) { if (i + 1 >= src.feeds.length) throw e; return tryFeed(i + 1); });
+  };
+  return tryFeed(0).catch(function (e) {
+    if (!src.page) throw e;
+    return newsFetchText(src.page).then(function (html) { var it = parseNewsPage(html, src); if (!it.length) throw new Error("geen berichten op de nieuwspagina"); return it; });
+  }).then(function (items) {
+    return items.filter(function (it) {
+      if (!it.title || !cleanNewsUrl(it.url) || !looksDutch(it.title)) return false;
+      return !src.filter || NEWS_TOPIC_RE.test(it.title + " " + it.text);
+    }).slice(0, 15).map(function (it) {
+      var url = cleanNewsUrl(it.url);
+      return { id: crypto.createHash("sha1").update(url).digest("hex").slice(0, 12), src: src.key, srcName: src.name, title: it.title.slice(0, 200),
+        url: url, date: it.date, text: it.text.slice(0, 240), tags: newsTags(it.title, it.text) };
+    });
+  });
+}
+function refreshNews(force) {
+  if (newsCache.loading) return newsCache.loading;
+  if (!force && Date.now() - newsCache.fetchedAt < NEWS_TTL_MS) return Promise.resolve(newsCache);
+  newsCache.loading = getSettings().then(function (s) {
+    var srcs = NEWS_SOURCES.filter(function (x) { return s.news["src_" + x.key]; });
+    var prevById = {}; newsCache.items.forEach(function (it) { prevById[it.id] = it; });
+    return Promise.all(srcs.map(function (src) {
+      return fetchNewsSource(src).then(function (items) { newsCache.status[src.key] = { ok: true, n: items.length, at: new Date().toISOString() }; return items; },
+        function (e) {
+          newsCache.status[src.key] = { ok: false, error: String(e && e.message || e).slice(0, 120), at: new Date().toISOString() };
+          return newsCache.items.filter(function (it) { return it.src === src.key; });   // bij een storing de vorige berichten houden
+        });
+    })).then(function (lists) {
+      var now = new Date().toISOString(), items = [];
+      // Zonder datum (nieuwspagina): de datum waarop Balanza het bericht voor het eerst zag.
+      lists.forEach(function (l) { l.forEach(function (it) { if (!it.date) it.date = prevById[it.id] && prevById[it.id].date || now; items.push(it); }); });
+      items.sort(function (a, b) { return a.date < b.date ? 1 : -1; });
+      newsCache.items = items.slice(0, 60); newsCache.fetchedAt = Date.now();
+      logEvent("news", "refresh", true, 200, { n: newsCache.items.length });
+      return dbSetDoc("news/cache", { items: newsCache.items, fetchedAt: newsCache.fetchedAt, status: newsCache.status }).catch(function () {});
+    });
+  }).then(function () { newsCache.loading = null; return newsCache; }, function (e) { newsCache.loading = null; throw e; });
+  return newsCache.loading;
+}
+var newsLoadedFromDb = false;
+function loadNewsCache() {
+  if (newsLoadedFromDb) return Promise.resolve();
+  newsLoadedFromDb = true;
+  return dbGetDoc("news/cache").then(function (r) {
+    if (r.exists && r.value && Array.isArray(r.value.items) && !newsCache.fetchedAt) { newsCache.items = r.value.items; newsCache.fetchedAt = r.value.fetchedAt || 0; newsCache.status = r.value.status || {}; }
+  }).catch(function () {});
+}
+function handleNews(req, res) {
+  return Promise.all([getSettings(), loadNewsCache()]).then(function (r) {
+    var s = r[0];
+    if (!s.news.enabled) return sendJSON(res, 200, { enabled: false, items: [] });
+    var stale = Date.now() - newsCache.fetchedAt >= NEWS_TTL_MS;
+    var wait = Promise.resolve();
+    if (stale && !newsCache.items.length) wait = refreshNews().catch(function () {});
+    else if (stale) refreshNews().catch(function () {});   // op de achtergrond verversen; nu de bewaarde berichten geven
+    return wait.then(function () {
+      var on = {}; NEWS_SOURCES.forEach(function (x) { on[x.key] = s.news["src_" + x.key]; });
+      var items = newsCache.items.filter(function (it) { return on[it.src]; }).slice(0, 30);
+      var pin = s.news.pinTitle ? { id: "pin" + crypto.createHash("sha1").update(s.news.pinAt + s.news.pinTitle).digest("hex").slice(0, 8), src: "balanza", srcName: "Balanza",
+        title: s.news.pinTitle, url: s.news.pinUrl, text: s.news.pinText, date: s.news.pinAt, tags: [], pinned: true } : null;
+      sendJSON(res, 200, { enabled: true, items: items, pin: pin });
+    });
+  }).catch(function () { sendJSON(res, 200, { enabled: true, items: [] }); });
+}
+function handleAdminNews(req, res, refresh) {
+  return loadNewsCache().then(function () { return refresh ? refreshNews(true).catch(function () {}) : null; }).then(function () {
+    sendJSON(res, 200, { fetchedAt: newsCache.fetchedAt ? new Date(newsCache.fetchedAt).toISOString() : null, status: newsCache.status,
+      sources: NEWS_SOURCES.map(function (x) { return { key: x.key, name: x.name }; }),
+      items: newsCache.items.slice(0, 20).map(function (it) { return { src: it.srcName, title: it.title, url: it.url, date: it.date }; }) });
+  });
+}
+
 function normalizeSettings(raw) {
   raw = raw && typeof raw === "object" ? raw : {};
   var modules = {};
@@ -204,6 +353,14 @@ function normalizeSettings(raw) {
       var pv = raw.privacy && typeof raw.privacy === "object" ? raw.privacy : {};
       return { company: cleanText(pv.company, 120), address: cleanText(pv.address, 200), kvk: cleanText(pv.kvk, 20), email: cleanText(pv.email, 120),
         version: intIn(pv.version, 1, 999, 1), updatedOn: /^\d{4}-\d{2}-\d{2}$/.test(pv.updatedOn || "") ? pv.updatedOn : "2026-10-20" };
+    })(),
+    news: (function () {
+      var nw = raw.news && typeof raw.news === "object" ? raw.news : {};
+      var o = { enabled: nw.enabled !== false };
+      NEWS_SOURCES.forEach(function (src) { o["src_" + src.key] = nw["src_" + src.key] !== false; });
+      o.pinTitle = cleanText(nw.pinTitle, 160); o.pinUrl = cleanNewsUrl(nw.pinUrl); o.pinText = cleanText(nw.pinText, 280);
+      o.pinAt = /^\d{4}-\d{2}-\d{2}T/.test(nw.pinAt || "") ? nw.pinAt : "";
+      return o;
     })()
   };
 }
@@ -232,7 +389,7 @@ function getSettings() {
 function mergeSettings(cur, patch) {
   var next = JSON.parse(JSON.stringify(cur));
   if (typeof patch.authRequired === "boolean") next.authRequired = patch.authRequired;
-  ["modules", "planOnly", "limits", "maintenance", "announcement", "billing", "privacy"].forEach(function (k) {
+  ["modules", "planOnly", "limits", "maintenance", "announcement", "billing", "privacy", "news"].forEach(function (k) {
     if (patch[k]) Object.keys(patch[k]).forEach(function (kk) { next[k][kk] = patch[k][kk]; });
   });
   return next;
@@ -333,6 +490,23 @@ function validateSettingsPatch(body) {
       else return { error: "Onbekende privacy-instelling: " + pk2 + "." };
     }
     if (patch.privacy.email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(patch.privacy.email)) return { error: "Het e-mailadres voor privacyvragen is ongeldig." };
+  }
+  if (body.news !== undefined) {
+    var nw = body.news;
+    if (!nw || typeof nw !== "object" || Array.isArray(nw)) return { error: "news moet een object zijn." };
+    patch.news = {};
+    for (var nk of Object.keys(nw)) {
+      if (nk === "enabled" || /^src_/.test(nk)) {
+        if (nk !== "enabled" && !NEWS_SOURCES.some(function (x) { return "src_" + x.key === nk; })) return { error: "Onbekende nieuwsbron: " + nk.slice(4) + "." };
+        if (typeof nw[nk] !== "boolean") return { error: "Nieuws: " + nk + " moet true of false zijn." };
+        patch.news[nk] = nw[nk]; n++;
+      } else if (nk === "pinTitle" || nk === "pinText" || nk === "pinUrl") {
+        if (typeof nw[nk] !== "string") return { error: "Nieuws: " + nk + " moet tekst zijn." };
+        if (nk === "pinUrl") { var pu = cleanNewsUrl(nw.pinUrl); if (nw.pinUrl.trim() && !pu) return { error: "De link van het eigen bericht moet met https:// beginnen." }; patch.news.pinUrl = pu; }
+        else patch.news[nk] = cleanText(nw[nk], nk === "pinTitle" ? 160 : 280);
+        patch.news.pinAt = new Date().toISOString(); n++;
+      } else return { error: "Onbekende nieuwsinstelling: " + nk + "." };
+    }
   }
   if (!n) return { error: "Geen geldige wijzigingen ontvangen." };
   return { patch: patch };
@@ -6532,7 +6706,7 @@ function settingsPayload(s) {
 function diffSettings(cur, next) {
   var out = [];
   if (cur.authRequired !== next.authRequired) out.push({ sleutel: "authRequired", van: cur.authRequired, naar: next.authRequired });
-  ["modules", "planOnly", "limits", "maintenance", "announcement", "billing", "privacy"].forEach(function (k) {
+  ["modules", "planOnly", "limits", "maintenance", "announcement", "billing", "privacy", "news"].forEach(function (k) {
     Object.keys(next[k]).forEach(function (kk) { if (cur[k][kk] !== next[k][kk]) out.push({ sleutel: k + "." + kk, van: cur[k][kk], naar: next[k][kk] }); });
   });
   return out;
@@ -6646,6 +6820,8 @@ function handleAdminApi(req, res, url) {
     else if (sub && method === "POST") run = function () { return handleAdminUserAction(req, res, uid, sub); };
   }
   else if (method === "GET" && p === "/api/admin/community") run = function () { return handleAdminCommunity(req, res, url); };
+  else if (method === "GET" && p === "/api/admin/news") run = function () { return handleAdminNews(req, res, false); };
+  else if (method === "POST" && p === "/api/admin/news/refresh") run = function () { return handleAdminNews(req, res, true); };
   else if (method === "GET" && p === "/api/admin/dishes") run = function () { return handleAdminDishes(req, res, url); };
   else if (method === "GET" && p === "/api/admin/dish") run = function () { return handleAdminDishDetail(req, res, url); };
   else if ((m = p.match(/^\/api\/admin\/community\/([A-Za-z0-9_-]{6,30})(?:\/([a-z-]+))?$/))) {
@@ -7132,6 +7308,7 @@ var server = http.createServer(function (req, res) {
   if (req.method === "POST" && url.pathname === "/api/tips") return handleTips(req, res);
   if (req.method === "POST" && url.pathname === "/api/assistant") return handleAssistant(req, res);
   if (req.method === "POST" && url.pathname === "/api/estimate") return handleEstimate(req, res);
+  if (req.method === "GET" && url.pathname === "/api/news") return handleNews(req, res);
   if ((req.method === "GET" || req.method === "POST") && url.pathname === "/api/suggestions") return handleSuggestions(req, res);
   if ((req.method === "GET" && url.pathname === "/api/inbox") || (req.method === "POST" && url.pathname === "/api/inbox/read")) return handleInbox(req, res);
   if (req.method === "POST" && url.pathname === "/api/auth/register") return guardedRegister(req, res);

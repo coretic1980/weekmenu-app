@@ -674,6 +674,8 @@
   .recent-card .rc-meal { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--accent2); }
   .recent-card > b { font-size: 14px; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 36px; }
   .recent-card .rc-meta { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .news-card .news-meta { font-size: 11.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--accent2, var(--accent)); margin-bottom: 2px; }
+  .news-card .nudge-txt > span { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
   .ws-streak { margin-top: 6px; text-align: center; font-size: 12.5px; font-weight: 600; color: var(--accent2, var(--accent)); }
   .tip-of-day { margin-bottom: 14px; }
   .tip-of-day .tod-label { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--accent2); margin-bottom: 6px; }
@@ -3204,6 +3206,7 @@
     devices: '<rect x="2" y="4" width="14" height="10" rx="2"/><path d="M8 18h2"/><rect x="18" y="8" width="4" height="10" rx="1"/>',
     bell: '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>',
     check: '<path d="M20 6L9 17l-5-5"/>',
+    news: '<path d="M4 4h13a2 2 0 0 1 2 2v12a2 2 0 0 0 2 2H6a2 2 0 0 1-2-2z"/><path d="M19 9h1a1 1 0 0 1 1 1v8a2 2 0 0 1-2 2"/><path d="M8 8h7M8 12h7M8 16h4"/>',
     camera: '<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>'
   };
   function iconSvg(key, size) {
@@ -5347,6 +5350,7 @@
       }
       renderPushAskCard(pool);
       renderRecapHomeCard(pool);
+      renderNewsCard(pool);
       var lay = homeLayout().visible;
       if (lay.indexOf("reis") === -1 && HOME_TILES.reis.available()) renderJourneyTile(pool);
       if (lay.indexOf("seizoen") === -1 && HOME_TILES.seizoen.available()) renderSeasonCard(pool);
@@ -12081,6 +12085,7 @@
     ["cooked", "Na het eten: was het lekker?", "Eén vraag na het diner, zodat Balanza je smaak leert", "cookedCheck"],
     ["recap", "Weekterugblik", "Op maandag je vorige week in cijfers", "recap"],
     ["leftovers", "Restjes opmaken", "Bij het plannen: wat moet er op, en welke gerechten gebruiken dat", null],
+    ["news", "Voedingsnieuws", "Hooguit één bericht per dag van Voedingscentrum, RIVM of WUR, met een link naar het artikel", null],
     ["season", "Seizoen en feestdagen", "Inspiratie voor wat nu lekker is en voor speciale momenten", null],
     ["journey", "Jouw reis", "Fases op weg naar je doel, met één focus per fase", null],
     ["challenge", "Weekuitdaging", "Elke week kies je zelf een kleine uitdaging (of sla je over)", null],
@@ -12259,6 +12264,76 @@
         enablePush().then(function () { showToast("Meldingen staan aan.", "ok"); render(); }, function (e) { showToast(friendlyNetError(e)); render(); });
       } }],
       onClose: function () { lsSet("balanza_push_ask", "later"); render(); } });
+  }
+
+  // ---------- Voedingsnieuws: één kop per dag uit betrouwbare bronnen, met link naar het artikel ----------
+  var NEWS_LS = "balanza_news", NEWS_SEEN_LS = "balanza_news_seen", NEWS_DAY_LS = "balanza_news_day";
+  function newsData() {
+    if (state.news) return state.news;
+    try { var c = JSON.parse(lsGet(NEWS_LS) || "null"); if (c && Array.isArray(c.items)) return c; } catch (e) {}
+    return null;
+  }
+  function loadNews() {
+    if (state.newsLoading || !coachOn("news")) return;
+    var c = newsData();
+    if (state.news && Date.now() - (state.news.at || 0) < 3 * 3600 * 1000) return;
+    state.newsLoading = true;
+    fetch("/api/news").then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
+      state.newsLoading = false;
+      if (!d) return;
+      var hadPick = !!pickNews(c);
+      state.news = { items: d.enabled ? d.items || [] : [], pin: d.enabled ? d.pin || null : null, at: Date.now() };
+      lsSet(NEWS_LS, JSON.stringify(state.news));
+      if (!hadPick && pickNews(state.news) && state.view === "weeks" && !document.querySelector(".sheet.active, .sheet-overlay.active")) render();
+    }).catch(function () { state.newsLoading = false; });
+  }
+  function newsSeen() { try { var a = JSON.parse(lsGet(NEWS_SEEN_LS) || "[]"); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+  function markNewsSeen(id) { var a = newsSeen().filter(function (x) { return x !== id; }); a.unshift(id); lsSet(NEWS_SEEN_LS, JSON.stringify(a.slice(0, 200))); }
+  function newsFits(it) {
+    var t = it.tags || [];
+    if (meatFree() && (t.indexOf("vlees") > -1 || t.indexOf("vis") > -1)) return false;
+    if (isMinor() && t.indexOf("alcohol") > -1) return false;
+    if (prefs.gender === "Man" && t.indexOf("zwanger") > -1) return false;
+    return true;
+  }
+  // Eén bericht per dag: het bericht van vandaag blijft staan tot je het leest of wegtikt; morgen is er een volgende.
+  function pickNews(data) {
+    if (!data || !coachOn("news")) return null;
+    var seen = newsSeen(), today = todayKeyLocal(), limit = Date.now() - 21 * 86400000;
+    var day = null; try { day = JSON.parse(lsGet(NEWS_DAY_LS) || "null"); } catch (e) {}
+    var all = (data.pin ? [data.pin] : []).concat(data.items || []);
+    if (day && day.d === today) {
+      if (day.done) return null;
+      var keep = all.filter(function (it) { return it.id === day.id; })[0];
+      if (keep && seen.indexOf(keep.id) === -1 && newsFits(keep)) return keep;
+    }
+    var cands = all.filter(function (it) { return it.id && it.title && seen.indexOf(it.id) === -1 && newsFits(it) && (it.pinned || !it.date || new Date(it.date).getTime() >= limit); });
+    var pick = cands[0] || null;
+    if (pick) lsSet(NEWS_DAY_LS, JSON.stringify({ d: today, id: pick.id }));
+    return pick;
+  }
+  function newsDateLabel(iso) {
+    var d = new Date(iso); if (isNaN(d)) return "";
+    var days = Math.floor((new Date(todayKeyLocal()) - new Date(isoDateKey(d))) / 86400000);
+    if (days <= 0) return "vandaag"; if (days === 1) return "gisteren"; if (days < 7) return days + " dagen geleden";
+    return d.getDate() + " " + ["jan", "feb", "mrt", "apr", "mei", "jun", "jul", "aug", "sep", "okt", "nov", "dec"][d.getMonth()];
+  }
+  function renderNewsCard(main) {
+    if (!coachOn("news")) return;
+    loadNews();
+    var it = pickNews(newsData());
+    if (!it) return;
+    var done = function () { markNewsSeen(it.id); lsSet(NEWS_DAY_LS, JSON.stringify({ d: todayKeyLocal(), id: it.id, done: true })); };
+    var body = document.createElement("div"); body.className = "news-meta";
+    body.textContent = it.srcName + (it.date && !it.pinned ? " · " + newsDateLabel(it.date) : "");
+    var actions = [];
+    if (it.url) actions.push({ label: "Lees bij " + (it.pinned ? "de bron" : it.srcName.replace(/ University & Research$/, "")), id: "newsGo", onClick: function () {
+      done(); try { window.open(it.url, "_blank", "noopener"); } catch (e) {} render();
+    } });
+    var card = nudgeCard(main, { id: "newsCard", icon: iconSvg("news", 20), title: it.title, text: it.text || "", actions: actions,
+      onClose: function () { done(); render(); } });
+    card.classList.add("news-card");
+    card.querySelector(".nudge-txt").insertBefore(body, card.querySelector(".nudge-txt").firstChild);
   }
 
   // ---------- 2. Na het eten: gekookt, en was het lekker? ----------
