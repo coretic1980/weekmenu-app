@@ -104,6 +104,10 @@ en bovenaan Start staat een kaart "Nieuw bericht van Balanza" met het begin van 
 een tijdstempel per bericht (`balanza_chat_seen_at`), zodat het ook klopt als het gesprek langer is dan 50 berichten.
 
 **Dagelijks (bij Vandaag op Start):**
+- **Gegeten / niet gegeten:** bij elke maaltijd van vandaag staan ✓ en ✕ (bij de grote kaart als "Gegeten" en "Niet gegeten").
+  ✓ zet `cooked: true` (bij het diner vraagt Balanza daarna in *Voor jou* of het lekker was); ✕ zet `cooked: false`: de maaltijd
+  wordt doorgestreept en telt niet meer mee in je dag (meters, balk, planner). Nog eens tikken zet het terug; de melding heeft
+  *Ongedaan maken* en bij ✕ ook *Wat at je wel?* (opent "Anders gegeten" voor die maaltijd).
 - **Anders gegeten** (`/api/estimate`): beschrijf of fotografeer wat je at; de AI (assistent-model) schat kcal en macro's, die je kunt
   aanpassen. Met een foto gebruikt de server het hoofdmodel (`ANTHROPIC_MODEL`, kan foto's lezen), alleen tekst gaat via het assistent-model. Fouten staan in het scherm zelf en in de log (soort "estimate"). Kies "In plaats van" een geplande maaltijd of "Extra". Het telt mee in je dag (meters, balk, planner); opgeslagen in
   `plannedWeeks[].extra[dag]` met `who` (in een huishouden ziet ieder alleen zijn eigen). Max 30 schattingen per uur per gebruiker.

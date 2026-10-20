@@ -1454,6 +1454,23 @@
   .consent-err { margin: 0; padding: 10px 12px; border-radius: 12px; background: #FBE9E4; color: #8A2E1C; font-size: 13.5px; }
   .op-err { margin: 0; padding: 10px 12px; border-radius: 12px; background: #FBE9E4; color: #8A2E1C; font-size: 13.5px; line-height: 1.45; }
   .op-note { font-size: 13.5px; color: var(--muted); margin: 0; line-height: 1.45; }
+  .hh-meal.with-eat { grid-template-columns: minmax(0, 1fr) auto; cursor: default; }
+  .hh-meal-open { appearance: none; border: 0; background: none; padding: 0; font: inherit; color: inherit; text-align: left; cursor: pointer;
+    display: grid; grid-template-columns: 10px minmax(0, 1fr); gap: 12px; align-items: center; min-width: 0; }
+  .hh-meal-open > i { width: 10px; height: 10px; border-radius: 50%; }
+  .hh-meal.skipped .hh-meal-txt b { text-decoration: line-through; color: var(--muted); }
+  .hh-eat { display: inline-flex; gap: 6px; flex: none; }
+  .eat-btn { appearance: none; width: 34px; height: 34px; border-radius: 50%; border: 1.5px solid var(--line); background: var(--surface); color: var(--muted);
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px; font: inherit; font-size: 15px; font-weight: 800; cursor: pointer; transition: transform .12s ease, background .15s ease; }
+  .eat-btn:active { transform: scale(.9); }
+  .eat-btn.yes.on { background: #2E9A5C; border-color: #2E9A5C; color: #fff; }
+  .eat-btn.no.on { background: #8C8C8C; border-color: #8C8C8C; color: #fff; }
+  .hh-eat.big .eat-btn { width: auto; height: 36px; border-radius: 999px; padding: 0 14px 0 12px; font-size: 14px; }
+  .hh-eat.big .eat-btn em { font-style: normal; font-weight: 700; font-size: 13.5px; }
+  .hh-eatbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+  .hh-eatbar > span:first-child { font-weight: 700; font-size: 14.5px; }
+  .toast-alt { margin-left: 8px; }
+  @media (prefers-reduced-motion: reduce) { .eat-btn { transition: none; } }
   .hh-meals { display: flex; flex-direction: column; margin-top: 4px; border-top: 1px solid var(--line); }
   .hh-meal { appearance: none; border: 0; border-bottom: 1px solid var(--line); background: none; padding: 11px 2px; display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; gap: 12px;
     align-items: center; text-align: left; font-family: inherit; color: var(--ink); cursor: pointer; }
@@ -4758,6 +4775,12 @@
       card.appendChild(ph);
     }
     var body = document.createElement("div"); body.className = "hh-body";
+    if (feat) {
+      var eb = document.createElement("div"); eb.className = "hh-eatbar"; eb.id = "heroEat";
+      var q = document.createElement("span"); q.textContent = feat.a.cooked === true ? "Gegeten" : feat.a.cooked === false ? "Niet gegeten" : (hr >= SLOT_HOURS[feat.slot] - 2 ? "Gegeten?" : "Al gegeten?");
+      eb.appendChild(q); eb.appendChild(eatButtons(pw, dayName, feat, true));
+      body.appendChild(eb);
+    }
     // Voorbereiding voor vanavond (zelfde tip als in het ochtendbericht)
     if (feat && feat.slot === "Diner" && hr < 17 && feat.a.cooked === undefined && coachOn("morning")) {
       var tip = prepTipFor(feat.dish);
@@ -4770,7 +4793,7 @@
       body.appendChild(line);
       var bar = document.createElement("div"); bar.className = "hh-bar"; bar.setAttribute("aria-hidden", "true");
       // De balk is opgebouwd uit de maaltijden van vandaag, elk in de kleur van zijn moment.
-      live.forEach(function (r) {
+      live.filter(function (r) { return r.a.cooked !== false; }).forEach(function (r) {
         var seg = document.createElement("span"); seg.style.width = Math.max(1, Math.min(100, r.dish.kcal / target * 100)) + "%"; seg.style.background = MEAL_DOT[r.mt] || MEAL_DOT.Snack;
         if (r.a.cooked !== true) seg.className = "todo"; bar.appendChild(seg);
       });
@@ -4783,14 +4806,18 @@
     }
     var list = document.createElement("div"); list.className = "hh-meals";
     rows.filter(function (r) { return r !== feat; }).forEach(function (r) {
-      var row = document.createElement("button"); row.type = "button"; row.className = "hh-meal" + (r.a.cooked === true ? " done" : "") + (r.replacedBy ? " replaced" : "");
-      var dot = document.createElement("i"); dot.style.background = MEAL_DOT[r.mt] || MEAL_DOT.Snack; row.appendChild(dot);
+      var skipped = r.a.cooked === false && !r.replacedBy;
+      var row = document.createElement("div"); row.className = "hh-meal with-eat" + (r.a.cooked === true ? " done" : "") + (r.replacedBy ? " replaced" : "") + (skipped ? " skipped" : "");
+      row.id = "meal-" + r.slot.replace(/\s+/g, "-");
+      var openB = document.createElement("button"); openB.type = "button"; openB.className = "hh-meal-open";
+      var dot = document.createElement("i"); dot.style.background = MEAL_DOT[r.mt] || MEAL_DOT.Snack; openB.appendChild(dot);
       var tx = document.createElement("span"); tx.className = "hh-meal-txt";
       var b = document.createElement("b"); b.textContent = r.dish.name;
-      var sm = document.createElement("small"); sm.textContent = r.replacedBy ? r.slot + ": anders gegeten" : r.slot + ", " + r.dish.kcal + " kcal";
-      tx.appendChild(b); tx.appendChild(sm); row.appendChild(tx);
-      var st = document.createElement("span"); st.className = "hh-meal-go"; st.setAttribute("aria-hidden", "true"); st.textContent = r.a.cooked === true ? "✓" : "›"; row.appendChild(st);
-      row.onclick = function () { open(r); };
+      var sm = document.createElement("small"); sm.textContent = r.replacedBy ? r.slot + ": anders gegeten" : skipped ? r.slot + ": niet gegeten" : r.slot + ", " + r.dish.kcal + " kcal" + (r.a.cooked === true ? ", gegeten" : "");
+      tx.appendChild(b); tx.appendChild(sm); openB.appendChild(tx);
+      openB.onclick = function () { open(r); };
+      row.appendChild(openB);
+      if (!r.replacedBy) row.appendChild(eatButtons(pw, dayName, r));
       list.appendChild(row);
     });
     extras.forEach(function (x) {
@@ -4820,6 +4847,44 @@
     renderWaterRow(body);
     card.appendChild(body);
     main.appendChild(card);
+  }
+  // ---- Gegeten of niet gegeten, direct vanaf Start ----
+  // ✓ = gegeten (telt mee, en bij het diner vraagt Balanza daarna of het lekker was); ✕ = niet gegeten (telt niet mee in je dag).
+  // Nog eens tikken op dezelfde knop zet het terug.
+  function eatButtons(pw, dayName, r, big) {
+    var wrap = document.createElement("span"); wrap.className = "hh-eat" + (big ? " big" : "");
+    [[true, "\u2713", "Gegeten"], [false, "\u2715", "Niet gegeten"]].forEach(function (o) {
+      var on = r.a.cooked === o[0];
+      var b = document.createElement("button"); b.type = "button"; b.className = "eat-btn " + (o[0] ? "yes" : "no") + (on ? " on" : "");
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+      b.setAttribute("aria-label", r.dish.name + ": " + o[2].toLowerCase());
+      b.innerHTML = '<span aria-hidden="true">' + o[1] + '</span>' + (big ? "<em>" + o[2] + "</em>" : "");
+      b.onclick = function (e) { if (e && e.stopPropagation) e.stopPropagation(); setEaten(pw, dayName, r, on ? undefined : o[0]); };
+      wrap.appendChild(b);
+    });
+    return wrap;
+  }
+  function setEaten(pw, dayName, r, val) {
+    var prev = { cooked: r.a.cooked, cookedAt: r.a.cookedAt };
+    if (val === undefined) { delete r.a.cooked; delete r.a.cookedAt; }
+    else { r.a.cooked = val; r.a.cookedAt = new Date().toISOString(); }
+    savePlannedWeeks();
+    render();
+    var undo = function () { if (prev.cooked === undefined) { delete r.a.cooked; delete r.a.cookedAt; } else { r.a.cooked = prev.cooked; r.a.cookedAt = prev.cookedAt; } savePlannedWeeks(); render(); };
+    if (val === true) {
+      try { if (navigator.vibrate) navigator.vibrate(12); } catch (e) {}
+      showUndoToast("\u2713 " + r.dish.name + " gegeten", undo);
+    } else if (val === false) {
+      showUndoToast(r.dish.name + " niet gegeten. Telt niet mee in je dag.", undo);
+      if (coachOn("daytools") && moduleOn("generate")) setTimeout(function () {
+        var tb = document.getElementById("toastText");
+        if (tb && !tb.querySelector(".toast-alt")) {
+          var alt = document.createElement("button"); alt.type = "button"; alt.className = "toast-undo toast-alt"; alt.textContent = "Wat at je wel?";
+          alt.onclick = function () { document.getElementById("toast").classList.remove("active"); openOffPlanSheet(dayName + "|" + r.slot); };
+          tb.appendChild(alt);
+        }
+      }, 0);
+    } else showToast("Teruggezet.");
   }
   // ---- Voorbereidingstip (zelfde regels als het ochtendbericht op de server) ----
   var PREP_FROZEN_RE = /\b(kipfilet|kippendij\w*|kippenpoot\w*|kip|gehakt|rundergehakt|kipgehakt|biefstuk|steak|varkenshaas|karbonade|zalm\w*|kabeljauw|koolvis|tilapia|pangasius|garnalen|scampi|kalkoen\w*|riblappen|stoofvlees|lamsvlees|shoarma)\b/i;
@@ -8077,7 +8142,7 @@
     });
     PLAN_SLOTS.forEach(function (m) {
       var assigned = pw.slots[d + "|" + m];
-      if (!assigned || repl[d + "|" + m]) return;
+      if (!assigned || repl[d + "|" + m] || assigned.cooked === false) return;   // niet gegeten of vervangen: telt niet mee
       var resolved = resolveAssignedDish(assigned);
       if (!resolved) return;
       var day = resolved.day;
