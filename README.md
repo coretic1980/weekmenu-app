@@ -103,6 +103,12 @@ en bovenaan Start staat een kaart "Nieuw bericht van Balanza" met het begin van 
 (inbox) komen ook als bericht in de chat; meldingen daarover openen direct de chat (`/?open=chat`). Ongelezen wordt bepaald met
 een tijdstempel per bericht (`balanza_chat_seen_at`), zodat het ook klopt als het gesprek langer is dan 50 berichten.
 
+**Balans-score overal, in kleur:** 75–100% groen, 50–74% geel, 25–49% oranje, 0–24% rood (`balClass()`; admin gebruikt
+dezelfde kleuren). Te zien bij: het uitgelichte gerecht en elke maaltijd op Start, de dag als geheel (op de macro's van alles
+samen), het weekgemiddelde in *Je week*, de weekplanner (per dag en per gerecht), de dagkaart en snacks in de planner,
+suggesties, *Wat past nog?*, *Anders gegeten* (ook de schatting), bibliotheek, favorieten, recente gerechten, community,
+het gerechtmenu en de receptpagina. De score is altijd berekend tegen je huidige doel.
+
 **Dagelijks (bij Vandaag op Start):**
 - **Gegeten / niet gegeten:** bij elke maaltijd van vandaag staan ✓ en ✕ (bij de grote kaart als "Gegeten" en "Niet gegeten").
   ✓ zet `cooked: true` (bij het diner vraagt Balanza daarna in *Voor jou* of het lekker was); ✕ zet `cooked: false`: de maaltijd

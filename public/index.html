@@ -1471,6 +1471,28 @@
   .hh-eatbar > span:first-child { font-weight: 700; font-size: 14.5px; }
   .toast-alt { margin-left: 8px; }
   @media (prefers-reduced-motion: reduce) { .eat-btn { transition: none; } }
+  .bal-pill { display: inline-flex; align-items: center; padding: 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  /* Balans-kleuren: 75-100 groen, 50-74 geel, 25-49 oranje, 0-24 rood */
+  .b-green { --bc: #1A7F4B; --bb: #DDF3E5; }
+  .b-yellow { --bc: #8A6A00; --bb: #FFF4C2; }
+  .b-orange { --bc: #B4530A; --bb: #FFE4CC; }
+  .b-red { --bc: #B42318; --bb: #FDE2DE; }
+  .bal-pill { background: var(--bb); color: var(--bc); }
+  .bal-txt { color: var(--bc); font-weight: 700; }
+  .tag.balans.b-green, .tag.balans.b-yellow, .tag.balans.b-orange, .tag.balans.b-red { background: var(--bb); color: var(--bc); }
+  .res-bal.b-green, .res-bal.b-yellow, .res-bal.b-orange, .res-bal.b-red { background: var(--bb); color: var(--bc); }
+  .lib-bal.b-green, .lib-bal.b-yellow, .lib-bal.b-orange, .lib-bal.b-red { color: var(--bc); }
+  .wk-bal.b-green, .wk-bal.b-yellow, .wk-bal.b-orange, .wk-bal.b-red { color: var(--bc); }
+  .hh-cap .bal-pill { vertical-align: 1px; }
+  .bal-txt.b-green, .bal-txt.b-yellow, .bal-txt.b-orange, .bal-txt.b-red { color: var(--bc) !important; }
+  .wk-sum-top { flex-wrap: wrap; row-gap: 4px; }
+  .wk-pill { font-size: 11px; padding: 2px 8px; }
+  .wk-sum-top .bal-pill { color: var(--bc); }
+  .hh-line { gap: 8px; }
+  .hh-line .bal-pill { margin-left: auto; }
+  .dp-head .bal-pill { margin-left: 8px; }
+  .wk-meal { position: relative; }
+  .wk-bal { font-style: normal; font-size: 11.5px; font-weight: 700; color: var(--muted); margin-left: 6px; font-variant-numeric: tabular-nums; }
   .hh-meals { display: flex; flex-direction: column; margin-top: 4px; border-top: 1px solid var(--line); }
   .hh-meal { appearance: none; border: 0; border-bottom: 1px solid var(--line); background: none; padding: 11px 2px; display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; gap: 12px;
     align-items: center; text-align: left; font-family: inherit; color: var(--ink); cursor: pointer; }
@@ -2802,7 +2824,7 @@
       ["kh", "KH " + day.kh + "%" + (day.khG !== undefined ? " (" + day.khG + "g)" : "")],
       ["eiwit", "Eiwit " + day.eiwit + "%" + (day.eiwitG !== undefined ? " (" + day.eiwitG + "g)" : "")],
       ["vet", "Vet " + day.vet + "%" + (day.vetG !== undefined ? " (" + day.vetG + "g)" : "")],
-      ["balans", "Balans " + day.balans + "%"]
+      ["balans " + balClass(computeBalance(day.kh, day.eiwit, day.vet)), "Balans " + computeBalance(day.kh, day.eiwit, day.vet) + "%"]
     ]);
     if (day.mealType && !(opts && opts.hideMealType)) items.unshift(["neutral", day.mealType]);
     if (day.macroBron === "nevo") items.push(["nevo", "NEVO-berekend"]);
@@ -4769,7 +4791,8 @@
       var chip = document.createElement("span"); chip.className = "hh-chip"; chip.textContent = when + " – " + feat.slot.toLowerCase();
       var nm = document.createElement("b"); nm.textContent = feat.dish.name;
       var meta = document.createElement("small");
-      meta.textContent = [feat.dish.kcal + " kcal", feat.dish.eiwitG ? feat.dish.eiwitG + " g eiwit" : "", feat.dish.bereidingstijd ? feat.dish.bereidingstijd + " min" : ""].filter(Boolean).join("   ");
+      meta.textContent = [feat.dish.kcal + " kcal", feat.dish.eiwitG ? feat.dish.eiwitG + " g eiwit" : "", feat.dish.bereidingstijd ? feat.dish.bereidingstijd + " min" : ""].filter(Boolean).join("   ") + "   ";
+      meta.appendChild(balPill(dishBal(feat.dish), "heroBal"));
       cap.appendChild(chip); cap.appendChild(nm); cap.appendChild(meta); ph.appendChild(cap);
       ph.onclick = function () { open(feat); };
       card.appendChild(ph);
@@ -4786,10 +4809,16 @@
       var tip = prepTipFor(feat.dish);
       if (tip) { var pt = document.createElement("div"); pt.className = "hh-prep"; pt.id = "heroPrep"; pt.textContent = tip; body.appendChild(pt); }
     }
+    if (!target && agg && agg.kcal) {
+      var nl = document.createElement("div"); nl.className = "hh-line";
+      nl.innerHTML = "<span><b>" + agg.kcal + "</b> kcal vandaag</span>"; nl.appendChild(balPill(dayBal(agg), "dayBal"));
+      body.appendChild(nl);
+    }
     if (target) {
       var line = document.createElement("div"); line.className = "hh-line";
       var kc = agg ? agg.kcal : 0;
       line.innerHTML = '<span><b>' + kc + '</b> van ' + target + ' kcal</span><span class="hh-pct">' + Math.min(999, Math.round(kc / target * 100)) + '%</span>';
+      var db = dayBal(agg); if (db !== null) line.insertBefore(balPill(db, "dayBal"), line.lastChild);
       body.appendChild(line);
       var bar = document.createElement("div"); bar.className = "hh-bar"; bar.setAttribute("aria-hidden", "true");
       // De balk is opgebouwd uit de maaltijden van vandaag, elk in de kleur van zijn moment.
@@ -4814,6 +4843,7 @@
       var tx = document.createElement("span"); tx.className = "hh-meal-txt";
       var b = document.createElement("b"); b.textContent = r.dish.name;
       var sm = document.createElement("small"); sm.textContent = r.replacedBy ? r.slot + ": anders gegeten" : skipped ? r.slot + ": niet gegeten" : r.slot + ", " + r.dish.kcal + " kcal" + (r.a.cooked === true ? ", gegeten" : "");
+      if (!r.replacedBy && !skipped) appendBal(sm, dishBal(r.dish), ", ");
       tx.appendChild(b); tx.appendChild(sm); openB.appendChild(tx);
       openB.onclick = function () { open(r); };
       row.appendChild(openB);
@@ -4826,6 +4856,7 @@
       var tx = document.createElement("span"); tx.className = "hh-meal-txt";
       var b = document.createElement("b"); b.textContent = x.name;
       var sm = document.createElement("small"); sm.textContent = (x.place ? "Bij " + x.place : x.replaces ? x.replaces.split("|")[1] + ", anders gegeten" : "Extra") + ", " + x.kcal + " kcal";
+      appendBal(sm, gramsBal(x.kcal, x.khG || 0, x.eiwitG || 0, x.vetG || 0), ", ");
       tx.appendChild(b); tx.appendChild(sm); row.appendChild(tx);
       var st = document.createElement("span"); st.className = "hh-meal-go"; st.setAttribute("aria-hidden", "true"); st.textContent = "×"; row.appendChild(st);
       row.setAttribute("aria-label", x.name + " weghalen");
@@ -5103,6 +5134,7 @@
       kr.appendChild(kI); kr.appendChild(document.createTextNode(" kcal"));
       var mac = document.createElement("div"); mac.className = "op-mac";
       mac.textContent = "Eiwit " + (d.eiwitG || 0) + " g, koolhydraten " + (d.khG || 0) + " g, vet " + (d.vetG || 0) + " g";
+      appendBal(mac, gramsBal(d.kcal, d.khG || 0, d.eiwitG || 0, d.vetG || 0), ", ");
       box.appendChild(nmI); box.appendChild(kr); box.appendChild(mac);
       if (d.note) { var n = document.createElement("p"); n.className = "op-note"; n.textContent = d.note; box.appendChild(n); }
       body.appendChild(box);
@@ -5174,6 +5206,7 @@
         var b = document.createElement("button"); b.type = "button"; b.className = "op-place fit-own";
         b.innerHTML = "<b></b><small></small>"; b.querySelector("b").textContent = o.it.day.name;
         b.querySelector("small").textContent = o.it.day.mealType + ", " + o.k + " kcal, " + o.e + " g eiwit";
+        appendBal(b.querySelector("small"), dishBal(o.it.day), ", ");
         b.onclick = function () { closeSheet(sh.ov); openDishSheet(o.it); };
         body.appendChild(b);
       });
@@ -5222,11 +5255,13 @@
     var openWeek = function () { needDishesThen(function () { var w = pwk || addOrOpenPlannedWeek(monday); goto("planweek", { planWeekId: w.id }); }); };
     var link = document.createElement("button"); link.type = "button"; link.className = "home-h-link"; link.id = offset ? "nextWeekOpen" : "weekOpen";
     var wrap = document.createElement("section"); wrap.className = "home-sec";
-    var planned = 0, cells = [];
+    var planned = 0, cells = [], balSum = 0, balN = 0;
     PLAN_DAYS.forEach(function (dn, i) {
       var n = 0, cooked = 0, mts = [];
       if (pwk) PLAN_SLOTS.forEach(function (sl) { var a = pwk.slots[dn + "|" + sl]; if (a) { n++; if (a.cooked === true) cooked++; var mt = SLOT_TO_MEALTYPE[sl]; if (mts.indexOf(mt) === -1) mts.push(mt); } });
       if (n) planned++;
+      var bAgg = n && pwk ? aggregateDayMacros(pwk, dn) : null, bv = dayBal(bAgg);
+      if (bv !== null) { balSum += bv; balN++; }
       cells.push({ dn: dn, i: i, n: n, cooked: cooked, mts: mts });
     });
     link.textContent = planned ? "Hele week" : "Plannen";
@@ -5247,7 +5282,9 @@
     });
     card.appendChild(days);
     var sum = document.createElement("div"); sum.className = "ws-sum";
-    sum.textContent = planned === 7 ? "Je hele week staat. Mooi." : planned ? planned + " van de 7 dagen gepland" : "Nog niets gepland. Tik op een dag om te beginnen.";
+    sum.textContent = (planned === 7 ? "Je hele week staat" : planned ? planned + " van de 7 dagen gepland" : "Nog niets gepland. Tik op een dag om te beginnen.") +
+      (!balN && planned === 7 ? ". Mooi." : "");
+    if (balN) { sum.appendChild(document.createTextNode(", gemiddelde ")); var wsb = appendBal(sum, Math.round(balSum / balN), ""); wsb.id = "weekBal"; }
     card.appendChild(sum);
     wrap.appendChild(card);
     main.appendChild(wrap);
@@ -5530,7 +5567,8 @@
           c.querySelector(".rc-meal i").style.background = MEAL_DOT[d.mealType] || MEAL_DOT.Snack;
           c.querySelector(".rc-meal span").textContent = d.mealType || "";
           c.querySelector("b").textContent = d.name;
-          c.querySelector(".rc-meta").textContent = d.kcal + " kcal, balans " + computeBalance(d.kh, d.eiwit, d.vet) + "%";
+          c.querySelector(".rc-meta").textContent = d.kcal + " kcal";
+          appendBal(c.querySelector(".rc-meta"), computeBalance(d.kh, d.eiwit, d.vet), ", ");
           c.onclick = function () { goto("day", { weekId: "cache", dayId: d.id, dayServings: null, dayBackView: "weeks", dayBackWeekId: null, dayBackDayName: null }); };
           row.appendChild(c);
         });
@@ -6478,7 +6516,7 @@
       open.onclick = function () { goto("day", { weekId: "cache", dayId: d.id, dayServings: null, dayBackView: "genresult", dayBackWeekId: null, dayBackDayName: null }); };
       card.appendChild(open);
       var side = document.createElement("div"); side.className = "res-side";
-      var badge = document.createElement("span"); badge.className = "res-bal" + (bal >= 85 ? " hi" : ""); badge.textContent = "Balans " + bal + "%";
+      var badge = document.createElement("span"); badge.className = "res-bal " + balClass(bal); badge.textContent = "Balans " + bal + "%";
       side.appendChild(badge);
       var acts = document.createElement("div"); acts.className = "res-acts";
       var regen = document.createElement("button"); regen.type = "button"; regen.className = "res-btn"; regen.disabled = !!state.genRegenId || off;
@@ -6582,6 +6620,25 @@
     return el;
   }
 
+  // Balans van één gerecht (tegen je huidige doel) en van een hele dag (de macro's van alles samen).
+  function dishBal(d) { return d ? computeBalance(d.kh, d.eiwit, d.vet) : 0; }
+  function dayBal(agg) { return agg && agg.kcal ? computeBalance(agg.kh, agg.eiwit, agg.vet) : null; }
+  function gramsBal(kcal, khG, eiwitG, vetG) { var k = Number(kcal) || 0; if (!k) return 0; return computeBalance(Math.round(khG * 400 / k), Math.round(eiwitG * 400 / k), Math.round(vetG * 900 / k)); }
+  // Kleuren voor de Balans-score: 75-100 groen, 50-74 geel, 25-49 oranje, 0-24 rood.
+  function balClass(v) { v = Number(v) || 0; return v >= 75 ? "b-green" : v >= 50 ? "b-yellow" : v >= 25 ? "b-orange" : "b-red"; }
+  // Voegt "balans 88%" in kleur toe aan een regel tekst (na de bestaande tekst).
+  function appendBal(el, v, sep, cap) {
+    if (sep) el.appendChild(document.createTextNode(sep));
+    var sp = document.createElement("span"); sp.className = "bal-txt " + balClass(v); sp.textContent = (cap ? "Balans " : "balans ") + v + "%";
+    el.appendChild(sp);
+    return sp;
+  }
+  function balPill(v, id) {
+    var sp = document.createElement("span"); sp.className = "bal-pill " + balClass(v); if (id) sp.id = id;
+    sp.title = "Balans-score: hoe dicht de verdeling van koolhydraten, eiwit en vet bij je doel ligt";
+    sp.textContent = "Balans " + v + "%";
+    return sp;
+  }
   function computeBalance(khPct, eiwitPct, vetPct, target) {
     var t = target || goalTarget();
     var maxDev = Math.max(Math.abs(khPct - t.kh), Math.abs(eiwitPct - t.eiwit), Math.abs(vetPct - t.vet));
@@ -7512,7 +7569,8 @@
       body.innerHTML = '<span class="comm-type"></span><b class="comm-name"></b><span class="comm-meta"></span><span class="comm-stats"></span>';
       body.querySelector(".comm-type").textContent = it.mealType + (it.dietStyle && it.dietStyle !== "Omnivoor" ? " · " + it.dietStyle : "") + (it.hidden ? " · verborgen" : "");
       body.querySelector(".comm-name").textContent = it.name;
-      body.querySelector(".comm-meta").textContent = Math.round(it.kcal) + " kcal · " + Math.round(it.eiwitG || 0) + " g eiwit · Balans " + Math.round(it.balans || 0) + "%";
+      body.querySelector(".comm-meta").textContent = Math.round(it.kcal) + " kcal · " + Math.round(it.eiwitG || 0) + " g eiwit";
+      appendBal(body.querySelector(".comm-meta"), Math.round(it.balans || 0), " · ", true);
       body.querySelector(".comm-stats").textContent = "door " + it.authorName + " · ♥ " + (it.likes || 0) + " · " + (it.saves || 0) + "× bewaard";
       card.appendChild(img); card.appendChild(ph); card.appendChild(body);
       img.onload = function () { ph.style.display = "none"; };
@@ -7730,7 +7788,8 @@
     }
     var day = item.day;
     document.getElementById("dishSheetTitle").textContent = day.name;
-    document.getElementById("dishSheetMeta").textContent = day.mealType + " · " + day.kcal + " kcal · " + (day.eiwitG || Math.round(day.kcal * day.eiwit / 400)) + " g eiwit · Balans " + computeBalance(day.kh, day.eiwit, day.vet) + "%";
+    document.getElementById("dishSheetMeta").textContent = day.mealType + " · " + day.kcal + " kcal · " + (day.eiwitG || Math.round(day.kcal * day.eiwit / 400)) + " g eiwit";
+    appendBal(document.getElementById("dishSheetMeta"), computeBalance(day.kh, day.eiwit, day.vet), " · ", true);
     var body = document.getElementById("dishSheetBody");
     function actionsView() {
       body.innerHTML = "";
@@ -7966,7 +8025,7 @@
           var b = document.createElement("button"); b.type = "button"; b.className = "lib-fav";
           b.appendChild(dishThumb(it.day, "lib-fav-thumb"));
           var nm = document.createElement("b"); nm.textContent = it.day.name; b.appendChild(nm);
-          var mt = document.createElement("small"); mt.textContent = it.day.kcal + " kcal · Balans " + computeBalance(it.day.kh, it.day.eiwit, it.day.vet) + "%"; b.appendChild(mt);
+          var mt = document.createElement("small"); mt.textContent = it.day.kcal + " kcal"; appendBal(mt, computeBalance(it.day.kh, it.day.eiwit, it.day.vet), " · ", true); b.appendChild(mt);
           b.onclick = function () { goto("day", { weekId: it.week.id, dayId: it.day.id, dayServings: null, dayBackView: "library", dayBackWeekId: null, dayBackDayName: null }); };
           fr.appendChild(b);
         });
@@ -8017,7 +8076,7 @@
       }
       open.appendChild(txt);
       var bal = computeBalance(d.kh, d.eiwit, d.vet) || 0;
-      var ring = document.createElement("span"); ring.className = "lib-bal " + (bal >= 80 ? "hi" : bal >= 60 ? "mid" : "lo");
+      var ring = document.createElement("span"); ring.className = "lib-bal " + balClass(bal);
       ring.textContent = bal; ring.setAttribute("aria-label", "Balans " + bal + " procent"); ring.title = "Balans-score";
       open.appendChild(ring);
       open.onclick = librarySelect.on
@@ -8261,7 +8320,9 @@
       head.querySelector(".wk-date small").textContent = isToday ? "VNDG" : PLAN_SHORT[dn];
       head.querySelector(".wk-date b").textContent = date.getDate();
       head.querySelector(".wk-sum-top b").textContent = past ? (some ? "Voorbij" : "Voorbij \u00b7 niets gepland") : full ? "Compleet" : some ? "Deels gepland" : "Nog leeg";
+      var dAgg = kc ? aggregateDayMacros(pw, dn) : null, dB = dayBal(dAgg);
       head.querySelector(".wk-sum-top span").textContent = kc ? kc + (target ? " / " + target : "") + " kcal" : "";
+      if (dB !== null) { var whp = balPill(dB); whp.classList.add("wk-pill"); head.querySelector(".wk-sum-top").appendChild(whp); }
       var bar = head.querySelector(".wk-bar i");
       bar.style.width = (target ? Math.min(100, Math.round(kc / target * 100)) : (kc ? Math.min(100, Math.round(kc / 2000 * 100)) : 0)) + "%";
       if (target && kc > target + 150) bar.className = "over";
@@ -8275,6 +8336,7 @@
           b.innerHTML = "<small></small><span></span>";
           b.querySelector("small").textContent = sl;
           b.querySelector("span").textContent = r ? r.day.name + (a.leftover ? " (restje)" : "") : (past ? "\u2014" : "+ Kies een gerecht");
+          if (r) { var wbv = dishBal(r.day), wb = document.createElement("em"); wb.className = "wk-bal " + balClass(wbv); wb.textContent = wbv + "%"; wb.title = "Balans-score"; b.appendChild(wb); }
           if (r) b.onclick = function () { goto("day", { weekId: r.week.id, dayId: r.day.id, dayServings: a.servings || 1, dayBackView: "planweek", dayBackWeekId: pw.id, dayBackDayName: dn }); };
           else if (!past) { b.onclick = function () { goto("planpick", { pickFilter: null, planWeekId: pw.id, planSlotKey: dn + "|" + sl }); }; lockEl(b, "Je planning aanpassen"); }
           else b.disabled = true;
@@ -8615,6 +8677,7 @@
     card.innerHTML = '<div class="dp-head"><b></b><span class="dp-kcal"></span></div><div class="dp-bar"><i></i></div><div class="dp-macros"></div><div class="dp-advice"></div>';
     card.querySelector(".dp-head b").textContent = d + " " + date.getDate() + " " + MONTHS_SHORT[date.getMonth()] + (isToday ? " · vandaag" : "");
     card.querySelector(".dp-kcal").innerHTML = "<b>" + agg.kcal + "</b>" + (target ? " / " + target + " kcal" : " kcal");
+    if (agg.kcal) { var dpb = balPill(dayBal(agg), "dpBal"); card.querySelector(".dp-head").appendChild(dpb); }
     var kb = card.querySelector(".dp-bar i");
     kb.style.width = (target ? Math.min(100, Math.round(agg.kcal / target * 100)) : (agg.kcal ? 100 : 0)) + "%";
     if (target && agg.kcal > target + 150) kb.className = "over";
@@ -8657,7 +8720,8 @@
         open.innerHTML = "<b></b><small></small>";
         open.querySelector("b").textContent = dish.name;
         var bal = computeBalance(dish.kh, dish.eiwit, dish.vet);
-        open.querySelector("small").textContent = dish.kcal + " kcal · " + (dish.eiwitG || Math.round(dish.kcal * dish.eiwit / 400)) + " g eiwit · Balans " + bal + "%";
+        open.querySelector("small").textContent = dish.kcal + " kcal · " + (dish.eiwitG || Math.round(dish.kcal * dish.eiwit / 400)) + " g eiwit";
+        appendBal(open.querySelector("small"), bal, " · ", true);
         if (a.leftover) { var lt = document.createElement("span"); lt.className = "ps-tag"; lt.textContent = "Restje van gisteren"; open.insertBefore(lt, open.firstChild); }
         open.onclick = function () { goto("day", { weekId: res.week.id, dayId: dish.id, dayServings: a.servings || 1, dayBackView: "planweek", dayBackWeekId: pw.id, dayBackDayName: d }); };
         c.appendChild(open);
@@ -8686,7 +8750,8 @@
           var sb = document.createElement("button"); sb.type = "button"; sb.className = "pe-sug"; sb.id = "sug-" + slot + "-" + n;
           sb.innerHTML = '<span class="pe-plus" aria-hidden="true">+</span><span class="pe-txt"><b></b><small></small></span>';
           sb.querySelector("b").textContent = it.day.name;
-          sb.querySelector("small").textContent = it.day.kcal + " kcal · Balans " + computeBalance(it.day.kh, it.day.eiwit, it.day.vet) + "%";
+          sb.querySelector("small").textContent = it.day.kcal + " kcal";
+          appendBal(sb.querySelector("small"), computeBalance(it.day.kh, it.day.eiwit, it.day.vet), " · ", true);
           sb.onclick = function () { assignSlot(pw, key, it); render(); showToast("“" + it.day.name + "” ingepland", "ok"); };
           lockEl(sb, "Je planning aanpassen");
           box.appendChild(sb);
@@ -8720,6 +8785,7 @@
       if (a && r) {
         var o = document.createElement("button"); o.type = "button"; o.className = "sr-open";
         o.textContent = r.day.name + " · " + r.day.kcal + " kcal";
+        appendBal(o, dishBal(r.day), " · ");
         o.onclick = function () { goto("day", { weekId: r.week.id, dayId: r.day.id, dayServings: a.servings || 1, dayBackView: "planweek", dayBackWeekId: pw.id, dayBackDayName: d }); };
         var x = document.createElement("button"); x.type = "button"; x.className = "sr-x"; x.setAttribute("aria-label", "Snack wissen: " + r.day.name); x.textContent = "×";
         x.onclick = function () { removeSlot(pw, d + "|" + s); };
@@ -8975,9 +9041,10 @@
         stats.appendChild(kc);
         if (d.balans != null) {
           var bp = document.createElement("span");
-          bp.className = "tag balans";
+          var dbv = computeBalance(d.kh, d.eiwit, d.vet);
+          bp.className = "tag balans " + balClass(dbv);
           bp.title = "Balans-score";
-          bp.textContent = d.balans + "%";
+          bp.textContent = dbv + "%";
           stats.appendChild(bp);
         }
         stats.classList.add("mobile-only");

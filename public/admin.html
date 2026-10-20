@@ -1436,7 +1436,14 @@
   // Gerechten: alles wat gebruikers hebben gemaakt of bewaard (alleen bekijken)
   // =====================================================================================
   var DISH_SOURCES = { gegenereerd: "Gegenereerd", foto: "Van foto", community: "Uit community", eigen: "Eigen/ouder" };
-  function balansBadge(b) { return badge("Balans " + Math.round(b || 0) + "%", b >= 85 ? "good" : b >= 70 ? "" : "warn"); }
+  // 75-100 groen, 50-74 geel, 25-49 oranje, 0-24 rood (zelfde als in de app)
+  function balansBadge(b) {
+    b = Math.round(b || 0);
+    var el = badge("Balans " + b + "%", "");
+    var c = b >= 75 ? ["#DDF3E5", "#1A7F4B"] : b >= 50 ? ["#FFF4C2", "#8A6A00"] : b >= 25 ? ["#FFE4CC", "#B4530A"] : ["#FDE2DE", "#B42318"];
+    el.style.background = c[0]; el.style.color = c[1];
+    return el;
+  }
   function openDishDetail(uid, id) {
     api("/api/admin/dish" + qs({ uid: uid, id: id })).then(function (d) {
       var dish = d.dish || {};
