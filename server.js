@@ -4528,7 +4528,7 @@ function ghLiveCheck(force) {
           return pushInbox(doc.uid, { kind: "suggestion", status: "live", title: "Je idee staat live: " + doc.title,
             text: "Het is zover: “" + doc.title + "” zit nu in Balanza. Dank je wel dat je meedacht. Zo maken we de app samen beter. Heb je nog meer ideeën? De assistent hoort ze graag." });
         }).then(function () {
-          return notifyUser(doc.uid, { title: "Je idee staat live!", body: "“" + doc.title + "” zit nu in Balanza. Tik om te kijken.", url: "/?open=inbox", tag: "balanza-inbox" }, notifyHost(), "suggestion-live").catch(function () {});
+          return notifyUser(doc.uid, { title: "Je idee staat live!", body: "“" + doc.title + "” zit nu in Balanza. Tik om te kijken.", url: "/?open=chat", tag: "balanza-inbox" }, notifyHost(), "suggestion-live").catch(function () {});
         }).then(function () { ghApi("PATCH", "/issues/" + doc.issueNumber, { labels: ghLabels("live") }).catch(function () {}); });
       }).catch(function (e) { console.warn("GitHub-controle mislukt: " + e.message); });
     });
@@ -4569,7 +4569,7 @@ function handleAdminSuggestionAction(req, res, id, action) {
         ghSyncDecision(doc, action === "accept" ? "Geaccepteerd: dit gaan we bouwen. Sluit dit issue als *voltooid* zodra het live staat; de indiener krijgt dan automatisch bericht." : "Afgewezen na beoordeling.");
         var title = action === "accept" ? "Je idee komt erin: " + doc.title : "Bedankt voor je idee: " + doc.title;
         return pushInbox(doc.uid, { kind: "suggestion", status: doc.status, title: title, text: msg }).then(function () {
-          return notifyUser(doc.uid, { title: action === "accept" ? "Goed nieuws over je idee" : "Je idee is bekeken", body: "Over “" + doc.title + "”. Tik om de reactie te lezen.", url: "/?open=inbox", tag: "balanza-inbox" }, notifyHost(), "suggestion-reply").catch(function () {});
+          return notifyUser(doc.uid, { title: action === "accept" ? "Goed nieuws over je idee" : "Je idee is bekeken", body: "Over “" + doc.title + "”. Tik om de reactie te lezen.", url: "/?open=chat", tag: "balanza-inbox" }, notifyHost(), "suggestion-reply").catch(function () {});
         }).then(function () { sendJSON(res, 200, { suggestion: doc }); });
       });
     });

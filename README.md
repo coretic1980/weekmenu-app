@@ -62,6 +62,11 @@ daarom niet meer onderaan het startscherm.
 - Wissen van het chatgesprek en de smaakgeschiedenis gaat zonder vraag, met *Ongedaan maken* in de melding.
 - Inplannen en "gekookt" geven een melding met een groen vinkje (en een korte tik op telefoons die dat ondersteunen).
 
+**Nieuwe berichten in de chat:** de chatknop toont een rood getal met het aantal ongelezen berichten (en pulseert twee keer),
+en bovenaan Start staat een kaart "Nieuw bericht van Balanza" met het begin van het bericht en *Lees*. Antwoorden op ideeën
+(inbox) komen ook als bericht in de chat; meldingen daarover openen direct de chat (`/?open=chat`). Ongelezen wordt bepaald met
+een tijdstempel per bericht (`balanza_chat_seen_at`), zodat het ook klopt als het gesprek langer is dan 50 berichten.
+
 **Dagelijks (bij Vandaag op Start):**
 - **Anders gegeten** (`/api/estimate`): beschrijf of fotografeer wat je at; de AI (assistent-model) schat kcal en macro's, die je kunt
   aanpassen. Met een foto gebruikt de server het hoofdmodel (`ANTHROPIC_MODEL`, kan foto's lezen), alleen tekst gaat via het assistent-model. Fouten staan in het scherm zelf en in de log (soort "estimate"). Kies "In plaats van" een geplande maaltijd of "Extra". Het telt mee in je dag (meters, balk, planner); opgeslagen in
