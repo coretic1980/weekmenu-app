@@ -3955,7 +3955,8 @@ function cleanAutoPlan(p) {
     meals: meals.length ? meals : ["Diner"],
     days: days.length ? days : PLAN_DAY_NAMES.slice(),
     weekday: Number.isInteger(p.weekday) && p.weekday >= 0 && p.weekday <= 6 ? p.weekday : 6,
-    time: validHHMM(p.time) ? p.time : "09:00"
+    time: validHHMM(p.time) ? p.time : "09:00",
+    generate: p.generate !== false   // te weinig gerechten? dan mag Balanza er nieuwe bij maken (telt mee voor de maandlimiet)
   };
 }
 function daysBetweenKeys(a, b) { return Math.round((Date.parse(b + "T12:00:00Z") - Date.parse(a + "T12:00:00Z")) / 86400000); }
@@ -3981,7 +3982,7 @@ function buildAutoPlanWeek(weeksList, dishesDoc, prefs, mondayKey, today, cfg) {
   if (isNew) week = { id: "pw" + Date.now() + Math.floor(Math.random() * 1000), weekStart: mondayKey, slots: {}, dynamicPrep: null };
   week.slots = week.slots && typeof week.slots === "object" ? week.slots : {};
   var last = dishLastUse(weeksList, mondayKey);
-  var keys = [], relaxed = 0, empty = 0, noDishes = [];
+  var keys = [], relaxed = 0, empty = 0, noDishes = [], emptyBy = {};
   cfg.meals.forEach(function (m) {
     var slot = AUTOPLAN_SLOT[m], seen = {};
     var pool = (dishesDoc && Array.isArray(dishesDoc[m]) ? dishesDoc[m] : []).filter(function (d) {
@@ -3989,7 +3990,7 @@ function buildAutoPlanWeek(weeksList, dishesDoc, prefs, mondayKey, today, cfg) {
       if (pRules.proteinOut.length && dishHealthViolations(d, pRules).length) return false;
       seen[d.id] = 1; return true;
     });
-    if (!pool.length) { noDishes.push(m); return; }
+    if (!pool.length) { noDishes.push(m); emptyBy[m] = cfg.days.filter(function (day) { return !week.slots[day + "|" + slot]; }).length; empty += emptyBy[m]; return; }
     var used = {}, favUsed = 0;
     var favCap = Math.max(1, Math.floor(cfg.days.length * AUTOPLAN_FAV_SHARE));
     PLAN_DAY_NAMES.forEach(function (day, di) {   // wat al in de week staat telt mee voor de afwisseling
@@ -4015,35 +4016,127 @@ function buildAutoPlanWeek(weeksList, dishesDoc, prefs, mondayKey, today, cfg) {
         pick = alt[0] || null;
         if (pick) relaxed++;
       }
-      if (!pick) { empty++; return; }
+      if (!pick) { empty++; emptyBy[m] = (emptyBy[m] || 0) + 1; return; }
       week.slots[key] = { name: pick.name, weekId: "cache", dayId: pick.id, balans: pick.balans };
       used[pick.id] = 1; if (pick.rating === 1) favUsed++;
       last[pick.id] = date;
       keys.push(key);
     });
   });
-  if (!keys.length) return { added: 0, relaxed: relaxed, empty: empty, noDishes: noDishes };
+  if (!keys.length) return { added: 0, relaxed: relaxed, empty: empty, emptyBy: emptyBy, noDishes: noDishes, week: week, isNew: isNew };
   var oldKeys = week.draft && Array.isArray(week.draft.keys) ? week.draft.keys.filter(function (k) { return week.slots[k] && keys.indexOf(k) === -1; }) : [];
   week.draft = { createdAt: new Date().toISOString(), createdOn: today, keys: oldKeys.concat(keys), auto: true, relaxed: relaxed, empty: empty };
-  return { week: week, isNew: isNew, added: keys.length, keys: keys, relaxed: relaxed, empty: empty, noDishes: noDishes };
+  return { week: week, isNew: isNew, added: keys.length, keys: keys, relaxed: relaxed, empty: empty, emptyBy: emptyBy, noDishes: noDishes };
+}
+// Nieuwe gerechten maken voor het automatisch plannen (alleen als er te weinig keus is en de gebruiker dat toestaat).
+// Gebruikt dezelfde AI-opdracht als "aanvullen op de achtergrond" in de app, en telt mee voor de dag- en maandlimiet.
+var AUTOPLAN_GEN_MAX = 7;
+function serverGenParams(prefs, dishesDoc) {
+  var all = [];
+  if (dishesDoc && typeof dishesDoc === "object") Object.keys(dishesDoc).forEach(function (m) { if (Array.isArray(dishesDoc[m])) all = all.concat(dishesDoc[m]); });
+  var names = function (f) { return all.filter(f).map(function (d) { return String(d.name || ""); }).filter(Boolean).slice(-30); };
+  return {
+    cuisines: prefs.cuisines, flavors: prefs.flavors, level: prefs.level, dietStyle: prefs.dietStyle, health: Array.isArray(prefs.health) ? prefs.health : [],
+    proteinOut: Array.isArray(prefs.proteinOut) ? prefs.proteinOut : [], sugarMode: prefs.sugarMode || "natuurlijk", cheeseMode: prefs.cheeseMode || "hardekaas",
+    familyMode: prefs.familyMode, ageGroup: prefs.ageGroup || "", student: prefs.student && prefs.student.on ? prefs.student : null,
+    equipment: prefs.equipment, exclude: prefs.exclude, goal: prefs.goal, gender: prefs.gender, heightCm: prefs.heightCm, weightKg: prefs.weightKg, age: prefs.age, activityLevel: prefs.activityLevel,
+    likes: names(function (d) { return d.rating === 1; }), dislikes: names(function (d) { return d.rating === -1; }),
+    existingNames: all.map(function (d) { return String(d && d.name || ""); }).filter(Boolean).slice(-60)
+  };
+}
+function aiDishToStored(d, idx, prefs) {
+  var kcal = Number(d.kcal) || 0, khG = Number(d.kh_g) || 0, eiwitG = Number(d.eiwit_g) || 0, vetG = Number(d.vet_g) || 0;
+  var kh = kcal ? Math.round(khG * 400 / kcal) : 0, eiwit = kcal ? Math.round(eiwitG * 400 / kcal) : 0, vet = kcal ? Math.round(vetG * 900 / kcal) : 0;
+  var steps = Array.isArray(d.steps) ? d.steps.map(function (st) { var o = { title: String(st && st.title || "Stap"), content: String(st && st.content || "") }; if (st && st.timer_seconds) o.timer = Number(st.timer_seconds); return o; }) : [{ title: "Bereiding", content: "Geen bereidingsstappen ontvangen." }];
+  return { id: "auto" + Date.now() + "_" + idx, label: "Gerecht " + (idx + 1), name: String(d.name || "Naamloos gerecht").slice(0, 120),
+    kcal: kcal, kh: kh, eiwit: eiwit, vet: vet, balans: computeBalanceServer(kh, eiwit, vet, prefs.goal, prefs.dietStyle), khG: khG, eiwitG: eiwitG, vetG: vetG,
+    bereidingstijd: Number(d.bereidingstijd_minuten) || 0, fotoZoekterm: String(d.foto_zoekterm || "").trim().slice(0, 80),
+    mealType: AUTOPLAN_MEALS.indexOf(d.mealType) > -1 ? d.mealType : "Diner", benodigdheden: String(d.benodigdheden || ""),
+    ingredienten: Array.isArray(d.ingredienten) ? d.ingredienten.map(String) : [], steps: steps,
+    macroBron: d.macroBron === "nevo" ? "nevo" : "schatting", nevo: d.nevo || null, autoPlan: true };
+}
+// Geeft { dishes: [...] } of { dishes: [], skipped: "reden" }.
+function generateForAutoPlan(uid, prefs, dishesDoc, needed) {
+  var types = Object.keys(needed).filter(function (m) { return needed[m] > 0; });
+  if (!types.length) return Promise.resolve({ dishes: [] });
+  if (!ANTHROPIC_API_KEY) return Promise.resolve({ dishes: [], skipped: "geen AI" });
+  return getSettings().then(function (settings) {
+    if (!effectiveModules(settings).generate) return { dishes: [], skipped: "genereren staat uit" };
+    return Promise.all([getUserPlan(uid, settings), getUsageToday(), quotaState(uid)]).then(function (r) {
+      if (r[0] === "expired") return { dishes: [], skipped: "proef voorbij" };
+      if (r[1] + runningJobCount() >= liveLimits.dailyGenerateCap) return { dishes: [], skipped: "daglimiet" };
+      var q = r[2], total = types.reduce(function (a, m) { return a + needed[m]; }, 0);
+      if (quotaBlocked(q, 0)) return { dishes: [], skipped: "maandlimiet" };
+      if (q && q.cap > 0 && q.used + total > q.cap) {   // niet over de maandlimiet heen: schaal terug
+        var room = q.cap - q.used;
+        types.forEach(function (m) { var take = Math.min(needed[m], room); needed[m] = take; room -= take; });
+        types = types.filter(function (m) { return needed[m] > 0; });
+        if (!types.length) return { dishes: [], skipped: "maandlimiet" };
+      }
+      var body = { action: "background", needed: needed, params: serverGenParams(prefs, dishesDoc) };
+      var usage = newUsage(), t0 = Date.now();
+      return usageCtx.run(usage, function () { return runGenerateAction(body); }).then(function (parsed) {
+        var arr = Array.isArray(parsed) ? parsed : (parsed && typeof parsed === "object" ? Object.keys(parsed).map(function (k) { return parsed[k]; }).filter(Array.isArray)[0] || [] : []);
+        var have = {};
+        Object.keys(dishesDoc || {}).forEach(function (m) { (Array.isArray(dishesDoc[m]) ? dishesDoc[m] : []).forEach(function (d) { if (d && d.name) have[String(d.name).trim().toLowerCase()] = 1; }); });
+        var dishes = arr.filter(function (d) { return d && typeof d === "object" && d.name && !have[String(d.name).trim().toLowerCase()]; }).map(function (d, i) { return aiDishToStored(d, i, prefs); });
+        incrementUsageToday();
+        return recordAccounting(uid, "background", usage, dishes.length, true).then(function () {
+          logRequest(Object.assign({ ts: new Date().toISOString(), type: "generate", action: "autoplan", durationMs: Date.now() - t0, ok: true, status: 200, uid: uid }, meterFields(usage, dishes.length)));
+          return { dishes: dishes };
+        });
+      }).catch(function (e) {
+        return recordAccounting(uid, "background", usage, 0, false).then(function () {
+          logRequest({ ts: new Date().toISOString(), type: "generate", action: "autoplan", durationMs: Date.now() - t0, ok: false, status: 502, error: String(e && e.message || e).slice(0, 200), uid: uid });
+          return { dishes: [], skipped: "genereren mislukt" };
+        });
+      });
+    });
+  }).catch(function () { return { dishes: [], skipped: "genereren mislukt" }; });
+}
+// Voegt nieuwe gerechten toe aan de lijst (max 40 per soort, zoals in de app; favorieten blijven altijd staan).
+function addDishesToDoc(doc, dishes) {
+  doc = doc && typeof doc === "object" ? doc : {};
+  dishes.forEach(function (d) {
+    var arr = Array.isArray(doc[d.mealType]) ? doc[d.mealType] : [];
+    arr.push(d);
+    while (arr.length > 40) { var i = arr.findIndex(function (x) { return !x || x.rating !== 1; }); if (i < 0) break; arr.splice(i, 1); }
+    doc[d.mealType] = arr;
+  });
+  return doc;
 }
 // Voert het automatisch plannen uit voor één gebruiker (ook in een huishouden: de gedeelde planning van de eigenaar).
+// Eerst met de bestaande gerechten; blijft er iets leeg en mag het, dan maakt Balanza er gerechten bij en vult opnieuw.
 function runAutoPlanFor(uid, cfg, todayKey, mondayKey) {
   return householdOf(uid).catch(function () { return null; }).then(function (hh) {
     var dataUid = hh && hh.ownerUid ? hh.ownerUid : uid;
     return Promise.all([dbGetDoc("data/users/" + uid + "/prefs"), dbGetDoc("data/users/" + dataUid + "/plannedWeeks"), dbGetDoc("data/users/" + dataUid + "/dishes")]).then(function (r) {
       var prefs = r[0].exists && r[0].value ? r[0].value : {};
       var weeksDoc = r[1].exists && r[1].value ? r[1].value : null, weeks = weekList(weeksDoc);
-      var dishes = r[2].exists ? r[2].value : null;
-      var built = buildAutoPlanWeek(weeks, dishes, prefs, mondayKey, todayKey, cfg);
-      if (!built.added) return built;
-      if (built.isNew) weeks.push(built.week);
-      return dbSetDoc("data/users/" + dataUid + "/plannedWeeks", Object.assign({}, weeksDoc && !Array.isArray(weeksDoc) ? weeksDoc : {}, { list: weeks })).then(function () { return built; });
+      var dishes = r[2].exists && r[2].value ? r[2].value : {};
+      var b1 = buildAutoPlanWeek(weeks, dishes, prefs, mondayKey, todayKey, cfg);
+      if (b1.added && b1.isNew) weeks.push(b1.week);
+      var needed = {};
+      Object.keys(b1.emptyBy || {}).forEach(function (m) { if (b1.emptyBy[m] > 0) needed[m] = Math.min(AUTOPLAN_GEN_MAX, b1.emptyBy[m] + 1); });   // één extra voor wat speling
+      var gen = cfg.generate && Object.keys(needed).length ? generateForAutoPlan(uid, prefs, dishes, needed) : Promise.resolve({ dishes: [] });
+      return gen.then(function (g) {
+        var res = b1, saveDishes = Promise.resolve();
+        if (g.dishes.length) {
+          dishes = addDishesToDoc(dishes, g.dishes);
+          saveDishes = dbSetDoc("data/users/" + dataUid + "/dishes", dishes);
+          var b2 = buildAutoPlanWeek(weeks, dishes, prefs, mondayKey, todayKey, cfg);
+          if (b2.added && b2.isNew) weeks.push(b2.week);
+          res = { week: b2.week, added: (b1.added || 0) + (b2.added || 0), relaxed: (b1.relaxed || 0) + (b2.relaxed || 0), empty: b2.empty, noDishes: b2.noDishes, generated: g.dishes.length };
+          if (res.week.draft) { res.week.draft.relaxed = res.relaxed; res.week.draft.empty = res.empty; res.week.draft.generated = g.dishes.length; }
+        } else if (g.skipped) res = Object.assign({}, b1, { genSkipped: g.skipped });
+        if (!res.added) return saveDishes.then(function () { return res; });
+        return Promise.all([saveDishes, dbSetDoc("data/users/" + dataUid + "/plannedWeeks", Object.assign({}, weeksDoc && !Array.isArray(weeksDoc) ? weeksDoc : {}, { list: weeks }))]).then(function () { return res; });
+      });
     });
   });
 }
 function autoPlanSummary(b) {
-  return { added: b.added || 0, relaxed: b.relaxed || 0, empty: b.empty || 0, noDishes: b.noDishes || [] };
+  return { added: b.added || 0, relaxed: b.relaxed || 0, empty: b.empty || 0, noDishes: b.noDishes || [], generated: b.generated || 0, genSkipped: b.genSkipped || null };
 }
 function runAutoPlanTick(ctx) {
   var now = ctx.local;
@@ -4061,10 +4154,10 @@ function runAutoPlanTick(ctx) {
         return runAutoPlanFor(uid, cfg, now.date, mon).then(function (b) {
           var sum = autoPlanSummary(b);
           return dbSetDoc("autoplan/" + uid, Object.assign({}, v, { lastRunOn: now.date, last: Object.assign({ week: mon, at: new Date().toISOString() }, sum) })).then(function () {
-            logEvent("autoplan", "week", sum.added > 0, 200, { uid: uid, added: sum.added, relaxed: sum.relaxed, empty: sum.empty });
+            logEvent("autoplan", "week", sum.added > 0, 200, { uid: uid, added: sum.added, relaxed: sum.relaxed, empty: sum.empty, generated: sum.generated });
             if (!sum.added) return 0;
             return notifyUser(uid, { title: "Je week staat klaar", tag: "balanza-week",
-              body: sum.added + (sum.added === 1 ? " maaltijd" : " maaltijden") + " voor de week vanaf maandag " + fmtDayMonth(mon) + ", elke keer wat anders. Tik om ze één voor één te bekijken en goed te keuren.",
+              body: sum.added + (sum.added === 1 ? " maaltijd" : " maaltijden") + " voor de week vanaf maandag " + fmtDayMonth(mon) + (sum.generated ? ", waarvan " + sum.generated + (sum.generated === 1 ? " nieuw gerecht" : " nieuwe gerechten") : ", elke keer wat anders") + ". Tik om ze één voor één te bekijken en goed te keuren.",
               url: "/?open=review&week=" + mon }, ctx.host, "autoplan").then(function (x) { return x.sent > 0 ? 1 : 0; });
           });
         });

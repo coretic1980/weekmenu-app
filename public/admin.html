@@ -1293,7 +1293,7 @@
       el.oninput = debounce(function () { L[key] = el.value.trim(); L.page = 1; load(); }, 350); return el;
     }
     var q = bind("lQ", "q", "Zoek in actie, melding, IP, gebruiker…", "grow", "search");
-    var typeSel = select([["", "Alle soorten"], ["generate", "AI (genereren)"], ["tips", "Tips"], ["auth", "Account (inloggen)"], ["push", "Meldingen (push)"], ["household", "Samen plannen"], ["estimate", "Schatten (iets anders gegeten)"], ["news", "Voedingsnieuws"], ["privacy", "Privacy"], ["assistant", "Assistent (chat)"], ["suggestion", "Ideeën"], ["billing", "Betalingen"]], L.type, function (v) { L.type = v; L.page = 1; load(); }, "Soort"); typeSel.id = "lType";
+    var typeSel = select([["", "Alle soorten"], ["generate", "AI (genereren)"], ["tips", "Tips"], ["auth", "Account (inloggen)"], ["push", "Meldingen (push)"], ["household", "Samen plannen"], ["estimate", "Schatten (iets anders gegeten)"], ["news", "Voedingsnieuws"], ["autoplan", "Automatisch plannen"], ["privacy", "Privacy"], ["assistant", "Assistent (chat)"], ["suggestion", "Ideeën"], ["billing", "Betalingen"]], L.type, function (v) { L.type = v; L.page = 1; load(); }, "Soort"); typeSel.id = "lType";
     var statusSel = select([["", "Alle uitkomsten"], ["ok", "Gelukt"], ["error", "Fouten"]], L.status, function (v) { L.status = v; L.page = 1; load(); }, "Uitkomst"); statusSel.id = "lStatus";
     var uidIn = bind("lUid", "uid", "Gebruikers-ID", "", "text"), ipIn = bind("lIp", "ip", "IP-adres", "", "text");
     var fromIn = h("input", { type: "date", id: "lFrom", "aria-label": "Vanaf datum" }); fromIn.value = L.from; fromIn.onchange = function () { L.from = fromIn.value; L.page = 1; load(); };

@@ -700,6 +700,7 @@
   .rv-meta { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .rv-fav { font-size: 12px; font-weight: 700; color: #FDBA74; background: #431407; border-radius: 999px; padding: 2px 8px; }
   :root[data-theme="light"] .rv-fav { color: #C2410C; background: #FFEDD5; }
+  .rv-new { font-size: 12px; font-weight: 700; color: var(--accent-ink, #fff); background: var(--accent); border-radius: 999px; padding: 2px 8px; }
   .rv-ago { font-size: 12.5px; color: var(--muted); }
   .rv-acts { display: flex; gap: 8px; margin-top: 10px; }
   .rv-acts .ghost-btn { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 42px; white-space: nowrap; padding-left: 8px; padding-right: 8px; }
@@ -12355,7 +12356,16 @@
           plannedWeeks.push({ id: item.id, weekStart: item.weekStart, slots: item.slots ? deepClone(item.slots) : {}, dynamicPrep: item.dynamicPrep ? deepClone(item.dynamicPrep) : null,
             draft: item.draft ? deepClone(item.draft) : null, prepGenerating: false, prepError: old.prepError || null, autoFilling: false, autoFillError: null });
         });
-        return true;
+        // Nieuwe gerechten die de server voor de planning maakte, ook in de bibliotheek zetten.
+        return dbCap.doc("data/users/" + uid + "/dishes").get().then(function (ds) {
+          var data = ds.exists ? (ds.data() || {}) : {};
+          var cacheWeek = WEEKS.filter(function (w) { return w.id === "cache"; })[0];
+          var have = {}; if (cacheWeek) cacheWeek.days.forEach(function (d) { have[d.id] = 1; });
+          var fresh = [];
+          PLAN_MEALS.forEach(function (m) { (Array.isArray(data[m]) ? data[m] : []).forEach(function (d) { if (d && d.id && !have[d.id]) fresh.push(deepClone(d)); }); });
+          if (fresh.length) addToCacheLibrary(fresh);
+          return true;
+        }, function () { return true; });
       });
     }).catch(function () { return false; });
   }
@@ -12393,7 +12403,8 @@
     if (d.last && d.last.at) {
       var l = d.last, ld = new Date(l.at);
       parts.push("Laatst: " + ld.getDate() + " " + MONTHS_SHORT[ld.getMonth()] + ", " + (l.skipped ? "overgeslagen" : l.added ? l.added + (l.added === 1 ? " maaltijd" : " maaltijden") + " klaargezet" : "niets klaargezet") +
-        (l.relaxed ? " (" + l.relaxed + " met minder afwisseling)" : "") + (l.empty ? ", " + l.empty + " bleven leeg" : "") + ".");
+        (l.generated ? ", met " + l.generated + (l.generated === 1 ? " nieuw gerecht" : " nieuwe gerechten") : "") + (l.relaxed ? " (" + l.relaxed + " met minder afwisseling)" : "") + (l.empty ? ", " + l.empty + " bleven leeg" : "") +
+        (l.genSkipped === "maandlimiet" ? " Nieuwe gerechten maken kon niet: je maandlimiet is bereikt." : "") + ".");
     }
     return parts.join(" ");
   }
@@ -12431,6 +12442,10 @@
       if (!/:00$/.test(cfg.time)) { var o3 = document.createElement("option"); o3.value = cfg.time; o3.textContent = "om " + cfg.time; o3.selected = true; tm.appendChild(o3); }
       tm.onchange = function () { cfg.time = tm.value; };
       when.appendChild(wd); when.appendChild(tm); body.appendChild(when);
+      var gt = document.createElement("button"); gt.type = "button"; gt.className = "sheet-toggle"; gt.id = "apGen"; gt.setAttribute("role", "switch"); gt.setAttribute("aria-checked", cfg.generate !== false ? "true" : "false");
+      gt.innerHTML = '<span class="st-txt"><b>Te weinig gerechten? Maak er nieuwe bij</b><small>Alleen als er anders iets leeg blijft. Telt mee voor je nieuwe gerechten van deze maand.</small></span><span class="st-track' + (cfg.generate !== false ? " on" : "") + '"><i></i></span>';
+      gt.onclick = function () { cfg.generate = cfg.generate === false; paint(); };
+      if (moduleOn("generate")) body.appendChild(gt);
       var rules = document.createElement("ul"); rules.className = "ap-rules";
       ["Elk gerecht hooguit één keer per maand", "Favorieten (duimpje omhoog) vaker, maar niet vaker dan eens per anderhalve week", "Duimpje omlaag en wat je niet eet komen er nooit in", "Wat al in je week staat, blijft staan"].forEach(function (t) {
         var li = document.createElement("li"); li.textContent = t; rules.appendChild(li);
@@ -12455,13 +12470,13 @@
       body.appendChild(save);
       var now = document.createElement("button"); now.type = "button"; now.className = "ghost-btn"; now.id = "apRunNow"; now.textContent = "Volgende week nu alvast klaarzetten";
       now.onclick = function () {
-        now.disabled = true; save.disabled = true; now.textContent = "Bezig met klaarzetten…";
+        now.disabled = true; save.disabled = true; now.textContent = cfg.generate !== false ? "Bezig… nieuwe gerechten maken kan even duren" : "Bezig met klaarzetten…";
         postAutoPlan({ config: cfg, run: true }).then(function (d) {
           return reloadPlannedWeeks().then(function () { return d; });
         }).then(function (d) {
           closeSheet(sh.ov);
           var r = d.result || {};
-          if (!r.added) { showToast(r.noDishes && r.noDishes.length ? "Je hebt nog geen gerechten voor " + r.noDishes.join(", ").toLowerCase() + ". Maak er eerst een paar." : "Er viel niets meer in te plannen: de gekozen dagen staan al vol."); render(); return; }
+          if (!r.added) { showToast(r.genSkipped === "maandlimiet" ? "Er waren te weinig gerechten en je maandlimiet voor nieuwe gerechten is bereikt." : r.noDishes && r.noDishes.length ? "Je hebt nog geen gerechten voor " + r.noDishes.join(", ").toLowerCase() + ". Maak er eerst een paar." : "Er viel niets meer in te plannen: de gekozen dagen staan al vol."); render(); return; }
           var w = weekByStart(r.week);
           if (w) openReview(w.id); else render();
         }).catch(function (e) { now.disabled = false; save.disabled = false; now.textContent = "Volgende week nu alvast klaarzetten"; showToast(friendlyNetError(e)); });
@@ -12470,7 +12485,7 @@
     };
     (state.autoplan ? Promise.resolve(state.autoplan) : loadAutoPlan()).then(function (d) {
       var c = d && d.config ? d.config : { on: false, meals: ["Diner"], days: PLAN_DAYS.slice(), weekday: 6, time: "09:00" };
-      cfg = { on: c.on, meals: c.meals.slice(), days: c.days.slice(), weekday: c.weekday, time: c.time };
+      cfg = { on: c.on, meals: c.meals.slice(), days: c.days.slice(), weekday: c.weekday, time: c.time, generate: c.generate !== false };
       if (!c.on && !(d && d.last)) cfg.on = true;   // wie dit opent, wil het meestal aanzetten
       paint();
     });
@@ -12549,6 +12564,7 @@
     var h = document.createElement("h2"); h.className = "rv-title"; h.textContent = keys.length + (keys.length === 1 ? " maaltijd" : " maaltijden") + " voor je klaargezet"; main.appendChild(h);
     var sub = document.createElement("p"); sub.className = "acc-sub rv-sub";
     sub.textContent = "Veeg erdoorheen. Wissel wat je niet zint, en keur de week goed als hij klopt.";
+    if (pw.draft && pw.draft.generated) sub.textContent += " Er " + (pw.draft.generated === 1 ? "is 1 nieuw gerecht" : "zijn " + pw.draft.generated + " nieuwe gerechten") + " voor gemaakt, omdat je eigen lijst te kort was.";
     if (pw.draft && (pw.draft.relaxed || pw.draft.empty)) sub.textContent += " " + (pw.draft.relaxed ? "Bij " + pw.draft.relaxed + (pw.draft.relaxed === 1 ? " maaltijd" : " maaltijden") + " was er te weinig keus, dus komt een gerecht wat sneller terug." : "") + (pw.draft.empty ? " " + pw.draft.empty + (pw.draft.empty === 1 ? " maaltijd bleef" : " maaltijden bleven") + " leeg." : "") + " Maak een paar nieuwe gerechten voor meer afwisseling.";
     main.appendChild(sub);
     var track = document.createElement("div"); track.className = "rv-track"; track.id = "reviewTrack"; track.setAttribute("aria-label", "Voorgestelde maaltijden");
@@ -12576,6 +12592,7 @@
       if (dish.time || dish.bereidingstijd) bits.push((dish.time || dish.bereidingstijd) + (String(dish.time || dish.bereidingstijd).match(/min/) ? "" : " min"));
       meta.textContent = bits.join(" · ");
       if (dish.rating === 1) { var fav = document.createElement("span"); fav.className = "rv-fav"; fav.textContent = "♥ Favoriet"; meta.appendChild(fav); }
+      else if (dish.autoPlan && !(res && last[dish.id])) { var nw = document.createElement("span"); nw.className = "rv-new"; nw.textContent = "Nieuw gerecht"; meta.appendChild(nw); }
       info.appendChild(meta);
       var ago = document.createElement("div"); ago.className = "rv-ago";
       var lu = res && last[dish.id];
