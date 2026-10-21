@@ -2054,8 +2054,9 @@
     };
     // Naast de dialoog tikken of Escape = annuleren, zoals je gewend bent.
     var ov = document.getElementById("confirmOverlay");
-    if (ov) ov.addEventListener("click", function (e) { if (e.target === ov && cancelBtn) cancelBtn.onclick(); });
-    document.addEventListener("keydown", function (e) { if (e.key === "Escape" && ov && ov.classList.contains("active") && cancelBtn) cancelBtn.onclick(); });
+    // (alleen sluiten: de tweede knop is soms een actie, zoals "Kopieer link")
+    if (ov) ov.addEventListener("click", function (e) { if (e.target === ov) closeConfirm(); });
+    document.addEventListener("keydown", function (e) { if (e.key === "Escape" && ov && ov.classList.contains("active")) closeConfirm(); });
   })();
 
   // Dialoog: kies maaltijdmomenten voor "Vul week automatisch in".
@@ -10109,8 +10110,21 @@
     a.click();
     document.body.removeChild(a);
   }
+  // Op een telefoon openen we WhatsApp rechtstreeks (whatsapp://). Via wa.me opent een als app geïnstalleerde Balanza
+  // op de iPhone eerst een browservenster dat niet altijd doorschakelt naar WhatsApp. Lukt de app niet (niet geïnstalleerd),
+  // dan alsnog via wa.me.
   function openWhatsApp(text) {
-    openExternal("https://wa.me/?text=" + encodeURIComponent(text));
+    var web = "https://wa.me/?text=" + encodeURIComponent(text);
+    var mobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || "") || (typeof isIosLike === "function" && isIosLike());
+    if (!mobile) { openExternal(web); return; }
+    var left = false;
+    var onHide = function () { if (document.visibilityState === "hidden") left = true; };
+    document.addEventListener("visibilitychange", onHide);
+    try { window.location.href = "whatsapp://send?text=" + encodeURIComponent(text); } catch (e) {}
+    setTimeout(function () {
+      document.removeEventListener("visibilitychange", onHide);
+      if (!left && document.visibilityState === "visible") openExternal(web);   // WhatsApp ging niet open
+    }, 1500);
   }
 
   function copyToClipboard(text) {
@@ -10178,7 +10192,7 @@
         askConfirm(
           updated
             ? "Je gedeelde lijst is bijgewerkt (" + built.items.length + " producten). De link die je eerder deelde blijft gewoon werken."
-            : "Je lijst is klaar om te delen (" + built.items.length + " producten). Wie de link opent, kan producten afvinken als \u201cin mandje\u201d of \u201cniet nodig\u201d, en jullie zien elkaars vinkjes direct.",
+            : "Je lijst is klaar om te delen (" + built.items.length + (built.items.length === 1 ? " product" : " producten") + "). Wie de link opent, kan producten afvinken als \u201cin mandje\u201d of \u201cniet nodig\u201d, en jullie zien elkaars vinkjes direct.",
           function () { openWhatsApp(text); },
           "Deel via WhatsApp",
           "Kopieer link",
