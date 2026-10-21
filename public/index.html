@@ -674,6 +674,44 @@
   .recent-card .rc-meal { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--accent2); }
   .recent-card > b { font-size: 14px; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 36px; }
   .recent-card .rc-meta { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .ap-h { font-size: 13px; font-weight: 700; margin: 16px 0 8px; }
+  .ap-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .ap-days .chip { min-width: 40px; padding: 7px 0; text-align: center; }
+  .ap-when { display: flex; gap: 8px; }
+  .ap-when select { flex: 1; min-height: 44px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; padding: 0 10px; }
+  .ap-rules { margin: 16px 0 10px; padding-left: 18px; font-size: 13px; color: var(--muted); line-height: 1.5; }
+  #autoPlanSheet .primary-btn { width: 100%; margin-top: 14px; }
+  #autoPlanSheet .ghost-btn { width: 100%; margin-top: 8px; }
+  .review { padding-bottom: 150px; }
+  .rv-title { font-family: "Fraunces", serif; font-weight: 600; font-size: 24px; line-height: 1.2; margin: 4px 0 6px; }
+  .rv-sub { margin: 0 0 14px; }
+  .rv-track { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; margin: 0 -16px; padding: 4px 16px 10px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .rv-track::-webkit-scrollbar { display: none; }
+  .rv-card { flex: 0 0 86%; max-width: 420px; scroll-snap-align: center; padding: 0; overflow: hidden; display: flex; flex-direction: column; }
+  .rv-photo { position: relative; height: 190px; border: 0; padding: 0; width: 100%; background: var(--meal, var(--mint)); cursor: pointer; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+  .rv-photo .hh-emoji { font-size: 150px; right: -4%; top: -6%; }
+  .rv-photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .rv-photo.has-img img { display: block !important; }
+  .rv-photo.has-img .hh-emoji { display: none; }
+  .rv-photo .on-photo { position: absolute; top: 12px; left: 12px; }
+  .rv-info { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 4px; }
+  .rv-when { font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--accent2, var(--accent)); }
+  .rv-info h3 { font-family: "Fraunces", serif; font-size: 21px; font-weight: 600; line-height: 1.25; margin: 0; }
+  .rv-meta { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .rv-fav { font-size: 12px; font-weight: 700; color: #FDBA74; background: #431407; border-radius: 999px; padding: 2px 8px; }
+  :root[data-theme="light"] .rv-fav { color: #C2410C; background: #FFEDD5; }
+  .rv-ago { font-size: 12.5px; color: var(--muted); }
+  .rv-acts { display: flex; gap: 8px; margin-top: 10px; }
+  .rv-acts .ghost-btn { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 42px; white-space: nowrap; padding-left: 8px; padding-right: 8px; }
+  .rv-nav { display: flex; align-items: center; justify-content: center; gap: 18px; margin: 6px 0 0; }
+  .rv-arrow { width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font-size: 22px; line-height: 1; cursor: pointer; }
+  .rv-arrow:disabled { opacity: .35; cursor: default; }
+  .rv-count { font-size: 13.5px; font-weight: 600; color: var(--muted); min-width: 70px; text-align: center; }
+  .rv-foot { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); background: linear-gradient(to top, var(--bg) 70%, transparent); display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .rv-foot .primary-btn { width: 100%; max-width: 520px; }
+  .rv-empty { text-align: center; padding: 28px 18px; }
+  .rv-empty .primary-btn { margin-top: 12px; }
+  body.has-tabbar[data-view="review"] .tabbar { display: none; }
   .news-card .news-meta { font-size: 11.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--accent2, var(--accent)); margin-bottom: 2px; }
   .news-card .nudge-txt > span { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
   .ws-streak { margin-top: 6px; text-align: center; font-size: 12.5px; font-weight: 600; color: var(--accent2, var(--accent)); }
@@ -3848,6 +3886,17 @@
       else goto("community");
       return;
     }
+    if (q.open === "review") {
+      Promise.race([plansReady, new Promise(function (r) { setTimeout(r, 6000); })]).then(function () {
+        return reloadPlannedWeeks();
+      }).then(function () {
+        var w = /^\d{4}-\d{2}-\d{2}$/.test(q.week || "") ? weekByStart(q.week) : null;
+        if (w && draftKeysLeft(w).length) openReview(w.id);
+        else if (w) goto("planweek", { planWeekId: w.id });
+        else goto("weeks");
+      });
+      return;
+    }
     if (q.open === "plan") {
       // Eerst de planning binnen hebben, anders maken we een lege week aan naast de echte.
       Promise.race([plansReady, new Promise(function (r) { setTimeout(r, 6000); })]).then(function () {
@@ -4018,6 +4067,7 @@
     };
     refreshPushState().then(paintPush).catch(function () {});
 
+    renderAutoPlanSettings(main);
     renderCoachSettings(main);
     var mine = accCard(main, "Mijn Balanza");
     accButton(mine, "settingsProfile", "user", "Mijn profiel", function () { goto("account"); });
@@ -4182,7 +4232,7 @@
     window.USER_ID = data.uid;
     window.setStoredUid(window.USER_ID);
     syncPush();
-    setTimeout(function () { loadHousehold(); checkPendingJoin(); }, 300);
+    setTimeout(function () { loadHousehold(); loadAutoPlan(); checkPendingJoin(); }, 300);
   }
   function upgradeDoneMessage(m) {
     var what = describeMigrated(m);
@@ -5341,11 +5391,11 @@
       if (coachOn("draft") && nw && nw.draft && draftKeysLeft(nw).length) {
         nudgeCard(pool, { id: "draftHomeCard", tone: "accent", icon: iconSvg("calendar", 20), title: "Je volgende week staat klaar",
           text: draftKeysLeft(nw).length + " maaltijden voorgesteld met je eigen gerechten. Bekijk, wissel en keur goed.",
-          actions: [{ label: "Bekijken", primary: true, id: "draftHomeGo", onClick: function () { goto("planweek", { planWeekId: nw.id }); } }] });
+          actions: [{ label: "Bekijken", primary: true, id: "draftHomeGo", onClick: function () { openReview(nw.id); } }] });
       } else if (coachOn("draft") && [5, 6, 0].indexOf(new Date().getDay()) > -1 && hasAnyDishes() && !readOnlyMode() && nextWeekNeedsPlan() && lsGet("balanza_prepweek_skip") !== nextKey) {
         nudgeCard(pool, { id: "prepWeekCard", icon: iconSvg("calendar", 20), title: "Volgende week alvast klaarzetten?",
           text: "Balanza vult hem in één tik met je eigen gerechten. Daarna wissel je wat je wilt.",
-          actions: [{ label: "Zet klaar", primary: true, id: "prepWeekGo", onClick: prepareNextWeek }],
+          actions: [{ label: "Zet klaar", primary: true, id: "prepWeekGo", onClick: prepareNextWeek }].concat(autoPlanOn() ? [] : [{ label: "Elke week vanzelf", id: "prepWeekAuto", onClick: openAutoPlanSheet }]),
           onClose: function () { lsSet("balanza_prepweek_skip", nextKey); render(); } });
       }
       renderPushAskCard(pool);
@@ -11551,6 +11601,8 @@
       backFn = function () { goto("weeks"); };
     } else if (state.dayBackView === "recap") {
       backFn = function () { goto("recap"); };
+    } else if (state.dayBackView === "review") {
+      backFn = function () { goto("review"); };
     } else {
       backFn = function () { goto("week", { weekId: week.id }); };
     }
@@ -12193,7 +12245,8 @@
       title: "Voorstel: " + keys.length + (keys.length === 1 ? " maaltijd" : " maaltijden") + " klaargezet",
       text: "Met je eigen gerechten, je favorieten vaker en wat op moet eerst. Wissel wat je niet zint en keur de week goed.",
       actions: [
-        { label: "Week goedkeuren", primary: true, id: "draftOk", onClick: function () { approveDraft(pw); } },
+        { label: "Eén voor één bekijken", primary: true, id: "draftReview", onClick: function () { openReview(pw.id); } },
+        { label: "Week goedkeuren", id: "draftOk", onClick: function () { approveDraft(pw); } },
         { label: "Voorstel weghalen", id: "draftDrop", onClick: function () { discardDraft(pw); }, lock: "Je planning aanpassen" }
       ] });
   }
@@ -12264,6 +12317,309 @@
         enablePush().then(function () { showToast("Meldingen staan aan.", "ok"); render(); }, function (e) { showToast(friendlyNetError(e)); render(); });
       } }],
       onClose: function () { lsSet("balanza_push_ask", "later"); render(); } });
+  }
+
+  // =====================================================================================================
+  // Automatisch plannen: één keer instellen, dan zet Balanza elke week (bijv. zaterdag) de volgende week klaar.
+  // Het plannen zelf gebeurt op de server, ook als de app dicht is. Daarna bekijk je het voorstel één voor één.
+  // =====================================================================================================
+  var AP_MEALS = ["Ontbijt", "Lunch", "Diner", "Snack"];
+  var AP_SLOT = { Ontbijt: "Ontbijt", Lunch: "Lunch", Diner: "Diner", Snack: "Snack na lunch" };
+  var AP_WEEKDAYS = ["zondag", "maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag"];
+  function autoPlanOn() { return !!(state.autoplan && state.autoplan.config && state.autoplan.config.on); }
+  function loadAutoPlan() {
+    if (!window.authToken) return Promise.resolve(null);
+    return fetch("/api/autoplan", { headers: authHeaders() }).then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) { if (d) { state.autoplan = d; startAutoPlanSync(); } return d; }).catch(function () { return null; });
+  }
+  function postAutoPlan(body) {
+    return fetch("/api/autoplan", { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, authHeaders()), body: JSON.stringify(body) })
+      .then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d && d.message || "Opslaan lukte niet."); return d; }); })
+      .then(function (d) { state.autoplan = d; startAutoPlanSync(); return d; });
+  }
+  // De server kan de planning aanpassen terwijl de app open staat: haal hem opnieuw op als de app weer in beeld komt.
+  function reloadPlannedWeeks() {
+    if (!dbCap || !userCap) return Promise.resolve(false);
+    return userCap.id().then(function (uid) {
+      if (!uid) return false;
+      return dbCap.doc("data/users/" + uid + "/plannedWeeks").get().then(function (snap) {
+        var list = snap.exists && snap.data() && Array.isArray(snap.data().list) ? snap.data().list : null;
+        if (!list) return false;
+        var before = JSON.stringify(plannedWeeks.map(function (w) { return [w.id, w.slots, w.draft || null]; }));
+        var after = JSON.stringify(list.map(function (w) { return [w.id, w.slots || {}, w.draft || null]; }));
+        if (before === after) return false;
+        var byId = {}; plannedWeeks.forEach(function (w) { byId[w.id] = w; });
+        plannedWeeks.length = 0;
+        list.forEach(function (item) {
+          var old = byId[item.id] || {};
+          plannedWeeks.push({ id: item.id, weekStart: item.weekStart, slots: item.slots ? deepClone(item.slots) : {}, dynamicPrep: item.dynamicPrep ? deepClone(item.dynamicPrep) : null,
+            draft: item.draft ? deepClone(item.draft) : null, prepGenerating: false, prepError: old.prepError || null, autoFilling: false, autoFillError: null });
+        });
+        return true;
+      });
+    }).catch(function () { return false; });
+  }
+  var autoPlanSyncOn = false, autoPlanLastSync = Date.now();
+  function startAutoPlanSync() {
+    if (autoPlanSyncOn || !autoPlanOn()) return;
+    autoPlanSyncOn = true;
+    document.addEventListener("visibilitychange", function () {
+      if (document.visibilityState !== "visible" || !autoPlanOn() || Date.now() - autoPlanLastSync < 10 * 60 * 1000) return;
+      if (state.generating || document.querySelector(".sheet-overlay.active, .confirm-overlay.active")) return;
+      if (plannedWeeks.some(function (w) { return w.autoFilling || w.prepGenerating; })) return;
+      autoPlanLastSync = Date.now();
+      reloadPlannedWeeks().then(function (changed) { if (changed) render(); });
+    });
+  }
+  function apChipRow(items, picked, label, onToggle, short) {
+    var row = document.createElement("div"); row.className = "chiprow ap-chips"; row.setAttribute("role", "group"); row.setAttribute("aria-label", label);
+    items.forEach(function (it) {
+      var on = picked.indexOf(it) > -1;
+      var b = document.createElement("button"); b.type = "button"; b.className = "chip" + (on ? " selected" : "");
+      b.textContent = short ? it.slice(0, 2).toLowerCase() : it; b.title = it; b.setAttribute("aria-pressed", on ? "true" : "false");
+      b.dataset.v = it;
+      b.onclick = function () { onToggle(it); };
+      row.appendChild(b);
+    });
+    return row;
+  }
+  function apStatusText(d) {
+    if (!d || !d.config) return "";
+    var parts = [];
+    if (d.config.on && d.next) {
+      var nd = new Date(d.next.date + "T12:00:00");
+      parts.push("Volgende keer: " + AP_WEEKDAYS[nd.getDay()] + " " + nd.getDate() + " " + MONTHS_SHORT[nd.getMonth()] + " om " + d.next.time + ", voor de week vanaf maandag " + new Date(d.next.week + "T12:00:00").getDate() + " " + MONTHS_SHORT[new Date(d.next.week + "T12:00:00").getMonth()] + ".");
+    }
+    if (d.last && d.last.at) {
+      var l = d.last, ld = new Date(l.at);
+      parts.push("Laatst: " + ld.getDate() + " " + MONTHS_SHORT[ld.getMonth()] + ", " + (l.skipped ? "overgeslagen" : l.added ? l.added + (l.added === 1 ? " maaltijd" : " maaltijden") + " klaargezet" : "niets klaargezet") +
+        (l.relaxed ? " (" + l.relaxed + " met minder afwisseling)" : "") + (l.empty ? ", " + l.empty + " bleven leeg" : "") + ".");
+    }
+    return parts.join(" ");
+  }
+  var MONTHS_SHORT = ["jan", "feb", "mrt", "apr", "mei", "jun", "jul", "aug", "sep", "okt", "nov", "dec"];
+  function openAutoPlanSheet() {
+    if (requirePlus("Je week automatisch laten plannen")) return;
+    var sh = openSimpleSheet("autoPlanSheet", "Automatisch plannen", "Eén keer instellen, elke week een nieuwe planning");
+    var body = sh.body;
+    body.innerHTML = '<div class="acc-sub">Laden…</div>';
+    var cfg = null;
+    var paint = function () {
+      body.innerHTML = "";
+      var tg = document.createElement("button"); tg.type = "button"; tg.className = "sheet-toggle"; tg.id = "apOn"; tg.setAttribute("role", "switch"); tg.setAttribute("aria-checked", cfg.on ? "true" : "false");
+      tg.innerHTML = '<span class="st-txt"><b>Elke week automatisch klaarzetten</b><small>Met je eigen gerechten, elke week wat anders. Jij keurt het goed.</small></span><span class="st-track' + (cfg.on ? " on" : "") + '"><i></i></span>';
+      tg.onclick = function () { cfg.on = !cfg.on; paint(); };
+      body.appendChild(tg);
+      var h1 = document.createElement("div"); h1.className = "ap-h"; h1.textContent = "Welke maaltijden?"; body.appendChild(h1);
+      body.appendChild(apChipRow(AP_MEALS, cfg.meals, "Maaltijden", function (m) {
+        var i = cfg.meals.indexOf(m); if (i > -1) { if (cfg.meals.length > 1) cfg.meals.splice(i, 1); else return showToast("Kies minstens één maaltijd."); } else cfg.meals.push(m);
+        cfg.meals = AP_MEALS.filter(function (x) { return cfg.meals.indexOf(x) > -1; }); paint();
+      }));
+      var h2 = document.createElement("div"); h2.className = "ap-h"; h2.textContent = "Welke dagen?"; body.appendChild(h2);
+      var dr = apChipRow(PLAN_DAYS, cfg.days, "Dagen", function (d) {
+        var i = cfg.days.indexOf(d); if (i > -1) { if (cfg.days.length > 1) cfg.days.splice(i, 1); else return showToast("Kies minstens één dag."); } else cfg.days.push(d);
+        cfg.days = PLAN_DAYS.filter(function (x) { return cfg.days.indexOf(x) > -1; }); paint();
+      }, true);
+      dr.classList.add("ap-days"); body.appendChild(dr);
+      var h3 = document.createElement("div"); h3.className = "ap-h"; h3.textContent = "Wanneer klaarzetten?"; body.appendChild(h3);
+      var when = document.createElement("div"); when.className = "ap-when";
+      var wd = document.createElement("select"); wd.id = "apWeekday"; wd.setAttribute("aria-label", "Dag van klaarzetten");
+      [6, 0, 5, 4, 3, 2, 1].forEach(function (i) { var o = document.createElement("option"); o.value = String(i); o.textContent = "Elke " + AP_WEEKDAYS[i]; if (i === cfg.weekday) o.selected = true; wd.appendChild(o); });
+      wd.onchange = function () { cfg.weekday = Number(wd.value); };
+      var tm = document.createElement("select"); tm.id = "apTime"; tm.setAttribute("aria-label", "Tijd van klaarzetten");
+      for (var hr = 6; hr <= 21; hr++) { var v = (hr < 10 ? "0" : "") + hr + ":00"; var o2 = document.createElement("option"); o2.value = v; o2.textContent = "om " + v; if (v === cfg.time) o2.selected = true; tm.appendChild(o2); }
+      if (!/:00$/.test(cfg.time)) { var o3 = document.createElement("option"); o3.value = cfg.time; o3.textContent = "om " + cfg.time; o3.selected = true; tm.appendChild(o3); }
+      tm.onchange = function () { cfg.time = tm.value; };
+      when.appendChild(wd); when.appendChild(tm); body.appendChild(when);
+      var rules = document.createElement("ul"); rules.className = "ap-rules";
+      ["Elk gerecht hooguit één keer per maand", "Favorieten (duimpje omhoog) vaker, maar niet vaker dan eens per anderhalve week", "Duimpje omlaag en wat je niet eet komen er nooit in", "Wat al in je week staat, blijft staan"].forEach(function (t) {
+        var li = document.createElement("li"); li.textContent = t; rules.appendChild(li);
+      });
+      body.appendChild(rules);
+      var st = apStatusText(state.autoplan);
+      if (st) { var sp = document.createElement("div"); sp.className = "acc-sub"; sp.id = "apStatus"; sp.textContent = st; body.appendChild(sp); }
+      if (cfg.on && pushState !== "on") {
+        var pn = document.createElement("div"); pn.className = "acc-sub"; pn.id = "apPushNote";
+        pn.textContent = pushState === "ios-install" ? "Tip: zet Balanza op je beginscherm en zet meldingen aan, dan krijg je een seintje als je week klaarstaat." : "Tip: zet meldingen aan (Instellingen → Meldingen), dan krijg je een seintje als je week klaarstaat.";
+        body.appendChild(pn);
+      }
+      var save = document.createElement("button"); save.type = "button"; save.className = "primary-btn"; save.id = "apSave"; save.textContent = "Opslaan";
+      save.onclick = function () {
+        save.disabled = true;
+        postAutoPlan({ config: cfg }).then(function (d) {
+          closeSheet(sh.ov);
+          showToast(d.config.on ? "Automatisch plannen staat aan. Elke " + AP_WEEKDAYS[d.config.weekday] + " om " + d.config.time + " staat je volgende week klaar." : "Automatisch plannen staat uit.", "ok");
+          render();
+        }).catch(function (e) { save.disabled = false; showToast(friendlyNetError(e)); });
+      };
+      body.appendChild(save);
+      var now = document.createElement("button"); now.type = "button"; now.className = "ghost-btn"; now.id = "apRunNow"; now.textContent = "Volgende week nu alvast klaarzetten";
+      now.onclick = function () {
+        now.disabled = true; save.disabled = true; now.textContent = "Bezig met klaarzetten…";
+        postAutoPlan({ config: cfg, run: true }).then(function (d) {
+          return reloadPlannedWeeks().then(function () { return d; });
+        }).then(function (d) {
+          closeSheet(sh.ov);
+          var r = d.result || {};
+          if (!r.added) { showToast(r.noDishes && r.noDishes.length ? "Je hebt nog geen gerechten voor " + r.noDishes.join(", ").toLowerCase() + ". Maak er eerst een paar." : "Er viel niets meer in te plannen: de gekozen dagen staan al vol."); render(); return; }
+          var w = weekByStart(r.week);
+          if (w) openReview(w.id); else render();
+        }).catch(function (e) { now.disabled = false; save.disabled = false; now.textContent = "Volgende week nu alvast klaarzetten"; showToast(friendlyNetError(e)); });
+      };
+      body.appendChild(now);
+    };
+    (state.autoplan ? Promise.resolve(state.autoplan) : loadAutoPlan()).then(function (d) {
+      var c = d && d.config ? d.config : { on: false, meals: ["Diner"], days: PLAN_DAYS.slice(), weekday: 6, time: "09:00" };
+      cfg = { on: c.on, meals: c.meals.slice(), days: c.days.slice(), weekday: c.weekday, time: c.time };
+      if (!c.on && !(d && d.last)) cfg.on = true;   // wie dit opent, wil het meestal aanzetten
+      paint();
+    });
+  }
+  // Instellingen: een kaart met de status en een knop.
+  function renderAutoPlanSettings(main) {
+    if (readOnlyMode()) return;
+    var card = accCard(main, "Automatisch plannen");
+    var p = document.createElement("div"); p.className = "acc-sub"; p.id = "apSettingsStatus";
+    p.textContent = autoPlanOn() ? "Staat aan: " + state.autoplan.config.meals.join(", ").toLowerCase() + ", elke " + AP_WEEKDAYS[state.autoplan.config.weekday] + " om " + state.autoplan.config.time + "." : "Laat Balanza elke week je volgende week klaarzetten, met elke keer andere gerechten.";
+    card.appendChild(p);
+    accButton(card, "settingsAutoPlan", "calendar", autoPlanOn() ? "Aanpassen" : "Instellen", openAutoPlanSheet);
+  }
+
+  // ---------- Voorstel bekijken: één maaltijd per kaart, vegen, wisselen of weghalen, en dan goedkeuren ----------
+  function openReview(weekId) { state.reviewIdx = 0; goto("review", { reviewWeekId: weekId }); }
+  function reviewKeys(pw) {
+    var keys = draftKeysLeft(pw);
+    return keys.sort(function (a, b) {
+      var da = PLAN_DAYS.indexOf(a.split("|")[0]), db = PLAN_DAYS.indexOf(b.split("|")[0]);
+      return da - db || PLAN_SLOTS.indexOf(a.split("|")[1]) - PLAN_SLOTS.indexOf(b.split("|")[1]);
+    });
+  }
+  function lastUseMap(skipWeekId) {
+    var last = {};
+    plannedWeeks.forEach(function (w) {
+      if (w.id === skipWeekId || !w.weekStart) return;
+      Object.keys(w.slots).forEach(function (k) {
+        var s = w.slots[k], di = PLAN_DAYS.indexOf(k.split("|")[0]);
+        if (!s || !s.dayId || di < 0 || s.cooked === false) return;
+        var d = new Date(w.weekStart + "T12:00:00"); d.setDate(d.getDate() + di);
+        if (!last[s.dayId] || last[s.dayId] < d) last[s.dayId] = d;
+      });
+    });
+    return last;
+  }
+  // Een ander gerecht voor één maaltijd, met dezelfde regels als het automatisch plannen.
+  function reviewSwap(pw, key) {
+    var parts = key.split("|"), mt = SLOT_TO_MEALTYPE[parts[1]], cur = pw.slots[key];
+    var cache = WEEKS.filter(function (w) { return w.id === "cache"; })[0];
+    var inWeek = {}; Object.keys(pw.slots).forEach(function (k) { if (pw.slots[k]) inWeek[pw.slots[k].dayId] = 1; });
+    var last = lastUseMap(pw.id), date = new Date(pw.weekStart + "T12:00:00"); date.setDate(date.getDate() + PLAN_DAYS.indexOf(parts[0]));
+    var gap = function (d) { return last[d.id] ? Math.round((date - last[d.id]) / 86400000) : 999; };
+    var pool = (cache ? cache.days : []).filter(function (d) { return d.mealType === mt && d.rating !== -1 && !d.prep && !inWeek[d.id] && (!proteinOutList().length || !dishHasProteinOut(d)); });
+    var good = pool.filter(function (d) { return d.rating === 1 ? gap(d) >= 10 : gap(d) >= 28; });
+    var pick = good.length ? good[Math.floor(Math.random() * good.length)] : pool.sort(function (a, b) { return gap(b) - gap(a); })[0];
+    if (!pick) { showToast("Geen ander " + (mt || "gerecht").toLowerCase() + " beschikbaar. Maak er een paar bij voor meer keus."); return; }
+    var prev = cur ? deepClone(cur) : null;
+    pw.slots[key] = { name: pick.name, weekId: "cache", dayId: pick.id, balans: pick.balans };
+    savePlannedWeeks(); render();
+    showUndoToast("Gewisseld voor " + pick.name, function () { if (prev) pw.slots[key] = prev; savePlannedWeeks(); render(); });
+  }
+  function reviewRemove(pw, key) {
+    var prev = pw.slots[key] ? deepClone(pw.slots[key]) : null, keys = pw.draft ? pw.draft.keys.slice() : null;
+    delete pw.slots[key];
+    if (pw.draft) pw.draft.keys = pw.draft.keys.filter(function (k) { return k !== key; });
+    savePlannedWeeks(); render();
+    showUndoToast("Weggehaald", function () { if (prev) pw.slots[key] = prev; if (pw.draft && keys) pw.draft.keys = keys; savePlannedWeeks(); render(); });
+  }
+  function renderReview() {
+    var pw = plannedWeeks.filter(function (w) { return w.id === state.reviewWeekId; })[0];
+    var app = document.getElementById("app"); app.innerHTML = "";
+    app.appendChild(renderTopbar("Je week bekijken", true, function () { goto(pw ? "planweek" : "weeks", pw ? { planWeekId: pw.id } : {}); }));
+    var main = document.createElement("main"); main.className = "review";
+    app.appendChild(main);
+    var keys = pw ? reviewKeys(pw) : [];
+    if (!pw || !keys.length) {
+      var e = document.createElement("div"); e.className = "card rv-empty";
+      e.innerHTML = "<h2>Niets meer te bekijken</h2><p class=\"acc-sub\">Je week staat vast. Je kunt hem altijd nog aanpassen in de planner.</p>";
+      var go = document.createElement("button"); go.type = "button"; go.className = "primary-btn"; go.textContent = "Naar mijn week";
+      go.onclick = function () { if (pw) goto("planweek", { planWeekId: pw.id }); else goto("weeks"); };
+      e.appendChild(go); main.appendChild(e); return;
+    }
+    var idx = Math.max(0, Math.min(state.reviewIdx || 0, keys.length - 1));
+    var eb = document.createElement("div"); eb.className = "eyebrow"; eb.textContent = "Week van " + formatWeekLabel(new Date(pw.weekStart + "T00:00:00")); main.appendChild(eb);
+    var h = document.createElement("h2"); h.className = "rv-title"; h.textContent = keys.length + (keys.length === 1 ? " maaltijd" : " maaltijden") + " voor je klaargezet"; main.appendChild(h);
+    var sub = document.createElement("p"); sub.className = "acc-sub rv-sub";
+    sub.textContent = "Veeg erdoorheen. Wissel wat je niet zint, en keur de week goed als hij klopt.";
+    if (pw.draft && (pw.draft.relaxed || pw.draft.empty)) sub.textContent += " " + (pw.draft.relaxed ? "Bij " + pw.draft.relaxed + (pw.draft.relaxed === 1 ? " maaltijd" : " maaltijden") + " was er te weinig keus, dus komt een gerecht wat sneller terug." : "") + (pw.draft.empty ? " " + pw.draft.empty + (pw.draft.empty === 1 ? " maaltijd bleef" : " maaltijden bleven") + " leeg." : "") + " Maak een paar nieuwe gerechten voor meer afwisseling.";
+    main.appendChild(sub);
+    var track = document.createElement("div"); track.className = "rv-track"; track.id = "reviewTrack"; track.setAttribute("aria-label", "Voorgestelde maaltijden");
+    var last = lastUseMap(pw.id);
+    keys.forEach(function (key, i) {
+      var slot = pw.slots[key], res = resolveAssignedDish(slot), dish = res ? res.day : { name: slot.name, mealType: SLOT_TO_MEALTYPE[key.split("|")[1]] };
+      var mt = dish.mealType || SLOT_TO_MEALTYPE[key.split("|")[1]];
+      var c = document.createElement("article"); c.className = "card rv-card"; c.id = "rv-" + i;
+      var ph = document.createElement("button"); ph.type = "button"; ph.className = "rv-photo"; ph.setAttribute("aria-label", "Recept van " + dish.name + " bekijken");
+      ph.style.setProperty("--meal", (MEAL_THUMBS[mt] || MEAL_THUMBS.Snack)[1]);
+      var emo = document.createElement("span"); emo.className = "hh-emoji"; emo.setAttribute("aria-hidden", "true"); emo.textContent = MEAL_EMOJI[mt] || "🍽️"; ph.appendChild(emo);
+      if (wantsImages() && res) {
+        var img = document.createElement("img"); img.alt = ""; img.style.display = "none"; img.onload = function () { ph.classList.add("has-img"); };
+        ph.appendChild(img); try { loadDishImageInto(dish, img); } catch (er) {}
+      }
+      if (res && dish.kcal) { var seal = balSeal(dishBal(dish)); seal.classList.add("on-photo"); ph.appendChild(seal); }
+      if (res) ph.onclick = function () { state.reviewIdx = i; goto("day", { weekId: slot.weekId, dayId: slot.dayId, dayServings: slot.servings || 1, dayBackView: "review", dayBackWeekId: null, dayBackDayName: null }); };
+      c.appendChild(ph);
+      var info = document.createElement("div"); info.className = "rv-info";
+      var when = document.createElement("div"); when.className = "rv-when"; when.textContent = key.split("|")[0] + " · " + (mt || "").toLowerCase(); info.appendChild(when);
+      var nm = document.createElement("h3"); nm.textContent = dish.name; info.appendChild(nm);
+      var meta = document.createElement("div"); meta.className = "rv-meta";
+      var bits = [];
+      if (dish.kcal) bits.push(dish.kcal + " kcal");
+      if (dish.time || dish.bereidingstijd) bits.push((dish.time || dish.bereidingstijd) + (String(dish.time || dish.bereidingstijd).match(/min/) ? "" : " min"));
+      meta.textContent = bits.join(" · ");
+      if (dish.rating === 1) { var fav = document.createElement("span"); fav.className = "rv-fav"; fav.textContent = "♥ Favoriet"; meta.appendChild(fav); }
+      info.appendChild(meta);
+      var ago = document.createElement("div"); ago.className = "rv-ago";
+      var lu = res && last[dish.id];
+      ago.textContent = lu ? "Laatst gegeten: " + Math.max(1, Math.round((Date.now() - lu) / (7 * 86400000))) + (Math.round((Date.now() - lu) / (7 * 86400000)) > 1 ? " weken" : " week") + " geleden" : "Nog niet eerder ingepland";
+      info.appendChild(ago);
+      var acts = document.createElement("div"); acts.className = "rv-acts";
+      var sw = document.createElement("button"); sw.type = "button"; sw.className = "ghost-btn"; sw.id = "rvSwap" + i; sw.innerHTML = iconSvg("refresh", 17) + "<span>Wissel</span>";
+      sw.onclick = function () { state.reviewIdx = i; reviewSwap(pw, key); };
+      var rm = document.createElement("button"); rm.type = "button"; rm.className = "ghost-btn"; rm.id = "rvRemove" + i; rm.innerHTML = iconSvg("trash", 17) + "<span>Haal weg</span>";
+      rm.onclick = function () { state.reviewIdx = Math.min(i, keys.length - 2); reviewRemove(pw, key); };
+      acts.appendChild(sw); acts.appendChild(rm); info.appendChild(acts);
+      c.appendChild(info);
+      track.appendChild(c);
+    });
+    main.appendChild(track);
+    var nav = document.createElement("div"); nav.className = "rv-nav";
+    var prev = document.createElement("button"); prev.type = "button"; prev.className = "rv-arrow"; prev.id = "rvPrev"; prev.setAttribute("aria-label", "Vorige"); prev.textContent = "‹";
+    var count = document.createElement("span"); count.className = "rv-count"; count.id = "rvCount";
+    var next = document.createElement("button"); next.type = "button"; next.className = "rv-arrow"; next.id = "rvNext"; next.setAttribute("aria-label", "Volgende"); next.textContent = "›";
+    nav.appendChild(prev); nav.appendChild(count); nav.appendChild(next); main.appendChild(nav);
+    var goTo = function (n, smooth) {
+      idx = Math.max(0, Math.min(n, keys.length - 1)); state.reviewIdx = idx;
+      var el = track.children[idx]; if (el) track.scrollTo({ left: el.offsetLeft - track.offsetLeft - (track.clientWidth - el.clientWidth) / 2, behavior: smooth ? "smooth" : "auto" });
+      paintNav();
+    };
+    var paintNav = function () { count.textContent = (idx + 1) + " van " + keys.length; prev.disabled = idx === 0; next.disabled = idx === keys.length - 1; };
+    prev.onclick = function () { goTo(idx - 1, true); };
+    next.onclick = function () { goTo(idx + 1, true); };
+    var tmr = null;
+    track.addEventListener("scroll", function () {
+      clearTimeout(tmr);
+      tmr = setTimeout(function () {
+        var mid = track.scrollLeft + track.clientWidth / 2, best = 0, bd = Infinity;
+        Array.prototype.forEach.call(track.children, function (el, i) { var c = el.offsetLeft - track.offsetLeft + el.clientWidth / 2, dd = Math.abs(c - mid); if (dd < bd) { bd = dd; best = i; } });
+        if (best !== idx) { idx = best; state.reviewIdx = idx; paintNav(); }
+      }, 80);
+    }, { passive: true });
+    var foot = document.createElement("div"); foot.className = "rv-foot";
+    var ok = document.createElement("button"); ok.type = "button"; ok.className = "primary-btn"; ok.id = "reviewAccept"; ok.textContent = "Week goedkeuren (" + keys.length + ")";
+    ok.onclick = function () { delete pw.draft; savePlannedWeeks(); showToast("Top! Je week staat vast. Je boodschappenlijst is bijgewerkt.", "ok"); goto("planweek", { planWeekId: pw.id }); };
+    var drop = document.createElement("button"); drop.type = "button"; drop.className = "hh-link"; drop.id = "reviewDrop"; drop.textContent = "Hele voorstel weghalen";
+    drop.onclick = function () { discardDraft(pw); goto("planweek", { planWeekId: pw.id }); };
+    foot.appendChild(ok); foot.appendChild(drop); main.appendChild(foot);
+    requestAnimationFrame(function () { goTo(idx, false); });
   }
 
   // ---------- Voedingsnieuws: één kop per dag uit betrouwbare bronnen, met link naar het artikel ----------
@@ -12768,6 +13124,12 @@
   }
   function plannerExtras(main, pw) {
     renderDraftBanner(main, pw);
+    if (state.autoplan && !autoPlanOn() && !readOnlyMode() && hasAnyDishes() && !pw.draft && lsGet("balanza_ap_hint") !== "1") {
+      nudgeCard(main, { id: "autoPlanHint", icon: iconSvg("calendar", 20), title: "Elke week vanzelf gepland?",
+        text: "Kies één keer welke maaltijden en dagen. Balanza zet dan elke week je volgende week klaar, steeds met andere gerechten.",
+        actions: [{ label: "Instellen", id: "autoPlanHintGo", onClick: openAutoPlanSheet }],
+        onClose: function () { lsSet("balanza_ap_hint", "1"); render(); } });
+    }
     renderLeftoversCard(main, pw);
   }
 
@@ -14346,6 +14708,7 @@
   }
   function initPersistence() {
     loadHousehold();
+    loadAutoPlan();
     loadInbox();
     claude.use("db").then(function (db) {
       dbCap = db;
@@ -14675,6 +15038,7 @@
       else if (state.view === "planadd") renderPlanAdd();
       else if (state.view === "planweek") renderPlanWeek();
       else if (state.view === "recap") renderRecap();
+      else if (state.view === "review") renderReview();
       else if (state.view === "journey") renderJourney();
       else if (state.view === "planday") renderPlanDay();
       else if (state.view === "planprep") renderPlanPrep();
