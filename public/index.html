@@ -685,9 +685,11 @@
   .review { padding-bottom: 150px; }
   .rv-title { font-family: "Fraunces", serif; font-weight: 600; font-size: 24px; line-height: 1.2; margin: 4px 0 6px; }
   .rv-sub { margin: 0 0 14px; }
-  .rv-track { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; margin: 0 -16px; padding: 4px 16px 10px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
-  .rv-track::-webkit-scrollbar { display: none; }
-  .rv-card { flex: 0 0 86%; max-width: 420px; scroll-snap-align: center; padding: 0; overflow: hidden; display: flex; flex-direction: column; }
+  .rv-track { overflow: hidden; margin: 0 -16px; padding: 4px 0 10px; touch-action: pan-y; user-select: none; -webkit-user-select: none; outline: none; }
+  .rv-rail { display: flex; gap: 12px; width: 100%; will-change: transform; }
+  .rv-card { flex: 0 0 86%; max-width: 420px; padding: 0; overflow: hidden; display: flex; flex-direction: column; transition: opacity .25s, transform .25s; opacity: .55; transform: scale(.96); }
+  .rv-card.is-current { opacity: 1; transform: none; }
+  .rv-card img { -webkit-user-drag: none; pointer-events: none; }
   .rv-photo { position: relative; height: 190px; border: 0; padding: 0; width: 100%; background: var(--meal, var(--mint)); cursor: pointer; display: flex; align-items: center; justify-content: center; overflow: hidden; }
   .rv-photo .hh-emoji { font-size: 150px; right: -4%; top: -6%; }
   .rv-photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
@@ -12567,7 +12569,8 @@
     if (pw.draft && pw.draft.generated) sub.textContent += " Er " + (pw.draft.generated === 1 ? "is 1 nieuw gerecht" : "zijn " + pw.draft.generated + " nieuwe gerechten") + " voor gemaakt, omdat je eigen lijst te kort was.";
     if (pw.draft && (pw.draft.relaxed || pw.draft.empty)) sub.textContent += " " + (pw.draft.relaxed ? "Bij " + pw.draft.relaxed + (pw.draft.relaxed === 1 ? " maaltijd" : " maaltijden") + " was er te weinig keus, dus komt een gerecht wat sneller terug." : "") + (pw.draft.empty ? " " + pw.draft.empty + (pw.draft.empty === 1 ? " maaltijd bleef" : " maaltijden bleven") + " leeg." : "") + " Maak een paar nieuwe gerechten voor meer afwisseling.";
     main.appendChild(sub);
-    var track = document.createElement("div"); track.className = "rv-track"; track.id = "reviewTrack"; track.setAttribute("aria-label", "Voorgestelde maaltijden");
+    var track = document.createElement("div"); track.className = "rv-track"; track.id = "reviewTrack"; track.setAttribute("aria-label", "Voorgestelde maaltijden"); track.tabIndex = 0;
+    var rail = document.createElement("div"); rail.className = "rv-rail"; rail.id = "reviewRail"; track.appendChild(rail);
     var last = lastUseMap(pw.id);
     keys.forEach(function (key, i) {
       var slot = pw.slots[key], res = resolveAssignedDish(slot), dish = res ? res.day : { name: slot.name, mealType: SLOT_TO_MEALTYPE[key.split("|")[1]] };
@@ -12605,7 +12608,7 @@
       rm.onclick = function () { state.reviewIdx = Math.min(i, keys.length - 2); reviewRemove(pw, key); };
       acts.appendChild(sw); acts.appendChild(rm); info.appendChild(acts);
       c.appendChild(info);
-      track.appendChild(c);
+      rail.appendChild(c);
     });
     main.appendChild(track);
     var nav = document.createElement("div"); nav.className = "rv-nav";
@@ -12613,23 +12616,53 @@
     var count = document.createElement("span"); count.className = "rv-count"; count.id = "rvCount";
     var next = document.createElement("button"); next.type = "button"; next.className = "rv-arrow"; next.id = "rvNext"; next.setAttribute("aria-label", "Volgende"); next.textContent = "›";
     nav.appendChild(prev); nav.appendChild(count); nav.appendChild(next); main.appendChild(nav);
+    // Vegen met je vinger (of slepen met de muis): de kaart volgt je vinger en klikt naar de volgende of vorige.
+    // Verticaal scrollen van de pagina blijft gewoon werken (touch-action: pan-y).
+    var posFor = function (i) { var el = rail.children[i]; return el ? -(el.offsetLeft - (track.clientWidth - el.clientWidth) / 2) : 0; };
+    var setX = function (x, anim) { rail.style.transition = anim ? "transform .32s cubic-bezier(.2,.8,.2,1)" : "none"; rail.style.transform = "translate3d(" + Math.round(x) + "px,0,0)"; };
     var goTo = function (n, smooth) {
       idx = Math.max(0, Math.min(n, keys.length - 1)); state.reviewIdx = idx;
-      var el = track.children[idx]; if (el) track.scrollTo({ left: el.offsetLeft - track.offsetLeft - (track.clientWidth - el.clientWidth) / 2, behavior: smooth ? "smooth" : "auto" });
+      setX(posFor(idx), smooth);
+      Array.prototype.forEach.call(rail.children, function (el, i) { el.classList.toggle("is-current", i === idx); });
       paintNav();
     };
     var paintNav = function () { count.textContent = (idx + 1) + " van " + keys.length; prev.disabled = idx === 0; next.disabled = idx === keys.length - 1; };
     prev.onclick = function () { goTo(idx - 1, true); };
     next.onclick = function () { goTo(idx + 1, true); };
-    var tmr = null;
-    track.addEventListener("scroll", function () {
-      clearTimeout(tmr);
-      tmr = setTimeout(function () {
-        var mid = track.scrollLeft + track.clientWidth / 2, best = 0, bd = Infinity;
-        Array.prototype.forEach.call(track.children, function (el, i) { var c = el.offsetLeft - track.offsetLeft + el.clientWidth / 2, dd = Math.abs(c - mid); if (dd < bd) { bd = dd; best = i; } });
-        if (best !== idx) { idx = best; state.reviewIdx = idx; paintNav(); }
-      }, 80);
-    }, { passive: true });
+    var drag = null, moved = false;
+    track.addEventListener("pointerdown", function (e) {
+      if (e.pointerType === "mouse" && e.button !== 0) return;
+      drag = { x: e.clientX, y: e.clientY, t: Date.now(), base: posFor(idx), horiz: null, id: e.pointerId }; moved = false;
+    });
+    track.addEventListener("pointermove", function (e) {
+      if (!drag || e.pointerId !== drag.id) return;
+      var dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+      if (drag.horiz === null) {
+        if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+        drag.horiz = Math.abs(dx) > Math.abs(dy);
+        if (!drag.horiz) { drag = null; return; }
+        try { track.setPointerCapture(e.pointerId); } catch (er) {}
+      }
+      moved = true;
+      var edge = (idx === 0 && dx > 0) || (idx === keys.length - 1 && dx < 0);
+      setX(drag.base + (edge ? dx / 3 : dx), false);
+      if (e.cancelable) e.preventDefault();
+    });
+    var endDrag = function (e) {
+      if (!drag || (e && e.pointerId !== drag.id)) return;
+      var d = drag; drag = null;
+      if (!d.horiz) return;
+      var dx = (e ? e.clientX : d.x) - d.x, v = Math.abs(dx) / Math.max(1, Date.now() - d.t);
+      if (dx < -50 || (dx < -15 && v > 0.35)) goTo(idx + 1, true);
+      else if (dx > 50 || (dx > 15 && v > 0.35)) goTo(idx - 1, true);
+      else goTo(idx, true);
+    };
+    track.addEventListener("pointerup", endDrag);
+    track.addEventListener("pointercancel", function (e) { if (drag && e.pointerId === drag.id) { drag = null; goTo(idx, true); } });
+    track.addEventListener("click", function (e) { if (moved) { e.stopPropagation(); e.preventDefault(); moved = false; } }, true);   // na vegen geen per-ongeluk-tik
+    track.addEventListener("keydown", function (e) { if (e.key === "ArrowRight") { goTo(idx + 1, true); e.preventDefault(); } else if (e.key === "ArrowLeft") { goTo(idx - 1, true); e.preventDefault(); } });
+    var onResize = function () { if (state.view === "review" && document.body.contains(rail)) goTo(idx, false); else window.removeEventListener("resize", onResize); };
+    window.addEventListener("resize", onResize);
     var foot = document.createElement("div"); foot.className = "rv-foot";
     var ok = document.createElement("button"); ok.type = "button"; ok.className = "primary-btn"; ok.id = "reviewAccept"; ok.textContent = "Week goedkeuren (" + keys.length + ")";
     ok.onclick = function () { delete pw.draft; savePlannedWeeks(); showToast("Top! Je week staat vast. Je boodschappenlijst is bijgewerkt.", "ok"); goto("planweek", { planWeekId: pw.id }); };
