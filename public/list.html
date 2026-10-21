@@ -7,7 +7,7 @@
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#0A0805">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Boodschappen">
 <title>{{OG_TITLE}}</title>
 <meta property="og:type" content="website">
@@ -20,62 +20,89 @@
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png?v=2">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Public+Sans:wght@400;500;600;700&display=swap">
 <style>
+  /* Zelfde stijl als de app: licht "Fris" (groen) als standaard, donker (warm goud) als je de app donker gebruikt of je toestel donker staat */
   :root {
-    box-sizing: border-box;
-    --bg: #0A0805; --surface: #17130C; --ink: #F3EEE2; --muted: #A89A80; --line: #2E2517;
-    --accent: #C6A15B; --accent-ink: #14110C; --accent2: #D4A24A; --ok: #7FB77E; --warn: #E0A458;
+    --bg: #F3F7F4; --surface: #FFFFFF; --ink: #0F2219; --muted: #55685D; --line: #DCE6E0;
+    --accent: #14543A; --accent-ink: #FFFFFF; --accent2: #1F8A55; --mint: #DDF3E5; --ok: #1F8A55; --warn: #B0731B;
+    --glow1: rgba(120, 214, 160, 0.42); --glow2: rgba(255, 220, 110, 0.26); --shadow: 0 8px 22px rgba(15, 55, 38, 0.08);
+    --flag: #F2C230; --flag-ink: #3A2A00; --stickybg: rgba(243, 247, 244, 0.86);
   }
-  @media (prefers-color-scheme: light) {
-    :root { --bg: #F7F2E7; --surface: #FFFDF8; --ink: #10182B; --muted: #6B6152; --line: #E7DFCC; --accent: #0E1A30; --accent-ink: #FFFFFF; --accent2: #B8863B; --ok: #3E8E41; --warn: #B0731B; }
+  :root[data-theme="dark"] {
+    --bg: #0C0906; --surface: #17130C; --ink: #F3EEE2; --muted: #A89A80; --line: #2E2517;
+    --accent: #C6A15B; --accent-ink: #14110C; --accent2: #D4A24A; --mint: #241C0E; --ok: #7FB77E; --warn: #E0A458;
+    --glow1: rgba(232, 160, 60, 0.40); --glow2: rgba(190, 90, 45, 0.24); --shadow: 0 12px 28px rgba(0, 0, 0, 0.38);
+    --flag: #D4A24A; --flag-ink: #241800; --stickybg: rgba(12, 9, 6, 0.86);
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  html, body { margin: 0; background: var(--bg); color: var(--ink); font-family: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); font-family: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif; overscroll-behavior-y: none; }
   body { min-height: 100vh; padding: env(safe-area-inset-top, 0) 0 env(safe-area-inset-bottom, 0); }
-  #app { max-width: 620px; margin: 0 auto; padding: 18px 16px 80px; }
-  .brand { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; font-weight: 600; }
-  h1 { font-family: "Fraunces", Georgia, serif; font-weight: 600; font-size: 26px; line-height: 1.2; margin: 10px 0 2px; }
-  .sub { color: var(--muted); font-size: 13px; }
-  .sync { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--muted); margin-top: 10px; }
-  .sync i { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); display: inline-block; }
-  .sync.off i { background: var(--warn); }
+  body::before { content: ""; position: fixed; inset: 0 0 auto 0; height: 340px; pointer-events: none; z-index: 0;
+    background: radial-gradient(60% 70% at 15% 0%, var(--glow2), transparent 70%), radial-gradient(70% 80% at 90% 0%, var(--glow1), transparent 70%); opacity: .7; }
+  #app { position: relative; z-index: 1; max-width: 620px; margin: 0 auto; padding: 18px 16px 90px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-family: "Fraunces", Georgia, serif; font-weight: 700; font-size: 18px; color: var(--ink); }
+  .brandmark { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; color: #fff; background: linear-gradient(145deg, #1F8A55, #14543A); box-shadow: 0 6px 14px rgba(20, 84, 58, .28); }
+  :root[data-theme="dark"] .brandmark { color: #14110C; background: linear-gradient(145deg, #E0B66A, #B8863B); box-shadow: none; }
+  h1 { font-family: "Fraunces", Georgia, serif; font-weight: 600; font-size: 30px; line-height: 1.15; margin: 18px 0 4px; }
+  .sync { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--muted); }
+  .sync i { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); display: inline-block; box-shadow: 0 0 0 0 var(--ok); animation: live 2.4s ease-out infinite; }
+  @keyframes live { 0% { box-shadow: 0 0 0 0 rgba(31,138,85,.45); } 70%, 100% { box-shadow: 0 0 0 7px rgba(31,138,85,0); } }
+  .sync.off i { background: var(--warn); animation: none; }
   .sync.off { color: var(--warn); }
-  .stats { display: flex; gap: 8px; margin: 16px 0 10px; }
-  .stat { flex: 1; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px 6px; text-align: center; }
-  .stat b { display: block; font-family: "Fraunces", Georgia, serif; font-size: 22px; font-weight: 600; }
-  .stat span { font-size: 11px; color: var(--muted); }
-  .bar { height: 5px; background: var(--line); border-radius: 999px; overflow: hidden; }
-  .bar > div { height: 100%; background: var(--accent2); width: 0; transition: width .25s ease; }
-  .filters { display: flex; gap: 8px; margin: 16px 0 4px; }
-  .chip { border: 1px solid var(--line); background: transparent; color: var(--ink); border-radius: 999px; padding: 9px 16px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+  /* Voortgang: blijft bovenin staan tijdens het winkelen */
+  .progress { position: sticky; top: 0; z-index: 5; margin: 16px -16px 0; padding: 10px 16px 12px; background: var(--stickybg); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+  .pcard { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 14px 16px; box-shadow: var(--shadow); }
+  .ptop { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+  .ptop b { font-family: "Fraunces", Georgia, serif; font-size: 22px; font-weight: 600; }
+  .ptop span { font-size: 13px; color: var(--muted); text-align: right; }
+  .bar { height: 8px; background: var(--line); border-radius: 999px; overflow: hidden; }
+  .bar > div { height: 100%; background: linear-gradient(90deg, var(--accent2), var(--accent)); width: 0; border-radius: 999px; transition: width .35s ease; }
+  .filters { display: flex; gap: 8px; margin: 12px 0 0; }
+  .chip { border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 999px; padding: 9px 16px; font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; min-height: 40px; }
   .chip.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
-  .cat { margin: 22px 0 8px; font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-weight: 700; display: flex; justify-content: space-between; }
-  .items { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
-  .item { display: flex; align-items: center; gap: 12px; padding: 6px 8px 6px 6px; min-height: 60px; border-top: 1px solid var(--line); }
+  .cat { margin: 22px 2px 8px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 700; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .cat.doneCat { width: 100%; font: inherit; font-size: 12px; color: var(--muted); text-align: left; cursor: pointer; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; margin: 10px 0; letter-spacing: .04em; }
+  .cat.doneCat .ok { color: var(--ok); font-weight: 700; text-transform: none; letter-spacing: 0; font-size: 13px; }
+  .items { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; box-shadow: var(--shadow); }
+  .item { display: flex; align-items: center; gap: 10px; padding: 6px 10px 6px 6px; min-height: 60px; border-top: 1px solid var(--line); transition: background .2s; }
   .item:first-child { border-top: 0; }
-  .check { flex: none; width: 46px; height: 46px; border: 0; background: transparent; padding: 0; display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--accent-ink); }
-  .check span { width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--muted); display: flex; align-items: center; justify-content: center; transition: background .15s, border-color .15s; }
-  .item.basket .check span { background: var(--accent2); border-color: var(--accent2); }
-  .item.skip .check span { border-style: dashed; opacity: .5; }
+  .item.flash { background: var(--mint); }
+  .check { flex: none; width: 48px; height: 48px; border: 0; background: transparent; padding: 0; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #fff; }
+  .check span { width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--line); display: flex; align-items: center; justify-content: center; transition: background .15s, border-color .15s, transform .15s; }
+  .item:not(.basket):not(.skip) .check span { border-color: var(--muted); }
+  .item.basket .check span { background: var(--accent2); border-color: var(--accent2); transform: scale(1.05); }
+  :root[data-theme="dark"] .item.basket .check span { color: #14110C; }
+  .item.skip .check span { border-style: dashed; opacity: .55; }
   .txt { flex: 1; padding: 8px 0; cursor: pointer; word-break: break-word; }
   .name { font-size: 16px; line-height: 1.35; }
-  .item.basket .name { text-decoration: line-through; color: var(--muted); }
-  .item.skip .name { text-decoration: line-through; color: var(--muted); font-style: italic; opacity: .75; }
+  .item.basket .name, .item.skip .name { text-decoration: line-through; color: var(--muted); }
+  .item.skip .name { font-style: italic; }
   .flaginfo { margin-top: 3px; font-size: 12px; color: var(--muted); line-height: 1.4; }
-  .flag { display: inline-block; background: var(--accent2); color: var(--accent-ink); border-radius: 999px; font-size: 11px; font-weight: 700; padding: 2px 8px; margin-right: 6px; letter-spacing: .02em; }
-  .notice { margin: 14px 0 0; padding: 12px 14px; border: 1px solid var(--accent2); border-radius: 12px; background: var(--surface); font-size: 14px; line-height: 1.45; display: flex; gap: 12px; align-items: center; justify-content: space-between; }
+  .flag { display: inline-block; background: var(--flag); color: var(--flag-ink); border-radius: 999px; font-size: 11px; font-weight: 700; padding: 2px 8px; margin-right: 6px; }
+  .notice { margin: 14px 0 0; padding: 14px 16px; border: 1px solid var(--accent2); border-radius: 16px; background: var(--surface); font-size: 14px; line-height: 1.45; display: flex; gap: 12px; align-items: center; justify-content: space-between; box-shadow: var(--shadow); }
   .notice b { font-family: "Fraunces", Georgia, serif; font-weight: 600; font-size: 16px; display: block; margin-bottom: 2px; }
-  .notice button { flex: none; border: 0; background: var(--accent); color: var(--accent-ink); border-radius: 10px; padding: 10px 16px; font: inherit; font-weight: 700; cursor: pointer; }
-  .skipbtn { flex: none; border: 1px solid var(--line); background: transparent; color: var(--muted); border-radius: 999px; padding: 8px 12px; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; min-height: 36px; }
+  .notice button, .btn { flex: none; border: 0; background: var(--accent); color: var(--accent-ink); border-radius: 12px; padding: 11px 18px; font: inherit; font-weight: 700; cursor: pointer; min-height: 44px; }
+  .skipbtn { flex: none; border: 1px solid var(--line); background: transparent; color: var(--muted); border-radius: 999px; padding: 7px 12px; font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; min-height: 36px; }
   .item.skip .skipbtn { color: var(--ink); border-color: var(--accent2); }
-  .item.basket .skipbtn { opacity: .35; }
-  .foot { margin-top: 26px; text-align: center; color: var(--muted); font-size: 12px; }
-  .linkbtn { background: none; border: 0; color: var(--muted); font: inherit; font-size: 12px; text-decoration: underline; cursor: pointer; margin-top: 10px; padding: 8px; }
-  .done { margin: 18px 0 0; padding: 16px; border-radius: 14px; background: var(--surface); border: 1px solid var(--accent2); text-align: center; font-family: "Fraunces", Georgia, serif; font-size: 18px; }
+  .item.basket .skipbtn { visibility: hidden; }
+  .foot { margin-top: 28px; text-align: center; color: var(--muted); font-size: 12.5px; }
+  .linkbtn { background: none; border: 0; color: var(--muted); font: inherit; font-size: 12.5px; text-decoration: underline; cursor: pointer; margin-top: 6px; padding: 10px; }
+  .cta { display: block; margin: 26px 0 0; padding: 16px; border-radius: 18px; background: var(--surface); border: 1px solid var(--line); color: var(--ink); text-decoration: none; text-align: left; box-shadow: var(--shadow); }
+  .cta b { font-family: "Fraunces", Georgia, serif; font-size: 17px; font-weight: 600; display: block; margin-bottom: 3px; }
+  .cta span { font-size: 13.5px; color: var(--muted); line-height: 1.45; }
+  .cta em { font-style: normal; color: var(--accent2); font-weight: 700; display: inline-block; margin-top: 6px; }
+  .done { margin: 16px 0 0; padding: 18px; border-radius: 18px; background: var(--mint); text-align: center; font-family: "Fraunces", Georgia, serif; font-size: 19px; }
   .msg { text-align: center; padding: 70px 10px; color: var(--muted); line-height: 1.5; }
   .msg h2 { color: var(--ink); font-family: "Fraunces", Georgia, serif; font-size: 22px; margin: 0 0 8px; }
-  .btn { margin-top: 16px; border: 0; background: var(--accent); color: var(--accent-ink); border-radius: 12px; padding: 13px 22px; font: inherit; font-weight: 700; cursor: pointer; }
   .empty { padding: 26px 10px; text-align: center; color: var(--muted); font-size: 14px; }
+  @media (prefers-reduced-motion: reduce) { .sync i { animation: none; } * { transition: none !important; } }
 </style>
+<script>
+  // Thema zoals in de app (zelfde toestel), anders volgens de instelling van je toestel.
+  (function () { var t = null; try { t = localStorage.getItem("weekmenu_theme"); } catch (e) {}
+    if (t !== "dark" && t !== "light") t = window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    document.documentElement.setAttribute("data-theme", t);
+    var m = document.querySelector('meta[name="theme-color"]'); if (m) m.setAttribute("content", t === "dark" ? "#0C0906" : "#F3F7F4"); })();
+</script>
 </head>
 <body>
 <div id="app"><div class="msg">Lijst laden…</div></div>
@@ -97,6 +124,8 @@
   var flushing = null;   // lopende verzending (Promise)
   var seen = {};         // markeringen die jij al gezien hebt: product-id -> "nieuw|tekst" / "aangepast|tekst"
   var fetchedAt = 0;     // wanneer de lijst voor het laatst is opgehaald (voor "zojuist", "5 min geleden")
+  var recent = {};       // net afgevinkt: blijft nog even op zijn plek staan voordat hij naar onderen schuift
+  var openCats = {};     // categorieën die helemaal klaar zijn maar die je toch openklapt
   var FLAG_TTL_S = 12 * 3600;
 
   var app = document.getElementById("app");
@@ -204,7 +233,7 @@
     app.innerHTML = "";
 
     var brand = el("div", "brand");
-    var logo = el("span");
+    var logo = el("span", "brandmark");
     logo.innerHTML = LOGO;
     brand.appendChild(logo);
     brand.appendChild(el("span", null, "Balanza"));
@@ -219,20 +248,19 @@
               : "Live \u00b7 " + (data.updatedAt ? "bijgewerkt " + new Date(data.updatedAt).toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" }) : "gesynchroniseerd")));
     app.appendChild(sync);
 
-    var stats = el("div", "stats");
-    [["In mandje", c.basket], ["Niet nodig", c.skip], ["Nog te doen", c.todo]].forEach(function (p) {
-      var s = el("div", "stat");
-      s.appendChild(el("b", null, String(p[1])));
-      s.appendChild(el("span", null, p[0]));
-      stats.appendChild(s);
-    });
-    app.appendChild(stats);
+    // Voortgang in één kaart die bovenin blijft staan tijdens het winkelen, met de filter eronder.
+    var prog = el("div", "progress");
+    var pc = el("div", "pcard");
+    var top = el("div", "ptop");
+    top.appendChild(el("b", null, c.todo ? c.todo + (c.todo === 1 ? " product te gaan" : " producten te gaan") : "Alles gehaald"));
+    top.appendChild(el("span", null, c.basket + " in mandje" + (c.skip ? " \u00b7 " + c.skip + " niet nodig" : "")));
+    pc.appendChild(top);
     var bar = el("div", "bar");
     var fill = el("div");
     fill.style.width = (c.total ? Math.round(((c.basket + c.skip) / c.total) * 100) : 0) + "%";
     bar.appendChild(fill);
-    app.appendChild(bar);
-
+    pc.appendChild(bar);
+    prog.appendChild(pc);
     var flagged = data.items.filter(function (it) { return !!flagOf(it); });
     var removedList = removedNow();
     if (flagged.length || removedList.length) {
@@ -255,12 +283,13 @@
     }
 
     var filters = el("div", "filters");
-    [["all", "Alles"], ["todo", "Nog te doen"]].forEach(function (p) {
+    [["all", "Alles"], ["todo", "Nog te doen" + (c.todo ? " (" + c.todo + ")" : "")]].forEach(function (p) {
       var b = el("button", "chip" + (filter === p[0] ? " on" : ""), p[1]);
       b.onclick = function () { filter = p[0]; save(); render(); };
       filters.appendChild(b);
     });
-    app.appendChild(filters);
+    prog.appendChild(filters);
+    app.appendChild(prog);
 
     if (c.todo === 0 && c.total > 0) {
       app.appendChild(el("div", "done", "Alles gehaald! \uD83C\uDF89"));
@@ -272,14 +301,30 @@
       groups[it.cat].push(it);
     });
     var shown = 0;
+    var now = Date.now();
+    var isDone = function (it) { return !!statusOf(it.id) && !(recent[it.id] && now - recent[it.id] < 1400); };
     order.forEach(function (cat) {
-      var items = groups[cat].filter(function (it) { return filter === "all" || !statusOf(it.id); });
+      var all = groups[cat];
+      var doneInCat = all.filter(function (it) { return statusOf(it.id); }).length;
+      // Categorie helemaal klaar: ingeklapt tot één regel (tik om open te klappen).
+      if (filter === "all" && doneInCat === all.length && !openCats[cat] && all.every(isDone)) {
+        var dc = el("button", "cat doneCat");
+        dc.type = "button";
+        dc.appendChild(el("span", null, cat));
+        dc.appendChild(el("span", "ok", "\u2713 alles klaar"));
+        dc.setAttribute("aria-label", cat + ": alles klaar. Tik om te bekijken.");
+        dc.onclick = function () { openCats[cat] = true; render(); };
+        app.appendChild(dc);
+        return;
+      }
+      var items = all.filter(function (it) { return filter === "all" || !statusOf(it.id) || (recent[it.id] && now - recent[it.id] < 1400); });
       if (!items.length) return;
+      // Wat nog moet bovenaan; afgevinkt zakt (na een tel) naar onderen.
+      items = items.filter(function (it) { return !isDone(it); }).concat(items.filter(isDone));
       shown += items.length;
-      var doneInCat = groups[cat].filter(function (it) { return statusOf(it.id); }).length;
       var head = el("div", "cat");
       head.appendChild(el("span", null, cat));
-      head.appendChild(el("span", null, doneInCat + " van " + groups[cat].length + " klaar"));
+      head.appendChild(el("span", null, doneInCat + " van " + all.length + " klaar"));
       app.appendChild(head);
       var box = el("div", "items");
       items.forEach(function (it) { box.appendChild(renderItem(it)); });
@@ -294,11 +339,18 @@
     reset.onclick = resetAll;
     foot.appendChild(reset);
     app.appendChild(foot);
+    // Voor wie Balanza nog niet kent: rustig onderaan, nooit tussen de boodschappen.
+    var cta = el("a", "cta");
+    cta.href = "/welkom";
+    cta.appendChild(el("b", null, "Zelf ook zo plannen?"));
+    cta.appendChild(el("span", null, "Balanza maakt gerechten die passen bij jouw doel, plant je week en zet je boodschappen klaar. "));
+    cta.appendChild(el("em", null, "Probeer Balanza \u203a"));
+    app.appendChild(cta);
   }
 
   function renderItem(it) {
     var s = statusOf(it.id);
-    var row = el("div", "item" + (s === "basket" ? " basket" : s === "skip" ? " skip" : ""));
+    var row = el("div", "item" + (s === "basket" ? " basket" : s === "skip" ? " skip" : "") + (recent[it.id] && Date.now() - recent[it.id] < 1400 ? " flash" : ""));
 
     var check = el("button", "check");
     check.setAttribute("role", "checkbox");
@@ -336,6 +388,10 @@
     var current = statusOf(id);
     pending[id] = current === kind ? null : kind;
     try { if (navigator.vibrate) navigator.vibrate(8); } catch (e) {}
+    recent[id] = Date.now();
+    var cat = item && item.cat;
+    if (cat) delete openCats[cat];
+    setTimeout(function () { render(); }, 1500);   // daarna schuift hij naar onderen / klapt de categorie in
     save();
     render();
     flush();
