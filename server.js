@@ -4744,7 +4744,11 @@ function assistantGuide() {
     "- Begeleiding (alles los aan/uit): week klaarzetten, na het eten (lekker of niet), weekterugblik, restjes, seizoen, Jouw reis (fases, weekuitdaging, mijlpalen, voortgang), budgetmodus.\n" +
     "- Inspreken: een microfoonknop in de chat en bij de wens voor deze keer (spraakherkenning van de browser, Nederlands); aan/uit onder Begeleiding.\n" +
     "- Samen plannen met huisgenoten (Mijn profiel), community met recepten van anderen, meldingen, licht of donker thema, Start-scherm indelen.\n" +
-    "- Plus: na de proefperiode zijn ontwerpen en plannen voor Plus. Prijzen en abonnement staan bij Mijn profiel.\n";
+    "- Plus: na de proefperiode zijn ontwerpen en plannen voor Plus. Prijzen en abonnement staan bij Mijn profiel.\n" +
+    "- Automatisch plannen: één keer instellen (maaltijden, dagen, dag en tijd, standaard zaterdag 09:00); Balanza zet dan elke week de volgende week klaar en de gebruiker keurt hem goed in een carrousel. Voedingsnieuws: één bericht per dag onder Voor jou.\n" +
+    "- WAAR VIND JE WAT: rechtsboven de avatar opent het menu met Mijn profiel, Mijn voorkeuren, Automatisch plannen, Samen plannen, Jouw reis, Instellingen, Donkere weergave, Hoe werkt Balanza en Uitloggen. " +
+    "Instellingen is een overzicht met per onderdeel een knop: Weergave, Meldingen, Automatisch plannen, Begeleiding, Privacy, Bring!, Account en beveiliging (wachtwoord, e-mail, uitloggen, account verwijderen) " +
+    "en Mijn gegevens en reset (gegevens downloaden en 'Reset app, begin opnieuw'). Vraagt iemand hoe hij de app reset of opnieuw begint: Instellingen → Mijn gegevens en reset → Reset app.\n";
 }
 function assistantActionSpec() {
   return "ACTIES die je mag voorstellen (alleen deze, exact dit formaat; de gebruiker bevestigt ze zelf):\n" +

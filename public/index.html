@@ -4077,7 +4077,7 @@
     var loggedIn = !!window.authToken;
     // Overzicht met per onderdeel de stand en een knop "Aanpassen"; elk onderdeel heeft een eigen pagina.
     var page = state.settingsPage || null;
-    var TITLES = { look: "Weergave", push: "Meldingen", coach: "Begeleiding", privacy: "Privacy", bring: "Bring!", account: loggedIn ? "Account en beveiliging" : "Account", data: "Mijn gegevens" };
+    var TITLES = { look: "Weergave", push: "Meldingen", coach: "Begeleiding", privacy: "Privacy", bring: "Bring!", account: loggedIn ? "Account en beveiliging" : "Account", data: "Mijn gegevens en reset" };
     if (page && !TITLES[page]) page = null;
     app.appendChild(page ? renderTopbar(TITLES[page], true, function () {
       if (state.settingsEntry === page) { state.settingsEntry = null; navBack("settings", { settingsPage: null }); } else goto("settings", { settingsPage: null });
@@ -4280,10 +4280,10 @@
       return;
     }
     var open = function (k) { return function () { goto("settings", { settingsPage: k }); }; };
-    var sumCard = function (k, icon, status) {
+    var sumCard = function (k, icon, status, label) {
       var c = accCard(main, TITLES[k]); c.id = "settingsCard-" + k;
       var p = document.createElement("div"); p.className = "acc-sub settings-sum"; p.id = "settingsSum-" + k; p.textContent = status; c.appendChild(p);
-      accButton(c, "settingsOpen-" + k, icon, "Aanpassen", open(k));
+      accButton(c, "settingsOpen-" + k, icon, label || "Aanpassen", open(k));
       return p;
     };
     sumCard("look", "sliders", currentTheme === "dark" ? "Donker thema" : "Licht thema");
@@ -4306,7 +4306,7 @@
     }
     sumCard("bring", "refresh", prefs.bringListLink ? "Gekoppeld aan je Bring!-lijst" : "Nog niet gekoppeld");
     sumCard("account", "user", loggedIn ? "Ingelogd als " + (accountEmail() || "je account") + viaText : "Anoniem: je gegevens staan alleen op dit apparaat");
-    sumCard("data", "download", "Downloaden, of de app opnieuw beginnen");
+    sumCard("data", "download", "Download je gegevens, of reset de app en begin opnieuw", "Downloaden of resetten");
     app.appendChild(main);
   }
 
