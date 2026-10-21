@@ -719,6 +719,8 @@
   .rv-empty { text-align: center; padding: 28px 18px; }
   .rv-empty .primary-btn { margin-top: 12px; }
   body.has-tabbar[data-view="review"] .tabbar { display: none; }
+  .chat-tip { margin: -2px 0 6px; }
+  .chat-tip.done { font-size: 12.5px; color: var(--muted); }
   .news-card .news-meta { font-size: 11.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--accent2, var(--accent)); margin-bottom: 2px; }
   .news-card .nudge-txt > span { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
   .ws-streak { margin-top: 6px; text-align: center; font-size: 12.5px; font-weight: 600; color: var(--accent2, var(--accent)); }
@@ -12150,6 +12152,7 @@
     ["challenge", "Weekuitdaging", "Elke week kies je zelf een kleine uitdaging (of sla je over)", null],
     ["milestones", "Mijlpalen", "Een kaartje als je iets bereikt, zoals 10 keer zelf gekookt", null],
     ["progress", "Voortgang bijhouden", "Optioneel: energie, verzadiging, kleding of gewicht, één keer per week", null],
+    ["tips", "Tips over wat je kunt instellen", "Om de dag een tip in de chat, met een knop om het meteen te proberen", null],
     ["opener", "Balanza begint soms een gesprekje", "Hooguit één keer per dag een klein persoonlijk berichtje bij de chatknop", null],
     ["voiceSend", "Na inspreken vanzelf versturen", "Na een korte pauze gaat je ingesproken bericht vanzelf weg; tik op de tekst om eerst iets aan te passen", null],
     ["voice", "Inspreken", "Een microfoonknop in de chat en bij je wens; je browser zet je stem om in tekst die je eerst kunt aanpassen", null]
@@ -13857,6 +13860,77 @@
   // Hooguit één keer per dag, niet tijdens genereren of in de rustige modus, en weg met één tik. Geen AI-kosten:
   // de zin komt uit wat er nu bij de gebruiker speelt. Af en toe een hint dat je ideeën kunt insturen.
   var OPENER_DAY_KEY = "balanza_opener_day";
+  // ---------- Tips over instellingen: om de dag één, met een knop om het meteen te proberen ----------
+  // Alleen tips voor wat je nog niet gebruikt; een tip die je probeerde of wegtikte komt niet terug.
+  var TIPS_LS = "balanza_tips";
+  function tipsState() { try { var t = JSON.parse(lsGet(TIPS_LS) || "null"); return t && typeof t === "object" ? t : {}; } catch (e) { return {}; } }
+  function markTip(id, how) { var t = tipsState(); t[id] = how + ":" + todayKeyLocal(); lsSet(TIPS_LS, JSON.stringify(t)); }
+  function goSettingsThen(fn) { closeChat(); goto("settings"); if (fn) setTimeout(fn, 250); }
+  var SETTING_TIPS = [
+    { id: "autoplan", when: function () { return !autoPlanOn() && hasAnyDishes() && !readOnlyMode(); },
+      text: "Tip: Balanza kan elke week vanzelf je volgende week klaarzetten. Jij kiest welke maaltijden en dagen, en elke zaterdag staat er een nieuwe week voor je klaar om te bekijken.",
+      btn: "Automatisch plannen instellen", go: function () { closeChat(); openAutoPlanSheet(); } },
+    { id: "push", when: function () { return pushState === "off" || pushState === "ios-install"; },
+      text: "Tip: met meldingen krijg je een seintje op het goede moment, bijvoorbeeld als er vlees uit de vriezer moet of als je week klaarstaat. Hooguit één per dag, en je kiest zelf welke.",
+      btn: "Meldingen instellen", go: function () { goSettingsThen(function () { var el = document.getElementById("settingsPushBtn"); if (el && el.scrollIntoView) el.scrollIntoView({ block: "center", behavior: "smooth" }); }); } },
+    { id: "home", when: function () { return true; },
+      text: "Tip: je startscherm is van jou. Zet tegels aan of uit en sleep ze in de volgorde die bij jou past, bijvoorbeeld je boodschappenlijst bovenaan.",
+      btn: "Startscherm aanpassen", go: function () { closeChat(); goto("weeks"); state.homeEdit = true; render(); } },
+    { id: "photo", when: function () { return moduleOn("generate") && moduleOn("photo") && !readOnlyMode(); },
+      text: "Tip: maak eens een foto van je koelkast of van een recept uit een tijdschrift. Balanza maakt er een gerecht van dat bij jouw doel past.",
+      btn: "Foto proberen", go: function () { closeChat(); goto("prefs"); } },
+    { id: "proteins", when: function () { return !meatFree() && !proteinOutList().length; },
+      text: "Tip: eet je bijvoorbeeld geen varken, geen lam of liever geen vette vis? Bij je voorkeuren zet je elke soort vlees, gevogelte en vis apart uit.",
+      btn: "Naar mijn voorkeuren", go: function () { closeChat(); goto("myprefs", { prefsBack: "weeks" }); } },
+    { id: "theme", when: function () { return true; },
+      text: function () { return currentTheme === "dark" ? "Tip: Balanza heeft ook een licht thema. Probeer het gerust; met één tik zet je het terug." : "Tip: 's avonds in de keuken prettiger? Balanza heeft een donker thema. Met één tik zet je het terug."; },
+      btn: function () { return currentTheme === "dark" ? "Licht thema proberen" : "Donker thema proberen"; }, go: function () { toggleTheme(); showToast("Thema gewisseld. Terugzetten kan in het menu bij je profiel."); } },
+    { id: "household", when: function () { return !householdShared() && !!window.authToken; },
+      text: "Tip: plan je samen met iemand? Nodig je huisgenoot uit, dan delen jullie gerechten, weekplanning en boodschappenlijst.",
+      btn: "Samen plannen", go: function () { closeChat(); goto("account"); setTimeout(function () { var el = Array.prototype.filter.call(document.querySelectorAll(".acc-card h2, .acc-card .acc-title, h2"), function (h) { return /Samen plannen/.test(h.textContent); })[0]; if (el && el.scrollIntoView) el.scrollIntoView({ block: "start", behavior: "smooth" }); }, 250); } },
+    { id: "leftovers", when: function () { return coachOn("leftovers") && !leftoverTerms().length && hasAnyDishes(); },
+      text: "Tip: ligt er nog iets in de koelkast dat op moet? Zet het bij “Op te maken” in je planner, dan kiest Balanza gerechten die het gebruiken.",
+      btn: "Restjes toevoegen", go: function () { closeChat(); var w = currentWeekPlan() || addOrOpenPlannedWeek(getMonday(new Date())); state.leftoversOpen = true; goto("planweek", { planWeekId: w.id }); } },
+    { id: "water", when: function () { return healthOk() && !coachOn("water"); },
+      text: "Tip: wil je bijhouden hoeveel water je drinkt? Zet het aan, dan staan er glaasjes op Start om aan te tikken.",
+      btn: "Water aanzetten", go: function () { setCoach("water", true); closeChat(); goto("weeks"); showToast("Water bijhouden staat aan. Je vindt de glaasjes bij Vandaag.", "ok"); } },
+    { id: "daytools", when: function () { return coachOn("daytools"); },
+      text: "Tip: uit eten geweest of iets anders gegeten? Tik op Start op “Anders gegeten”. Een foto van je bord is genoeg voor een schatting.",
+      btn: "Naar Start", go: function () { closeChat(); goto("weeks"); } },
+    { id: "news", when: function () { return !coachOn("news"); },
+      text: "Tip: je kunt elke dag één kort nieuwsbericht krijgen over voeding, van het Voedingscentrum, het RIVM of Wageningen.",
+      btn: "Voedingsnieuws aanzetten", go: function () { setCoach("news", true); closeChat(); goto("weeks"); showToast("Voedingsnieuws staat aan.", "ok"); } },
+    { id: "coach", when: function () { return true; },
+      text: "Tip: bij Instellingen → Begeleiding bepaal je zelf hoeveel Balanza helpt: weekuitdagingen, mijlpalen, de weekterugblik en meer. Zet aan wat jij fijn vindt.",
+      btn: "Begeleiding bekijken", go: function () { goSettingsThen(function () { var el = document.getElementById("coach-draft"); if (el && el.scrollIntoView) el.scrollIntoView({ block: "center", behavior: "smooth" }); }); } }
+  ];
+  function pickSettingTip() {
+    if (!coachOn("tips")) return null;
+    var st = tipsState();
+    var today = todayKeyLocal();
+    var blocked = function (v) {
+      if (!v) return false;
+      var how = v.split(":")[0], day = v.split(":")[1] || "";
+      if (how !== "shown") return true;   // geprobeerd of 'niet nodig': klaar
+      return (new Date(today) - new Date(day)) / 86400000 < 14;   // laten zien maar niets mee gedaan: na twee weken nog eens
+    };
+    var open = SETTING_TIPS.filter(function (t) { try { return !blocked(st[t.id]) && t.when(); } catch (e) { return false; } });
+    if (!open.length) return null;
+    var dayNr = Math.floor(Date.now() / 86400000);
+    return open[dayNr % Math.min(open.length, 3)];   // de belangrijkste eerst, met een beetje afwisseling
+  }
+  function tipById(id) { return SETTING_TIPS.filter(function (t) { return t.id === id; })[0] || null; }
+  function chatTipCard(m, idx) {
+    var t = tipById(m.tip);
+    var row = document.createElement("div"); row.className = "nudge-actions chat-tip"; row.id = "chatTip-" + idx;
+    if (!t || m.tipDone) { row.textContent = m.tipDone === "tried" ? "✓ Geprobeerd" : ""; row.className += " done"; return row; }
+    var go = document.createElement("button"); go.type = "button"; go.className = "primary-btn small"; go.id = "chatTipGo-" + idx; go.textContent = typeof t.btn === "function" ? t.btn() : t.btn;
+    go.onclick = function () { m.tipDone = "tried"; markTip(t.id, "tried"); saveChat(); t.go(); };
+    var no = document.createElement("button"); no.type = "button"; no.className = "ghost-btn small"; no.id = "chatTipNo-" + idx; no.textContent = "Niet nodig";
+    no.onclick = function () { m.tipDone = "no"; markTip(t.id, "no"); saveChat(); paintChat(); };
+    row.appendChild(go); row.appendChild(no);
+    return row;
+  }
   function firstName() { return prefs.name ? String(prefs.name).split(" ")[0] : ""; }
   function pickOpener() {
     var now = new Date(), h = now.getHours(), dow = now.getDay(), nm = firstName(), hi = nm ? nm + ", " : "";
@@ -13870,8 +13944,10 @@
     if (journeyOn() && prefs.goal) { var ph = journeyPhase(); cands.push({ text: hi + "je zit in week " + ph.week + " van je reis (" + ph.phase[0] + "). Hoe gaat “" + ph.phase[2].toLowerCase() + "” tot nu toe?", quick: ["Gaat goed!", "Lastig, help me"] }); }
     if (window.appSeason && coachOn("season")) cands.push({ text: "Het is " + window.appSeason.month + (nm ? ", " + nm : "") + ": " + window.appSeason.produce.slice(0, 2).join(" en ") + " zijn nu op hun best. Zin in een idee daarmee?", quick: ["Ja, verras me", "Niet nu"] });
     var idea = { text: (nm ? nm + ", mis" : "Mis") + " je iets in Balanza? Vertel het me gerust. Goede ideeën gaan naar het team, en die bouwen we echt.", quick: ["Ik heb een idee", "Nu even niet"] };
-    // Elke paar dagen de idee-hint, anders de eerste die nu het meest speelt.
+    // Om de dag een tip over iets dat je nog kunt instellen; anders de idee-hint (elke paar dagen) of wat nu het meest speelt.
     var dayNr = Math.floor(now / 86400000);
+    var tip = dayNr % 2 === 1 || !cands.length ? pickSettingTip() : null;
+    if (tip) { markTip(tip.id, "shown"); var tt = typeof tip.text === "function" ? tip.text() : tip.text; return { text: (nm && tt.indexOf("Tip: ") === 0 ? "Tip voor jou, " + nm + ": " + tt.charAt(5).toUpperCase() + tt.slice(6) : tt), tip: tip.id }; }
     if (!cands.length || dayNr % 4 === 0) return idea;
     return cands[dayNr % cands.length];
   }
@@ -13898,7 +13974,7 @@
       document.body.appendChild(bub);
       btn.classList.add("has-dot");
       lsSet(OPENER_DAY_KEY, todayKeyLocal());
-      chat.msgs.push({ role: "assistant", content: o.text, quick: o.quick, openerDay: todayKeyLocal() }); saveChat();   // staat ook in het gesprek
+      chat.msgs.push({ role: "assistant", content: o.text, quick: o.quick, tip: o.tip || undefined, openerDay: todayKeyLocal() }); saveChat();   // staat ook in het gesprek
       function gone() { if (bub.parentNode) bub.parentNode.removeChild(bub); }
       bub.querySelector(".cb-x").onclick = gone;
       bub.querySelector(".cb-txt").onclick = function () {
@@ -14001,6 +14077,7 @@
       list.appendChild(b);
       if (m.actions && m.actions.length) list.appendChild(chatActionCard(m, idx));
       if (m.suggestion) list.appendChild(chatSuggestionCard(m, idx));
+      if (m.tip) list.appendChild(chatTipCard(m, idx));
       if (m.quick && m.quick.length && idx === chat.msgs.length - 1 && !chat.busy) {
         var qr = document.createElement("div"); qr.className = "chiprow chat-sugg";
         m.quick.forEach(function (q) { var c = document.createElement("button"); c.type = "button"; c.className = "chip"; c.textContent = q; c.onclick = function () { sendChat(q); }; qr.appendChild(c); });
