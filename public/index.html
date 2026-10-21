@@ -719,6 +719,8 @@
   .rv-empty { text-align: center; padding: 28px 18px; }
   .rv-empty .primary-btn { margin-top: 12px; }
   body.has-tabbar[data-view="review"] .tabbar { display: none; }
+  .settings-page > .acc-card:first-child > h2:first-child { display: none; }   /* de paginatitel staat al bovenin */
+  .settings-sum { margin-bottom: 4px; }
   .chat-tip { margin: -2px 0 6px; }
   .chat-tip.done { font-size: 12.5px; color: var(--muted); }
   .news-card .news-meta { font-size: 11.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--accent2, var(--accent)); margin-bottom: 2px; }
@@ -3329,7 +3331,7 @@
     list.className = "am-list";
     if (!window.authToken && moduleOn("registration")) amItem(list, "amCreate", "userplus", "Account aanmaken", function () { upgradeState.error = null; goto("upgrade"); }, "accent");
     amItem(list, "amPrefs", "sliders", "Mijn voorkeuren", function () { goto("myprefs", { prefsBack: "weeks", tab: "ontwerpen" }); });
-    amItem(list, "amSettings", "gear", "Instellingen", function () { goto("settings"); });
+    amItem(list, "amSettings", "gear", "Instellingen", function () { goto("settings", { settingsPage: null }); });
     amItem(list, "amTheme", currentTheme === "dark" ? "sun" : "moon", currentTheme === "dark" ? "Lichte weergave" : "Donkere weergave", function () { toggleTheme(); });
     amItem(list, "amExport", "download", "Mijn gegevens downloaden", function () { exportMyData(); });
     amItem(list, "amGuide", "help", "Hoe werkt Balanza", function () { goto("guide"); });
@@ -3988,7 +3990,7 @@
     plusCard.id = "plusCard"; plusCard.style.display = "none";
     var plusBody = document.createElement("div"); plusBody.id = "plusBody"; plusCard.appendChild(plusBody);
     var more = accCard(main, null);
-    accButton(more, "profileSettings", "gear", "Instellingen", function () { goto("settings"); });
+    accButton(more, "profileSettings", "gear", "Instellingen", function () { goto("settings", { settingsPage: null }); });
     app.appendChild(main);
     paintQuota(); refreshQuota();
     if (billingOn()) { paintPlus(); refreshBilling().then(function () { if (state.view === "account") paintPlus(); }); }
@@ -4012,10 +4014,27 @@
   function renderSettings() {
     var app = document.getElementById("app");
     app.innerHTML = "";
-    app.appendChild(renderTopbar("Instellingen", true, function () { goto("weeks"); }));
     var main = document.createElement("main");
     var loggedIn = !!window.authToken;
+    // Overzicht met per onderdeel de stand en een knop "Aanpassen"; elk onderdeel heeft een eigen pagina.
+    var page = state.settingsPage || null;
+    var TITLES = { look: "Weergave", push: "Meldingen", coach: "Begeleiding", privacy: "Privacy", bring: "Bring!", account: loggedIn ? "Account en beveiliging" : "Account", data: "Mijn gegevens" };
+    if (page && !TITLES[page]) page = null;
+    app.appendChild(page ? renderTopbar(TITLES[page], true, function () { goto("settings", { settingsPage: null }); }) : renderTopbar("Instellingen", true, function () { goto("weeks"); }));
+    // Of dit account een wachtwoord heeft (accounts via Apple/Google hebben dat niet altijd).
+    var ai = state.accountAuth;
+    if (loggedIn && (!ai || ai.token !== window.authToken)) {
+      state.accountAuth = { token: window.authToken, loading: true };
+      accountRequest("GET", "/api/account").then(function (d) {
+        state.accountAuth = { token: window.authToken, hasPassword: d.hasPassword !== false, providers: Array.isArray(d.providers) ? d.providers : [] };
+        if (state.view === "settings") render();
+      }).catch(function () { state.accountAuth = { token: window.authToken, hasPassword: true, providers: [] }; });
+    }
+    var noPassword = !!(ai && ai.token === window.authToken && ai.hasPassword === false);
+    var viaText = ai && ai.providers && ai.providers.length ? " \u00b7 gekoppeld met " + ai.providers.map(function (p) { return p === "apple" ? "Apple" : p === "google" ? "Google" : p; }).join(" en ") : "";
 
+
+    function secLook(main) {
     var look = accCard(main, "Weergave");
     var seg = document.createElement("div"); seg.className = "seg";
     [["dark", "Donker", "moon"], ["light", "Licht", "sun"]].forEach(function (t) {
@@ -4027,6 +4046,8 @@
     });
     look.appendChild(seg);
 
+    }
+    function secPush(main) {
     var pushCard = accCard(main, "Meldingen");
     var pushText = document.createElement("div"); pushText.className = "acc-sub"; pushText.id = "settingsPushText"; pushText.textContent = "Even kijken\u2026";
     pushCard.appendChild(pushText);
@@ -4076,15 +4097,8 @@
     };
     refreshPushState().then(paintPush).catch(function () {});
 
-    renderAutoPlanSettings(main);
-    renderCoachSettings(main);
-    var mine = accCard(main, "Mijn Balanza");
-    accButton(mine, "settingsProfile", "user", "Mijn profiel", function () { goto("account"); });
-    accButton(mine, "settingsPrefs", "sliders", "Mijn voorkeuren", function () { goto("myprefs", { prefsBack: "settings" }); });
-    if (journeyOn()) accButton(mine, "settingsJourney", "sparkle", "Jouw reis", function () { goto("journey"); });
-    accButton(mine, "settingsGuide", "help", "Hoe werkt Balanza", function () { goto("guide"); });
-
-    renderPrivacySettings(main);
+    }
+    function secBring(main) {
     var bringCard = accCard(main, "Bring!");
     var bringSub = document.createElement("div"); bringSub.className = "acc-sub";
     bringSub.textContent = "De link naar je eigen Bring!-lijst, voor \u201cImporteer in Bring!\u201d op het boodschappenscherm. Laat leeg om hem te verwijderen.";
@@ -4101,18 +4115,8 @@
       showToast(bringBefore ? "Bring!-link opgeslagen." : "Bring!-link verwijderd.");
     };
 
-    // Of dit account een wachtwoord heeft (accounts via Apple/Google hebben dat niet altijd).
-    var ai = state.accountAuth;
-    if (loggedIn && (!ai || ai.token !== window.authToken)) {
-      state.accountAuth = { token: window.authToken, loading: true };
-      accountRequest("GET", "/api/account").then(function (d) {
-        state.accountAuth = { token: window.authToken, hasPassword: d.hasPassword !== false, providers: Array.isArray(d.providers) ? d.providers : [] };
-        if (state.view === "settings") render();
-      }).catch(function () { state.accountAuth = { token: window.authToken, hasPassword: true, providers: [] }; });
     }
-    var noPassword = !!(ai && ai.token === window.authToken && ai.hasPassword === false);
-    var viaText = ai && ai.providers && ai.providers.length ? " \u00b7 gekoppeld met " + ai.providers.map(function (p) { return p === "apple" ? "Apple" : p === "google" ? "Google" : p; }).join(" en ") : "";
-
+    function secAccount(main) {
     if (loggedIn) {
       var acc = accCard(main, "Account en beveiliging");
       var mailLine = document.createElement("div"); mailLine.className = "acc-sub"; mailLine.id = "settingsEmailLine";
@@ -4177,13 +4181,6 @@
       if (moduleOn("registration")) accButton(anon, "settingsCreate", "userplus", "Account aanmaken en gegevens bewaren", function () { upgradeState.error = null; goto("upgrade"); });
     }
 
-    var data = accCard(main, "Mijn gegevens");
-    accButton(data, "settingsExport", "download", "Mijn gegevens downloaden", function () { exportMyData(); });
-    var dt = document.createElement("div"); dt.className = "acc-sub";
-    dt.textContent = "Een bestand met je voorkeuren, gerechten, planning en gedeelde lijsten.";
-    data.appendChild(dt);
-    accButton(data, "settingsReset", "refresh", "Reset app \u2014 begin opnieuw", function () { resetEverything(); }, "danger");
-
     if (loggedIn) {
       var danger = accCard(main, "Account verwijderen");
       var dd = document.createElement("div"); dd.className = "acc-sub";
@@ -4205,6 +4202,50 @@
         box.appendChild(go);
       }, "danger");
     }
+    }
+    function secData(main) {
+    var data = accCard(main, "Mijn gegevens");
+    accButton(data, "settingsExport", "download", "Mijn gegevens downloaden", function () { exportMyData(); });
+    var dt = document.createElement("div"); dt.className = "acc-sub";
+    dt.textContent = "Een bestand met je voorkeuren, gerechten, planning en gedeelde lijsten.";
+    data.appendChild(dt);
+    accButton(data, "settingsReset", "refresh", "Reset app \u2014 begin opnieuw", function () { resetEverything(); }, "danger");
+
+    }
+    if (page) {
+      main.className = "settings-page";
+      ({ look: secLook, push: secPush, coach: renderCoachSettings, privacy: renderPrivacySettings, bring: secBring, account: secAccount, data: secData })[page](main);
+      app.appendChild(main);
+      return;
+    }
+    var open = function (k) { return function () { goto("settings", { settingsPage: k }); }; };
+    var sumCard = function (k, icon, status) {
+      var c = accCard(main, TITLES[k]); c.id = "settingsCard-" + k;
+      var p = document.createElement("div"); p.className = "acc-sub settings-sum"; p.id = "settingsSum-" + k; p.textContent = status; c.appendChild(p);
+      accButton(c, "settingsOpen-" + k, icon, "Aanpassen", open(k));
+      return p;
+    };
+    sumCard("look", "sliders", currentTheme === "dark" ? "Donker thema" : "Licht thema");
+    var PUSH_SUM = { on: "Aan op dit toestel", off: "Uit", denied: "Geblokkeerd op dit toestel", "ios-install": "Werkt als Balanza op je beginscherm staat", unsupported: "Niet beschikbaar op dit toestel" };
+    var pushSum = sumCard("push", "bell", PUSH_SUM[pushState] || "Even kijken\u2026");
+    refreshPushState().then(function (st) { if (pushSum.isConnected) pushSum.textContent = PUSH_SUM[st] || PUSH_SUM.unsupported; }).catch(function () {});
+    renderAutoPlanSettings(main);
+    var coachOpts = COACH_OPTIONS.filter(function (o) { return !((o[0] === "water" || o[0] === "daytools") && !healthOk()); });
+    var coachN = coachOpts.filter(function (o) { return coachOn(o[0]); }).length;
+    sumCard("coach", "sparkle", coachN + " van " + coachOpts.length + " onderdelen aan");
+    var mine = accCard(main, "Mijn Balanza");
+    accButton(mine, "settingsProfile", "user", "Mijn profiel", function () { goto("account"); });
+    accButton(mine, "settingsPrefs", "sliders", "Mijn voorkeuren", function () { goto("myprefs", { prefsBack: "settings" }); });
+    if (journeyOn()) accButton(mine, "settingsJourney", "sparkle", "Jouw reis", function () { goto("journey"); });
+    accButton(mine, "settingsGuide", "help", "Hoe werkt Balanza", function () { goto("guide"); });
+
+    if (!(!window.authToken && window.authRequired)) {
+      var cs = consentState.doc;
+      sumCard("privacy", "help", cs && cs.health ? "Persoonlijke afstemming staat aan" : cs ? "Persoonlijke afstemming staat uit" : "Nog geen keuze gemaakt");
+    }
+    sumCard("bring", "refresh", prefs.bringListLink ? "Gekoppeld aan je Bring!-lijst" : "Nog niet gekoppeld");
+    sumCard("account", "user", loggedIn ? "Ingelogd als " + (accountEmail() || "je account") + viaText : "Anoniem: je gegevens staan alleen op dit apparaat");
+    sumCard("data", "download", "Downloaden, of de app opnieuw beginnen");
     app.appendChild(main);
   }
 
@@ -13606,7 +13647,7 @@
     qt.onclick = function () { j.quiet = !j.quiet; savePrefs(); render(); };
     set.appendChild(qt);
     var more = document.createElement("button"); more.type = "button"; more.className = "comm-foot-link"; more.textContent = "Alle begeleiding aan- of uitzetten ›";
-    more.onclick = function () { goto("settings"); };
+    more.onclick = function () { goto("settings", { settingsPage: "coach" }); };
     set.appendChild(more);
     var rs = document.createElement("button"); rs.type = "button"; rs.className = "comm-foot-link"; rs.id = "journeyRestart"; rs.textContent = "Reis opnieuw beginnen";
     rs.onclick = function () { askConfirm("Je reis opnieuw beginnen vanaf fase 1? Je mijlpalen blijven gehaald.", function () { j.startedOn = todayKeyLocal(); j.challenge = null; savePrefs(); render(); }, "Opnieuw beginnen", "Annuleren"); };
@@ -13865,14 +13906,14 @@
   var TIPS_LS = "balanza_tips";
   function tipsState() { try { var t = JSON.parse(lsGet(TIPS_LS) || "null"); return t && typeof t === "object" ? t : {}; } catch (e) { return {}; } }
   function markTip(id, how) { var t = tipsState(); t[id] = how + ":" + todayKeyLocal(); lsSet(TIPS_LS, JSON.stringify(t)); }
-  function goSettingsThen(fn) { closeChat(); goto("settings"); if (fn) setTimeout(fn, 250); }
+  function goSettingsThen(fn, page) { closeChat(); goto("settings", { settingsPage: page || null }); if (fn) setTimeout(fn, 250); }
   var SETTING_TIPS = [
     { id: "autoplan", when: function () { return !autoPlanOn() && hasAnyDishes() && !readOnlyMode(); },
       text: "Tip: Balanza kan elke week vanzelf je volgende week klaarzetten. Jij kiest welke maaltijden en dagen, en elke zaterdag staat er een nieuwe week voor je klaar om te bekijken.",
       btn: "Automatisch plannen instellen", go: function () { closeChat(); openAutoPlanSheet(); } },
     { id: "push", when: function () { return pushState === "off" || pushState === "ios-install"; },
       text: "Tip: met meldingen krijg je een seintje op het goede moment, bijvoorbeeld als er vlees uit de vriezer moet of als je week klaarstaat. Hooguit één per dag, en je kiest zelf welke.",
-      btn: "Meldingen instellen", go: function () { goSettingsThen(function () { var el = document.getElementById("settingsPushBtn"); if (el && el.scrollIntoView) el.scrollIntoView({ block: "center", behavior: "smooth" }); }); } },
+      btn: "Meldingen instellen", go: function () { goSettingsThen(null, "push"); } },
     { id: "home", when: function () { return true; },
       text: "Tip: je startscherm is van jou. Zet tegels aan of uit en sleep ze in de volgorde die bij jou past, bijvoorbeeld je boodschappenlijst bovenaan.",
       btn: "Startscherm aanpassen", go: function () { closeChat(); goto("weeks"); state.homeEdit = true; render(); } },
@@ -13902,7 +13943,7 @@
       btn: "Voedingsnieuws aanzetten", go: function () { setCoach("news", true); closeChat(); goto("weeks"); showToast("Voedingsnieuws staat aan.", "ok"); } },
     { id: "coach", when: function () { return true; },
       text: "Tip: bij Instellingen → Begeleiding bepaal je zelf hoeveel Balanza helpt: weekuitdagingen, mijlpalen, de weekterugblik en meer. Zet aan wat jij fijn vindt.",
-      btn: "Begeleiding bekijken", go: function () { goSettingsThen(function () { var el = document.getElementById("coach-draft"); if (el && el.scrollIntoView) el.scrollIntoView({ block: "center", behavior: "smooth" }); }); } }
+      btn: "Begeleiding bekijken", go: function () { goSettingsThen(null, "coach"); } }
   ];
   function pickSettingTip() {
     if (!coachOn("tips")) return null;
