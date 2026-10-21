@@ -4479,6 +4479,7 @@ function handleHousehold(req, res, action) {
             return dbSetDoc("hhinvite/" + token, { hid: hh.id, createdBy: uid, expiresAt: Date.now() + HOUSEHOLD_INVITE_TTL }).then(function () {
               logEvent("household", "invite", true, 200, { uid: uid });
               var base = (process.env.PUBLIC_BASE_URL || "").replace(/\/+$/, "");
+              if (!base && req.headers.host && /^[A-Za-z0-9.:-]+$/.test(req.headers.host)) base = (String(req.headers["x-forwarded-proto"] || "").split(",")[0].trim() === "http" || /^localhost(:|$)/.test(req.headers.host) ? "http://" : "https://") + req.headers.host;   // altijd een volledige link
               sendJSON(res, 200, { token: token, link: (base || "") + "/?join=" + token, expiresInDays: 7 });
             });
           });

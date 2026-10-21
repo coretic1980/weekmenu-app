@@ -13100,21 +13100,36 @@
     document.addEventListener("visibilitychange", function () { if (document.visibilityState === "visible" && Date.now() - lastSharedSync > 10000) refreshSharedData(); });
   }
   function inviteHousehold(btn) {
-    if (btn) btn.disabled = true;
+    if (btn) { btn.disabled = true; btn.textContent = "Link wordt gemaakt\u2026"; }
     hhFetch("invite", {}).then(function (d) {
-      if (btn) btn.disabled = false;
-      var name = accountName();
-      var msg = (name ? name + " nodigt je uit" : "Je bent uitgenodigd") + " om samen te plannen in Balanza: dezelfde weekplanning, gerechten en boodschappenlijst. Open de link (7 dagen geldig): " + d.link;
-      var box = document.createElement("div"); box.className = "hh-invite";
-      var inp = document.createElement("input"); inp.className = "textinput"; inp.readOnly = true; inp.value = d.link; inp.id = "hhInviteLink";
-      var row = document.createElement("div"); row.className = "nudge-actions";
-      var wa = document.createElement("a"); wa.className = "primary-btn small"; wa.href = "https://wa.me/?text=" + encodeURIComponent(msg); wa.target = "_blank"; wa.rel = "noopener"; wa.textContent = "Deel via WhatsApp";
-      var cp = document.createElement("button"); cp.type = "button"; cp.className = "ghost-btn small"; cp.textContent = "Kopieer link";
-      cp.onclick = function () { try { navigator.clipboard.writeText(d.link).then(function () { showToast("Link gekopieerd."); }); } catch (e) { inp.select(); } };
-      row.appendChild(wa); row.appendChild(cp); box.appendChild(inp); box.appendChild(row);
-      var slot = document.getElementById("hhInviteSlot"); if (slot) { slot.innerHTML = ""; slot.appendChild(box); }
-      loadHousehold();
-    }).catch(function (e) { if (btn) btn.disabled = false; showToast(e.message); });
+      // De server geeft een pad (/?join=…): voor WhatsApp moet het een volledige link zijn, anders is hij niet aan te tikken.
+      var link = /^https?:\/\//.test(d.link || "") ? d.link : window.location.origin + (d.link || "/?join=" + d.token);
+      state.hhInvite = { link: link, at: Date.now() };   // blijft staan, ook als de pagina zich ververst
+      return loadHousehold().then(function () { render(); });
+    }).catch(function (e) { if (btn) { btn.disabled = false; btn.textContent = "Iemand uitnodigen"; } showToast(friendlyNetError(e)); });
+  }
+  function renderHouseholdInvite(slot) {
+    var iv = state.hhInvite;
+    if (!iv || Date.now() - iv.at > 6 * 86400000) return;
+    var name = accountName();
+    var msg = (name ? name + " nodigt je uit" : "Je bent uitgenodigd") + " om samen te plannen in Balanza: dezelfde weekplanning, gerechten en boodschappenlijst. Open de link (7 dagen geldig): " + iv.link;
+    var box = document.createElement("div"); box.className = "hh-invite";
+    var lab = document.createElement("div"); lab.className = "acc-sub"; lab.textContent = "Stuur deze link naar wie je wilt uitnodigen. Die opent hem, logt in of maakt een account, en dan plannen jullie samen.";
+    var inp = document.createElement("input"); inp.className = "textinput"; inp.readOnly = true; inp.value = iv.link; inp.id = "hhInviteLink";
+    inp.onfocus = function () { inp.select(); };
+    var row = document.createElement("div"); row.className = "nudge-actions";
+    var wa = document.createElement("button"); wa.type = "button"; wa.className = "primary-btn small"; wa.id = "hhInviteWa"; wa.textContent = "Deel via WhatsApp";
+    wa.onclick = function () { openWhatsApp(msg); };
+    var cp = document.createElement("button"); cp.type = "button"; cp.className = "ghost-btn small"; cp.id = "hhInviteCopy"; cp.textContent = "Kopieer link";
+    cp.onclick = function () { copyToClipboard(iv.link).then(function () { showToast("Link gekopieerd.", "ok"); }).catch(function () { inp.focus(); inp.select(); showToast("Kopiëren lukte niet. Houd de link ingedrukt om hem te kopiëren."); }); };
+    row.appendChild(wa); row.appendChild(cp);
+    if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+      var sh = document.createElement("button"); sh.type = "button"; sh.className = "ghost-btn small"; sh.id = "hhInviteShare"; sh.textContent = "Andere app\u2026";
+      sh.onclick = function () { try { var p = navigator.share({ title: "Samen plannen in Balanza", text: msg }); if (p && p.catch) p.catch(function () {}); } catch (e) {} };
+      row.appendChild(sh);
+    }
+    box.appendChild(lab); box.appendChild(inp); box.appendChild(row);
+    slot.appendChild(box);
   }
   function leaveHousehold() {
     var owner = householdInfo && householdInfo.owner;
@@ -13151,7 +13166,8 @@
     var row = document.createElement("div"); row.className = "nudge-actions";
     if (!householdInfo || householdInfo.members.length < (householdInfo.max || 6)) {
       var inv = document.createElement("button"); inv.type = "button"; inv.className = householdShared() ? "ghost-btn small" : "primary-btn small"; inv.id = "hhInviteBtn";
-      inv.textContent = householdShared() ? "Nog iemand uitnodigen" : "Iemand uitnodigen";
+      inv.textContent = state.hhInvite ? "Nieuwe link maken" : householdShared() ? "Nog iemand uitnodigen" : "Iemand uitnodigen";
+      if (state.hhInvite) inv.className = "ghost-btn small";
       inv.onclick = function () { inviteHousehold(inv); };
       row.appendChild(inv);
     }
@@ -13162,6 +13178,7 @@
     }
     card.appendChild(row);
     var slot = document.createElement("div"); slot.id = "hhInviteSlot"; card.appendChild(slot);
+    renderHouseholdInvite(slot);
   }
   // Uitnodigingslink: /?join=<code>. Zonder account eerst inloggen of een account maken; daarna gaat het vanzelf verder.
   var JOIN_KEY = "balanza_pending_join";
