@@ -919,7 +919,8 @@
   .sheet-overlay.active .sheet { transform: none; }
   @media (min-width: 701px) { .sheet-overlay { align-items: center; } .sheet { border-radius: 20px; } }
   .sheet-grip { align-self: center; width: 40px; height: 4px; border-radius: 2px; background: var(--line); }
-  .sheet-head { display: flex; flex-direction: column; gap: 2px; }
+  .sheet-head { display: flex; flex-direction: column; gap: 2px; position: relative; padding-right: 44px; }
+  .sheet-x { position: absolute; top: -6px; right: -4px; width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font-size: 24px; line-height: 1; cursor: pointer; display: grid; place-items: center; }
   .sheet-head.row { flex-direction: row; align-items: center; justify-content: space-between; }
   .sheet-head b { font-family: "Fraunces", serif; font-size: 19px; font-weight: 600; }
   .sheet-head span { font-size: 12.5px; color: var(--muted); }
@@ -2831,8 +2832,24 @@
     timerRunning = false;
   }
 
+  // Pagina's die je vanuit het gebruikersmenu (of vanuit elkaar) opent: met Terug kom je precies terug waar je vandaan kwam.
+  var NAV_PAGES = { account: 1, myprefs: 1, settings: 1, guide: 1, journey: 1, plans: 1, upgrade: 1 };
+  var NAV_KEYS = ["view", "weekId", "dayId", "dayServings", "dayBackView", "dayBackWeekId", "dayBackDayName", "planWeekId", "planDayName", "planDayFor", "tab", "settingsPage", "reviewWeekId", "reviewIdx", "recap", "prefsBack"];
+  var navStack = [], navGoingBack = false;
+  function navSnapshot() { var o = {}; NAV_KEYS.forEach(function (k) { o[k] = state[k] === undefined ? null : state[k]; }); o.scrollY = window.scrollY || 0; return o; }
+  function navBack(fallbackView, fallbackExtra) {
+    var snap = navStack.pop();
+    if (!snap) { goto(fallbackView || "weeks", fallbackExtra); return; }
+    var extra = {}; NAV_KEYS.forEach(function (k) { if (k !== "view") extra[k] = snap[k]; });
+    navGoingBack = true;
+    try { goto(snap.view, extra); } finally { navGoingBack = false; }
+    var y = snap.scrollY || 0; if (y) setTimeout(function () { try { window.scrollTo(0, y); } catch (e) {} }, 30);
+  }
   function goto(view, extra) {
     if (typeof stopVoice === "function") stopVoice(true);
+    if (NAV_PAGES[view] && state.view !== view && !navGoingBack) { navStack.push(navSnapshot()); if (navStack.length > 12) navStack.shift(); }
+    // Rechtstreeks een onderdeel van Instellingen geopend (bijv. vanuit een tip)? Dan brengt Terug je meteen terug.
+    if (view === "settings" && state.view !== "settings") state.settingsEntry = extra && extra.settingsPage ? extra.settingsPage : null;
     if (view !== "library" && view !== "day" && librarySelect.on) { librarySelect.on = false; librarySelect.ids = {}; }
     if (state.view === "genresult" && view !== "genresult" && view !== "day") commitGenDiscards();
     if (state.view === "day" && state.dayBackView === "genresult" && view !== "genresult" && view !== "cook" && view !== "day") commitGenDiscards();
@@ -3348,7 +3365,7 @@
 
     // Jouw Balanza: wat je het vaakst aanpast
     amHeading(list, "Jouw Balanza");
-    amItem(list, "amPrefs", "sliders", "Mijn voorkeuren", function () { goto("myprefs", { prefsBack: "weeks", tab: "ontwerpen" }); }, null, "Doel, voedingsstijl en wat je (niet) eet");
+    amItem(list, "amPrefs", "sliders", "Mijn voorkeuren", function () { goto("myprefs", { prefsBack: null }); }, null, "Doel, voedingsstijl en wat je (niet) eet");
     if (!readOnlyMode() && window.authToken) {
       var ap = state.autoplan && state.autoplan.config;
       amItem(list, "amAutoPlan", "calendar", "Automatisch plannen", function () { openAutoPlanSheet(); }, null,
@@ -3919,8 +3936,11 @@
   }
 
   // ---- Openen vanuit een melding: /?open=plan&week=2026-10-19&day=Maandag of /?open=community[&id=…] ----
-  var plansReady = null, plansReadyResolve = null;
-  plansReady = new Promise(function (resolve) { plansReadyResolve = resolve; });
+  var plansReady = null, plansReadyResolve = null, dishesReadyResolve = null;
+  var plansOnly = new Promise(function (resolve) { plansReadyResolve = resolve; });
+  var dishesReady = new Promise(function (resolve) { dishesReadyResolve = resolve; });
+  // Een link uit een melding wacht op planning én gerechten, anders lijkt het alsof je nog geen gerechten hebt.
+  plansReady = Promise.all([plansOnly, dishesReady]);
   function openFromLink(q) {
     if (q && q.join) { handleJoinToken(q.join); return; }
     if (!q || !q.open) return;
@@ -3982,7 +4002,7 @@
   function renderAccount() {
     var app = document.getElementById("app");
     app.innerHTML = "";
-    app.appendChild(renderTopbar("Mijn profiel", true, function () { goto("weeks"); }));
+    app.appendChild(renderTopbar("Mijn profiel", true, function () { navBack("weeks"); }));
     var main = document.createElement("main");
 
     var card = accCard(main, null);
@@ -4059,7 +4079,9 @@
     var page = state.settingsPage || null;
     var TITLES = { look: "Weergave", push: "Meldingen", coach: "Begeleiding", privacy: "Privacy", bring: "Bring!", account: loggedIn ? "Account en beveiliging" : "Account", data: "Mijn gegevens" };
     if (page && !TITLES[page]) page = null;
-    app.appendChild(page ? renderTopbar(TITLES[page], true, function () { goto("settings", { settingsPage: null }); }) : renderTopbar("Instellingen", true, function () { goto("weeks"); }));
+    app.appendChild(page ? renderTopbar(TITLES[page], true, function () {
+      if (state.settingsEntry === page) { state.settingsEntry = null; navBack("settings", { settingsPage: null }); } else goto("settings", { settingsPage: null });
+    }) : renderTopbar("Instellingen", true, function () { navBack("weeks"); }));
     // Of dit account een wachtwoord heeft (accounts via Apple/Google hebben dat niet altijd).
     var ai = state.accountAuth;
     if (loggedIn && (!ai || ai.token !== window.authToken)) {
@@ -4396,7 +4418,7 @@
   function renderUpgrade() {
     var app = document.getElementById("app");
     app.innerHTML = "";
-    app.appendChild(renderTopbar("Account aanmaken", true, function () { upgradeState.error = null; goto("weeks"); }));
+    app.appendChild(renderTopbar("Account aanmaken", true, function () { upgradeState.error = null; navBack("weeks"); }));
     var main = document.createElement("main");
 
     var intro = document.createElement("div");
@@ -5157,8 +5179,9 @@
     if (!ov) {
       ov = document.createElement("div"); ov.id = id; ov.className = "sheet-overlay";
       ov.innerHTML = '<div class="sheet" role="dialog" aria-modal="true" aria-labelledby="' + id + 'T"><span class="sheet-grip" aria-hidden="true"></span>' +
-        '<div class="sheet-head"><b id="' + id + 'T"></b><span class="' + id + 'M"></span></div><div class="' + id + 'B sheet-pad"></div></div>';
+        '<div class="sheet-head"><b id="' + id + 'T"></b><span class="' + id + 'M"></span><button type="button" class="sheet-x" id="' + id + 'X" aria-label="Sluiten">\u00d7</button></div><div class="' + id + 'B sheet-pad"></div></div>';
       document.body.appendChild(ov);
+      ov.querySelector(".sheet-x").onclick = function () { closeSheet(ov); };
       ov.addEventListener("click", function (e) { if (e.target === ov) closeSheet(ov); });
       ov.addEventListener("keydown", function (e) { if (e.key === "Escape") closeSheet(ov); });
     }
@@ -6400,7 +6423,7 @@
     var app = document.getElementById("app");
     app.innerHTML = "";
     var back = state.prefsBack || "weeks";
-    app.appendChild(renderTopbar("Mijn voorkeuren", true, function () { savePrefs(); state.prefsBack = null; goto(back); }));
+    app.appendChild(renderTopbar("Mijn voorkeuren", true, function () { savePrefs(); state.prefsBack = null; navBack(back); }));
     var main = document.createElement("main");
     var savedPill = document.createElement("div");
     savedPill.className = "saved-pill"; savedPill.id = "prefsSaved"; savedPill.setAttribute("aria-live", "polite");
@@ -7384,7 +7407,7 @@
     if (!billingOn() && !trialModel()) { goto(window.authToken || !window.authRequired ? "account" : "weeks"); return; }
     var app = document.getElementById("app");
     app.innerHTML = "";
-    app.appendChild(renderTopbar(trialModel() ? "Proef en Plus" : "Abonnement vergelijken", true, function () { goto(window.authToken || !window.authRequired ? "account" : "weeks"); }));
+    app.appendChild(renderTopbar(trialModel() ? "Proef en Plus" : "Abonnement vergelijken", true, function () { navBack(window.authToken || !window.authRequired ? "account" : "weeks"); }));
     var main = document.createElement("main");
     if (billingInfo && !billingInfo.enabled) { goto(window.authToken || !window.authRequired ? "account" : "weeks"); return; }   // uitgezet terwijl je hier keek
     var info = billingInfo;
@@ -7489,7 +7512,7 @@
   function renderGuide() {
     var app = document.getElementById("app");
     app.innerHTML = "";
-    app.appendChild(renderTopbar("Hoe werkt Balanza", true, function () { goto("weeks"); }));
+    app.appendChild(renderTopbar("Hoe werkt Balanza", true, function () { navBack("weeks"); }));
     var main = document.createElement("main");
 
     var eyebrow = document.createElement("div");
@@ -13587,7 +13610,7 @@
     var j = journey(), ph = journeyPhase(), pw = journeyCurrentWeek();
     checkChallengeDone();
     var app = document.getElementById("app"); app.innerHTML = "";
-    app.appendChild(renderTopbar("Jouw reis", true, function () { goto("weeks"); }));
+    app.appendChild(renderTopbar("Jouw reis", true, function () { navBack("weeks"); }));
     var main = document.createElement("main"); main.className = "journey";
     var eb = document.createElement("div"); eb.className = "eyebrow"; eb.textContent = String(prefs.goal || "Onderhoud").split(" (")[0] + " · week " + ph.week; main.appendChild(eb);
     var h = document.createElement("h2"); h.className = "recap-title"; h.textContent = say("phase", ph.phase[0]); main.appendChild(h);
@@ -14982,7 +15005,8 @@
               addToCacheLibrary(cached);
               render();
             }
-          }).catch(function () {});
+            if (dishesReadyResolve) dishesReadyResolve();
+          }).catch(function () { if (dishesReadyResolve) dishesReadyResolve(); });
         }).catch(function () {});
       }).catch(function () {});
     }).catch(function () {});
@@ -15136,6 +15160,7 @@
   }
 
   function onTab(id) {
+    navStack.length = 0;   // de tabbalk is hoofdnavigatie: geen weg terug meer nodig
     if (state.view === "prefs") { savePrefs(); state.genSuccess = null; }
     if (id === "start") goto("weeks", { tab: "start" });
     else if (id === "ontwerpen") goto("prefs", { tab: "ontwerpen" });
