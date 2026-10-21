@@ -69,6 +69,10 @@
   /* Geen vaste hoogte op html/body: dan scrolt het document zelf en blijft position:fixed (tabbalk) op iPhone echt staan. */
   html { min-height: 100%; }
   body { min-height: 100vh; min-height: 100dvh; }
+  /* Geen elastisch meeveren van de hele pagina (iPhone): anders schuift de vaste tabbalk mee bij het vegen en aan het begin/eind van een pagina.
+     Horizontaal kan de pagina nooit schuiven; rijen die zelf horizontaal scrollen (carrousels) blijven werken. */
+  html, body { overscroll-behavior: none; overflow-x: hidden; }
+  @supports (overflow-x: clip) { html, body { overflow-x: clip; } }
   html { scroll-padding-top: env(safe-area-inset-top, 0px); }
   * { box-sizing: border-box; }
   body {
