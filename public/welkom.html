@@ -337,11 +337,15 @@
     }));
   }
   var FEATURES = [
-    [["M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"], "Gerechten op maat", "Keukenstijl, smaakprofiel, culinair niveau, kindvriendelijke gezinsmodus en uitsluitingen — jij bepaalt de smaak en wat je niet wilt eten."],
-    [["M3 4h18l-1.5 12a2 2 0 0 1-2 1.8H6.5a2 2 0 0 1-2-1.8L3 4z", "M8 4V2M16 4V2"], "Weekplanning", "Zes momenten per dag, of laat een week automatisch aanvullen met wat je al hebt opgeslagen."],
-    [["M6 2l1.5 5M18 2l-1.5 5M4 7h16l-1.5 12a2 2 0 0 1-2 1.8H7.5a2 2 0 0 1-2-1.8L4 7z"], "Boodschappenlijst", "Automatisch samengevoegd per categorie, met een kostenschatting voor Nederlandse supermarkten."],
-    [["M12 2v6M12 22v-6M4.9 4.9l4.2 4.2M14.9 14.9l4.2 4.2M2 12h6M16 12h6M4.9 19.1l4.2-4.2M14.9 9.1l4.2-4.2"], "Prepdag", "Eén geconsolideerd plan om in bulk voor te bereiden, precies afgestemd op je geplande week."],
-    [["M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9", "M13.73 21a2 2 0 0 1-3.46 0"], "Meldingen", "Een seintje zodra je gerechten klaar zijn, ook als je intussen iets anders aan het doen bent."],
+    [["M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"], "Gerechten op maat", "Keukenstijl, smaakprofiel, culinair niveau, kindvriendelijke gezinsmodus en uitsluitingen — jij bepaalt de smaak en wat je niet wilt eten. Varianten met één tik: pittiger, simpeler, fine dining of een andere eiwit- of koolhydraatbron."],
+    [["M12 5v14M5 12h14"], "Snel toevoegen wat je at", "Typ \u201c2 eieren met 2 sneetjes brood\u201d, scan een streepjescode, maak een foto van je bord of check in bij een restaurant. Kcal, macro's en Balans staan er meteen bij, en het komt vanzelf in je planning."],
+    [["M12 3l2.5 5 5.5.8-4 3.9.9 5.5-4.9-2.6-4.9 2.6.9-5.5-4-3.9 5.5-.8z"], "Balans-keurmerk", "Elk gerecht, elke dag en elke week een score voor hoe dicht je bij je doel zit, in kleur. Is hij laag, dan zie je waarom en wat helpt."],
+    [["M3 4h18l-1.5 12a2 2 0 0 1-2 1.8H6.5a2 2 0 0 1-2-1.8L3 4z", "M8 4V2M16 4V2"], "Weekplanning", "Zes momenten per dag, slepen tussen dagen, porties per persoon, restjes eerst opmaken. Of laat Balanza elke week automatisch plannen: favorieten vaker, maar niet te vaak."],
+    [["M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2", "M9 7a4 4 0 1 0 0 .01", "M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"], "Samen plannen", "Nodig je huisgenoten uit: samen één weekplanning en één boodschappenlijst, ieder met eigen doel en voorkeuren."],
+    [["M6 2l1.5 5M18 2l-1.5 5M4 7h16l-1.5 12a2 2 0 0 1-2 1.8H7.5a2 2 0 0 1-2-1.8L4 7z"], "Boodschappenlijst", "Automatisch samengevoegd per categorie, met een kostenschatting. Deel hem live via WhatsApp om samen af te vinken, of zet hem in Bring!."],
+    [["M21 11.5a8.4 8.4 0 0 1-9 8.4 8.6 8.6 0 0 1-3.8-.9L3 21l1.9-5.2a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 8.4-8.5 8.4 8.4 0 0 1 8.6 8z"], "Assistent en coach", "Vraag wat je vanavond eet of laat je week aanpassen. Balanza denkt mee met tips, een terugblik op je week en een seintje na het eten."],
+    [["M12 2v6M12 22v-6M4.9 4.9l4.2 4.2M14.9 14.9l4.2 4.2M2 12h6M16 12h6M4.9 19.1l4.2-4.2M14.9 9.1l4.2-4.2"], "Prepdag en kookmodus", "Eén geconsolideerd plan om in bulk voor te bereiden, en stap voor stap koken met timers."],
+    [["M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9", "M13.73 21a2 2 0 0 1-3.46 0"], "Meldingen", "Een seintje als je gerechten of je week klaarstaan, voor het diner van vandaag en je weekterugblik, ook op je iPhone."],
     [["M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4", "M7 10l5 5 5-5", "M12 15V3"], "PDF-export", "Boodschappenlijst of weekmenu als kookboek, om te printen of te bewaren."]
   ];
   function featureList(list) {
@@ -437,14 +441,14 @@
       var freeBenefit = info.freeDishCap > 0 ? info.freeDishCap + " nieuwe gerechten per maand" : "onbeperkt nieuwe gerechten";
       intro.textContent = "Gratis om te beginnen. Wil je meer, dan is er Balanza Plus.";
       grid.appendChild(h("div", { class: "price-card" }, h("h3", { text: "Gratis" }), h("div", { class: "price-amount", text: "\u20ac0" }),
-        h("ul", { class: "price-list" }, h("li", { text: freeBenefit }), h("li", { text: "Planning, boodschappenlijst en delen" }), h("li", { text: "Prepdag en kookmodus" }))));
+        h("ul", { class: "price-list" }, h("li", { text: freeBenefit }), h("li", { text: "Snel toevoegen met NEVO en streepjescode" }), h("li", { text: "Planning, boodschappenlijst en delen" }), h("li", { text: "Prepdag en kookmodus" }))));
     }
     grid.appendChild(h("div", { class: "price-card highlight" }, h("h3", { text: "Balanza Plus" }),
       h("div", { class: "price-amount" }, fmtEur(info.monthCents) + " ", h("span", { text: "/ maand" })),
       h("div", { class: "price-alt", style: { fontSize: "13px", color: "var(--muted)", marginTop: "-4px" }, text: "of " + fmtEur(info.yearCents) + " per jaar" }),
       h("ul", { class: "price-list" }, (trialDays() ? [
         plusBenefit + " ontwerpen", "Gerecht van foto en varianten met één tik", "Je week plannen, verslepen en porties aanpassen",
-        "Week automatisch invullen en prepdag", "Kostenschatting van je boodschappen", "Maandelijks opzegbaar"
+        "Elke week automatisch plannen en prepdag", "Kostenschatting van je boodschappen", "Maandelijks opzegbaar"
       ] : [plusBenefit, "Alles uit Gratis", "Maandelijks opzegbaar"]).map(function (t) { return h("li", { text: t }); }))));
     grid.style.display = "grid";
   }
