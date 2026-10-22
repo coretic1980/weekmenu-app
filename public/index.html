@@ -1541,6 +1541,35 @@
   .gp-move-sub { font-size: 12.5px; color: var(--muted); line-height: 1.35; }
   .gp-move-add { display: flex; gap: 6px; flex-wrap: wrap; }
   .gp-move-fix { border-style: dashed; }
+  .gp-home { gap: 14px; }
+  .gp-chips { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin: -2px -2px 0; padding: 2px; }
+  .gp-chips::-webkit-scrollbar { display: none; }
+  .gp-chip { flex: none; padding: 6px 11px; border-radius: 999px; border: 1px solid var(--line, rgba(0,0,0,.1)); background: color-mix(in srgb, var(--accent) 6%, transparent); color: inherit; font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+  .gp-meters { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .gp-meter { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 4px 8px; border-radius: 16px; border: 1px solid var(--line, rgba(0,0,0,.08)); background: var(--card, #fff); color: inherit; font: inherit; cursor: pointer; min-width: 0; }
+  .gp-meter-v { position: relative; width: 58px; height: 58px; display: block; margin-bottom: 4px; }
+  .gp-meter-v i { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-style: normal; font-family: "Fraunces", serif; font-weight: 600; font-size: 15px; letter-spacing: -.01em; }
+  .gp-ring { width: 58px; height: 58px; display: block; }
+  .gp-ring circle { fill: none; stroke-width: 6; stroke-linecap: round; }
+  .gp-ring .bg { stroke: rgba(0,0,0,.07); }
+  .gp-ring .fg { stroke: var(--accent); transition: stroke-dasharray .6s ease; }
+  .gp-ring.bewegen .fg { stroke: #2E9A5C; } .gp-ring.kracht .fg { stroke: #D98C2B; } .gp-ring.balans .fg { stroke: #3E7FD9; } .gp-ring.train .fg { stroke: #D98C2B; } .gp-ring.weetjes .fg { stroke: #9B6BD6; }
+  .gp-meter b { font-size: 13px; } .gp-meter small { font-size: 11.5px; color: var(--muted); text-align: center; line-height: 1.25; }
+  .gp-alert { display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%; padding: 10px 12px; border-radius: 12px; border: 0; background: rgba(217,140,43,.13); color: inherit; font: inherit; text-align: left; cursor: pointer; }
+  .gp-alert b { font-size: 13.5px; } .gp-alert span { font-size: 12.5px; color: var(--accent); font-weight: 700; white-space: nowrap; }
+  .gp-todos { display: flex; flex-wrap: wrap; gap: 8px; }
+  .gp-todo { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 999px; border: 0; background: var(--accent); color: #fff; font: inherit; font-size: 13.5px; font-weight: 700; cursor: pointer; }
+  .gp-todo:nth-child(n+2) { background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent); }
+  .gp-all { align-self: flex-start; }
+  .gp-flash { animation: gpFlash 1.4s ease; border-radius: 12px; }
+  @keyframes gpFlash { 0%, 60% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 45%, transparent); } 100% { box-shadow: none; } }
+  .wj-tile { display: flex; flex-direction: column; gap: 6px; background: linear-gradient(140deg, color-mix(in srgb, var(--accent) 10%, var(--card, #fff)), color-mix(in srgb, #E9A27C 14%, var(--card, #fff))); }
+  .wj-tile > .wj-card { background: transparent; padding: 0; }
+  .wj-tile > .wj-card.right, .wj-tile > .wj-card.wrong { background: transparent; }
+  .wj-tile:has(.wj-card.right) { background: linear-gradient(140deg, rgba(46,154,92,.16), var(--card, #fff)); }
+  .wj-tile:has(.wj-card.wrong) { background: linear-gradient(140deg, rgba(233,162,124,.28), var(--card, #fff)); }
+  .gp-chips { -webkit-mask-image: linear-gradient(90deg, #000 85%, transparent); mask-image: linear-gradient(90deg, #000 85%, transparent); }
+  #gpFull { padding: 0; box-shadow: none; border: 0; background: transparent; }
   .wj-strip { display: flex; flex-direction: column; gap: 8px; padding-top: 10px; border-top: 1px solid var(--line, rgba(0,0,0,.08)); }
   .wj-strip-h { display: flex; justify-content: space-between; align-items: baseline; font-size: 14.5px; }
   .wj-card { border-radius: 18px; padding: 14px 16px; background: linear-gradient(140deg, color-mix(in srgb, var(--accent) 12%, transparent), color-mix(in srgb, #E9A27C 14%, transparent)); display: flex; flex-direction: column; gap: 10px; transition: background .3s; }
@@ -4261,7 +4290,7 @@
     }
     if (q.open === "goal") {
       goto("weeks");
-      setTimeout(function () { var el = document.getElementById("wgWeight") || document.getElementById("homeGoal"); if (el) { el.scrollIntoView({ behavior: "smooth", block: "center" }); if (el.focus) try { el.focus({ preventScroll: true }); } catch (e) {} } else if (weightGoal()) openWeightGoalSheet(); }, 700);
+      setTimeout(function () { openGoalProgress("wgWeigh"); }, 700);
       return;
     }
     if (q.open === "community" && communityOn()) {
@@ -6024,7 +6053,7 @@
   // ---------- Startscherm: eigen indeling ----------
   // Versie 2 (rustiger startscherm): oude indelingen beginnen één keer opnieuw vanaf de nieuwe standaard.
   var HOME_LAYOUT_V = 2;
-  var HOME_DEFAULT_ORDER = ["vandaag", "doel", "training", "week", "voorjou", "recent", "reis", "seizoen", "volgendeweek", "foto", "genereren", "community", "boodschappen", "tip", "uitleg"];
+  var HOME_DEFAULT_ORDER = ["vandaag", "doel", "training", "week", "weetje", "voorjou", "recent", "reis", "seizoen", "volgendeweek", "foto", "genereren", "community", "boodschappen", "tip", "uitleg"];
   var HOME_DEFAULT_HIDDEN = ["reis", "seizoen", "volgendeweek", "foto", "genereren", "community", "boodschappen", "tip", "uitleg"];
   function homeLayout() {
     var hl = prefs.homeLayout && typeof prefs.homeLayout === "object" && prefs.homeLayout.v === HOME_LAYOUT_V ? prefs.homeLayout : null;
@@ -6032,7 +6061,8 @@
     var hidden = hl && Array.isArray(hl.hidden) ? hl.hidden.filter(function (id) { return HOME_TILES[id]; }) : HOME_DEFAULT_HIDDEN.slice();
     HOME_DEFAULT_ORDER.forEach(function (id) {   // nieuwe tegels komen er vanzelf bij, op hun standaardplek en -zichtbaarheid
       if (order.indexOf(id) > -1) return;
-      order.push(id);
+      var di0 = HOME_DEFAULT_ORDER.indexOf(id), before = di0 > 0 ? order.indexOf(HOME_DEFAULT_ORDER[di0 - 1]) : -1;
+      if (before > -1) order.splice(before + 1, 0, id); else order.push(id);   // op de standaardplek, na de tegel die er normaal voor staat
       if (hl && HOME_DEFAULT_HIDDEN.indexOf(id) > -1 && hidden.indexOf(id) === -1) hidden.push(id);
     });
     // "Jouw doel" staat altijd direct onder je dag (wat je gegeten hebt), ook in een eigen indeling
@@ -6094,7 +6124,9 @@
     training: { label: "Training", desc: "Je trainingsschema en wat er vandaag op staat", available: function () { return !!training() || (!prefs.trainingDismissed && (!!weightGoal() || /Spieropbouw|Atleet|Vetverlies|Cutting/.test(prefs.goal || ""))); },
       render: function (main) { renderTrainingCard(main); } },
     doel: { label: "Jouw doel", desc: "Je doel, je aanpak (voeding, macro's, sport, beweging) en je voortgang", available: function () { return true; },
-      render: function (main) { renderGoalCard(main, { id: "homeGoal" }); } },
+      render: function (main) { renderGoalHome(main); } },
+    weetje: { label: "Weetje van de dag", desc: "Waar of niet waar? Elke dag een korte uitleg over eten, slapen en bewegen", available: function () { return true; },
+      render: function (main) { renderWeetjeTile(main); } },
     reis: { label: "Jouw reis", desc: "Je fase, focus en uitdaging van deze week", available: function () { return journeyOn() && !journey().quiet; },
       render: function (main) { renderJourneyTile(main); } },
     seizoen: { label: "Seizoen en momenten", desc: "Wat nu lekker is, en feestdagen waar je iets bijzonders voor kookt", available: function () { return !!window.appSeason && moduleOn("generate") && coachOn("season"); },
@@ -7744,7 +7776,7 @@
     { title: "Navigeren op je telefoon", body: "Onderin staat een vaste balk met Start, Ontwerpen, Plannen, Gerechten en Lijst. Tik nogmaals op het actieve onderdeel om terug te gaan naar het begin ervan. Het getal bij Lijst laat zien hoeveel boodschappen voor deze week nog open staan. Rechtsboven vind je de assistent (het tekstwolkje) en je accountmenu (je avatar) met Instellingen, Hoe werkt Balanza en je abonnement." },
     { title: "Je dag op Start", body: "Op Start zie je alles wat vandaag gepland staat, plus wat je er los bij at. De gekleurde balk is je dag in calorie\u00ebn tegenover je dagdoel: elk blokje is een maaltijd in de kleur van het moment (de legenda staat eronder), een lichter blokje heb je nog niet gegeten. Daaronder zie je eiwit, koolhydraten en vet tegenover je doel. Vink een maaltijd af met het vinkje als je hem gegeten hebt. Tik op de maaltijd zelf om iets te wijzigen: iets anders gegeten, niet gegeten, of meer of minder (\u00bd tot 2 porties); wat je niet at, telt niet mee. Alles kun je ongedaan maken. \u201cWat past nog?\u201d laat zien wat er nog in je dag past. Met \u201cStartscherm aanpassen\u201d onderaan Start zet je de tegels in jouw volgorde of verberg je wat je niet nodig hebt." },
     { title: "Weetjes en je avondsnack", body: "Onderaan je doel staat elke dag een weetje: een stelling als \u201cLaat eten maakt dikker\u201d. Tik op Waar of Niet waar en lees waarom. Via \u201cX van 17 ontdekt\u201d (of Aanpak \u2192 Weetjes) veeg je door alle weetjes over eten, slapen, trainen en bewegen; Balanza onthoudt wat je al ontdekte en laat eerst zien wat bij jouw doel en je week past. Geef je in de wekelijkse check-in aan dat je \u2019s avonds honger of trek had, dan stelt Balanza een eiwitrijke avondsnack voor die in je dagdoel past (kwark, skyr, h\u00fcttenk\u00e4se, eieren; plantaardig: sojayoghurt of edamame) en zet die met \u00e9\u00e9n tik de rest van de week in je planning, na het diner." },
-    { title: "Jouw doel en je aanpak", body: "Je doel (Onderhoud, Vetverlies, Cutting, Spieropbouw of Atleet) bepaalt je hele aanpak. De tegel \u201cJouw doel\u201d op Start laat die zien in vier delen: voeding (je dagdoel), macro's, sport en beweging; tik erop voor de uitleg. Ook je voortgang past bij je doel: bij afvallen je gewicht, middel en of je kracht blijft; bij spieropbouw hoe sterk je wordt per oefening; bij presteren je trainingen; bij onderhoud je Balans en een stabiel gewicht. Beweging telt voor elk doel: afgevinkte trainingen tellen vanzelf mee, de rest tik je erbij (+15 min, +30 min, +1 uur). Pas je je doel aan, dan gaat alles mee: dagdoel, macro's, Balans-scores, trainingsschema, beweegdoel en voortgang. Je ziet meteen wat er veranderd is. Een doelgewicht dat niet meer past (bijvoorbeeld afvallen terwijl je nu spieren opbouwt) stopt; je wegingen blijven bewaard." },
+    { title: "Jouw doel en je aanpak", body: "Je doel (Onderhoud, Vetverlies, Cutting, Spieropbouw of Atleet) bepaalt je hele aanpak. De tegel \u201cJouw doel\u201d op Start laat in \u00e9\u00e9n oogopslag zien hoe je ervoor staat: je aanpak in een regel (dagdoel, macro's, sport, beweging; tik voor uitleg), drie meters die bij je doel passen en alleen wat nu te doen is, zoals wegen, je check-in of een half uur bewegen. Tik op een meter of op \u201cJouw voortgang\u201d voor alles in detail. Ook je voortgang past bij je doel: bij afvallen je gewicht, middel en of je kracht blijft; bij spieropbouw hoe sterk je wordt per oefening; bij presteren je trainingen; bij onderhoud je Balans en een stabiel gewicht. Beweging telt voor elk doel: afgevinkte trainingen tellen vanzelf mee, de rest tik je erbij (+15 min, +30 min, +1 uur). Pas je je doel aan, dan gaat alles mee: dagdoel, macro's, Balans-scores, trainingsschema, beweegdoel en voortgang. Je ziet meteen wat er veranderd is. Een doelgewicht dat niet meer past (bijvoorbeeld afvallen terwijl je nu spieren opbouwt) stopt; je wegingen blijven bewaard." },
     { title: "Jouw doelgewicht", body: "Werk je naar een gewicht toe? Stel op Start (tegel \u201cJouw doel\u201d), in Mijn voorkeuren of in de startwizard een doelgewicht in, met een tempo: rustig, normaal of stevig. Balanza stemt je dagdoel daarop af, binnen veilige grenzen, en laat zien hoe ver je bent: van start naar doel, je weekgemiddelden in een grafiekje en, na drie wegingen, of je op schema ligt en wanneer je je doel verwacht. Weeg je \u00e9\u00e9n keer per week op je vaste weegmoment (zelf te kiezen, standaard maandag 7:30): nuchter, na het plassen en zonder kleren. Elke dag wegen helpt niet; je ziet vooral schommelingen door vocht. Meet eens per maand je omtrekken (middel, nek, heup en eventueel borst, arm en bovenbeen): dan zie je ook vooruitgang als de weegschaal stilstaat, en schat Balanza met de Navy-methode je vetpercentage. Dat gebruikt Balanza ook om te checken of je doelgewicht gezond is: zo telt je bouw mee en niet alleen je BMI. Na je weging vraagt Balanza kort hoe je week ging: je motivatie, op welke dag je veel honger had, wat goed ging en wat lastig was. Balanza kijkt dan naar wat je op die dagen at (kcal, eiwit, overgeslagen maaltijden, verdeling) en geeft je tips voor komende week; met \u201cBespreek met Balanza\u201d ga je er in de chat over door. Staat je gewicht een paar weken stil, dan geeft Balanza een tip over eten of bewegen, gebaseerd op wat je de afgelopen weken at, en kun je de assistent om een persoonlijke tip vragen. Wil je geen kilo\u2019s zien, zet dan \u201cCijfers verbergen\u201d aan. Een doel onder een gezond gewicht kan niet, en voor wie jonger is dan 18 is deze functie er niet." },
     { title: "Je trainingsschema", body: "Wil je er een trainingsschema bij? Kies op Start in de tegel \u201cTraining\u201d of je thuis traint (eigen gewicht, elastiek of dumbbells) of in de sportschool, op welke 2 tot 5 dagen en hoe fit je nu bent. Balanza kiest een vast schema dat bij je doel past (afvallen met behoud van spieren, spieren opbouwen, conditie of fit blijven) en bouwt rustig op: elke paar weken iets zwaarder, elke 6e week een herstelweek. Je trainingen staan in je week bij Plannen; tik erop voor de oefeningen met uitleg en een uitlegfilmpje. In de tegel tik je op een dag om die training te openen, en via Weekoverzicht zie je alle trainingen van de week (blader met Vorige en Volgende). Train elke set tot spierfalen: tot je geen herhaling meer netjes kunt doen. Bij zware vrije oefeningen stop je bij de laatste nette herhaling; beginners leren de eerste 4 weken eerst de techniek. Vul per set je gewicht en herhalingen in: de volgende keer zie je wat je deed en zegt Balanza wanneer het zwaarder mag. Haal je meer herhalingen dan de bovenkant (bijvoorbeeld meer dan 12), dan is het gewicht te licht. Vink af als je klaar bent; de tegel laat zien hoeveel weken op rij je alles deed. Heb je klachten, een blessure of twijfel, overleg dan eerst met je huisarts." },
     { title: "Het Balans-keurmerk", body: "Elk gerecht, elke dag en elke week krijgt een Balans-score: hoe dicht de verdeling van koolhydraten, eiwit en vet bij jouw doel ligt. Groen (75\u2013100%) is dichtbij, geel, oranje en rood wijken steeds meer af. Is een score laag, dan staat er waarom (bijvoorbeeld weinig eiwit en veel koolhydraten) met een tip wat helpt. De Balans van je dag rekent naar verhouding: een grote maaltijd telt zwaarder dan een tussendoortje." },
@@ -15254,7 +15286,7 @@
     head.innerHTML = '<div><div class="eyebrow">Jouw doel</div><b class="gp-title"></b><small class="wg-sub"></small></div>';
     head.querySelector(".gp-title").textContent = p.title; head.querySelector(".wg-sub").textContent = p.sub;
     var ed = document.createElement("button"); ed.type = "button"; ed.className = "hh-link"; ed.id = "gpPlanOpen"; ed.textContent = "Aanpak"; ed.onclick = function () { openGoalPlanSheet(); };
-    head.appendChild(ed); card.appendChild(head);
+    head.appendChild(ed); if (!opts.inSheet) card.appendChild(head);
     var grid = document.createElement("div"); grid.className = "gp-grid";
     gpParts().forEach(function (x) {
       var b = document.createElement("button"); b.type = "button"; b.className = "gp-tile"; b.id = "gpTile-" + x[0];
@@ -15278,7 +15310,7 @@
     if (gk === "atleet") renderAthleteBlock(card);
     if (gk === "onderhoud") { renderBalanceBlock(card); if (health && !g) renderStableWeight(card); }
     renderMoveBlock(card);
-    renderWeetjeStrip(card);
+    if (!opts.inSheet) renderWeetjeStrip(card);
     if (health) {
       if (!g && (gk === "spier" || gk === "onderhoud")) renderMeasureBlock(card, null);
       wgCheckinRow(card);
@@ -15286,6 +15318,145 @@
     }
     main.appendChild(card);
     return card;
+  }
+  // ---------- Startscherm: "Jouw doel" compact. Drie meters in één oogopslag, alleen wat nu te doen is, de rest in "Jouw voortgang". ----------
+  function gpRing(pct, cls) {
+    var r = 22, c = 2 * Math.PI * r, p = Math.max(0, Math.min(1, pct || 0));
+    return '<svg viewBox="0 0 52 52" class="gp-ring ' + (cls || "") + '" aria-hidden="true"><circle cx="26" cy="26" r="' + r + '" class="bg"/><circle cx="26" cy="26" r="' + r + '" class="fg" stroke-dasharray="' + (c * p).toFixed(1) + ' ' + c.toFixed(1) + '" transform="rotate(-90 26 26)"/></svg>';
+  }
+  // De drie meters, per doel: [id, label, waarde, toelichting, voortgang 0..1 of null, sectie in Jouw voortgang]
+  function gpMeters() {
+    var gk = goalKey(), p = gpPlan(), g = weightGoal(), health = wgAllowed(), out = [];
+    var mw = moveWeek(0), mv = ["bewegen", "Bewegen", String(mw.total), "van " + p.move + " min", mw.total / p.move, "gpMove"];
+    if ((gk === "afvallen" || gk === "cutting") && health) {
+      if (g) { var pr = wgProgress(g); out.push(["doel", "Doelgewicht", Math.round(pr.pct * 100) + "%", pr.status === "reached" ? "bereikt!" : g.hide ? "van je doel" : "nog " + wgFmt(pr.left) + " kg", pr.pct, "wgCard"]); }
+      else out.push(["doel", "Doelgewicht", "+", "instellen", 0, "wgCard"]);
+      out.push(mv);
+      var sp = strengthProgress(); out.push(["kracht", "Kracht", sp ? (sp.avg >= 0 ? "+" : "") + sp.avg + "%" : "–", sp ? "in 8 weken" : "nog geen data", sp ? Math.min(1, Math.max(0, 0.5 + sp.avg / 40)) : null, "gpStrength"]);
+    } else if (gk === "spier") {
+      var sp2 = strengthProgress(); out.push(["kracht", "Kracht", sp2 ? (sp2.avg >= 0 ? "+" : "") + sp2.avg + "%" : "–", sp2 ? "in 8 weken" : "vul je sets in", sp2 ? Math.min(1, Math.max(0.05, sp2.avg / 20)) : null, "gpStrength"]);
+      out.push(mv);
+      var cw = health ? currentWeight() : null; if (cw) out.push(["gewicht", "Gewicht", wgFmt(cw), g ? "doel " + wgFmt(g.target) : "kg", g ? wgProgress(g).pct : null, g ? "wgCard" : "wgWeigh"]);
+    } else if (gk === "atleet") {
+      var t = training(), dn = 0, pn = 0;
+      if (t) for (var w = 3; w >= 0; w--) { var mon = getMonday(new Date()); mon.setDate(mon.getDate() - 7 * w); for (var i = 0; i < 7; i++) { var d = new Date(mon); d.setDate(d.getDate() + i); if (w === 0 && d > new Date()) continue; var s = trSessionFor(t, d); if (s) { pn++; if (trIsDone(t, s.key)) dn++; } } }
+      out.push(["train", "Trainingen", t ? dn + "/" + pn : "–", t ? "in 4 weken" : "kies een schema", pn ? dn / pn : null, "gpTrainLoad"]);
+      out.push(mv);
+    } else {
+      var r = wgRecentDays(); out.push(["balans", "Balans", r.balAvg !== null ? r.balAvg + "%" : "–", "gemiddeld", r.balAvg !== null ? r.balAvg / 100 : null, "gpBalance"]);
+      out.push(mv);
+      var cw2 = health ? currentWeight() : null; if (cw2) out.push(["gewicht", "Gewicht", wgFmt(cw2), "kg", null, "gpStable"]);
+    }
+    if (out.length < 3) out.push(["weetjes", "Weetjes", weetjesFound() + "/" + WEETJES.length, "ontdekt", weetjesFound() / WEETJES.length, "weetjes"]);
+    return out;
+  }
+  // Wat is er nu te doen? Alleen wat echt aan de beurt is, hooguit drie.
+  function gpTodos() {
+    var gk = goalKey(), g = weightGoal(), health = wgAllowed(), out = [];
+    if (health && gk !== "atleet" || g) {
+      var mine = thisWeekWeight(), wd = wgWeighDay(g), today = new Date().getDay(), dayIdx = function (x) { return (x + 6) % 7; };
+      if (!mine && (g || weightEntries().length) && dayIdx(today) >= dayIdx(wd)) out.push(["wegen", "⚖️", "Wegen", function () { openGoalProgress("wgWeigh"); }]);
+    }
+    if (health && !thisWeekCheckin() && (thisWeekWeight() || new Date().getDay() === 0 || new Date().getDay() >= 5)) out.push(["checkin", "💬", "Check-in", function () { openCheckinSheet(); }]);
+    if (health && (g || gk === "spier" || gk === "onderhoud") && measDue() && measLastWeek()) out.push(["meten", "📏", "Omtrek meten", function () { openMeasureSheet(); }]);
+    var p = gpPlan(), mw = moveWeek(0);
+    if (mw.total < p.move) out.push(["bewegen", "🚶", "+30 min bewogen", function () { addMove(30); render(); showUndoToast("30 min bewegen erbij gezet.", function () { addMove(-30); render(); }); }]);
+    return out.slice(0, 3);
+  }
+  // Is er iets wat aandacht vraagt? (stilstand, kracht staat stil, lang aan het cutten)
+  function gpAlert() {
+    var gk = goalKey(), g = weightGoal();
+    if (!coachOn("goaltips")) return null;
+    if (g && g.tipHidden !== mondayKeyOffset(0) && wgTips(g)) return ["Even stilstand? Dat hoort erbij.", "Bekijk wat nu helpt", "wgTip"];
+    var sp = (gk === "spier") ? strengthProgress() : null; if (sp && sp.stalled) return ["Je kracht staat even stil", "Bekijk tips", "gpStrengthTip"];
+    if (gk === "cutting" && g && g.startWeek && wgWeeksBetween(g.startWeek, mondayKeyOffset(0)) >= 10) return ["Al lang aan het cutten", "Tijd voor een pauze?", "gpCutLong"];
+    return null;
+  }
+  function renderGoalHome(main) {
+    var gk = goalKey(), p = gpPlan();
+    var card = document.createElement("div"); card.className = "card gp-card gp-home"; card.id = "homeGoal";
+    var head = document.createElement("div"); head.className = "wg-head";
+    head.innerHTML = '<div><div class="eyebrow">Jouw doel</div><b class="gp-title"></b></div>';
+    head.querySelector(".gp-title").textContent = p.title;
+    var ed = document.createElement("button"); ed.type = "button"; ed.className = "hh-link"; ed.id = "gpPlanOpen"; ed.textContent = "Aanpak"; ed.onclick = function () { openGoalPlanSheet(); };
+    head.appendChild(ed); card.appendChild(head);
+    // Aanpak in één regel: tik voor uitleg
+    var chips = document.createElement("div"); chips.className = "gp-chips";
+    [["voeding", gpShort("voeding").replace(/, .*$/, "")], ["macros", gpShort("macros")], ["sport", gpShort("sport")], ["beweging", gpPlan().move + " min/week"]].forEach(function (x) {
+      var b = document.createElement("button"); b.type = "button"; b.className = "gp-chip"; b.id = "gpChip-" + x[0]; b.textContent = x[1];
+      b.setAttribute("aria-label", { voeding: "Voeding", macros: "Macro's", sport: "Sport", beweging: "Beweging" }[x[0]] + ": " + x[1]);
+      b.onclick = function () { openGoalPlanSheet(x[0]); };
+      chips.appendChild(b);
+    });
+    card.appendChild(chips);
+    // Drie meters
+    var row = document.createElement("div"); row.className = "gp-meters";
+    gpMeters().forEach(function (m) {
+      var b = document.createElement("button"); b.type = "button"; b.className = "gp-meter"; b.id = "gpMeter-" + m[0];
+      b.innerHTML = '<span class="gp-meter-v"></span><b></b><small></small>';
+      var v = b.querySelector(".gp-meter-v");
+      v.innerHTML = m[4] !== null ? gpRing(m[4], m[0]) : '<svg viewBox="0 0 52 52" class="gp-ring none" aria-hidden="true"><circle cx="26" cy="26" r="22" class="bg"/></svg>';
+      var val = document.createElement("i"); val.textContent = m[2]; v.appendChild(val);
+      b.querySelector("b").textContent = m[1]; b.querySelector("small").textContent = m[3];
+      b.setAttribute("aria-label", m[1] + ": " + m[2] + " " + m[3]);
+      b.onclick = function () { if (m[5] === "weetjes") openWeetjes(); else if (m[0] === "doel" && !weightGoal()) openWeightGoalSheet(); else openGoalProgress(m[5]); };
+      row.appendChild(b);
+    });
+    card.appendChild(row);
+    var al = gpAlert();
+    if (al) {
+      var a = document.createElement("button"); a.type = "button"; a.className = "gp-alert"; a.id = "gpAlert";
+      a.innerHTML = "<b></b><span></span>"; a.querySelector("b").textContent = al[0]; a.querySelector("span").textContent = al[1] + " ›";
+      a.onclick = function () { openGoalProgress(al[2]); };
+      card.appendChild(a);
+    }
+    var todos = gpTodos();
+    if (todos.length) {
+      var tr = document.createElement("div"); tr.className = "gp-todos"; tr.id = "gpTodos";
+      todos.forEach(function (t) {
+        var b = document.createElement("button"); b.type = "button"; b.className = "gp-todo"; b.id = "gpTodo-" + t[0];
+        b.innerHTML = '<span aria-hidden="true"></span>'; b.querySelector("span").textContent = t[1]; b.appendChild(document.createTextNode(t[2]));
+        b.onclick = t[3]; tr.appendChild(b);
+      });
+      card.appendChild(tr);
+    }
+    var all = document.createElement("button"); all.type = "button"; all.className = "hh-link gp-all"; all.id = "gpAll"; all.textContent = "Jouw voortgang ›";
+    all.onclick = function () { openGoalProgress(); };
+    card.appendChild(all);
+    main.appendChild(card);
+    return card;
+  }
+  // Alles over je doel in één venster (dezelfde inhoud als in Jouw reis); ververst vanzelf na een actie
+  var gpSheetFocus = null;
+  function openGoalProgress(focus) {
+    var sh = openSimpleSheet("gpProgSheet", "Jouw voortgang", gpPlan().title);
+    gpSheetFocus = focus || null;
+    fillGoalProgress(sh.body, true);
+  }
+  function fillGoalProgress(body, scroll) {
+    var y = body.parentNode ? body.parentNode.scrollTop : 0;
+    body.innerHTML = "";
+    var c = renderGoalCard(body, { id: "gpFull", inSheet: true });
+    c.classList.remove("card");
+    if (scroll && gpSheetFocus) setTimeout(function () { var f = document.getElementById(gpSheetFocus) || (gpSheetFocus === "wgWeigh" ? document.getElementById("wgWeigh") : null); if (f && f.scrollIntoView) { f.scrollIntoView({ block: "center" }); f.classList.add("gp-flash"); var inp = f.querySelector && f.querySelector("input"); if (inp && gpSheetFocus === "wgWeigh") try { inp.focus({ preventScroll: true }); } catch (e) {} } }, 80);
+    else if (body.parentNode) body.parentNode.scrollTop = y;
+  }
+  function refreshGoalSheet() {
+    var ov = document.getElementById("gpProgSheet"); if (!ov || !ov.classList.contains("active")) return;
+    var body = ov.querySelector(".gpProgSheetB"); if (body) fillGoalProgress(body, false);
+  }
+  // Weetje van de dag als eigen tegel op Start
+  function renderWeetjeTile(main) {
+    var w = weetjeOrder()[0]; if (!w) return;
+    var box = document.createElement("div"); box.className = "card wj-tile"; box.id = "homeWeetje";
+    var hd = document.createElement("div"); hd.className = "wj-strip-h";
+    hd.innerHTML = '<div class="eyebrow">Weetje van de dag</div>';
+    var more = document.createElement("button"); more.type = "button"; more.className = "hh-link"; more.id = "wjTileMore"; more.textContent = weetjesFound() + "/" + WEETJES.length + " ›";
+    more.setAttribute("aria-label", weetjesFound() + " van " + WEETJES.length + " weetjes ontdekt, bekijk alle weetjes");
+    more.onclick = function () { openWeetjes(); };
+    hd.appendChild(more); box.appendChild(hd);
+    box.appendChild(weetjeCard(w, { prefix: "wjs-", onAnswer: function () { more.textContent = weetjesFound() + "/" + WEETJES.length + " ›"; } }));
+    main.appendChild(box);
   }
   // Doel gewijzigd: alles wat aan je doel hangt gaat mee (dagdoel, macro's, Balans, trainingsfocus, beweegdoel, voortgang).
   // Wat niet vanzelf kan (een doelgewicht dat de andere kant op gaat, te weinig trainingsdagen) leggen we voor.
@@ -18266,6 +18437,7 @@
       else if (state.view === "day") renderDay();
       else if (state.view === "cook") renderCook();
       else renderWeeks();
+      try { refreshGoalSheet(); } catch (e2) {}
     } catch (e) {
       renderTabbarSafe();
       console.error("Render error op scherm '" + state.view + "':", e);
