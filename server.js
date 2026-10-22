@@ -2992,6 +2992,7 @@ function stripHealthData(subpath, value) {
     if (v.coach && typeof v.coach === "object") { v.coach.water = false; v.coach.daytools = false; }
     if (v.journey && Array.isArray(v.journey.log)) v.journey.log = v.journey.log.filter(function (x) { return x && x.m !== "gewicht"; });
     if (v.journey && v.journey.metric === "gewicht") v.journey.metric = "";
+    delete v.weightGoal;
   } else if (subpath === "plannedWeeks") {
     var list = Array.isArray(v.list) ? v.list : Array.isArray(v) ? v : [];
     list.forEach(function (w) { if (w && w.extra) delete w.extra; });
@@ -3740,7 +3741,7 @@ function notifyJobFinished(job) {
 // Elke paar minuten kijkt de server (en/of een externe cron via /api/cron/notify) wie er nu een melding moet krijgen.
 // Tijden zijn Nederlandse tijd; een melding gaat binnen 3 uur na het gekozen tijdstip de deur uit, anders slaan we hem over.
 var NOTIFY_TZ = "Europe/Amsterdam";
-var NOTIFY_DEFAULTS = { planWeek: true, planWeekDay: 0, planWeekTime: "19:00", autoWeek: true, planToday: true, planTodayTime: "09:00", community: true, morning: true, morningTime: "08:00",
+var NOTIFY_DEFAULTS = { weighIn: true, planWeek: true, planWeekDay: 0, planWeekTime: "19:00", autoWeek: true, planToday: true, planTodayTime: "09:00", community: true, morning: true, morningTime: "08:00",
   cookedCheck: true, cookedTime: "20:30", recap: true };
 var RECAP_TIME = "10:00", TRIAL_RECAP_TIME = "18:00";
 var NOTIFY_WINDOW_MIN = 180;
@@ -3756,7 +3757,7 @@ function hhmmToMin(v) { return Number(v.slice(0, 2)) * 60 + Number(v.slice(3, 5)
 function cleanNotifyPrefs(p) {
   var out = Object.assign({}, NOTIFY_DEFAULTS);
   if (!p || typeof p !== "object") return out;
-  ["planWeek", "autoWeek", "planToday", "community", "cookedCheck", "recap", "morning"].forEach(function (k) { if (typeof p[k] === "boolean") out[k] = p[k]; });
+  ["planWeek", "autoWeek", "planToday", "community", "cookedCheck", "recap", "morning", "weighIn"].forEach(function (k) { if (typeof p[k] === "boolean") out[k] = p[k]; });
   if (validHHMM(p.morningTime)) out.morningTime = p.morningTime;
   if (validHHMM(p.cookedTime)) out.cookedTime = p.cookedTime;
   if (Number.isInteger(p.planWeekDay) && p.planWeekDay >= 0 && p.planWeekDay <= 6) out.planWeekDay = p.planWeekDay;
@@ -3962,6 +3963,15 @@ function notifyTickUser(uid, ctx) {
         jobs.push({ kind: "cooked-check", payload: { title: "Hoe was " + String(dinner.name).slice(0, 60) + "?", tag: "balanza-cooked",
           body: "Gekookt en lekker? Eén tik, dan leert Balanza je smaak en worden je volgende weken nog beter.",
           url: "/?open=cooked&week=" + monToday + "&day=" + dayName } });
+      }
+    }
+    // 4a. Maandagochtend: even op de weegschaal, alleen met een doelgewicht en als je deze week nog niet woog
+    if (np.weighIn && now.weekday === 1 && inWindow(now.minutes, "08:30") && st.weighSentOn !== now.date) {
+      var wgoal = prefs.weightGoal, wlog = prefs.journey && Array.isArray(prefs.journey.log) ? prefs.journey.log : [];
+      if (wgoal && Number(wgoal.target) > 0 && !wgoal.reachedAt && !wlog.some(function (x) { return x && x.m === "gewicht" && x.w === monToday; })) {
+        st.weighSentOn = now.date; changed = true;
+        jobs.push({ kind: "weigh-in", payload: { title: "Even op de weegschaal?", tag: "balanza-weigh",
+          body: "Eén keer per week is genoeg. Dan zie je hoe je ervoor staat richting je doel.", url: "/?open=goal" } });
       }
     }
     // 4. Maandag: je week in cijfers
@@ -4815,6 +4825,7 @@ function assistantGuide() {
     "- Samen plannen met huisgenoten (Mijn profiel), community met recepten van anderen, meldingen, licht of donker thema, Start-scherm indelen.\n" +
     "- Plus: na de proefperiode zijn ontwerpen en plannen voor Plus. Prijzen en abonnement staan bij Mijn profiel.\n" +
     "- Automatisch plannen: één keer instellen (maaltijden, dagen, dag en tijd, standaard zaterdag 09:00); Balanza zet dan elke week de volgende week klaar en de gebruiker keurt hem goed in een carrousel. Voedingsnieuws: één bericht per dag onder Voor jou.\n" +
+    "- Doelgewicht: tegel \u201cJouw doel\u201d op Start, of Mijn voorkeuren \u2192 Lichaamsprofiel \u2192 Doelgewicht. Tempo rustig, normaal of stevig; het dagdoel past zich aan, binnen veilige grenzen. Eén keer per week wegen; \u201cCijfers verbergen\u201d toont alleen procenten. Niet onder een gezond gewicht en niet voor minderjarigen.\n" +
     "- Snel toevoegen (knop \u201c\uFF0B Toevoegen\u201d op Start en \u201c\uFF0B Snel iets toevoegen\u201d per dag in de planner; vervangt het oude \u201cAnders gegeten\u201d): zoeken in de NEVO-productenlijst, een foto van je bord, uit eten (restaurant inchecken), \u201cin plaats van\u201d een geplande maaltijd, een hele zin (\u201c2 eieren, 1 snee brood met kaas\u201d), streepjescode scannen (Open Food Facts) of een eigen product van het etiket. Macro's en Balans worden zelf berekend; als extra bij een dag of ingepland als maaltijd (dan bewaard als gerecht).\n" +
     "- WAAR VIND JE WAT: rechtsboven de avatar opent het menu met Mijn profiel, Mijn voorkeuren, Automatisch plannen, Samen plannen, Jouw reis, Instellingen, Donkere weergave, Hoe werkt Balanza en Uitloggen. " +
     "Instellingen is een overzicht met per onderdeel een knop: Weergave, Meldingen, Automatisch plannen, Begeleiding, Privacy, Bring!, Account en beveiliging (wachtwoord, e-mail, uitloggen, account verwijderen) " +

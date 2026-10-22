@@ -1519,6 +1519,24 @@
   .hh-bar { display: flex; gap: 3px; height: 10px; border-radius: 999px; background: rgba(26, 20, 12, 0.07); overflow: hidden; }
   .hh-bar span { display: block; height: 100%; border-radius: 3px; }
   .hh-bar span.todo { opacity: .45; }
+  .wg-card { display: flex; flex-direction: column; gap: 10px; }
+  .wg-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+  .wg-big { display: block; font-family: "Fraunces", serif; font-size: 26px; font-weight: 600; margin-top: 4px; }
+  .wg-sub { display: block; color: var(--muted); font-size: 13.5px; }
+  .wg-inv-t { font-size: 17px; }
+  .wg-bar { height: 12px; border-radius: 999px; background: rgba(26, 20, 12, 0.08); overflow: hidden; }
+  .wg-bar span { display: block; height: 100%; border-radius: 999px; background: var(--accent2, var(--accent)); transition: width .5s ease; }
+  .wg-ends { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 12.5px; color: var(--muted); }
+  .wg-ends b { color: var(--ink); font-size: 13.5px; text-align: center; }
+  .wg-chart svg { width: 100%; height: 70px; display: block; }
+  .wg-line { stroke: var(--accent2, var(--accent)); }
+  .wg-dot { fill: var(--accent2, var(--accent)); }
+  .wg-goal-line { stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 5 5; opacity: .7; }
+  .wg-weigh { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding-top: 10px; border-top: 1px solid var(--line); }
+  .wg-weigh-l { flex: 1 1 100%; font-size: 13.5px; font-weight: 600; }
+  .wg-weigh .textinput { flex: 1; min-width: 90px; }
+  .wg-preview { margin-top: 12px; font-size: 14px; line-height: 1.5; }
+  .wg-prefrow { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; font-size: 14px; }
   .hh-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 7px; font-size: 12px; color: var(--muted); }
   .hh-legend span { display: inline-flex; align-items: center; gap: 5px; }
   .hh-legend i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
@@ -4042,6 +4060,7 @@
         row3.appendChild(timeInput("notifyCookedTime", np.cookedTime || "20:30", "Tijd voor de vraag na het eten", function (v) { save({ cookedTime: v }); paint(); }));
         box.appendChild(row3);
       }
+      if (weightGoal()) box.appendChild(toggle("notifyWeigh", "Even op de weegschaal", "Maandagochtend een seintje als je die week nog niet woog (alleen met een doelgewicht)", np.weighIn !== false, function () { save({ weighIn: !(np.weighIn !== false) }); paint(); }));
       box.appendChild(toggle("notifyRecap", "Weekterugblik", "Maandagochtend je vorige week in cijfers", np.recap !== false, function () { save({ recap: !(np.recap !== false) }); paint(); }));
       if (communityOn()) box.appendChild(toggle("notifyCommunity", "Nieuwe recepten in de community", "Hooguit één keer per dag, rond 17:00, en alleen recepten die passen bij je voedingsstijl, doel en wat je niet eet", np.community, function () { save({ community: !np.community }); paint(); }));
     }
@@ -4064,6 +4083,11 @@
       Promise.race([plansReady, new Promise(function (r) { setTimeout(r, 6000); })]).then(function () {
         if (q.open === "cooked") openCookedFromLink(); else openRecap(q.week, q.trial === "1");
       });
+      return;
+    }
+    if (q.open === "goal") {
+      goto("weeks");
+      setTimeout(function () { var el = document.getElementById("wgWeight") || document.getElementById("homeGoal"); if (el) { el.scrollIntoView({ behavior: "smooth", block: "center" }); if (el.focus) try { el.focus({ preventScroll: true }); } catch (e) {} } else if (weightGoal()) openWeightGoalSheet(); }, 700);
       return;
     }
     if (q.open === "community" && communityOn()) {
@@ -4860,13 +4884,19 @@
   }
 
   // Geschatte dagbehoefte (Mifflin-St Jeor × activiteit × doel). Null als het profiel onvolledig is.
-  function dailyKcalTarget() {
+  // Met een doelgewicht volgt het dagdoel je tempo (zie wgKcalAdjust); anders de vaste factor per doel.
+  function wgTdee() {
     if (!healthOk()) return null;
     var w = Number(prefs.weightKg), h = Number(prefs.heightCm), a = Number(prefs.age);
     if (!w || !h || !a) return null;
     var base = 10 * w + 6.25 * h - 5 * a + (prefs.gender === "Man" ? 5 : prefs.gender === "Vrouw" ? -161 : -78);
     var act = { "Zittend": 1.2, "Licht actief": 1.375, "Gemiddeld actief": 1.55, "Zeer actief": 1.725 }[prefs.activityLevel] || 1.375;
-    return Math.round(base * act * (GOAL_KCAL_MULTIPLIER[prefs.goal] || 1) / 10) * 10;
+    return base * act;
+  }
+  function dailyKcalTarget() {
+    var tdee = wgTdee(); if (!tdee) return null;
+    var adj = wgKcalAdjust(tdee);
+    return Math.round((adj !== null ? adj : tdee * (GOAL_KCAL_MULTIPLIER[prefs.goal] || 1)) / 10) * 10;
   }
 
   var MEAL_THUMBS = {
@@ -5725,7 +5755,7 @@
   // ---------- Startscherm: eigen indeling ----------
   // Versie 2 (rustiger startscherm): oude indelingen beginnen één keer opnieuw vanaf de nieuwe standaard.
   var HOME_LAYOUT_V = 2;
-  var HOME_DEFAULT_ORDER = ["vandaag", "week", "voorjou", "recent", "reis", "seizoen", "volgendeweek", "foto", "genereren", "community", "boodschappen", "tip", "uitleg"];
+  var HOME_DEFAULT_ORDER = ["vandaag", "doel", "week", "voorjou", "recent", "reis", "seizoen", "volgendeweek", "foto", "genereren", "community", "boodschappen", "tip", "uitleg"];
   var HOME_DEFAULT_HIDDEN = ["reis", "seizoen", "volgendeweek", "foto", "genereren", "community", "boodschappen", "tip", "uitleg"];
   function homeLayout() {
     var hl = prefs.homeLayout && typeof prefs.homeLayout === "object" && prefs.homeLayout.v === HOME_LAYOUT_V ? prefs.homeLayout : null;
@@ -5789,6 +5819,8 @@
       render: function (main) { renderForYou(main); } },
     volgendeweek: { label: "Volgende week", desc: "Alvast vooruit plannen", available: function () { return true; },
       render: function (main) { renderWeekStrip(main, 1); } },
+    doel: { label: "Jouw doel", desc: "Je doelgewicht en hoe ver je bent", available: function () { return wgAllowed() && (!!weightGoal() || (!prefs.weightGoalDismissed && !!prefs.weightKg)); },
+      render: function (main) { renderWeightGoalCard(main, { id: "homeGoal", dismissable: true }); } },
     reis: { label: "Jouw reis", desc: "Je fase, focus en uitdaging van deze week", available: function () { return journeyOn() && !journey().quiet; },
       render: function (main) { renderJourneyTile(main); } },
     seizoen: { label: "Seizoen en momenten", desc: "Wat nu lekker is, en feestdagen waar je iets bijzonders voor kookt", available: function () { return !!window.appSeason && moduleOn("generate") && coachOn("season"); },
@@ -6207,6 +6239,16 @@
       });
       main.appendChild(bioRow);
       if (!healthOk()) healthOffNote(main, "body");
+      if (wgAllowed()) {
+        labelEl("Doelgewicht (optioneel)");
+        var wgRow = document.createElement("div"); wgRow.className = "segrow";
+        var wgIn = document.createElement("input"); wgIn.className = "textinput"; wgIn.type = "text"; wgIn.inputMode = "decimal"; wgIn.id = "wizTargetWeight"; wgIn.placeholder = "Doel (kg)";
+        wgIn.value = state.wizTarget || (weightGoal() ? weightGoal().target : ""); wgIn.style.flex = "1";
+        wgIn.oninput = function (e) { state.wizTarget = e.target.value; };
+        wgRow.appendChild(wgIn); main.appendChild(wgRow);
+        var wgNote = document.createElement("div"); wgNote.className = "acc-sub"; wgNote.textContent = "Werk je naar een gewicht toe? Dan stemt Balanza je dagdoel erop af en zie je op Start hoe ver je bent. Later aan te passen.";
+        main.appendChild(wgNote);
+      }
       labelEl("Geslacht");
       chipGroupSingle([["", "Geen voorkeur"]].concat(GENDERS.map(function (g) { return [g, g]; })), prefs.gender, function (g) { prefs.gender = g; });
       labelEl("Activiteitsniveau");
@@ -6265,6 +6307,13 @@
     var isLast = state.wizardStep === WIZARD_STEP_COUNT - 1;
     nextBtn.textContent = isLast ? "Aan de slag!" : "Volgende";
     nextBtn.onclick = function () {
+      if (state.wizardStep === 7 && wgAllowed() && state.wizTarget) {
+        var tw = Math.round(Number(String(state.wizTarget).replace(",", ".")) * 10) / 10, cw = Number(prefs.weightKg);
+        if (!cw) { showToast("Vul ook je huidige gewicht in, dan kan Balanza je doel uitrekenen."); return; }
+        var wmsg = wgCheck(tw, cw); if (wmsg) { showToast(wmsg); return; }
+        prefs.weightGoal = { target: tw, start: cw, startWeek: mondayKeyOffset(0), startedAt: new Date().toISOString(), pace: "normaal", hide: false, ms: [] };
+        var wj = journey(); wj.log = (Array.isArray(wj.log) ? wj.log : []).filter(function (x) { return !(x && x.w === mondayKeyOffset(0) && x.m === "gewicht"); }); wj.log.push({ w: mondayKeyOffset(0), m: "gewicht", v: cw, n: 1 });
+      }
       if (isLast) { finishWizard(false); }
       else { state.wizardStep += 1; render(); }
     };
@@ -6548,6 +6597,12 @@
           chips(c, GENDERS, function (g) { return prefs.gender === g; }, function (g, on) { prefs.gender = on ? "" : g; });
           var bio = document.createElement("div"); bio.className = "segrow"; bio.style.flexWrap = "wrap";
           if (healthOk()) { numInput(bio, "heightCm", "Lengte (cm)"); numInput(bio, "weightKg", "Gewicht (kg)"); numInput(bio, "age", "Leeftijd"); c.appendChild(bio); }
+          if (wgAllowed()) {
+            var wgg = weightGoal(), wr = document.createElement("div"); wr.className = "wg-prefrow"; wr.id = "prefsWeightGoal";
+            var wt = document.createElement("span"); wt.textContent = wgg ? "Doelgewicht: " + (wgg.hide ? "ingesteld" : wgFmt(wgg.target) + " kg") + " \u00b7 tempo " + (WG_PACE[wgg.pace] || WG_PACE.normaal).label.toLowerCase() : "Werk je naar een gewicht toe? Stel een doelgewicht in.";
+            var wb = document.createElement("button"); wb.type = "button"; wb.className = "ghost-btn small"; wb.textContent = wgg ? "Aanpassen" : "Instellen"; wb.onclick = function () { openWeightGoalSheet(); };
+            wr.appendChild(wt); wr.appendChild(wb); c.appendChild(wr);
+          }
           else healthOffNote(c, "body");
           label(c, "Activiteitsniveau");
           chips(c, ACTIVITY_LEVELS, function (a) { return prefs.activityLevel === a; }, function (a) { prefs.activityLevel = a; });
@@ -7413,6 +7468,7 @@
 { title: "Stel je voorkeuren in", body: "Bij het eerste gebruik loop je een korte wizard door die alles in stapjes uitvraagt, elk met uitleg over wat die keuze precies doet. Later kun je alles terugvinden en aanpassen bij \u201cGerechten ontwerpen\u201d: doel (Onderhoud, Vetverlies, Cutting, Spieropbouw of Atleet), voedingsstijl, keukenstijl, smaakprofiel, culinair niveau, kindvriendelijk (gezinsmodus), beschikbare apparatuur, wat je niet wilt eten, en optioneel je lichaamsprofiel (geslacht, lengte, gewicht, leeftijd, activiteitsniveau)." },
     { title: "Navigeren op je telefoon", body: "Onderin staat een vaste balk met Start, Ontwerpen, Plannen, Gerechten en Lijst. Tik nogmaals op het actieve onderdeel om terug te gaan naar het begin ervan. Het getal bij Lijst laat zien hoeveel boodschappen voor deze week nog open staan. Rechtsboven vind je de assistent (het tekstwolkje) en je accountmenu (je avatar) met Instellingen, Hoe werkt Balanza en je abonnement." },
     { title: "Je dag op Start", body: "Op Start zie je alles wat vandaag gepland staat, plus wat je er los bij at. De gekleurde balk is je dag in calorie\u00ebn tegenover je dagdoel: elk blokje is een maaltijd in de kleur van het moment (de legenda staat eronder), een lichter blokje heb je nog niet gegeten. Daaronder zie je eiwit, koolhydraten en vet tegenover je doel. Vink per maaltijd \u201cGegeten\u201d of \u201cNiet gegeten\u201d af; wat je niet at, telt niet mee. \u201cWat past nog?\u201d laat zien wat er nog in je dag past. Met \u201cStartscherm aanpassen\u201d onderaan Start zet je de tegels in jouw volgorde of verberg je wat je niet nodig hebt." },
+    { title: "Jouw doelgewicht", body: "Werk je naar een gewicht toe? Stel op Start (tegel \u201cJouw doel\u201d), in Mijn voorkeuren of in de startwizard een doelgewicht in, met een tempo: rustig, normaal of stevig. Balanza stemt je dagdoel daarop af, binnen veilige grenzen, en laat zien hoe ver je bent: van start naar doel, je weekgemiddelden in een grafiekje en, na drie wegingen, of je op schema ligt en wanneer je je doel verwacht. E\u00e9n keer per week wegen is genoeg; weeg je vaker, dan telt het gemiddelde. Wil je geen kilo\u2019s zien, zet dan \u201cCijfers verbergen\u201d aan. Een doel onder een gezond gewicht kan niet, en voor wie jonger is dan 18 is deze functie er niet." },
     { title: "Het Balans-keurmerk", body: "Elk gerecht, elke dag en elke week krijgt een Balans-score: hoe dicht de verdeling van koolhydraten, eiwit en vet bij jouw doel ligt. Groen (75\u2013100%) is dichtbij, geel, oranje en rood wijken steeds meer af. Is een score laag, dan staat er waarom (bijvoorbeeld weinig eiwit en veel koolhydraten) met een tip wat helpt. De Balans van je dag rekent naar verhouding: een grote maaltijd telt zwaarder dan een tussendoortje." },
     { title: "Snel iets toevoegen", body: "At je iets wat niet gepland stond? Tik op Start op \u201c\uff0b Toevoegen\u201d of in de planner op \u201c\uff0b Snel iets toevoegen\u201d. Zoek een product, of typ een hele zin zoals \u201c2 eieren met 2 sneetjes volkoren brood en 30 g kaas\u201d: Balanza zoekt alles op in de NEVO-productenlijst en rekent kcal, macro's en Balans direct uit. Klopt een product niet, tik dan op \u201cAnder product?\u201d. Verder kun je een foto van je bord maken, een streepjescode scannen, een eigen product van het etiket toevoegen of \u201cUit eten\u201d kiezen (dan onthoudt Balanza het restaurant en wat je er nam). Snel toevoegen is gratis." },
     { title: "Maaltijd of los product", body: "Balanza herkent zelf of je een maaltijd of iets kleins invoert en kiest het moment erbij (ontbijt, lunch, diner of snack, op basis van de tijd of van woorden als \u201clunch\u201d of \u201ctussendoortje\u201d in je zin). Alles wat je toevoegt komt in je planning: op een leeg moment komt het op die plek, naast iets wat al gepland staat komt het onder \u201cErbij\u201d. Kies \u201cIn plaats van \u2026\u201d en het geplande gerecht wordt echt vervangen. Met ongedaan maken zet je het terug; wat je zelf kiest, gaat altijd voor." },
@@ -14440,6 +14496,247 @@
     d.innerHTML = '<svg viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none" role="img" aria-label="Verloop"><polyline fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" points="' + pts + '"/></svg>';
     return d;
   }
+  // ---------- Doelgewicht: een concreet doel, met voortgang die je ziet ----------
+  // prefs.weightGoal = { target, start, startWeek, startedAt, pace: rustig|normaal|stevig, hide, ms: [25,50,...], reachedAt }
+  // Wegingen staan als weekgemiddelde in journey.log ({ w, m: "gewicht", v, n }). Nooit per dag: het gaat om de trend.
+  // Veilig: geen doel onder een gezond gewicht (BMI 18,5), tempo hooguit ~1% van je gewicht per week, niet voor minderjarigen.
+  var WG_PACE = { rustig: { lose: 0.25, gain: 0.15, label: "Rustig" }, normaal: { lose: 0.5, gain: 0.25, label: "Normaal" }, stevig: { lose: 0.75, gain: 0.4, label: "Stevig" } };
+  var WG_MS = [25, 50, 75, 100];
+  function wgAllowed() { return healthOk() && !isMinor(); }
+  function weightGoal() {
+    var g = prefs.weightGoal;
+    return wgAllowed() && g && typeof g === "object" && Number(g.target) > 0 && Number(g.start) > 0 ? g : null;
+  }
+  function weightEntries() {
+    var log = prefs.journey && Array.isArray(prefs.journey.log) ? prefs.journey.log : [];
+    return log.filter(function (x) { return x && x.m === "gewicht" && Number(x.v) > 0; }).sort(function (a, b) { return a.w < b.w ? -1 : a.w > b.w ? 1 : 0; });
+  }
+  function currentWeight() { var e = weightEntries(); return e.length ? Number(e[e.length - 1].v) : (Number(prefs.weightKg) || null); }
+  function thisWeekWeight() { var wk = mondayKeyOffset(0); return weightEntries().filter(function (x) { return x.w === wk; })[0] || null; }
+  // Nog een weging deze week? Dan telt het gemiddelde.
+  function logWeight(v) {
+    var j = journey(); j.log = Array.isArray(j.log) ? j.log : [];
+    var wk = mondayKeyOffset(0), ex = j.log.filter(function (x) { return x && x.w === wk && x.m === "gewicht"; })[0];
+    if (ex) { var n = (Number(ex.n) || 1) + 1; ex.v = Math.round(((Number(ex.v) * (n - 1)) + v) / n * 10) / 10; ex.n = n; }
+    else j.log.push({ w: wk, m: "gewicht", v: v, n: 1 });
+    j.log = j.log.slice(-80);
+    prefs.weightKg = String(currentWeight());
+    wgCheckMilestones();
+    savePrefs();
+  }
+  function wgDir(g) { return g.target < g.start - 0.05 ? -1 : g.target > g.start + 0.05 ? 1 : 0; }
+  function wgPaceKg(g) {
+    var p = WG_PACE[g.pace] || WG_PACE.normaal, d = wgDir(g);
+    var kg = d < 0 ? p.lose : p.gain, cap = (currentWeight() || g.start) * 0.01;
+    return Math.round(Math.min(kg, cap) * 100) / 100;
+  }
+  function wgWeeksBetween(fromKey, toKey) { return Math.round((new Date(toKey + "T12:00:00") - new Date(fromKey + "T12:00:00")) / (7 * 86400000)); }
+  function wgFmt(kg) { return String(Math.round(kg * 10) / 10).replace(".", ","); }
+  function wgDateIn(weeks) { var d = new Date(); d.setDate(d.getDate() + Math.round(weeks * 7)); return d.toLocaleDateString("nl-NL", { day: "numeric", month: "long" }) + (d.getFullYear() !== new Date().getFullYear() ? " " + d.getFullYear() : ""); }
+  function wgProgress(g) {
+    var cur = currentWeight() || g.start, d = wgDir(g), total = Math.abs(g.target - g.start);
+    var done = d ? (g.start - cur) * (d < 0 ? 1 : -1) : 0;
+    var left = d < 0 ? Math.max(0, cur - g.target) : d > 0 ? Math.max(0, g.target - cur) : 0;
+    var pct = total ? Math.max(0, Math.min(1, done / total)) : 1;
+    // Trend uit de wegingen sinds de start (minstens 3), in kg per week
+    var pts = weightEntries().filter(function (x) { return x.w >= g.startWeek; }).map(function (x) { return [wgWeeksBetween(g.startWeek, x.w), Number(x.v)]; });
+    var slope = null;
+    if (pts.length >= 3) {
+      var n = pts.length, sx = 0, sy = 0, sxx = 0, sxy = 0;
+      pts.forEach(function (p) { sx += p[0]; sy += p[1]; sxx += p[0] * p[0]; sxy += p[0] * p[1]; });
+      var den = n * sxx - sx * sx; if (den) slope = (n * sxy - sx * sy) / den;
+    }
+    var pace = wgPaceKg(g), weeksIn = Math.max(0, wgWeeksBetween(g.startWeek, mondayKeyOffset(0)));
+    var etaWeeks = null, status = "";
+    if (left <= 0.05) status = "reached";
+    else if (slope !== null && slope * d > 0.03) {
+      etaWeeks = left / Math.abs(slope);
+      var expected = weeksIn * pace;
+      status = done >= expected * 1.2 && done > 0.5 ? "faster" : done >= expected * 0.8 ? "ontrack" : "slower";
+    } else if (slope !== null) status = "flat";
+    return { cur: cur, total: total, done: Math.max(0, done), left: left, pct: pct, slope: slope, weighIns: pts.length, pace: pace, planWeeks: pace ? left / pace : null, etaWeeks: etaWeeks, status: status };
+  }
+  // Je dagdoel volgt je doelgewicht: ± 7.700 kcal per kilo, binnen veilige grenzen.
+  function wgKcalAdjust(tdee) {
+    var g = weightGoal(); if (!g) return null;
+    var pr = wgProgress(g), d = wgDir(g);
+    if (!d || pr.left <= 0.05) return tdee;
+    var delta = wgPaceKg(g) * 7700 / 7;
+    if (d < 0) { var floor = prefs.gender === "Man" ? 1500 : prefs.gender === "Vrouw" ? 1200 : 1350; return Math.max(tdee - delta, tdee * 0.75, floor); }
+    return Math.min(tdee + delta, tdee * 1.15);
+  }
+  function wgCheckMilestones() {
+    var g = weightGoal(); if (!g) return;
+    var pr = wgProgress(g), p = Math.round(pr.pct * 100);
+    g.ms = Array.isArray(g.ms) ? g.ms : [];
+    var hit = WG_MS.filter(function (m) { return p >= m && g.ms.indexOf(m) === -1; });
+    if (!hit.length) return;
+    g.ms = g.ms.concat(hit);
+    var m = hit[hit.length - 1];
+    if (m === 100) { g.reachedAt = new Date().toISOString(); setTimeout(function () { showToast("Je hebt je doel bereikt. Wat een prestatie!"); }, 300); }
+    else setTimeout(function () { showToast(m === 50 ? "Halverwege je doel. Mooi volgehouden!" : m === 25 ? "Een kwart van je doel is binnen. Goed bezig!" : "Driekwart van je doel. Het einde is in zicht!"); }, 300);
+  }
+  function wgCheck(target, cur) {
+    var h = Number(prefs.heightCm);
+    if (!(target >= 35 && target <= 250)) return "Vul een doelgewicht in tussen 35 en 250 kg.";
+    if (h && target / Math.pow(h / 100, 2) < 18.5) return "Dit doel ligt onder een gezond gewicht voor jouw lengte (" + h + " cm). Kies een doel van minstens " + wgFmt(Math.ceil(18.5 * Math.pow(h / 100, 2) * 10) / 10) + " kg, en overleg bij twijfel met je huisarts of een diëtist.";
+    if (cur && Math.abs(target - cur) > 40) return "Dat is een groot verschil. Kies liever een tussendoel; daarna stel je een nieuw doel in.";
+    return "";
+  }
+  // Kleine grafiek: je weekgemiddelden, met een stippellijn op je doel
+  function wgChart(g) {
+    var pts = weightEntries().filter(function (x) { return x.w >= g.startWeek; }).map(function (x) { return Number(x.v); });
+    if (!pts.length || pts[0] !== Number(g.start)) pts.unshift(Number(g.start));
+    if (pts.length < 2) return null;
+    var w = 300, h = 70, lo = Math.min.apply(null, pts.concat([g.target])) - 0.5, hi = Math.max.apply(null, pts.concat([g.target])) + 0.5;
+    var x = function (i) { return 6 + i * (w - 12) / Math.max(1, pts.length - 1); }, y = function (v) { return 6 + (hi - v) * (h - 12) / (hi - lo); };
+    var d = document.createElement("div"); d.className = "wg-chart";
+    d.innerHTML = '<svg viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none" role="img" aria-label="Verloop van je gewicht">' +
+      '<line x1="0" x2="' + w + '" y1="' + y(g.target).toFixed(1) + '" y2="' + y(g.target).toFixed(1) + '" class="wg-goal-line"/>' +
+      '<polyline fill="none" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" class="wg-line" points="' + pts.map(function (v, i) { return x(i).toFixed(1) + "," + y(v).toFixed(1); }).join(" ") + '"/>' +
+      '<circle r="4" class="wg-dot" cx="' + x(pts.length - 1).toFixed(1) + '" cy="' + y(pts[pts.length - 1]).toFixed(1) + '"/></svg>';
+    return d;
+  }
+  function wgStatusText(g, pr) {
+    if (pr.status === "reached") return "Doel bereikt.";
+    var plan = pr.planWeeks ? " Op dit tempo ben je er rond " + wgDateIn(pr.planWeeks) + "." : "";
+    if (pr.weighIns < 3) return "Na " + (3 - pr.weighIns) + (3 - pr.weighIns === 1 ? " weging" : " wegingen") + " meer zie je hier hoe je ervoor staat." + plan;
+    if (pr.status === "flat") return "Nog geen duidelijke beweging. Dat hoort erbij; geef het een paar weken." + plan;
+    var eta = pr.etaWeeks ? " Verwacht rond " + wgDateIn(pr.etaWeeks) + "." : "";
+    return (pr.status === "faster" ? "Sneller dan gepland." : pr.status === "ontrack" ? "Op schema." : "Iets langzamer dan gepland, geen zorgen: het gaat om de trend.") + eta;
+  }
+  // De kaart "Jouw doel" (op Start en in Jouw reis)
+  function renderWeightGoalCard(main, opts) {
+    opts = opts || {};
+    var g = weightGoal();
+    var card = document.createElement("div"); card.className = "card wg-card"; card.id = opts.id || "wgCard";
+    if (!g) {
+      card.classList.add("wg-invite");
+      card.innerHTML = '<div class="eyebrow">Jouw doel</div><b class="wg-inv-t">Werk je naar een gewicht toe?</b><p class="acc-sub">Stel een doelgewicht in. Balanza stemt je dagdoel erop af en laat zien hoe ver je bent.</p>';
+      var row = document.createElement("div"); row.className = "nudge-actions";
+      var go = document.createElement("button"); go.type = "button"; go.className = "primary-btn small"; go.id = "wgSetup"; go.textContent = "Doelgewicht instellen"; go.onclick = function () { openWeightGoalSheet(); };
+      row.appendChild(go);
+      if (opts.dismissable) {
+        var no = document.createElement("button"); no.type = "button"; no.className = "ghost-btn small"; no.id = "wgDismiss"; no.textContent = "Niet nodig";
+        no.onclick = function () { prefs.weightGoalDismissed = true; savePrefs(); render(); };
+        row.appendChild(no);
+      }
+      card.appendChild(row); main.appendChild(card); return card;
+    }
+    var pr = wgProgress(g), hide = !!g.hide, pctTxt = Math.round(pr.pct * 100) + "%";
+    var head = document.createElement("div"); head.className = "wg-head";
+    head.innerHTML = '<div><div class="eyebrow">Jouw doel</div><b class="wg-big"></b><small class="wg-sub"></small></div>';
+    head.querySelector(".wg-big").textContent = hide ? pctTxt + " van je doel" : wgFmt(g.target) + " kg";
+    head.querySelector(".wg-sub").textContent = pr.status === "reached" ? "Bereikt!" : hide ? "" : "Nog " + wgFmt(pr.left) + " kg te gaan";
+    var edit = document.createElement("button"); edit.type = "button"; edit.className = "hh-link"; edit.id = "wgEdit"; edit.textContent = "Aanpassen"; edit.onclick = function () { openWeightGoalSheet(); };
+    head.appendChild(edit); card.appendChild(head);
+    var bar = document.createElement("div"); bar.className = "wg-bar"; bar.setAttribute("role", "progressbar"); bar.setAttribute("aria-valuenow", String(Math.round(pr.pct * 100))); bar.setAttribute("aria-valuemin", "0"); bar.setAttribute("aria-valuemax", "100"); bar.setAttribute("aria-label", "Voortgang naar je doel");
+    var fill = document.createElement("span"); fill.style.width = Math.max(2, pr.pct * 100) + "%"; bar.appendChild(fill);
+    card.appendChild(bar);
+    var ends = document.createElement("div"); ends.className = "wg-ends";
+    ends.innerHTML = "<span></span><b></b><span></span>";
+    ends.children[0].textContent = hide ? "Start" : "Start " + wgFmt(g.start);
+    ends.children[1].textContent = hide ? pctTxt : wgFmt(pr.done) + " van " + wgFmt(pr.total) + " kg (" + pctTxt + ")";
+    ends.children[2].textContent = hide ? "Doel" : "Doel " + wgFmt(g.target);
+    card.appendChild(ends);
+    if (!hide) { var ch = wgChart(g); if (ch) card.appendChild(ch); }
+    var st = document.createElement("div"); st.className = "acc-sub wg-status"; st.id = "wgStatus"; st.textContent = wgStatusText(g, pr); card.appendChild(st);
+    if (pr.status === "reached" && prefs.goal !== "Onderhoud") {
+      var keep = document.createElement("button"); keep.type = "button"; keep.className = "primary-btn small"; keep.id = "wgMaintain"; keep.textContent = "Overstappen op Onderhoud";
+      keep.onclick = function () { prefs.goal = "Onderhoud"; savePrefs(); showToast("Je doel staat nu op Onderhoud. Zo hou je vast wat je bereikt hebt."); render(); };
+      card.appendChild(keep);
+    }
+    // Wegen: hooguit één keer per week nodig; vaker mag, dan telt het gemiddelde
+    var mine = thisWeekWeight();
+    var f = document.createElement("form"); f.className = "wg-weigh"; f.id = "wgWeigh";
+    var lab = document.createElement("span"); lab.className = "wg-weigh-l";
+    lab.textContent = mine ? (hide ? "Deze week gewogen" : "Deze week: " + wgFmt(mine.v) + " kg" + (mine.n > 1 ? " (gemiddeld)" : "")) : "Je gewicht deze week";
+    var inp = document.createElement("input"); inp.className = "textinput"; inp.type = "text"; inp.inputMode = "decimal"; inp.autocomplete = "off"; inp.id = "wgWeight"; inp.placeholder = "kg";
+    var sb = document.createElement("button"); sb.type = "submit"; sb.className = "ghost-btn small"; sb.textContent = mine ? "Nog een weging" : "Opslaan";
+    f.onsubmit = function (e) {
+      e.preventDefault();
+      var v = Math.round(Number(String(inp.value).replace(",", ".")) * 10) / 10;
+      if (!(v >= 30 && v <= 300)) { showToast("Vul je gewicht in kilo's in, bijvoorbeeld 78,4."); return; }
+      logWeight(v); render();
+    };
+    f.appendChild(lab); f.appendChild(inp); f.appendChild(sb); card.appendChild(f);
+    main.appendChild(card);
+    return card;
+  }
+  function openWeightGoalSheet() {
+    if (!wgAllowed()) { showToast(isMinor() ? "Een doelgewicht is er niet voor wie jonger is dan 18." : "Hiervoor is toestemming voor gezondheidsgegevens nodig (Instellingen, Privacy)."); return; }
+    var g = weightGoal();
+    var sh = openSimpleSheet("wgSheet", g ? "Je doelgewicht" : "Doelgewicht instellen", "Balanza stemt je dagdoel erop af en laat zien hoe ver je bent.");
+    var body = sh.body;
+    var st = { cur: currentWeight() || "", target: g ? g.target : "", pace: g ? (g.pace || "normaal") : "normaal", hide: g ? !!g.hide : false };
+    var grid = document.createElement("div"); grid.className = "qa-grid wg-grid";
+    function field(id, label, val, on) {
+      var w = document.createElement("label"); w.className = "qa-field"; w.innerHTML = "<span></span>"; w.querySelector("span").textContent = label;
+      var i = document.createElement("input"); i.className = "textinput"; i.id = id; i.type = "text"; i.inputMode = "decimal"; i.autocomplete = "off"; i.value = val; i.oninput = function () { on(Number(String(i.value).replace(",", "."))); paint(); };
+      w.appendChild(i); grid.appendChild(w); return i;
+    }
+    field("wgCur", "Je gewicht nu (kg)", st.cur ? wgFmt(st.cur) : "", function (v) { st.cur = v; });
+    field("wgTarget", "Je doelgewicht (kg)", st.target ? wgFmt(st.target) : "", function (v) { st.target = v; });
+    body.appendChild(grid);
+    var pl = document.createElement("div"); pl.className = "qa-h"; pl.textContent = "Tempo"; body.appendChild(pl);
+    var pr = document.createElement("div"); pr.className = "chiprow"; body.appendChild(pr);
+    var prev = document.createElement("div"); prev.className = "wg-preview"; prev.id = "wgPreview"; body.appendChild(prev);
+    var err = document.createElement("div"); err.className = "dietnote"; err.id = "wgError"; err.style.display = "none"; body.appendChild(err);
+    var hideT = document.createElement("button"); hideT.type = "button"; hideT.className = "sheet-toggle"; hideT.id = "wgHide"; hideT.setAttribute("role", "switch");
+    body.appendChild(hideT);
+    var acts = document.createElement("div"); acts.className = "nudge-actions"; acts.style.marginTop = "14px";
+    var save = document.createElement("button"); save.type = "button"; save.className = "primary-btn small"; save.id = "wgSave"; save.textContent = "Opslaan";
+    acts.appendChild(save);
+    if (g) {
+      var rm = document.createElement("button"); rm.type = "button"; rm.className = "ghost-btn small"; rm.id = "wgRemove"; rm.textContent = "Doel weghalen";
+      rm.onclick = function () { askConfirm("Je doelgewicht weghalen? Je wegingen blijven bewaard; je dagdoel volgt dan weer je gewone doel.", function () { delete prefs.weightGoal; savePrefs(); closeSheet(sh.ov); render(); showToast("Je doelgewicht is weggehaald."); }, "Weghalen", "Annuleren"); };
+      acts.appendChild(rm);
+    }
+    body.appendChild(acts);
+    function paint() {
+      pr.innerHTML = "";
+      var down = st.target && st.cur && st.target < st.cur;
+      Object.keys(WG_PACE).forEach(function (k) {
+        var p = WG_PACE[k], c = document.createElement("button"); c.type = "button"; c.className = "chip" + (st.pace === k ? " selected" : ""); c.id = "wgPace-" + k;
+        c.textContent = p.label + " · " + (down ? "−" : "+") + String(down ? p.lose : p.gain).replace(".", ",") + " kg/week";
+        c.onclick = function () { st.pace = k; paint(); }; pr.appendChild(c);
+      });
+      hideT.setAttribute("aria-checked", st.hide ? "true" : "false");
+      hideT.innerHTML = '<span class="st-txt"><b>Cijfers verbergen</b><small>Je ziet alleen je voortgang in procenten, zonder kilo’s</small></span><span class="st-track' + (st.hide ? " on" : "") + '"><i></i></span>';
+      var msg = st.target && st.cur ? wgCheck(st.target, st.cur) : "";
+      err.style.display = msg ? "" : "none"; err.textContent = msg;
+      prev.textContent = "";
+      if (st.target && st.cur && !msg) {
+        var diff = Math.abs(st.target - st.cur);
+        if (diff < 0.1) prev.textContent = "Je zit al op je doel. Balanza helpt je het vast te houden.";
+        else {
+          var tmp = { target: st.target, start: st.cur, pace: st.pace };
+          var kgw = Math.min(down ? WG_PACE[st.pace].lose : WG_PACE[st.pace].gain, st.cur * 0.01);
+          var tdee = wgTdee();
+          var kc = tdee ? (down ? Math.max(tdee - kgw * 1100, tdee * 0.75, prefs.gender === "Man" ? 1500 : prefs.gender === "Vrouw" ? 1200 : 1350) : Math.min(tdee + kgw * 1100, tdee * 1.15)) : null;
+          prev.textContent = (down ? "Afvallen: " : "Aankomen: ") + wgFmt(diff) + " kg. In dit tempo ben je er rond " + wgDateIn(diff / kgw) + "." + (kc ? " Je dagdoel wordt dan ongeveer " + Math.round(kc / 10) * 10 + " kcal." : " Vul je lengte en leeftijd in voor een dagdoel op maat.");
+          void tmp;
+        }
+      }
+      save.disabled = !(st.target && st.cur) || !!msg;
+    }
+    hideT.onclick = function () { st.hide = !st.hide; paint(); };
+    save.onclick = function () {
+      var cur = Math.round(Number(st.cur) * 10) / 10, target = Math.round(Number(st.target) * 10) / 10;
+      if (wgCheck(target, cur)) return;
+      var same = g && Math.sign(g.target - g.start) === Math.sign(target - cur);
+      prefs.weightGoal = same ? Object.assign({}, g, { target: target, pace: st.pace, hide: st.hide })
+        : { target: target, start: cur, startWeek: mondayKeyOffset(0), startedAt: new Date().toISOString(), pace: st.pace, hide: st.hide, ms: [] };
+      if (prefs.weightGoal.reachedAt && wgProgress(prefs.weightGoal).left > 0.05) delete prefs.weightGoal.reachedAt;
+      var mine = thisWeekWeight();
+      if (!mine || Math.abs(mine.v - cur) > 0.05) { var j = journey(); j.log = (Array.isArray(j.log) ? j.log : []).filter(function (x) { return !(x && x.w === mondayKeyOffset(0) && x.m === "gewicht"); }); j.log.push({ w: mondayKeyOffset(0), m: "gewicht", v: cur, n: 1 }); }
+      prefs.weightKg = String(cur);
+      delete prefs.weightGoalDismissed;
+      savePrefs(); closeSheet(sh.ov); render();
+      showToast(g ? "Je doel is bijgewerkt." : "Je doel staat erin. Weeg je één keer per week, dan zie je je voortgang.");
+    };
+    paint();
+  }
   // Wekelijkse check-in voor wat de gebruiker zelf wil bijhouden. Gewicht als trend van weekgemiddelden, nooit per dag.
   function weeklyLog() { var j = journey(); j.log = Array.isArray(j.log) ? j.log : []; return j.log; }
   function logThisWeek(v) {
@@ -14579,6 +14876,7 @@
       ms.appendChild(fl);
       main.appendChild(ms);
     }
+    if (wgAllowed()) renderWeightGoalCard(main, { id: "journeyGoal" });
     if (coachOn("progress")) renderProgress(main);
     // Zo wil ik het
     var set = document.createElement("div"); set.className = "card journey-sec"; set.id = "journeySettings";
@@ -15327,6 +15625,8 @@
         water: prefs.water && typeof prefs.water === "object" ? { d: String(prefs.water.d || "").slice(0, 10), n: Number(prefs.water.n) || 0 } : null,
         places: Array.isArray(prefs.places) ? prefs.places.slice(0, 30) : [],
         myFoods: Array.isArray(prefs.myFoods) ? prefs.myFoods.slice(0, 150) : [],
+        weightGoal: prefs.weightGoal && typeof prefs.weightGoal === "object" && healthOk() ? prefs.weightGoal : null,
+        weightGoalDismissed: !!prefs.weightGoalDismissed,
         proteinOut: Array.isArray(prefs.proteinOut) ? prefs.proteinOut.slice(0, 20) : [],
         journey: prefs.journey && typeof prefs.journey === "object" ? prefs.journey : {},
         ageGroup: AGE_GROUPS.some(function (g) { return g[0] === prefs.ageGroup; }) ? prefs.ageGroup : "",
@@ -15770,6 +16070,7 @@
     prefs.coach = Object.assign({}, prefs.coach || {}, { water: false, daytools: false });
     if (prefs.journey && Array.isArray(prefs.journey.log)) prefs.journey.log = prefs.journey.log.filter(function (x) { return x && x.m !== "gewicht"; });
     if (prefs.journey && prefs.journey.metric === "gewicht") prefs.journey.metric = "";
+    delete prefs.weightGoal;
     plannedWeeks.forEach(function (w) { if (w.extra) delete w.extra; });
   }
   function showConsent(grant) {
@@ -15852,7 +16153,7 @@
               return;
             }
             var pdata = psnap.data() || {};
-            ["name", "bringListLink", "cuisines", "flavors", "level", "dietStyle", "health", "leftovers", "coach", "water", "places", "proteinOut", "journey", "ageGroup", "student", "sugarMode", "cheeseMode", "familyMode", "equipment", "exclude", "count", "mealTypes", "gender", "heightCm", "weightKg", "age", "activityLevel", "goal", "homeLayout", "mealCounts", "withImages", "pantry", "communityName", "myFoods"].forEach(function (k) {
+            ["name", "bringListLink", "cuisines", "flavors", "level", "dietStyle", "health", "leftovers", "coach", "water", "places", "proteinOut", "journey", "ageGroup", "student", "sugarMode", "cheeseMode", "familyMode", "equipment", "exclude", "count", "mealTypes", "gender", "heightCm", "weightKg", "age", "activityLevel", "goal", "homeLayout", "mealCounts", "withImages", "pantry", "communityName", "myFoods", "weightGoal", "weightGoalDismissed"].forEach(function (k) {
               if (pdata[k] !== undefined) prefs[k] = deepClone(pdata[k]);
             });
             var mig = migrateExcludeTerms();
