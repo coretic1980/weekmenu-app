@@ -1556,6 +1556,16 @@
   .meas-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; margin-top: 12px; }
   .meas-field small { display: block; font-size: 11.5px; line-height: 1.35; color: var(--muted); margin: 1px 0 4px; min-height: 2.7em; }
   @media (max-width: 360px) { .meas-grid { grid-template-columns: 1fr; } }
+  .wg-ci { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 14px; }
+  .ci-mot { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+  .ci-mot-b { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 2px; border-radius: 14px; border: 1.5px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; cursor: pointer; }
+  .ci-mot-b span { font-size: 24px; line-height: 1.1; }
+  .ci-mot-b small { font-size: 11.5px; color: var(--muted); }
+  .ci-mot-b.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
+  .ci-note { margin-top: 12px; width: 100%; resize: vertical; }
+  .ci-res { padding: 12px 14px; border-radius: 14px; background: color-mix(in srgb, var(--accent) 6%, var(--surface)); margin-bottom: 10px; font-size: 14px; line-height: 1.5; }
+  .ci-res p { margin: 4px 0 0; }
+  .ci-res.good { background: color-mix(in srgb, #2E9A5C 10%, var(--surface)); }
   .wg-prefrow { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; font-size: 14px; }
   .hh-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 7px; font-size: 12px; color: var(--muted); }
   .hh-legend span { display: inline-flex; align-items: center; gap: 5px; }
@@ -7597,7 +7607,7 @@
 { title: "Stel je voorkeuren in", body: "Bij het eerste gebruik loop je een korte wizard door die alles in stapjes uitvraagt, elk met uitleg over wat die keuze precies doet. Later kun je alles terugvinden en aanpassen bij \u201cGerechten ontwerpen\u201d: doel (Onderhoud, Vetverlies, Cutting, Spieropbouw of Atleet), voedingsstijl, keukenstijl, smaakprofiel, culinair niveau, kindvriendelijk (gezinsmodus), beschikbare apparatuur, wat je niet wilt eten, en optioneel je lichaamsprofiel (geslacht, lengte, gewicht, leeftijd, activiteitsniveau)." },
     { title: "Navigeren op je telefoon", body: "Onderin staat een vaste balk met Start, Ontwerpen, Plannen, Gerechten en Lijst. Tik nogmaals op het actieve onderdeel om terug te gaan naar het begin ervan. Het getal bij Lijst laat zien hoeveel boodschappen voor deze week nog open staan. Rechtsboven vind je de assistent (het tekstwolkje) en je accountmenu (je avatar) met Instellingen, Hoe werkt Balanza en je abonnement." },
     { title: "Je dag op Start", body: "Op Start zie je alles wat vandaag gepland staat, plus wat je er los bij at. De gekleurde balk is je dag in calorie\u00ebn tegenover je dagdoel: elk blokje is een maaltijd in de kleur van het moment (de legenda staat eronder), een lichter blokje heb je nog niet gegeten. Daaronder zie je eiwit, koolhydraten en vet tegenover je doel. Vink een maaltijd af met het vinkje als je hem gegeten hebt. Tik op de maaltijd zelf om iets te wijzigen: iets anders gegeten, niet gegeten, of meer of minder (\u00bd tot 2 porties); wat je niet at, telt niet mee. Alles kun je ongedaan maken. \u201cWat past nog?\u201d laat zien wat er nog in je dag past. Met \u201cStartscherm aanpassen\u201d onderaan Start zet je de tegels in jouw volgorde of verberg je wat je niet nodig hebt." },
-    { title: "Jouw doelgewicht", body: "Werk je naar een gewicht toe? Stel op Start (tegel \u201cJouw doel\u201d), in Mijn voorkeuren of in de startwizard een doelgewicht in, met een tempo: rustig, normaal of stevig. Balanza stemt je dagdoel daarop af, binnen veilige grenzen, en laat zien hoe ver je bent: van start naar doel, je weekgemiddelden in een grafiekje en, na drie wegingen, of je op schema ligt en wanneer je je doel verwacht. Weeg je \u00e9\u00e9n keer per week op je vaste weegmoment (zelf te kiezen, standaard maandag 7:30): nuchter, na het plassen en zonder kleren. Elke dag wegen helpt niet; je ziet vooral schommelingen door vocht. Meet eens per maand je omtrekken (middel, nek, heup en eventueel borst, arm en bovenbeen): dan zie je ook vooruitgang als de weegschaal stilstaat, en schat Balanza met de Navy-methode je vetpercentage. Dat gebruikt Balanza ook om te checken of je doelgewicht gezond is: zo telt je bouw mee en niet alleen je BMI. Staat je gewicht een paar weken stil, dan geeft Balanza een tip over eten of bewegen, gebaseerd op wat je de afgelopen weken at, en kun je de assistent om een persoonlijke tip vragen. Wil je geen kilo\u2019s zien, zet dan \u201cCijfers verbergen\u201d aan. Een doel onder een gezond gewicht kan niet, en voor wie jonger is dan 18 is deze functie er niet." },
+    { title: "Jouw doelgewicht", body: "Werk je naar een gewicht toe? Stel op Start (tegel \u201cJouw doel\u201d), in Mijn voorkeuren of in de startwizard een doelgewicht in, met een tempo: rustig, normaal of stevig. Balanza stemt je dagdoel daarop af, binnen veilige grenzen, en laat zien hoe ver je bent: van start naar doel, je weekgemiddelden in een grafiekje en, na drie wegingen, of je op schema ligt en wanneer je je doel verwacht. Weeg je \u00e9\u00e9n keer per week op je vaste weegmoment (zelf te kiezen, standaard maandag 7:30): nuchter, na het plassen en zonder kleren. Elke dag wegen helpt niet; je ziet vooral schommelingen door vocht. Meet eens per maand je omtrekken (middel, nek, heup en eventueel borst, arm en bovenbeen): dan zie je ook vooruitgang als de weegschaal stilstaat, en schat Balanza met de Navy-methode je vetpercentage. Dat gebruikt Balanza ook om te checken of je doelgewicht gezond is: zo telt je bouw mee en niet alleen je BMI. Na je weging vraagt Balanza kort hoe je week ging: je motivatie, op welke dag je veel honger had, wat goed ging en wat lastig was. Balanza kijkt dan naar wat je op die dagen at (kcal, eiwit, overgeslagen maaltijden, verdeling) en geeft je tips voor komende week; met \u201cBespreek met Balanza\u201d ga je er in de chat over door. Staat je gewicht een paar weken stil, dan geeft Balanza een tip over eten of bewegen, gebaseerd op wat je de afgelopen weken at, en kun je de assistent om een persoonlijke tip vragen. Wil je geen kilo\u2019s zien, zet dan \u201cCijfers verbergen\u201d aan. Een doel onder een gezond gewicht kan niet, en voor wie jonger is dan 18 is deze functie er niet." },
     { title: "Het Balans-keurmerk", body: "Elk gerecht, elke dag en elke week krijgt een Balans-score: hoe dicht de verdeling van koolhydraten, eiwit en vet bij jouw doel ligt. Groen (75\u2013100%) is dichtbij, geel, oranje en rood wijken steeds meer af. Is een score laag, dan staat er waarom (bijvoorbeeld weinig eiwit en veel koolhydraten) met een tip wat helpt. De Balans van je dag rekent naar verhouding: een grote maaltijd telt zwaarder dan een tussendoortje." },
     { title: "Snel iets toevoegen", body: "At je iets wat niet gepland stond? Tik op Start op \u201c\uff0b Toevoegen\u201d of in de planner op \u201c\uff0b Snel iets toevoegen\u201d. Zoek een product, of typ een hele zin zoals \u201c2 eieren met 2 sneetjes volkoren brood en 30 g kaas\u201d: Balanza zoekt alles op in de NEVO-productenlijst en rekent kcal, macro's en Balans direct uit. Klopt een product niet, tik dan op \u201cAnder product?\u201d. Verder kun je een foto van je bord maken, een streepjescode scannen, een eigen product van het etiket toevoegen of \u201cUit eten\u201d kiezen (dan onthoudt Balanza het restaurant en wat je er nam). Snel toevoegen is gratis." },
     { title: "Maaltijd of los product", body: "Balanza herkent zelf of je een maaltijd of iets kleins invoert en kiest het moment erbij (ontbijt, lunch, diner of snack, op basis van de tijd of van woorden als \u201clunch\u201d of \u201ctussendoortje\u201d in je zin). Alles wat je toevoegt komt in je planning: op een leeg moment komt het op die plek, naast iets wat al gepland staat komt het onder \u201cErbij\u201d. Kies \u201cIn plaats van \u2026\u201d en het geplande gerecht wordt echt vervangen. Met ongedaan maken zet je het terug; wat je zelf kiest, gaat altijd voor." },
@@ -14813,6 +14823,11 @@
       card.appendChild(keep);
     }
     renderMeasureBlock(card, g);
+    var ci = thisWeekCheckin(), cr = document.createElement("div"); cr.className = "wg-ci"; cr.id = "wgCheckin";
+    var ct = document.createElement("span"); ct.textContent = ci ? "Check-in deze week gedaan" + (ci.mot ? " \u00b7 motivatie " + (CI_MOT.filter(function (m) { return m[0] === ci.mot; })[0] || [0, ""])[1] : "") : "Hoe ging je week? Een paar tikken, dan krijg je tips op maat.";
+    var cb = document.createElement("button"); cb.type = "button"; cb.className = ci ? "hh-link" : "ghost-btn small"; cb.id = "wgCheckinBtn"; cb.textContent = ci ? "Bekijken" : "Check-in";
+    cb.onclick = function () { if (ci) { var sh = openSimpleSheet("ciSheet", "Jouw tips voor deze week", ""); showCheckinResult(sh, ci); } else openCheckinSheet(); };
+    cr.appendChild(ct); cr.appendChild(cb); card.appendChild(cr);
     // Wegen: hooguit één keer per week nodig; vaker mag, dan telt het gemiddelde
     var mine = thisWeekWeight();
     var f = document.createElement("form"); f.className = "wg-weigh"; f.id = "wgWeigh";
@@ -14828,6 +14843,7 @@
       if (!(v >= 30 && v <= 300)) { showToast("Vul je gewicht in kilo's in, bijvoorbeeld 78,4."); return; }
       logWeight(v); render();
       if (mine) showToast("Je weging van deze week is verbeterd. Tot " + moment + "!");
+      else if (!thisWeekCheckin()) setTimeout(function () { openCheckinSheet(); }, 350);
     };
     f.appendChild(lab);
     if (!mine || f.dataset.edit) { f.appendChild(inp); f.appendChild(sb); }
@@ -15070,6 +15086,144 @@
       else res.textContent = "Met nek, middel" + (prefs.gender === "Vrouw" ? " en heup" : "") + " schat Balanza je vetpercentage (Navy-methode).";
     }
     paint();
+  }
+  // ---------- Wekelijkse check-in op je weegmoment: hoe ging je week? ----------
+  // journey.checkins = [{ w, hunger: ["2026-10-20", ...], good: [...], hard: [...], mot: 1..5, note }]
+  // Balanza kijkt bij elke dag met honger naar wat je die dag at, en geeft op basis daarvan (en van wat lastig was) gerichte tips.
+  var CI_GOOD = [["plannen", "Vooruit plannen"], ["koken", "Zelf koken"], ["eiwit", "Genoeg eiwit"], ["groente", "Veel groente"], ["snoep", "Minder snoepen"], ["bewegen", "Bewegen"], ["water", "Genoeg drinken"], ["slaap", "Goed slapen"]];
+  var CI_HARD = [["weekend", "Het weekend"], ["avond", "Trek in de avond"], ["uiteten", "Uit eten of borrel"], ["stress", "Stress of drukte"], ["tijd", "Weinig tijd om te koken"], ["slaap", "Slecht geslapen"]];
+  var CI_MOT = [[1, "😫", "Laag"], [2, "😕", "Matig"], [3, "😐", "Gaat wel"], [4, "🙂", "Goed"], [5, "💪", "Top"]];
+  function checkins() { var j = journey(); j.checkins = Array.isArray(j.checkins) ? j.checkins : []; return j.checkins; }
+  function thisWeekCheckin() { var wk = mondayKeyOffset(0); return checkins().filter(function (c) { return c && c.w === wk; })[0] || null; }
+  function ciDays() {   // de afgelopen 7 dagen, gisteren als laatste
+    var out = [];
+    for (var i = 7; i >= 1; i--) { var d = new Date(); d.setDate(d.getDate() - i); out.push(d); }
+    return out;
+  }
+  function ciDayLabel(d) { return ["zo", "ma", "di", "wo", "do", "vr", "za"][d.getDay()] + " " + d.getDate(); }
+  function ciDayName(d) { return ["zondag", "maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag"][d.getDay()]; }
+  // Wat at je op een dag met honger? Uitleg + tip
+  function ciHungerInsight(key) {
+    var d = new Date(key + "T12:00:00"), pw = weekByStart(isoDateKey(getMonday(d))), dn = PLAN_DAYS[(d.getDay() + 6) % 7];
+    var name = ciDayName(d);
+    if (!pw) return { day: name, text: "Op " + name + " stond niets in je planning, dus Balanza kan niet zien wat je at. Plan of vink je maaltijden af, dan kan Balanza je volgende keer precies vertellen waar de honger vandaan kwam." };
+    var a = aggregateDayMacros(pw, dn), target = dailyKcalTarget(), t = goalTarget();
+    var skipped = ["Ontbijt", "Lunch"].filter(function (sl) { var s = pw.slots[dn + "|" + sl]; return !s || s.cooked === false; });
+    if (!a || !a.kcal) return { day: name, text: "Op " + name + " heb je niets vastgelegd. Vink volgende keer af wat je at, dan kan Balanza zien waar de honger vandaan kwam." };
+    var eiwitT = target ? Math.round(target * t.eiwit / 100 / 4) : null, bits = [], tips = [];
+    if (target && a.kcal < target * 0.85) { bits.push("at je " + a.kcal + " kcal, " + (target - a.kcal) + " onder je dagdoel"); tips.push("Eet dichter bij je dagdoel: te ver eronder geeft honger en dan houd je het minder lang vol. Een tussendoortje met eiwit (kwark, ei, een handje noten) helpt."); }
+    if (eiwitT && a.eiwitG < eiwitT * 0.8) { bits.push("kreeg je weinig eiwit binnen (" + a.eiwitG + " van " + eiwitT + " g)"); tips.push("Eiwit verzadigt het langst. Zorg voor eiwit bij elke maaltijd, vooral bij je ontbijt."); }
+    if (skipped.length) { bits.push((skipped.length > 1 ? "stonden je " : "stond je ") + skipped.map(function (x) { return x.toLowerCase(); }).join(" en ") + " niet in je planning of sloeg je " + (skipped.length > 1 ? "ze" : "die") + " over"); tips.push("Sla liever geen maaltijd over: dan komt de honger later dubbel terug, vaak in de avond."); }
+    var bal = dayBal(a);
+    if (bal !== null && bal < 60) { var kh = a.kcal ? Math.round(a.khG * 400 / a.kcal) : 0; if (kh > t.kh + 10) { bits.push("at je veel koolhydraten (" + kh + "% van je kcal)"); tips.push("Snelle koolhydraten (wit brood, zoet, pasta) geven snel weer trek. Combineer ze met eiwit en groente."); } }
+    if (!bits.length) return { day: name, text: "Op " + name + " zat je eten goed in balans (" + a.kcal + " kcal, " + a.eiwitG + " g eiwit, Balans " + (bal !== null ? bal + "%" : "–") + "). Honger kan dan ook door slaap, stress of te weinig drinken komen. Drink een groot glas water en wacht tien minuten; is de trek er nog, neem dan iets met eiwit." };
+    var joined = bits.length > 1 ? bits.slice(0, -1).join(", ") + " en " + bits[bits.length - 1] : bits[0];
+    return { day: name, text: "Op " + name + " " + joined + ". " + tips[0] };
+  }
+  var CI_HARD_TIPS = {
+    weekend: "Plan je zaterdag en zondag ook in, en kies één moment waarop je bewust iets lekkers neemt. Dan voelt het niet als een verbod en blijft het bij dat ene moment.",
+    avond: "Trek in de avond komt vaak door te weinig eten overdag. Zorg voor een stevige lunch met eiwit, en houd een eiwitrijk avondtussendoortje achter de hand, zoals kwark of skyr.",
+    uiteten: "Uit eten past er prima in. Kies iets met groente en eiwit, deel een voorgerecht of dessert, en vul het die dag aan met lichtere maaltijden. Met “Uit eten” leg je het snel vast.",
+    stress: "Bij stress eten we vaak sneller en meer. Plan je maaltijden vooruit, dan hoef je in drukke momenten niet te kiezen. Een korte wandeling helpt ook tegen stress-trek.",
+    tijd: "Gebruik een prepdag: in een uurtje op zondag kook je voor een paar dagen voor. Of kies bij het maken van gerechten de wens “Snel”.",
+    slaap: "Na een slechte nacht heb je echt meer trek; dat is je lichaam, geen zwakte. Zorg die dag extra voor eiwit en groente, en probeer op een vast tijdstip naar bed te gaan."
+  };
+  function ciMotivationText(m, g) {
+    var pr = g ? wgProgress(g) : null, wk = g ? Math.max(1, wgWeeksBetween(g.startWeek, mondayKeyOffset(0))) : 0;
+    var done = pr && pr.done > 0.2 ? (g.hide ? Math.round(pr.pct * 100) + "% van je doel" : wgFmt(pr.done) + " kg") : null;
+    if (m <= 2) return "Even geen zin? Dat heeft iedereen weleens. Kijk eens hoe ver je al bent" + (done ? ": " + done + " in " + wk + (wk === 1 ? " week" : " weken") : "") + ". Maak het deze week klein: kies één ding dat je vasthoudt, bijvoorbeeld elke dag een ontbijt met eiwit. Dat is genoeg.";
+    if (m === 3) return "Het gaat, en dat is ook goed. Volhouden is belangrijker dan perfect zijn" + (done ? "; je hebt er al " + done + " op zitten" : "") + ".";
+    return "Mooi, die motivatie! " + (done ? "Je hebt er al " + done + " op zitten. " : "") + "Gebruik deze energie om je volgende week alvast te plannen.";
+  }
+  function openCheckinSheet(opts) {
+    opts = opts || {};
+    if (!wgAllowed()) return;
+    var g = weightGoal(), prev = thisWeekCheckin();
+    var st = { hunger: prev ? (prev.hunger || []).slice() : [], none: prev ? !(prev.hunger || []).length : false, good: prev ? (prev.good || []).slice() : [], hard: prev ? (prev.hard || []).slice() : [], mot: prev ? prev.mot : 0, note: prev ? prev.note || "" : "" };
+    var sh = openSimpleSheet("ciSheet", "Hoe ging je week?", "Een paar tikken; Balanza kijkt mee naar wat je at");
+    var body = sh.body;
+    function h(t) { var e = document.createElement("div"); e.className = "qa-h"; e.textContent = t; body.appendChild(e); }
+    function chips(list, arr, id) {
+      var row = document.createElement("div"); row.className = "chiprow ci-chips"; row.id = id;
+      list.forEach(function (o) {
+        var c = document.createElement("button"); c.type = "button"; c.className = "chip" + (arr.indexOf(o[0]) > -1 ? " selected" : ""); c.textContent = o[1]; c.id = id + "-" + o[0];
+        c.setAttribute("aria-pressed", arr.indexOf(o[0]) > -1 ? "true" : "false");
+        c.onclick = function () { var i = arr.indexOf(o[0]); if (i > -1) arr.splice(i, 1); else arr.push(o[0]); c.classList.toggle("selected"); c.setAttribute("aria-pressed", arr.indexOf(o[0]) > -1 ? "true" : "false"); if (id === "ciHunger") { st.none = false; var n = document.getElementById("ciHunger-none"); if (n) n.classList.remove("selected"); } };
+        row.appendChild(c);
+      });
+      body.appendChild(row); return row;
+    }
+    h("Hoe is je motivatie?");
+    var mr = document.createElement("div"); mr.className = "ci-mot"; mr.id = "ciMot";
+    CI_MOT.forEach(function (m) {
+      var b = document.createElement("button"); b.type = "button"; b.className = "ci-mot-b" + (st.mot === m[0] ? " on" : ""); b.id = "ciMot-" + m[0];
+      b.innerHTML = '<span aria-hidden="true"></span><small></small>'; b.querySelector("span").textContent = m[1]; b.querySelector("small").textContent = m[2];
+      b.setAttribute("aria-label", "Motivatie " + m[2].toLowerCase());
+      b.onclick = function () { st.mot = m[0]; Array.prototype.forEach.call(mr.children, function (x) { x.classList.remove("on"); }); b.classList.add("on"); };
+      mr.appendChild(b);
+    });
+    body.appendChild(mr);
+    h("Had je op een dag veel honger?");
+    var hr = chips(ciDays().map(function (d) { return [isoDateKey(d), ciDayLabel(d)]; }), st.hunger, "ciHunger");
+    var none = document.createElement("button"); none.type = "button"; none.className = "chip" + (st.none ? " selected" : ""); none.id = "ciHunger-none"; none.textContent = "Nee, geen honger";
+    none.onclick = function () { st.none = true; st.hunger.length = 0; Array.prototype.forEach.call(hr.children, function (x) { x.classList.remove("selected"); }); none.classList.add("selected"); };
+    hr.appendChild(none);
+    h("Wat ging goed?"); chips(CI_GOOD, st.good, "ciGood");
+    h("Wat was lastig?"); chips(CI_HARD, st.hard, "ciHard");
+    var note = document.createElement("textarea"); note.className = "textinput ci-note"; note.id = "ciNote"; note.rows = 2; note.maxLength = 300; note.placeholder = "Nog iets kwijt? (optioneel)"; note.value = st.note;
+    note.oninput = function () { st.note = note.value; };
+    body.appendChild(note);
+    var acts = document.createElement("div"); acts.className = "nudge-actions"; acts.style.marginTop = "14px";
+    var save = document.createElement("button"); save.type = "button"; save.className = "primary-btn small"; save.id = "ciSave"; save.textContent = "Bekijk mijn tips";
+    save.onclick = function () {
+      if (!st.mot) { showToast("Kies eerst hoe je motivatie is."); return; }
+      var all = checkins().filter(function (c) { return c && c.w !== mondayKeyOffset(0); });
+      var rec = { w: mondayKeyOffset(0), hunger: st.hunger.slice(0, 7), good: st.good.slice(0, 8), hard: st.hard.slice(0, 6), mot: st.mot, note: String(st.note || "").trim().slice(0, 300) };
+      all.push(rec); prefs.journey.checkins = all.slice(-26); savePrefs();
+      showCheckinResult(sh, rec);
+    };
+    var skip = document.createElement("button"); skip.type = "button"; skip.className = "ghost-btn small"; skip.id = "ciSkip"; skip.textContent = "Niet nu";
+    skip.onclick = function () { closeSheet(sh.ov); render(); };
+    acts.appendChild(save); acts.appendChild(skip); body.appendChild(acts);
+  }
+  function showCheckinResult(sh, rec) {
+    var g = weightGoal(), body = sh.body; body.innerHTML = "";
+    document.getElementById("ciSheetT").textContent = "Jouw tips voor deze week";
+    var meta = sh.ov.querySelector(".ciSheetM"); if (meta) meta.textContent = "Op basis van je check-in en wat je at";
+    function block(title, text, cls) {
+      var b = document.createElement("div"); b.className = "ci-res" + (cls ? " " + cls : "");
+      b.innerHTML = "<b></b><p></p>"; b.querySelector("b").textContent = title; b.querySelector("p").textContent = text; body.appendChild(b);
+    }
+    block("Je motivatie", ciMotivationText(rec.mot, g), "mot");
+    (rec.hunger || []).slice(-3).forEach(function (k) { var ins = ciHungerInsight(k); block("Honger op " + ins.day, ins.text); });
+    (rec.hard || []).slice(0, 2).forEach(function (k) { var lab = (CI_HARD.filter(function (x) { return x[0] === k; })[0] || [k, k])[1]; if (CI_HARD_TIPS[k]) block("Lastig: " + lab.toLowerCase(), CI_HARD_TIPS[k]); });
+    if ((rec.good || []).length) {
+      var labs = rec.good.map(function (k) { return ((CI_GOOD.filter(function (x) { return x[0] === k; })[0] || [k, k])[1]).toLowerCase(); });
+      block("Wat goed ging", "Sterk: " + labs.join(", ") + ". Houd dat vast; dit zijn de gewoontes die je doel dichterbij brengen.", "good");
+    }
+    var acts = document.createElement("div"); acts.className = "nudge-actions"; acts.style.marginTop = "14px";
+    var ok = document.createElement("button"); ok.type = "button"; ok.className = "primary-btn small"; ok.id = "ciDone"; ok.textContent = "Klaar";
+    ok.onclick = function () { closeSheet(sh.ov); render(); };
+    acts.appendChild(ok);
+    var edit = document.createElement("button"); edit.type = "button"; edit.className = "hh-link"; edit.id = "ciEdit"; edit.textContent = "Aanpassen";
+    edit.onclick = function () { openCheckinSheet(); };
+    if (chatAvailable()) {
+      var talk = document.createElement("button"); talk.type = "button"; talk.className = "ghost-btn small"; talk.id = "ciTalk"; talk.textContent = "Bespreek met Balanza";
+      talk.onclick = function () { closeSheet(sh.ov); openChat(); setTimeout(function () { sendChat(ciChatQuestion(rec)); }, 250); };
+      acts.appendChild(talk);
+    }
+    acts.appendChild(edit);
+    body.appendChild(acts);
+  }
+  function ciChatQuestion(rec) {
+    var mot = (CI_MOT.filter(function (m) { return m[0] === rec.mot; })[0] || [0, "", "?"])[2].toLowerCase();
+    var hung = (rec.hunger || []).map(function (k) { var ins = ciHungerInsight(k); return ins.day; });
+    var lab = function (list, ks) { return ks.map(function (k) { return ((list.filter(function (x) { return x[0] === k; })[0] || [k, k])[1]).toLowerCase(); }); };
+    var g = weightGoal(), pr = g ? wgProgress(g) : null;
+    return "Mijn weekcheck-in: motivatie " + mot + "." + (hung.length ? " Veel honger op " + hung.join(", ") + "." : " Geen bijzondere honger.") +
+      (rec.good.length ? " Goed ging: " + lab(CI_GOOD, rec.good).join(", ") + "." : "") + (rec.hard.length ? " Lastig was: " + lab(CI_HARD, rec.hard).join(", ") + "." : "") +
+      (rec.note ? " Verder: " + rec.note : "") + (pr && g ? " Mijn doel is " + wgFmt(g.target) + " kg, ik ben " + wgFmt(pr.done) + " kg van de " + wgFmt(pr.total) + " kg op weg." : "") +
+      " Kijk naar wat ik die dagen at en geef me één of twee haalbare tips voor komende week.";
   }
   function openWeightGoalSheet() {
     if (!wgAllowed()) { showToast(isMinor() ? "Een doelgewicht is er niet voor wie jonger is dan 18." : "Hiervoor is toestemming voor gezondheidsgegevens nodig (Instellingen, Privacy)."); return; }
@@ -16504,6 +16658,7 @@
     if (prefs.journey && Array.isArray(prefs.journey.log)) prefs.journey.log = prefs.journey.log.filter(function (x) { return x && x.m !== "gewicht" && MEAS_KEYS.indexOf(x.m) === -1; });
     if (prefs.journey && prefs.journey.metric === "gewicht") prefs.journey.metric = "";
     delete prefs.weightGoal;
+    if (prefs.journey) delete prefs.journey.checkins;
     plannedWeeks.forEach(function (w) { if (w.extra) delete w.extra; });
   }
   function showConsent(grant) {

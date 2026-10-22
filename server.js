@@ -2993,6 +2993,7 @@ function stripHealthData(subpath, value) {
     if (v.journey && Array.isArray(v.journey.log)) v.journey.log = v.journey.log.filter(function (x) { return x && ["gewicht", "middel", "nek", "heup", "borst", "arm", "been"].indexOf(x.m) === -1; });
     if (v.journey && v.journey.metric === "gewicht") v.journey.metric = "";
     delete v.weightGoal;
+    if (v.journey) delete v.journey.checkins;
   } else if (subpath === "plannedWeeks") {
     var list = Array.isArray(v.list) ? v.list : Array.isArray(v) ? v : [];
     list.forEach(function (w) { if (w && w.extra) delete w.extra; });
