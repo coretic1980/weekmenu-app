@@ -714,6 +714,7 @@
   .qa-g::-webkit-outer-spin-button, .qa-g::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
   .qa-gl { font-size: 12px; color: var(--muted); margin-right: 2px; }
   .qa-sum { margin-top: 12px; }
+  .bal-why { margin: 10px 0 14px; padding: 10px 12px; border-radius: 12px; background: var(--surface-2, rgba(0,0,0,0.04)); font-size: 13.5px; line-height: 1.45; color: var(--ink); }
   .qa-kind { margin-top: 10px; font-size: 13px; font-weight: 600; color: var(--muted); }
   .qa-ownprev { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); min-height: 28px; margin: 2px 0 8px; }
   .qa-res-txt small, .qa-item-txt small { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
@@ -3029,6 +3030,30 @@
     if (day.macroBron === "nevo") return "Macro's berekend met het Nederlands Voedingsstoffenbestand (NEVO), RIVM.";
     return "Macro's zijn een schatting van de AI (nog niet berekend met NEVO).";
   }
+  // Waarom is de Balans laag? In gewone woorden: wat wijkt af van je doel, en wat helpt.
+  function balanceWhyText(khPct, eiPct, vetPct) {
+    var t = goalTarget(), score = computeBalance(khPct, eiPct, vetPct);
+    if (score >= 60) return null;
+    var parts = [], tips = [];
+    var d = [["eiwit", eiPct, t.eiwit], ["koolhydraten", khPct, t.kh], ["vet", vetPct, t.vet]];
+    d.sort(function (a, b) { return Math.abs(b[1] - b[2]) - Math.abs(a[1] - a[2]); });
+    d.forEach(function (m) {
+      var dev = m[1] - m[2]; if (Math.abs(dev) < 8) return;
+      parts.push((dev < 0 ? "weinig " : "veel ") + m[0] + " (" + m[1] + "% in plaats van " + m[2] + "%)");
+      if (m[0] === "eiwit" && dev < 0) tips.push("iets met veel eiwit erbij of in de plaats, zoals skyr of magere kwark, een ei, kipfilet of een schep eiwitpoeder");
+      if (m[0] === "koolhydraten" && dev > 0) tips.push("minder van het zoete of zetmeelrijke deel, zoals granola, honing, brood of pasta");
+      if (m[0] === "vet" && dev > 0) tips.push("minder olie, kaas, noten of saus");
+      if (m[0] === "koolhydraten" && dev < 0) tips.push("wat volkoren brood, havermout, fruit of rijst erbij");
+    });
+    if (!parts.length) return null;
+    return "Waarom " + score + "%? De Balans kijkt hoe dicht de verdeling bij je doel ligt (" + t.kh + "% koolhydraten \u00b7 " + t.eiwit + "% eiwit \u00b7 " + t.vet + "% vet). " +
+      "Dit heeft " + parts.slice(0, 2).join(" en ") + "." + (tips.length ? " Tip: " + tips.slice(0, 2).join(", of ") + "." : "");
+  }
+  function balanceWhyEl(khPct, eiPct, vetPct, id) {
+    var txt = balanceWhyText(khPct, eiPct, vetPct); if (!txt) return null;
+    var el = document.createElement("div"); el.className = "bal-why"; if (id) el.id = id; el.textContent = txt;
+    return el;
+  }
   function nevoCreditLine(day) {
     var el = document.createElement("div");
     el.className = "acc-sub"; el.id = "nevoCredit";
@@ -5277,6 +5302,8 @@
       x.items.forEach(function (t) { var li = document.createElement("li"); li.textContent = t; ul.appendChild(li); });
       body.appendChild(ul);
     }
+    var xk = Number(x.kcal) || 0;
+    if (xk) { var xw = balanceWhyEl(Math.round((x.khG || 0) * 400 / xk), Math.round((x.eiwitG || 0) * 400 / xk), Math.round((x.vetG || 0) * 900 / xk)); if (xw) body.appendChild(xw); }
     var note = document.createElement("div"); note.className = "qa-expl"; note.textContent = x.replaces ? "Kwam in de plaats van je geplande " + x.replaces.split("|")[1].toLowerCase() + "." : "Telt mee in je dag, naast wat er gepland staat.";
     body.appendChild(note);
     var row = document.createElement("div"); row.className = "nudge-actions"; row.style.marginTop = "14px";
@@ -11784,7 +11811,7 @@
     }
 
     main.appendChild(macroTags(day, { hideBalans: !day.prep }));   // het grote keurmerk staat al naast de titel
-    if (!day.prep) main.appendChild(nevoCreditLine(day));
+    if (!day.prep) { main.appendChild(nevoCreditLine(day)); var bw = balanceWhyEl(day.kh, day.eiwit, day.vet, "balWhy"); if (bw) main.appendChild(bw); }
 
     if (day.vanFoto && (day.herkend || (day.aanpassingen && day.aanpassingen.length))) {
       var fromPhoto = document.createElement("div");
@@ -12894,7 +12921,7 @@
     return s;
   }
   // Spreektaal en meervouden die NEVO anders noemt (alleen een verwijzing naar de zoekterm; de NEVO-gegevens blijven ongewijzigd).
-  var QA_WORDS = { bananen: "banaan", eieren: "ei", tomaten: "tomaat", appels: "appel", peren: "peer", aardappelen: "aardappel", aardappels: "aardappel", uien: "ui", wortels: "wortel", wortelen: "wortel",
+  var QA_WORDS = { granola: "muesli krokante", cruesli: "muesli krokante", yogurt: "yoghurt", yorgurt: "yoghurt", joghurt: "yoghurt", jogurt: "yoghurt", yoghurth: "yoghurt", yougurt: "yoghurt", bananen: "banaan", eieren: "ei", tomaten: "tomaat", appels: "appel", peren: "peer", aardappelen: "aardappel", aardappels: "aardappel", uien: "ui", wortels: "wortel", wortelen: "wortel",
     sneetjes: "brood", sneetje: "brood", boterham: "brood", boterhammen: "brood", snee: "brood", crackers: "cracker", beschuiten: "beschuit", mandarijnen: "mandarijn", sinaasappels: "sinaasappel", kiwis: "kiwi",
     druif: "druiven", aardbei: "aardbeien", noot: "noten", walnoot: "walnoten", amandel: "amandelen", champignon: "champignons", paprikas: "paprika", courgettes: "courgette", komkommers: "komkommer",
     plakje: "", plakjes: "", stukje: "", stukjes: "", bakje: "", portie: "", glas: "", glaasje: "", kopje: "", schaaltje: "", handje: "", koffie: "koffie", thee: "thee", ontbijtkoek: "ontbijtkoek",
@@ -13287,6 +13314,7 @@
       var kd = document.createElement("div"); kd.className = "qa-kind"; kd.id = "qaKind";
       kd.textContent = kind.meal ? "Herkend als maaltijd \u00b7 " + st.moment.toLowerCase() : "Herkend als los " + (st.items.length === 1 ? "product" : "tussendoortje") + " \u00b7 " + st.moment.toLowerCase();
       sumBox.appendChild(kd);
+      if (t.kcal) { var qw = balanceWhyEl(Math.round(t.khG * 400 / t.kcal), Math.round(t.eiwitG * 400 / t.kcal), Math.round(t.vetG * 900 / t.kcal), "qaBalWhy"); if (qw) sumBox.appendChild(qw); }
       var l = document.createElement("div"); l.className = "qa-h"; l.textContent = "Wanneer"; sumBox.appendChild(l);
       var dr = document.createElement("div"); dr.className = "chiprow qa-chips qa-days";
       qaDayOptions().forEach(function (o, i) {
@@ -13418,7 +13446,7 @@
       useHint();
       var parsed = qaParse(st.q); if (!parsed.length) return;
       // wat je typte is meestal de beste naam ("wrap met kip")
-      if (!st.items.length && parsed.length > 1) { var nm0 = st.q.replace(/^\s*[:\-]\s*/, "").replace(/\b\d+([.,]\d+)?\s*(g|gr|gram|ml|stuks?|x)?\b\s*/gi, "").replace(/\s+/g, " ").trim(); if (nm0.length >= 3 && nm0.length <= 60) st.autoName = nm0.charAt(0).toUpperCase() + nm0.slice(1); }
+      if (!st.items.length && parsed.length > 1) { var nm0 = st.q.replace(/^\s*[:\-]\s*/, "").replace(/\b\d+([.,]\d+)?\s*(g|gr|gram|ml|stuks?|x)?\b\s*/gi, "").replace(/\s+/g, " ").trim(); nm0 = nm0.replace(/\b(yogurt|yorgurt|joghurt|jogurt|yoghurth|yougurt)\b/gi, "yoghurt"); if (nm0.length >= 3 && nm0.length <= 60) st.autoName = nm0.charAt(0).toUpperCase() + nm0.slice(1); }
       if (!qaFoods) { showToast("Even geduld, de productenlijst laadt nog."); return; }
       var unknown = [];
       var prevRaw = "";
