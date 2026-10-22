@@ -11947,14 +11947,8 @@
       }
 
       var vRow = document.createElement("div");
-      vRow.className = "actionrow";
-      [
-        ["Pittiger", "pittiger"],
-        ["Simpeler (basic)", "simpeler"],
-        ["Fine dining", "finedining"],
-        ["Wissel koolhydraatbron", "wisselkh"],
-        [prefs.dietStyle === "Vegetarisch" || prefs.dietStyle === "Veganistisch" ? "Wissel vleesvervanger" : "Wissel vlees/vis", "wisseleiwit"]
-      ].forEach(function (pair) {
+      vRow.className = "actionrow"; vRow.id = "variantRow";
+      dishVariantOptions(day).forEach(function (pair) {
         var vBtn = document.createElement("button");
         vBtn.className = "ghost-btn variant-btn";
         vBtn.disabled = state.variating;
@@ -11985,6 +11979,35 @@
 
 
 
+  // Welke varianten passen bij dit gerecht? Alleen knoppen die iets zinnigs kunnen doen:
+  // geen "Wissel vlees/vis" zonder vlees of vis, geen "Wissel koolhydraatbron" zonder pasta/rijst/aardappel/brood, enz.
+  var VAR_MEATFISH = /(kip|kalkoen|rund|varken|gehakt|biefstuk|steak|spek|bacon|ham\b|hamblokjes|worst|chorizo|salami|lam(s|svlees|skotelet)|kalf|eend|konijn|vlees|schnitzel|shoarma|gyros|pulled|zalm|tonijn|kabeljauw|koolvis|pangasius|tilapia|forel|makreel|haring|sardine|ansjovis|garnal|gamba|scampi|mossel|inktvis|vis\b|visfilet|krab|kreeft|schelvis|heek|zeebaars|dorade|scholvis)/;
+  var VAR_VEGPROT = /(tofu|tempeh|seitan|vleesvervanger|vegaburger|vegetarisch(e)? (gehakt|burger|kipstuk|balletjes)|vega |falafel|kikkererwt|linzen|kidneybon|zwarte bonen|witte bonen|bruine bonen|edamame|sojabonen|lupine)/;
+  var VAR_OTHERPROT = /(\bei\b|\beieren\b|eiwit|kwark|skyr|yoghurt|cottage|huttenk|feta|halloumi|mozzarella|kaas|paneer|whey|eiwitpoeder)/;
+  var VAR_CARB = /((^|[^a-z])pasta\b|spaghetti|penne|fusilli|macaroni|tagliatelle|lasagne|orzo|gnocchi|noedel|\bmie\b|ramen|udon|rijst(?!azijn|wijn|e azijn)|risotto|couscous|bulgur|quinoa|parelgort|gierst|aardappel|krieltje|puree|friet|patat|zoete aardappel|(^|[^a-z])brood(?!kruim)|stokbrood|bolletje|broodje|pistolet|wrap|tortilla|pita|naan|flatbread|crackers?|beschuit|havermout|muesli|granola|cruesli|polenta|pannenkoek)/;
+  var VAR_SAVORY = /(ui\b|uien|knoflook|zout|peper|bouillon|tomaat|paprika|courgette|spinazie|broccoli|kip|vlees|vis|kaas|sojasaus|kerrie|curry|komijn|chili)/;
+  var VAR_SWEET = /(yoghurt|kwark|skyr|granola|muesli|havermout|honing|ahornsiroop|banaan|aardbei|bessen|blauwe bes|frambo|appel|peer|mango|smoothie|chocolade|cacao|kaneel|vanille|jam|suiker|pannenkoek|taart|cake|toetje)/;
+  function dishProteinKind(day) {
+    var all = (String(day.name || "") + " \n " + (day.ingredienten || []).filter(function (x) { return !/bouillon|fond\b|vissaus|oestersaus/i.test(String(x)); }).join(" \n ")).toLowerCase();
+    return VAR_MEATFISH.test(all) ? "vlees" : VAR_VEGPROT.test(all) ? "vega" : VAR_OTHERPROT.test(all) ? "anders" : "";
+  }
+  function dishVariantOptions(day) {
+    var lines = (day.ingredienten || []).map(function (x) { return String(x).toLowerCase(); }).filter(function (x) { return !/bouillon|fond\b|vissaus|oestersaus|ansjovispasta/.test(x); });
+    var all = (String(day.name || "").toLowerCase() + " \n " + lines.join(" \n "));
+    var steps = (day.steps || []).length;
+    var meat = VAR_MEATFISH.test(all), veg = VAR_VEGPROT.test(all), other = VAR_OTHERPROT.test(all), carb = VAR_CARB.test(all);
+    var sweet = VAR_SWEET.test(all) && !VAR_SAVORY.test(all);
+    var simple = lines.length <= 4 && steps <= 2;
+    var out = [];
+    if (!sweet) out.push(["Pittiger", "pittiger"]);
+    if (!simple) out.push(["Simpeler (basic)", "simpeler"]);
+    out.push(["Fine dining", "finedining"]);
+    if (carb) out.push(["Wissel koolhydraatbron", "wisselkh"]);
+    if (meat) out.push([prefs.dietStyle === "Pescotarisch" ? "Wissel vis" : "Wissel vlees/vis", "wisseleiwit"]);
+    else if (veg) out.push(["Wissel vleesvervanger", "wisseleiwit"]);
+    else if (other) out.push(["Wissel eiwitbron", "wisseleiwit"]);
+    return out;
+  }
   function variateDish(week, day, kind, btnEl) {
     if (state.variating) return;
     if (requirePlus("Een variatie laten maken")) return;
@@ -12007,7 +12030,7 @@
         benodigdheden: day.benodigdheden,
         steps: day.steps.map(function (s) { return s.title + ": " + s.content; })
       };
-      sample.json({ action: "variation", current: variationCurrent, kind: kind, params: { goal: prefs.goal, dietStyle: prefs.dietStyle, health: healthList(), proteinOut: proteinOutList(), sugarMode: prefs.sugarMode || "natuurlijk", cheeseMode: prefs.cheeseMode || "hardekaas", exclude: prefs.exclude, familyMode: prefs.familyMode, ageGroup: prefs.ageGroup || "", age: prefs.age, student: studentParams() } }, { modelTier: "default" }).then(function (d) {
+      sample.json({ action: "variation", current: variationCurrent, kind: kind, params: { proteinKind: kind === "wisseleiwit" ? dishProteinKind(day) : "", goal: prefs.goal, dietStyle: prefs.dietStyle, health: healthList(), proteinOut: proteinOutList(), sugarMode: prefs.sugarMode || "natuurlijk", cheeseMode: prefs.cheeseMode || "hardekaas", exclude: prefs.exclude, familyMode: prefs.familyMode, ageGroup: prefs.ageGroup || "", age: prefs.age, student: studentParams() } }, { modelTier: "default" }).then(function (d) {
         var kcal = Number(d.kcal) || 0;
         var khG = Number(d.kh_g) || 0;
         var eiwitG = Number(d.eiwit_g) || 0;

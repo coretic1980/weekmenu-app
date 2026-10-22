@@ -1225,6 +1225,16 @@ function variationInstructionText(kind, p) {
   var style = p.dietStyle, puur = hl.indexOf("puur") > -1, glutenvrij = hl.indexOf("glutenvrij") > -1, lactosevrij = hl.indexOf("lactosevrij") > -1;
   var keep = " Pas de rest van het gerecht (groente, kruiden, saus, bereiding) waar nodig aan zodat het goed bij de nieuwe eiwitbron past, " +
     "geef het gerecht een naam die bij de nieuwe eiwitbron hoort en behoud ongeveer dezelfde kcal en macroverdeling.";
+  // De app geeft mee wat voor eiwitbron het gerecht nu heeft: dan wisselen we binnen die soort (geen vlees erbij in een vega gerecht).
+  if (p.proteinKind === "vega" && style !== "Vegetarisch" && style !== "Veganistisch") {
+    return "Vervang de huidige plantaardige hoofd-eiwitbron (vleesvervanger of peulvrucht) door een duidelijk ANDERE plantaardige eiwitbron " +
+      "(bijv. " + (glutenvrij ? "" : "seitan, ") + "tofu, tempeh, vegetarisch gehakt, linzen, kikkererwten of bonen). Gebruik géén vlees of vis." + keep;
+  }
+  if (p.proteinKind === "anders") {
+    return "Vervang de hoofd-eiwitbron (zoals ei, kwark, yoghurt of kaas) door een duidelijk ANDERE eiwitbron die bij dit soort gerecht past " +
+      "(bijv. skyr in plaats van yoghurt, ei in plaats van kaas, cottage cheese, tofu of peulvruchten)" +
+      (style === "Veganistisch" ? "; alles plantaardig" : "") + ". Voeg geen vlees of vis toe." + keep;
+  }
   if (style === "Vegetarisch" || style === "Veganistisch") {
     var opties = puur
       ? "tofu, tempeh, peulvruchten (linzen, kikkererwten, bonen), edamame" + (style === "Vegetarisch" ? (lactosevrij ? ", eieren" : ", eieren of een naturel zuivelproduct") : "")
