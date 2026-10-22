@@ -5148,7 +5148,7 @@
       var dot = document.createElement("i"); dot.style.background = MEAL_DOT[r.mt] || MEAL_DOT.Snack; openB.appendChild(dot);
       var tx = document.createElement("span"); tx.className = "hh-meal-txt";
       var b = document.createElement("b"); b.textContent = r.dish.name;
-      var sm = document.createElement("small"); sm.textContent = r.replacedBy ? r.slot + ": anders gegeten" : skipped ? r.slot + ": niet gegeten" : r.slot.replace(/^Snack na .*/, "Snack") + (r === feat && r.a.cooked === undefined ? " \u00b7 " + when.toLowerCase() : "") + " \u00b7 " + r.dish.kcal + " kcal" + (r.a.cooked === true ? " \u00b7 gegeten" : "");
+      var sm = document.createElement("small"); sm.textContent = r.replacedBy ? r.slot + ": anders gegeten" : skipped ? r.slot + ": niet gegeten" : r.slot.replace(/^Snack na .*/, "Snack") + (r === feat && r.a.cooked === undefined ? " \u00b7 " + when.toLowerCase() : "") + " \u00b7 " + r.dish.kcal + " kcal" + (r.a.cooked === true ? " \u00b7 gegeten" : "") + (r.a.place ? " \u00b7 bij " + r.a.place : "");
       if (!r.replacedBy && !skipped) appendBal(sm, dishBal(r.dish), " ");
       tx.appendChild(b); tx.appendChild(sm); openB.appendChild(tx);
       openB.onclick = function () { open(r); };
@@ -9421,7 +9421,7 @@
       PLAN_SLOTS.forEach(function (m) {
         var slotKey = d + "|" + m;
         var assigned = pw.slots[slotKey];
-        if (!assigned || assigned.leftover) return;   // een restje is al meegekookt (extra portie bij het origineel)
+        if (!assigned || assigned.leftover || assigned.eaten) return;   // een restje is al meegekookt; wat je al at (Snel toevoegen) hoef je niet te kopen
         var resolved = resolveAssignedDish(assigned);
         if (!resolved) return;
         var servings = assigned.servings || 1;
@@ -12105,7 +12105,7 @@
     var seenIds = {};
     WEEKS.forEach(function (w) {
       w.days.forEach(function (d) {
-        if (d.prep || !d.mealType || !byType[d.mealType]) return;
+        if (d.prep || d.qaHidden || !d.mealType || !byType[d.mealType]) return;   // qaHidden: snel toegevoegd, niet als gerecht bewaard
         if (seenIds[d.id] || dishHasProteinOut(d)) return;   // wat je niet (meer) eet, plant Balanza niet vanzelf in
         seenIds[d.id] = true;
         byType[d.mealType].push({ week: w, day: d });
@@ -13130,8 +13130,7 @@
         var pw0 = weekByStart(st.week), key = st.day + "|" + (st.moment === "Snack" ? "Snack na lunch" : st.moment);
         var planned = pw0 && pw0.slots[key] && pw0.slots[key].cooked !== true && !replacedSlots(pw0, st.day)[key];
         if (!healthOk()) st.mode = "plan";
-        else if (!today && meal) st.mode = "plan";
-        else if (today && meal && planned && st.moment !== "Snack") st.mode = "replace";
+        else if (meal && planned && st.moment !== "Snack") st.mode = "replace";
         else st.mode = "extra";
       }
       return { meal: meal, today: today };
@@ -13320,20 +13319,22 @@
       var seg = document.createElement("div"); seg.className = "chiprow qa-chips qa-modes";
       var modes = [];
       if (healthOk()) modes.push(["extra", "Erbij"]);
-      if (healthOk() && cur && !already) modes.push(["replace", "In plaats van " + st.moment.toLowerCase()]);
-      modes.push(["plan", cur ? "In planning zetten" : "Inplannen"]);
+      if (healthOk() && cur && !already) modes.push(["replace", "In plaats van " + cur.day.name]);
+      if (!healthOk()) modes.push(["plan", cur ? "In planning zetten" : "Inplannen"]);
       if (!modes.some(function (m) { return m[0] === st.mode; })) st.mode = modes[0][0];
       if (modes.length > 1) {
         modes.forEach(function (m) { var b = document.createElement("button"); b.type = "button"; b.className = "chip" + (st.mode === m[0] ? " selected" : ""); b.id = "qaMode-" + m[0]; b.textContent = m[1]; b.setAttribute("aria-pressed", st.mode === m[0] ? "true" : "false"); b.onclick = function () { st.mode = m[0]; st.modeSet = true; paintSum(); }; seg.appendChild(b); });
         sumBox.appendChild(seg);
       }
       var expl = document.createElement("div"); expl.className = "qa-expl";
-      expl.textContent = st.mode === "extra" ? "Komt bij wat er die dag al staat en telt mee in je dag." :
-        st.mode === "replace" ? "Je at dit in plaats van " + cur.day.name + ". Dat telt dan niet meer mee; je planning blijft verder zoals hij is." :
+      var momTxt = st.moment === "Snack" ? "je snack" : "je " + st.moment.toLowerCase();
+      expl.textContent = st.mode === "extra" && !cur ? "Komt in je planning als " + momTxt + " en telt mee in je dag." :
+        st.mode === "extra" ? "Komt in je planning erbij, naast " + cur.day.name + ", en telt mee in je dag." :
+        st.mode === "replace" ? "Je planning wordt aangepast: dit komt in de plaats van " + cur.day.name + "." :
         cur ? "Komt in je planning in de plaats van " + cur.day.name + " en wordt bewaard als gerecht." : "Wordt bewaard als gerecht en ingepland, net als je andere gerechten.";
       sumBox.appendChild(expl);
       var nameIn = document.createElement("input"); nameIn.className = "textinput"; nameIn.id = "qaName"; nameIn.maxLength = 60;
-      nameIn.placeholder = st.items.length === 1 ? st.items[0].name : "Naam, bijv. Mijn ontbijt";
+      nameIn.placeholder = st.autoName || (st.items.length === 1 ? st.items[0].name : "Naam, bijv. Mijn ontbijt");
       nameIn.value = st.name; nameIn.oninput = function () { st.name = nameIn.value; };
       if (st.items.length > 1 || st.mode === "plan" || st.save) sumBox.appendChild(nameIn);
       if (st.mode === "extra" || st.mode === "replace") {
@@ -13344,7 +13345,7 @@
       }
       var go = document.createElement("button"); go.type = "button"; go.className = "primary-btn"; go.id = "qaGo";
       var dlab = (qaDayOptions().filter(function (o) { return o.week === st.week && o.day === st.day; })[0] || { label: st.day }).label.toLowerCase();
-      go.textContent = st.out && st.place && st.mode !== "plan" ? "Inchecken bij " + st.place : st.mode === "extra" ? "Toevoegen aan " + dlab : st.mode === "replace" ? "Vastleggen" : cur ? "Vervangen in planning" : "Inplannen";
+      go.textContent = st.out && st.place && st.mode !== "plan" ? "Inchecken bij " + st.place : st.mode === "extra" ? (cur ? "Erbij zetten (" + dlab + ")" : "In planning zetten (" + dlab + ")") : st.mode === "replace" ? "Vervangen in planning" : cur ? "Vervangen in planning" : "Inplannen";
       go.onclick = commit;
       if (st.mode === "plan" && readOnlyMode()) lockEl(go, "Je planning aanpassen");
       sumBox.appendChild(go);
@@ -13374,41 +13375,59 @@
     function commit() {
       if (!st.items.length) return;
       var t = qaTotals(st.items);
-      var name = (st.name || "").trim() || (st.items.length === 1 ? st.items[0].name : st.items.slice(0, 2).map(function (x) { return x.name.split(" ")[0]; }).join(" met "));
+      var name = (st.name || "").trim() || st.autoName || (st.items.length === 1 ? st.items[0].name : st.items.slice(0, 2).map(function (x) { return x.name.split(" ")[0]; }).join(" met "));
       var monday = new Date(st.week + "T00:00:00");
       var pw = addOrOpenPlannedWeek(monday);
       var isToday = st.week === isoDateKey(getMonday(new Date())) && st.day === PLAN_DAYS[(new Date().getDay() + 6) % 7];
       var dayLabel = isToday ? "vandaag" : st.day.toLowerCase() + (st.week !== isoDateKey(getMonday(new Date())) ? " volgende week" : "");
       var mealType = st.moment;
       var dish = null;
-      if (st.mode === "plan" || st.save) {
+      var key = st.day + "|" + (mealType === "Snack" ? "Snack na lunch" : mealType);
+      // Alles wat je toevoegt komt in je planning:
+      //  - In plaats van: het moment in je planning wordt echt dit
+      //  - Erbij, en er staat op dat moment nog niets: het komt op die plek
+      //  - Erbij naast iets wat al gepland staat: het komt erbij (blok "Erbij" bij die dag)
+      var fillSlot = st.mode === "replace" || (st.mode === "extra" && !pw.slots[key]);
+      var t0 = new Date(); t0.setHours(23, 59, 59, 0);
+      var eaten = fillSlot && planDayDate(pw, st.day) <= t0;
+      if (st.mode === "plan" || st.save || fillSlot) {
         if (st.mode === "plan" && requirePlus("Je planning aanpassen")) return;
         dish = asDish(name, t, mealType);
+        if (!st.save && st.mode !== "plan") dish.qaHidden = true;   // staat in je planning, niet tussen je gerechten
         addToCacheLibrary([dish]); persistDishesToDb([dish]);
       }
-      if (st.mode === "plan") {
-        var key = st.day + "|" + (mealType === "Snack" ? "Snack na lunch" : mealType);
+      if (st.mode === "plan" || fillSlot) {
         var prev = pw.slots[key] ? JSON.parse(JSON.stringify(pw.slots[key])) : null;
-        pw.slots[key] = { name: dish.name, weekId: "cache", dayId: dish.id, balans: dish.balans };
+        var prevDish = prev && resolveAssignedDish(prev); if (prev && prevDish && prevDish.day) prev.name = prevDish.day.name;
+        var slot = { name: dish.name, weekId: "cache", dayId: dish.id, balans: dish.balans };
+        if (eaten) { slot.cooked = true; slot.cookedAt = new Date().toISOString(); slot.eaten = true; }
+        if (st.mode === "replace" && prev && prev.name) slot.was = prev.name;
+        if (st.out && st.place.trim()) { slot.place = st.place.trim().slice(0, 60); rememberPlace(slot.place, st.pos, { name: name, kcal: t.kcal, eiwitG: t.eiwitG, khG: t.khG, vetG: t.vetG, items: st.items.map(qaLineText) }); }
+        pw.slots[key] = slot;
+        // oude manier ("anders gegeten" als losse regel) voor dit moment opruimen
+        if (Array.isArray(pw.extra && pw.extra[st.day])) pw.extra[st.day] = pw.extra[st.day].filter(function (x) { return x.replaces !== key; });
         savePlannedWeeks();
         remember(name); closeSheet(sh.ov); render();
-        showUndoToast(name + " staat " + (dayLabel === "vandaag" ? "vandaag" : "op " + dayLabel) + " bij " + mealType.toLowerCase(), function () { if (prev) pw.slots[key] = prev; else delete pw.slots[key]; savePlannedWeeks(); render(); });
+        var where = (dayLabel === "vandaag" ? "vandaag" : dayLabel) + " bij " + (mealType === "Snack" ? "snack" : mealType.toLowerCase());
+        showUndoToast((slot.place ? "Ingecheckt bij " + slot.place + ": " + name + ", staat in je planning" : st.mode === "replace" && prev ? "Planning aangepast: " + name + " in plaats van " + (prev.name || "je " + mealType.toLowerCase()) : name + " staat in je planning: " + where) + " (" + t.kcal + " kcal)" + (st.save ? ", en bewaard als gerecht" : ""),
+          function () { if (prev) pw.slots[key] = prev; else delete pw.slots[key]; savePlannedWeeks(); render(); });
         return;
       }
       pw.extra = pw.extra && typeof pw.extra === "object" ? pw.extra : {};
       pw.extra[st.day] = Array.isArray(pw.extra[st.day]) ? pw.extra[st.day] : [];
       var entry = { id: "x" + Date.now(), at: new Date().toISOString(), who: meId(), name: name, kcal: t.kcal, eiwitG: t.eiwitG, khG: t.khG, vetG: t.vetG, moment: mealType, quick: true, items: st.items.map(qaLineText) };
-      if (st.mode === "replace") entry.replaces = st.day + "|" + (mealType === "Snack" ? "Snack na lunch" : mealType);
       if (st.out && st.place.trim()) { entry.place = st.place.trim().slice(0, 60); rememberPlace(entry.place, st.pos, entry); }
       pw.extra[st.day].push(entry);
       savePlannedWeeks();
       remember(name); closeSheet(sh.ov); render();
-      showUndoToast((entry.place ? "Ingecheckt bij " + entry.place + ": " + name : entry.replaces ? name + " vastgelegd in plaats van je " + mealType.toLowerCase() : name + " toegevoegd aan " + dayLabel) + " (" + t.kcal + " kcal)" + (dish ? ", en bewaard als gerecht" : ""), function () { pw.extra[st.day] = (pw.extra[st.day] || []).filter(function (x) { return x.id !== entry.id; }); savePlannedWeeks(); render(); });
+      showUndoToast((entry.place ? "Ingecheckt bij " + entry.place + ": " + name : entry.replaces ? name + " vastgelegd in plaats van je " + mealType.toLowerCase() : name + " staat erbij in je planning (" + (dayLabel === "vandaag" ? "vandaag" : dayLabel) + ")") + " (" + t.kcal + " kcal)" + (dish ? ", en bewaard als gerecht" : ""), function () { pw.extra[st.day] = (pw.extra[st.day] || []).filter(function (x) { return x.id !== entry.id; }); savePlannedWeeks(); render(); });
     }
     // Een hele zin in één keer: wat de lijst kent, meteen; de rest laat Balanza schatten.
     function addSentence() {
       useHint();
       var parsed = qaParse(st.q); if (!parsed.length) return;
+      // wat je typte is meestal de beste naam ("wrap met kip")
+      if (!st.items.length && parsed.length > 1) { var nm0 = st.q.replace(/^\s*[:\-]\s*/, "").replace(/\b\d+([.,]\d+)?\s*(g|gr|gram|ml|stuks?|x)?\b\s*/gi, "").replace(/\s+/g, " ").trim(); if (nm0.length >= 3 && nm0.length <= 60) st.autoName = nm0.charAt(0).toUpperCase() + nm0.slice(1); }
       if (!qaFoods) { showToast("Even geduld, de productenlijst laadt nog."); return; }
       var unknown = [];
       var prevRaw = "";

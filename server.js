@@ -3843,7 +3843,7 @@ function buildDraftWeek(weeksList, dishesDoc, prefs, mondayKey, today) {
   meals.forEach(function (m) {
     var arr = dishesDoc && Array.isArray(dishesDoc[m]) ? dishesDoc[m] : [];
     var seen = {};
-    pools[m] = arr.filter(function (d) { if (!d || !d.id || d.prep || d.rating === -1 || seen[d.id]) return false; if (pRules.proteinOut.length && dishHealthViolations(d, pRules).length) return false; seen[d.id] = 1; return true; })
+    pools[m] = arr.filter(function (d) { if (!d || !d.id || d.prep || d.qaHidden || d.rating === -1 || seen[d.id]) return false; if (pRules.proteinOut.length && dishHealthViolations(d, pRules).length) return false; seen[d.id] = 1; return true; })
       .map(function (d) { return { d: d, score: (d.rating === 1 ? 3 : 0) + dishUsesTerms(d, terms) * 2 + Math.random() * 1.5 + (dishTs(d) / 1e13) }; });
   });
   if (!pools.Diner && !meals.some(function (m) { return pools[m].length; })) return null;
@@ -4043,7 +4043,7 @@ function buildAutoPlanWeek(weeksList, dishesDoc, prefs, mondayKey, today, cfg) {
   cfg.meals.forEach(function (m) {
     var slot = AUTOPLAN_SLOT[m], seen = {};
     var pool = (dishesDoc && Array.isArray(dishesDoc[m]) ? dishesDoc[m] : []).filter(function (d) {
-      if (!d || !d.id || d.prep || d.rating === -1 || seen[d.id]) return false;
+      if (!d || !d.id || d.prep || d.qaHidden || d.rating === -1 || seen[d.id]) return false;
       if (pRules.proteinOut.length && dishHealthViolations(d, pRules).length) return false;
       seen[d.id] = 1; return true;
     });
