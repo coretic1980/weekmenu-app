@@ -1518,6 +1518,10 @@
   .hh-bar { display: flex; gap: 3px; height: 10px; border-radius: 999px; background: rgba(26, 20, 12, 0.07); overflow: hidden; }
   .hh-bar span { display: block; height: 100%; border-radius: 3px; }
   .hh-bar span.todo { opacity: .45; }
+  .hh-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 7px; font-size: 12px; color: var(--muted); }
+  .hh-legend span { display: inline-flex; align-items: center; gap: 5px; }
+  .hh-legend i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .hh-legend .hh-legend-note { margin-left: auto; }
   .hh-macros { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 2px; }
   .hh-macros span { display: flex; flex-wrap: wrap; align-items: baseline; gap: 1px 2px; padding: 9px 10px; border-radius: 12px; background: var(--bg); font-variant-numeric: tabular-nums; }
   .hh-macros b { font-size: 16px; color: var(--ink); }
@@ -5154,6 +5158,19 @@
         var seg = document.createElement("span"); seg.style.width = Math.max(1, Math.min(100, (x.kcal || 0) / target * 100)) + "%"; seg.style.background = "#8C8C8C"; bar.appendChild(seg);
       });
       body.appendChild(bar);
+      // Legenda: welke kleur bij welk moment, en wat een lichter blokje betekent
+      var leg = document.createElement("div"); leg.className = "hh-legend"; leg.id = "hhLegend";
+      var seenMt = {}, anyTodo = false;
+      live.filter(function (r) { return r.a.cooked !== false; }).forEach(function (r) {
+        if (r.a.cooked !== true) anyTodo = true;
+        var lab = /^Snack/.test(r.mt) ? "Snack" : r.mt;
+        if (seenMt[lab]) return; seenMt[lab] = 1;
+        var it = document.createElement("span"); it.innerHTML = "<i></i>"; it.querySelector("i").style.background = MEAL_DOT[r.mt] || MEAL_DOT.Snack;
+        it.appendChild(document.createTextNode(lab.toLowerCase())); leg.appendChild(it);
+      });
+      if (extras.length) { var ie = document.createElement("span"); ie.innerHTML = "<i></i>erbij"; ie.querySelector("i").style.background = "#8C8C8C"; leg.appendChild(ie); }
+      if (anyTodo) { var nt = document.createElement("span"); nt.className = "hh-legend-note"; nt.textContent = "licht = nog niet gegeten"; leg.appendChild(nt); }
+      if (leg.childNodes.length) body.appendChild(leg);
       if (agg) body.appendChild(macroGauges([["Eiwit", agg.eiwitG, Math.round(target * t.eiwit / 100 / 4), "eiwit"],
         ["Koolhydraten", agg.khG, Math.round(target * t.kh / 100 / 4), "kh"], ["Vet", agg.vetG, Math.round(target * t.vet / 100 / 9), "vet"]]));
     }
