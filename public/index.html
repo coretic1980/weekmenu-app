@@ -1541,6 +1541,40 @@
   .gp-move-sub { font-size: 12.5px; color: var(--muted); line-height: 1.35; }
   .gp-move-add { display: flex; gap: 6px; flex-wrap: wrap; }
   .gp-move-fix { border-style: dashed; }
+  .wj-strip { display: flex; flex-direction: column; gap: 8px; padding-top: 10px; border-top: 1px solid var(--line, rgba(0,0,0,.08)); }
+  .wj-strip-h { display: flex; justify-content: space-between; align-items: baseline; font-size: 14.5px; }
+  .wj-card { border-radius: 18px; padding: 14px 16px; background: linear-gradient(140deg, color-mix(in srgb, var(--accent) 12%, transparent), color-mix(in srgb, #E9A27C 14%, transparent)); display: flex; flex-direction: column; gap: 10px; transition: background .3s; }
+  .wj-card.right { background: linear-gradient(140deg, rgba(46,154,92,.16), rgba(46,154,92,.06)); }
+  .wj-card.wrong { background: linear-gradient(140deg, rgba(233,162,124,.25), rgba(233,162,124,.08)); }
+  .wj-top { display: flex; align-items: center; gap: 8px; }
+  .wj-top small { font-size: 11.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .wj-e { font-size: 24px; line-height: 1; }
+  .wj-q { margin: 0; font-family: "Fraunces", serif; font-size: 19px; font-weight: 600; line-height: 1.3; }
+  .wj-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .wj-btns[hidden], .wj-ans[hidden] { display: none; }
+  .wj-b { padding: 11px 10px; border-radius: 14px; border: 0; font: inherit; font-weight: 700; font-size: 15px; cursor: pointer; transition: transform .12s; }
+  .wj-b:active { transform: scale(.96); }
+  .wj-b.yes { background: #2E9A5C; color: #fff; } .wj-b.no { background: #C0502E; color: #fff; }
+  .wj-ans b { display: block; font-size: 15px; margin-bottom: 4px; }
+  .wj-ans p { margin: 0; font-size: 14px; line-height: 1.5; }
+  .wj-card.right .wj-ans { animation: wjPop .35s ease; } .wj-card.wrong .wj-ans { animation: wjShake .35s ease; }
+  @keyframes wjPop { 0% { transform: scale(.96); opacity: 0; } 100% { transform: none; opacity: 1; } }
+  @keyframes wjShake { 0%, 100% { transform: none; } 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+  @media (prefers-reduced-motion: reduce) { .wj-card.right .wj-ans, .wj-card.wrong .wj-ans { animation: none; } }
+  .wj-deck { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; margin: 4px -4px 0; scrollbar-width: none; }
+  .wj-deck::-webkit-scrollbar { display: none; }
+  .wj-slide { flex: 0 0 100%; scroll-snap-align: center; padding: 4px; box-sizing: border-box; }
+  .wj-slide .wj-card { min-height: 250px; }
+  .wj-dots { display: flex; justify-content: center; flex-wrap: wrap; gap: 5px; margin: 12px 0 4px; }
+  .wj-dots i { width: 7px; height: 7px; border-radius: 50%; background: rgba(0,0,0,.15); }
+  .wj-dots i.done { background: color-mix(in srgb, var(--accent) 55%, transparent); }
+  .wj-dots i.now { background: var(--accent); transform: scale(1.35); }
+  .wj-nav { justify-content: space-between; }
+  .ci-res.avs .avs-opts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0; }
+  .avs-opt { display: flex; flex-direction: column; gap: 2px; align-items: flex-start; text-align: left; padding: 10px; border-radius: 12px; border: 1px solid var(--line, rgba(0,0,0,.1)); background: var(--card, #fff); color: inherit; font: inherit; cursor: pointer; }
+  .avs-opt b { font-size: 13.5px; line-height: 1.3; } .avs-opt small { font-size: 12px; color: var(--muted); }
+  .avs-opt.on { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent); }
+  .ci-res.avs .hh-link { display: block; margin-top: 10px; text-align: left; }
   .mv-list { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; }
   .mv-row { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 12px; border: 1px solid var(--line, rgba(0,0,0,.08)); }
   .mv-row.today { border-color: var(--accent); }
@@ -7709,6 +7743,7 @@
 { title: "Stel je voorkeuren in", body: "Bij het eerste gebruik loop je een korte wizard door die alles in stapjes uitvraagt, elk met uitleg over wat die keuze precies doet. Later kun je alles terugvinden en aanpassen bij \u201cGerechten ontwerpen\u201d: doel (Onderhoud, Vetverlies, Cutting, Spieropbouw of Atleet), voedingsstijl, keukenstijl, smaakprofiel, culinair niveau, kindvriendelijk (gezinsmodus), beschikbare apparatuur, wat je niet wilt eten, en optioneel je lichaamsprofiel (geslacht, lengte, gewicht, leeftijd, activiteitsniveau)." },
     { title: "Navigeren op je telefoon", body: "Onderin staat een vaste balk met Start, Ontwerpen, Plannen, Gerechten en Lijst. Tik nogmaals op het actieve onderdeel om terug te gaan naar het begin ervan. Het getal bij Lijst laat zien hoeveel boodschappen voor deze week nog open staan. Rechtsboven vind je de assistent (het tekstwolkje) en je accountmenu (je avatar) met Instellingen, Hoe werkt Balanza en je abonnement." },
     { title: "Je dag op Start", body: "Op Start zie je alles wat vandaag gepland staat, plus wat je er los bij at. De gekleurde balk is je dag in calorie\u00ebn tegenover je dagdoel: elk blokje is een maaltijd in de kleur van het moment (de legenda staat eronder), een lichter blokje heb je nog niet gegeten. Daaronder zie je eiwit, koolhydraten en vet tegenover je doel. Vink een maaltijd af met het vinkje als je hem gegeten hebt. Tik op de maaltijd zelf om iets te wijzigen: iets anders gegeten, niet gegeten, of meer of minder (\u00bd tot 2 porties); wat je niet at, telt niet mee. Alles kun je ongedaan maken. \u201cWat past nog?\u201d laat zien wat er nog in je dag past. Met \u201cStartscherm aanpassen\u201d onderaan Start zet je de tegels in jouw volgorde of verberg je wat je niet nodig hebt." },
+    { title: "Weetjes en je avondsnack", body: "Onderaan je doel staat elke dag een weetje: een stelling als \u201cLaat eten maakt dikker\u201d. Tik op Waar of Niet waar en lees waarom. Via \u201cX van 17 ontdekt\u201d (of Aanpak \u2192 Weetjes) veeg je door alle weetjes over eten, slapen, trainen en bewegen; Balanza onthoudt wat je al ontdekte en laat eerst zien wat bij jouw doel en je week past. Geef je in de wekelijkse check-in aan dat je \u2019s avonds honger of trek had, dan stelt Balanza een eiwitrijke avondsnack voor die in je dagdoel past (kwark, skyr, h\u00fcttenk\u00e4se, eieren; plantaardig: sojayoghurt of edamame) en zet die met \u00e9\u00e9n tik de rest van de week in je planning, na het diner." },
     { title: "Jouw doel en je aanpak", body: "Je doel (Onderhoud, Vetverlies, Cutting, Spieropbouw of Atleet) bepaalt je hele aanpak. De tegel \u201cJouw doel\u201d op Start laat die zien in vier delen: voeding (je dagdoel), macro's, sport en beweging; tik erop voor de uitleg. Ook je voortgang past bij je doel: bij afvallen je gewicht, middel en of je kracht blijft; bij spieropbouw hoe sterk je wordt per oefening; bij presteren je trainingen; bij onderhoud je Balans en een stabiel gewicht. Beweging telt voor elk doel: afgevinkte trainingen tellen vanzelf mee, de rest tik je erbij (+15 min, +30 min, +1 uur). Pas je je doel aan, dan gaat alles mee: dagdoel, macro's, Balans-scores, trainingsschema, beweegdoel en voortgang. Je ziet meteen wat er veranderd is. Een doelgewicht dat niet meer past (bijvoorbeeld afvallen terwijl je nu spieren opbouwt) stopt; je wegingen blijven bewaard." },
     { title: "Jouw doelgewicht", body: "Werk je naar een gewicht toe? Stel op Start (tegel \u201cJouw doel\u201d), in Mijn voorkeuren of in de startwizard een doelgewicht in, met een tempo: rustig, normaal of stevig. Balanza stemt je dagdoel daarop af, binnen veilige grenzen, en laat zien hoe ver je bent: van start naar doel, je weekgemiddelden in een grafiekje en, na drie wegingen, of je op schema ligt en wanneer je je doel verwacht. Weeg je \u00e9\u00e9n keer per week op je vaste weegmoment (zelf te kiezen, standaard maandag 7:30): nuchter, na het plassen en zonder kleren. Elke dag wegen helpt niet; je ziet vooral schommelingen door vocht. Meet eens per maand je omtrekken (middel, nek, heup en eventueel borst, arm en bovenbeen): dan zie je ook vooruitgang als de weegschaal stilstaat, en schat Balanza met de Navy-methode je vetpercentage. Dat gebruikt Balanza ook om te checken of je doelgewicht gezond is: zo telt je bouw mee en niet alleen je BMI. Na je weging vraagt Balanza kort hoe je week ging: je motivatie, op welke dag je veel honger had, wat goed ging en wat lastig was. Balanza kijkt dan naar wat je op die dagen at (kcal, eiwit, overgeslagen maaltijden, verdeling) en geeft je tips voor komende week; met \u201cBespreek met Balanza\u201d ga je er in de chat over door. Staat je gewicht een paar weken stil, dan geeft Balanza een tip over eten of bewegen, gebaseerd op wat je de afgelopen weken at, en kun je de assistent om een persoonlijke tip vragen. Wil je geen kilo\u2019s zien, zet dan \u201cCijfers verbergen\u201d aan. Een doel onder een gezond gewicht kan niet, en voor wie jonger is dan 18 is deze functie er niet." },
     { title: "Je trainingsschema", body: "Wil je er een trainingsschema bij? Kies op Start in de tegel \u201cTraining\u201d of je thuis traint (eigen gewicht, elastiek of dumbbells) of in de sportschool, op welke 2 tot 5 dagen en hoe fit je nu bent. Balanza kiest een vast schema dat bij je doel past (afvallen met behoud van spieren, spieren opbouwen, conditie of fit blijven) en bouwt rustig op: elke paar weken iets zwaarder, elke 6e week een herstelweek. Je trainingen staan in je week bij Plannen; tik erop voor de oefeningen met uitleg en een uitlegfilmpje. In de tegel tik je op een dag om die training te openen, en via Weekoverzicht zie je alle trainingen van de week (blader met Vorige en Volgende). Train elke set tot spierfalen: tot je geen herhaling meer netjes kunt doen. Bij zware vrije oefeningen stop je bij de laatste nette herhaling; beginners leren de eerste 4 weken eerst de techniek. Vul per set je gewicht en herhalingen in: de volgende keer zie je wat je deed en zegt Balanza wanneer het zwaarder mag. Haal je meer herhalingen dan de bovenkant (bijvoorbeeld meer dan 12), dan is het gewicht te licht. Vink af als je klaar bent; de tegel laat zien hoeveel weken op rij je alles deed. Heb je klachten, een blessure of twijfel, overleg dan eerst met je huisarts." },
@@ -15195,6 +15230,8 @@
       var tr = document.createElement("button"); tr.type = "button"; tr.className = "primary-btn small"; tr.id = "gpTrain"; tr.textContent = "Trainingsschema kiezen";
       tr.onclick = function () { closeSheet(sh.ov); openTrainingSetup(); }; acts.appendChild(tr);
     }
+    var wjb = document.createElement("button"); wjb.type = "button"; wjb.className = "ghost-btn small"; wjb.id = "gpWeetjes"; wjb.textContent = "Weetjes (" + weetjesFound() + "/" + WEETJES.length + ")";
+    wjb.onclick = function () { closeSheet(sh.ov); openWeetjes(); }; acts.appendChild(wjb);
     var ch = document.createElement("button"); ch.type = "button"; ch.className = "ghost-btn small"; ch.id = "gpChangeGoal"; ch.textContent = "Ander doel kiezen";
     ch.onclick = function () { closeSheet(sh.ov); state.prefsOpen = "doel"; goto("myprefs", { prefsBack: state.view || "weeks" }); };
     acts.appendChild(ch); body.appendChild(acts);
@@ -15241,6 +15278,7 @@
     if (gk === "atleet") renderAthleteBlock(card);
     if (gk === "onderhoud") { renderBalanceBlock(card); if (health && !g) renderStableWeight(card); }
     renderMoveBlock(card);
+    renderWeetjeStrip(card);
     if (health) {
       if (!g && (gk === "spier" || gk === "onderhoud")) renderMeasureBlock(card, null);
       wgCheckinRow(card);
@@ -15302,6 +15340,170 @@
     var done = document.createElement("button"); done.type = "button"; done.className = "hh-link"; done.id = "gcDone"; done.textContent = "Klaar";
     done.onclick = function () { closeSheet(sh.ov); };
     ok.appendChild(see); ok.appendChild(done); body.appendChild(ok);
+  }
+  // ---------- Avondsnack: honger of trek in de avond? Een eiwitrijk tussendoortje dat in je dagdoel past ----------
+  // Macro's per portie (NEVO-waarden, afgerond). Eiwit vult en beschermt je spieren, ook 's nachts.
+  var AVONDSNACKS = [
+    { id: "kwark", name: "Magere kwark met kaneel", items: ["200 g magere kwark", "snufje kaneel"], kcal: 105, eiwitG: 18, khG: 7, vetG: 0.4, vegan: false },
+    { id: "skyr", name: "Skyr met blauwe bessen", items: ["150 g skyr naturel", "50 g blauwe bessen"], kcal: 125, eiwitG: 17, khG: 12, vetG: 0.5, vegan: false },
+    { id: "huttenkase", name: "Hüttenkäse met komkommer", items: ["150 g hüttenkäse", "100 g komkommer"], kcal: 155, eiwitG: 19, khG: 7, vetG: 6, vegan: false },
+    { id: "eieren", name: "Twee gekookte eieren", items: ["2 eieren"], kcal: 140, eiwitG: 13, khG: 1, vetG: 10, vegan: false },
+    { id: "melk", name: "Glas warme halfvolle melk", items: ["250 ml halfvolle melk"], kcal: 115, eiwitG: 9, khG: 12, vetG: 4, vegan: false },
+    { id: "soja", name: "Sojayoghurt met walnoten", items: ["200 g sojayoghurt naturel", "10 g walnoten"], kcal: 170, eiwitG: 10, khG: 5, vetG: 11, vegan: true },
+    { id: "edamame", name: "Edamame met een snufje zout", items: ["100 g edamame (gepeld)"], kcal: 125, eiwitG: 11, khG: 6, vetG: 5, vegan: true }
+  ];
+  function avondsnackOptions() {
+    var vegan = /Vegan/i.test(prefs.dietStyle || "");
+    return AVONDSNACKS.filter(function (s) { return vegan ? s.vegan : true; }).slice(0, 4);
+  }
+  // Zet de avondsnack in je planning bij "Snack na diner", van vandaag tot en met zondag (alleen waar nog niets staat)
+  function planAvondsnack(sn) {
+    if (requirePlus("Je planning aanpassen")) return -1;
+    var now = new Date(), pw = addOrOpenPlannedWeek(getMonday(now)), todayIdx = (now.getDay() + 6) % 7;
+    var kh = Math.round(sn.khG * 400 / sn.kcal), ei = Math.round(sn.eiwitG * 400 / sn.kcal), ve = Math.round(sn.vetG * 900 / sn.kcal);
+    var dish = { id: "avs" + Date.now(), label: "Avondsnack", name: sn.name, kcal: sn.kcal, kh: kh, eiwit: ei, vet: ve, balans: computeBalance(kh, ei, ve),
+      khG: sn.khG, eiwitG: sn.eiwitG, vetG: sn.vetG, bereidingstijd: 2, fotoZoekterm: "", mealType: "Snack", benodigdheden: "",
+      ingredienten: sn.items.slice(), steps: [{ title: "Klaarmaken", content: "Pak het erbij, klaar. Eet het rustig, een uurtje voor je gaat slapen." }],
+      macroBron: "nevo", nevo: null, quick: true, qaHidden: true, profile: currentProfileSnapshot() };
+    addToCacheLibrary([dish]); persistDishesToDb([dish]);
+    var n = 0, filled = [];
+    for (var i = todayIdx; i < 7; i++) {
+      var key = PLAN_DAYS[i] + "|Snack na diner";
+      if (pw.slots[key]) continue;
+      pw.slots[key] = { name: dish.name, weekId: "cache", dayId: dish.id, balans: dish.balans }; filled.push(key); n++;
+    }
+    savePlannedWeeks(); render();
+    if (!n) { showToast("Je avonden na het diner staan al vol in je planning."); return 0; }
+    showUndoToast(n ? sn.name + " staat " + (n === 1 ? "vandaag" : n + " avonden") + " in je planning, na het diner (" + sn.kcal + " kcal)." : "Je avonden na het diner staan al vol in je planning.", function () { filled.forEach(function (k) { delete pw.slots[k]; }); savePlannedWeeks(); render(); });
+    return n;
+  }
+  function renderAvondsnackPicker(body, onDone) {
+    var box = document.createElement("div"); box.className = "ci-res avs"; box.id = "ciAvondsnack";
+    box.innerHTML = "<b>Een avondsnack die past</b><p></p>";
+    var tgt = dailyKcalTarget();
+    box.querySelector("p").textContent = "Houd 150 à 200 kcal van je dagdoel" + (tgt ? " (" + tgt + " kcal)" : "") + " over voor iets met eiwit, een uurtje voor je gaat slapen. Kies er een, dan zet Balanza hem de rest van de week in je planning.";
+    var opts = avondsnackOptions(), pick = opts[0];
+    var row = document.createElement("div"); row.className = "avs-opts";
+    opts.forEach(function (s) {
+      var b = document.createElement("button"); b.type = "button"; b.className = "avs-opt" + (s === pick ? " on" : ""); b.id = "avs-" + s.id;
+      b.innerHTML = "<b></b><small></small>"; b.querySelector("b").textContent = s.name; b.querySelector("small").textContent = s.kcal + " kcal · " + Math.round(s.eiwitG) + " g eiwit";
+      b.onclick = function () { pick = s; Array.prototype.forEach.call(row.children, function (x) { x.classList.remove("on"); }); b.classList.add("on"); };
+      row.appendChild(b);
+    });
+    box.appendChild(row);
+    var go = document.createElement("button"); go.type = "button"; go.className = "primary-btn small"; go.id = "avsPlan"; go.textContent = "Inplannen na het diner";
+    go.onclick = function () { var n = planAvondsnack(pick); if (n < 0) return; go.disabled = true; go.textContent = n ? "Ingepland ✓" : "Je avonden staan al vol"; if (onDone) onDone(); };
+    box.appendChild(go);
+    var wj = document.createElement("button"); wj.type = "button"; wj.className = "hh-link"; wj.id = "avsWhy"; wj.textContent = "Waar of niet waar: met honger naar bed helpt bij afvallen?";
+    wj.onclick = function () { openWeetjes("honger-bed"); };
+    box.appendChild(wj);
+    body.appendChild(box);
+  }
+
+  // ---------- Weetjes: korte uitleg als spelletje (waar of niet waar?) ----------
+  // Elk weetje: een stelling, het antwoord, een korte uitleg en bij welke doelen het past. Je ontdekt ze één voor één; Balanza onthoudt welke je al had.
+  var WEETJES = [
+    { id: "honger-bed", e: "🌙", q: "Met honger naar bed helpt je sneller afvallen.", a: false, k: "Het werkt eerder tegen je.", x: "Met flinke honger slaap je slechter. Na een slechte nacht maakt je lichaam meer van het hongerhormoon en minder van het verzadigingshormoon, en heb je de volgende dag meer trek. Een kleine eiwitrijke avondsnack binnen je dagdoel is slimmer.", g: ["afvallen", "cutting", "onderhoud"], ctx: "avond" },
+    { id: "laat-eten", e: "⏰", q: "Na acht uur 's avonds eten maakt dikker.", a: false, k: "Het tijdstip maakt niet uit.", x: "Voor je gewicht telt wat je over de hele dag eet, niet hoe laat. Wie 's avonds laat veel snackt, eet vaak gewoon méér; daar zit het verschil.", g: ["afvallen", "cutting", "onderhoud", "spier"], ctx: "avond" },
+    { id: "eiwit-nacht", e: "💪", q: "Eiwit voor het slapen helpt je spieren herstellen.", a: true, k: "Klopt.", x: "Je spieren herstellen en groeien 's nachts. Zo'n 20 tot 40 gram eiwit voor het slapen, zoals kwark of skyr, geeft ze daar de bouwstoffen voor.", g: ["spier", "afvallen", "cutting", "atleet"], ctx: "avond" },
+    { id: "korte-nacht", e: "😴", q: "Na een korte nacht heb je meer trek.", a: true, k: "Klopt.", x: "Slaaptekort verstoort je hongerhormonen: je krijgt meer trek, vooral in zoet en vet. Dat is je lichaam, geen zwakte. Eet die dag extra eiwit en groente.", g: ["afvallen", "cutting", "onderhoud", "spier", "atleet"], ctx: "slaap" },
+    { id: "dorst", e: "💧", q: "Dorst voelt soms als honger.", a: true, k: "Klopt.", x: "De signalen lijken op elkaar. Drink eerst een glas water of kruidenthee en kijk na tien minuten of de trek er nog is.", g: ["afvallen", "cutting", "onderhoud"], ctx: "avond" },
+    { id: "dagelijks-wegen", e: "⚖️", q: "Elke dag wegen motiveert het meest.", a: false, k: "Liever één keer per week.", x: "Je gewicht schommelt per dag een kilo of meer door vocht en zout. Dat zegt niets over vet, maar haalt wel je motivatie onderuit. Eén keer per week op een vast moment laat de echte trend zien.", g: ["afvallen", "cutting", "spier", "onderhoud"] },
+    { id: "stilstand", e: "📉", q: "Staat de weegschaal stil, dan werkt je plan niet.", a: false, k: "Niet per se.", x: "Vocht kan vetverlies weken maskeren, en als je traint komen er spieren bij. Kijk ook naar je middel en je kracht: als die goed gaan, werkt het gewoon.", g: ["afvallen", "cutting"] },
+    { id: "groot-tekort", e: "🔥", q: "Hoe groter je tekort, hoe beter.", a: false, k: "Te groot werkt tegen je.", x: "Met een te groot tekort verlies je ook spieren, krijg je meer honger en zakt je energie in. Een klein tekort, zo'n 0,5% van je gewicht per week, houd je vol en levert vooral vetverlies op.", g: ["afvallen", "cutting"] },
+    { id: "cardio-kracht", e: "🏃", q: "Voor afvallen is cardio beter dan krachttraining.", a: false, k: "Krachttraining hoort erbij.", x: "Cardio verbrandt tijdens het sporten, maar krachttraining zorgt dat je spieren blijven. Dan komt wat je verliest uit vet, en verbrand je ook in rust meer. De combinatie werkt het best.", g: ["afvallen", "cutting", "onderhoud"] },
+    { id: "wandelen", e: "🚶", q: "Een half uur wandelen telt niet echt mee.", a: false, k: "Het telt wel.", x: "Een stevige wandeling van een half uur is zo'n 120 tot 150 kcal, en het is goed voor je hart, je humeur en je slaap. Dagelijkse beweging maakt vaak meer verschil dan één keer per week hard sporten.", g: ["afvallen", "cutting", "onderhoud", "spier", "atleet"] },
+    { id: "lichte-gewichten", e: "🏋️", q: "Ook met lichtere gewichten bouw je spieren, als je tot spierfalen gaat.", a: true, k: "Klopt.", x: "Of je nu 8 of 20 herhalingen doet: als je tot (bijna) spierfalen gaat, groeien je spieren ongeveer even goed. Zwaar is vooral nodig voor maximale kracht.", g: ["spier", "afvallen", "cutting", "atleet"] },
+    { id: "te-veel-herh", e: "🔢", q: "Haal je meer herhalingen dan in je schema staat, dan is het gewicht te licht.", a: true, k: "Klopt.", x: "Staat er 8 tot 12 en haal je er 15? Neem dan de volgende keer zwaarder. Zo blijf je in het bereik waarin je schema werkt, en blijf je vooruitgaan.", g: ["spier", "afvallen", "cutting", "atleet"] },
+    { id: "groeien-rust", e: "🛌", q: "Je spieren groeien tijdens je training.", a: false, k: "Ze groeien in je rust.", x: "Training is de prikkel; het herstel en de groei gebeuren daarna, vooral tijdens je slaap. Daarom tellen rustdagen en 7 tot 9 uur slaap echt mee.", g: ["spier", "atleet"] },
+    { id: "overschot", e: "🍝", q: "Voor spieropbouw moet je flink veel meer eten.", a: false, k: "Een klein overschot is genoeg.", x: "Een paar honderd kcal boven je behoefte is genoeg. Met veel meer komt er vooral vet bij, niet sneller spieren.", g: ["spier"] },
+    { id: "koolhydraten", e: "🍞", q: "Koolhydraten maken dik.", a: false, k: "Niet op zichzelf.", x: "Je komt aan van meer eten dan je verbruikt, niet van één voedingsstof. Volkoren, peulvruchten en fruit vullen goed en geven energie voor je training.", g: ["onderhoud", "atleet", "spier", "afvallen"] },
+    { id: "vezels", e: "🥦", q: "Vezels houden je langer verzadigd.", a: true, k: "Klopt.", x: "Vezels uit groente, volkoren en peulvruchten vertragen je spijsvertering, zodat je langer vol zit. Streef naar zo'n 30 tot 40 gram per dag.", g: ["onderhoud", "afvallen", "cutting"] },
+    { id: "koolhydraten-sport", e: "⚡", q: "Op trainingsdagen mag je meer koolhydraten eten.", a: true, k: "Klopt.", x: "Koolhydraten zijn je brandstof. Op dagen dat je hard traint, presteer en herstel je beter met wat extra rijst, pasta, brood of fruit rond je training.", g: ["atleet", "spier"] }
+  ];
+  function weetjesState() { var w = prefs.weetjes && typeof prefs.weetjes === "object" ? prefs.weetjes : {}; prefs.weetjes = w; return w; }
+  // Welk weetje nu? Eerst wat past bij je laatste check-in (bijvoorbeeld trek in de avond), dan wat bij je doel past, en nog niet ontdekt.
+  function weetjeOrder(focusId) {
+    var gk = goalKey(), ws = weetjesState(), ci = thisWeekCheckin ? thisWeekCheckin() : null;
+    var ctx = ci && Array.isArray(ci.hard) ? ci.hard : [];
+    if (ci && (ci.hunger || []).length && ctx.indexOf("avond") === -1) ctx = ctx.concat(["avond"]);
+    var day = Math.floor(Date.now() / 86400000);
+    return WEETJES.slice().sort(function (a, b) {
+      function score(w) {
+        var s = 0;
+        if (w.id === focusId) s += 1000;
+        if (ws[w.id] === undefined) s += 100;
+        if (w.ctx && ctx.indexOf(w.ctx) > -1) s += 50;
+        if (w.g.indexOf(gk) > -1) s += 20;
+        return s + ((WEETJES.indexOf(w) + day) % WEETJES.length) / 100;
+      }
+      return score(b) - score(a);
+    });
+  }
+  function weetjesFound() { var ws = weetjesState(); return WEETJES.filter(function (w) { return ws[w.id] !== undefined; }).length; }
+  function answerWeetje(w, said) {
+    var ws = weetjesState(), first = ws[w.id] === undefined;
+    ws[w.id] = said === w.a ? 1 : 0; savePrefs();
+    return first;
+  }
+  // Eén weetje als kaartje (in de doelkaart en in het overzicht)
+  function weetjeCard(w, opts) {
+    opts = opts || {};
+    var ws = weetjesState(), done = ws[w.id] !== undefined;
+    var c = document.createElement("div"); c.className = "wj-card" + (done ? " done" : ""); c.id = (opts.prefix || "wj-") + w.id;
+    c.innerHTML = '<div class="wj-top"><span class="wj-e" aria-hidden="true"></span><small>Waar of niet waar?</small></div><p class="wj-q"></p><div class="wj-btns"></div><div class="wj-ans" hidden><b></b><p></p></div>';
+    c.querySelector(".wj-e").textContent = w.e; c.querySelector(".wj-q").textContent = w.q;
+    var btns = c.querySelector(".wj-btns"), ans = c.querySelector(".wj-ans");
+    function reveal(said, fresh, fromTap) {
+      var right = said === w.a;
+      btns.hidden = true; ans.hidden = false; c.classList.add(right ? "right" : "wrong");
+      ans.querySelector("b").textContent = (fresh ? (right ? "Goed geraden! " : "Net mis! ") : "") + (w.a ? "Het is waar." : "Het is niet waar.") + (w.k && w.k !== "Klopt." ? " " + w.k : "");
+      ans.querySelector("p").textContent = w.x;
+      if (fromTap && opts.onAnswer) opts.onAnswer(right, fresh);
+    }
+    [[true, "Waar"], [false, "Niet waar"]].forEach(function (o) {
+      var b = document.createElement("button"); b.type = "button"; b.className = "wj-b " + (o[0] ? "yes" : "no"); b.id = c.id + "-" + (o[0] ? "waar" : "niet"); b.textContent = o[1];
+      b.onclick = function () { var fresh = answerWeetje(w, o[0]); reveal(o[0], fresh, true); try { navigator.vibrate && navigator.vibrate(o[0] === w.a ? 15 : [10, 40, 10]); } catch (e) {} };
+      btns.appendChild(b);
+    });
+    if (done) reveal(ws[w.id] ? w.a : !w.a, false);
+    return c;
+  }
+  // Klein blokje onderaan de doelkaart: het weetje van vandaag
+  function renderWeetjeStrip(card) {
+    if (!coachOn("goaltips")) return;
+    var w = weetjeOrder()[0]; if (!w) return;
+    var box = document.createElement("div"); box.className = "wj-strip"; box.id = "wjStrip";
+    var hd = document.createElement("div"); hd.className = "wj-strip-h";
+    hd.innerHTML = "<b>Weetje</b><span></span>";
+    var more = document.createElement("button"); more.type = "button"; more.className = "hh-link"; more.id = "wjMore"; more.textContent = weetjesFound() + " van " + WEETJES.length + " ontdekt ›";
+    more.onclick = function () { openWeetjes(); };
+    hd.querySelector("span").appendChild(more); box.appendChild(hd);
+    box.appendChild(weetjeCard(w, { prefix: "wjs-", onAnswer: function (right, fresh) { if (fresh) more.textContent = weetjesFound() + " van " + WEETJES.length + " ontdekt ›"; } }));
+    card.appendChild(box);
+  }
+  // Alle weetjes als stapel kaarten om doorheen te vegen
+  function openWeetjes(focusId) {
+    var list = weetjeOrder(focusId);
+    var sh = openSimpleSheet("wjSheet", "Weetjes", ""), body = sh.body, meta = sh.ov.querySelector(".wjSheetM");
+    function paintMeta() { var n = weetjesFound(), ws = weetjesState(), good = WEETJES.filter(function (w) { return ws[w.id] === 1; }).length; meta.textContent = n + " van " + WEETJES.length + " ontdekt" + (n ? " · " + good + " goed geraden" : ""); }
+    paintMeta();
+    var deck = document.createElement("div"); deck.className = "wj-deck"; deck.id = "wjDeck";
+    list.forEach(function (w) { var slide = document.createElement("div"); slide.className = "wj-slide"; slide.appendChild(weetjeCard(w, { prefix: "wjd-", onAnswer: function () { paintMeta(); paintDots(); } })); deck.appendChild(slide); });
+    body.appendChild(deck);
+    var dots = document.createElement("div"); dots.className = "wj-dots"; dots.id = "wjDots"; body.appendChild(dots);
+    function paintDots() {
+      var ws = weetjesState(), idx = Math.round(deck.scrollLeft / Math.max(1, deck.clientWidth)); dots.innerHTML = "";
+      list.forEach(function (w, i) { var d = document.createElement("i"); d.className = (ws[w.id] !== undefined ? "done" : "") + (i === idx ? " now" : ""); dots.appendChild(d); });
+    }
+    deck.addEventListener("scroll", function () { clearTimeout(deck._t); deck._t = setTimeout(paintDots, 60); });
+    paintDots();
+    var nav = document.createElement("div"); nav.className = "nudge-actions wj-nav";
+    var prev = document.createElement("button"); prev.type = "button"; prev.className = "ghost-btn small"; prev.id = "wjPrev"; prev.textContent = "‹ Vorige";
+    var next = document.createElement("button"); next.type = "button"; next.className = "primary-btn small"; next.id = "wjNext"; next.textContent = "Volgende ›";
+    prev.onclick = function () { deck.scrollBy({ left: -deck.clientWidth, behavior: "smooth" }); };
+    next.onclick = function () { deck.scrollBy({ left: deck.clientWidth, behavior: "smooth" }); };
+    nav.appendChild(prev); nav.appendChild(next); body.appendChild(nav);
   }
   // Het gewichtsdeel van "Jouw doel" (ingebed in de doelkaart)
   function renderWeightGoalCard(main, opts) {
@@ -15616,7 +15818,7 @@
   // journey.checkins = [{ w, hunger: ["2026-10-20", ...], good: [...], hard: [...], mot: 1..5, note }]
   // Balanza kijkt bij elke dag met honger naar wat je die dag at, en geeft op basis daarvan (en van wat lastig was) gerichte tips.
   var CI_GOOD = [["plannen", "Vooruit plannen"], ["koken", "Zelf koken"], ["eiwit", "Genoeg eiwit"], ["groente", "Veel groente"], ["snoep", "Minder snoepen"], ["bewegen", "Bewegen"], ["water", "Genoeg drinken"], ["slaap", "Goed slapen"]];
-  var CI_HARD = [["weekend", "Het weekend"], ["avond", "Trek in de avond"], ["uiteten", "Uit eten of borrel"], ["stress", "Stress of drukte"], ["tijd", "Weinig tijd om te koken"], ["slaap", "Slecht geslapen"]];
+  var CI_HARD = [["weekend", "Het weekend"], ["avond", "Honger of trek in de avond"], ["uiteten", "Uit eten of borrel"], ["stress", "Stress of drukte"], ["tijd", "Weinig tijd om te koken"], ["slaap", "Slecht geslapen"]];
   var CI_MOT = [[1, "😫", "Laag"], [2, "😕", "Matig"], [3, "😐", "Gaat wel"], [4, "🙂", "Goed"], [5, "💪", "Top"]];
   function checkins() { var j = journey(); j.checkins = Array.isArray(j.checkins) ? j.checkins : []; return j.checkins; }
   function thisWeekCheckin() { var wk = mondayKeyOffset(0); return checkins().filter(function (c) { return c && c.w === wk; })[0] || null; }
@@ -15736,6 +15938,7 @@
     var gpb = ciGoalInsight(); if (gpb) block(gpb[0], gpb[1]);
     (rec.hunger || []).slice(-3).forEach(function (k) { var ins = ciHungerInsight(k); block("Honger op " + ins.day, ins.text); });
     (rec.hard || []).slice(0, 2).forEach(function (k) { var lab = (CI_HARD.filter(function (x) { return x[0] === k; })[0] || [k, k])[1]; if (CI_HARD_TIPS[k]) block("Lastig: " + lab.toLowerCase(), CI_HARD_TIPS[k]); });
+    if ((rec.hard || []).indexOf("avond") > -1 || (rec.hunger || []).length >= 2) renderAvondsnackPicker(body);
     if ((rec.good || []).length) {
       var labs = rec.good.map(function (k) { return ((CI_GOOD.filter(function (x) { return x[0] === k; })[0] || [k, k])[1]).toLowerCase(); });
       block("Wat goed ging", "Sterk: " + labs.join(", ") + ". Houd dat vast; dit zijn de gewoontes die je doel dichterbij brengen.", "good");
@@ -17202,6 +17405,7 @@
         training: prefs.training && typeof prefs.training === "object" ? prefs.training : null,
         trainingDismissed: !!prefs.trainingDismissed,
         moveLog: prefs.moveLog && typeof prefs.moveLog === "object" ? prefs.moveLog : {},
+        weetjes: prefs.weetjes && typeof prefs.weetjes === "object" ? prefs.weetjes : {},
         proteinOut: Array.isArray(prefs.proteinOut) ? prefs.proteinOut.slice(0, 20) : [],
         journey: prefs.journey && typeof prefs.journey === "object" ? prefs.journey : {},
         ageGroup: AGE_GROUPS.some(function (g) { return g[0] === prefs.ageGroup; }) ? prefs.ageGroup : "",
@@ -17729,7 +17933,7 @@
               return;
             }
             var pdata = psnap.data() || {};
-            ["name", "bringListLink", "cuisines", "flavors", "level", "dietStyle", "health", "leftovers", "coach", "water", "places", "proteinOut", "journey", "ageGroup", "student", "sugarMode", "cheeseMode", "familyMode", "equipment", "exclude", "count", "mealTypes", "gender", "heightCm", "weightKg", "age", "activityLevel", "goal", "homeLayout", "mealCounts", "withImages", "pantry", "communityName", "myFoods", "weightGoal", "weightGoalDismissed", "training", "trainingDismissed", "moveLog"].forEach(function (k) {
+            ["name", "bringListLink", "cuisines", "flavors", "level", "dietStyle", "health", "leftovers", "coach", "water", "places", "proteinOut", "journey", "ageGroup", "student", "sugarMode", "cheeseMode", "familyMode", "equipment", "exclude", "count", "mealTypes", "gender", "heightCm", "weightKg", "age", "activityLevel", "goal", "homeLayout", "mealCounts", "withImages", "pantry", "communityName", "myFoods", "weightGoal", "weightGoalDismissed", "training", "trainingDismissed", "moveLog", "weetjes"].forEach(function (k) {
               if (pdata[k] !== undefined) prefs[k] = deepClone(pdata[k]);
             });
             var mig = migrateExcludeTerms();
