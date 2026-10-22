@@ -15186,17 +15186,17 @@
     if (gk === "atleet") renderAthleteBlock(card);
     if (gk === "onderhoud") { renderBalanceBlock(card); if (health && !g) renderStableWeight(card); }
     renderMoveBlock(card);
-    if (health && !g) {
-      if (gk === "spier" || gk === "onderhoud") renderMeasureBlock(card, null);
+    if (health) {
+      if (!g && (gk === "spier" || gk === "onderhoud")) renderMeasureBlock(card, null);
       wgCheckinRow(card);
-      if (gk !== "atleet") wgWeighForm(card, null);
+      if (g || gk !== "atleet") wgWeighForm(card, g);
     }
     main.appendChild(card);
     return card;
   }
   // Doel gewijzigd: alles wat aan je doel hangt gaat mee (dagdoel, macro's, Balans, trainingsfocus, beweegdoel, voortgang).
   // Wat niet vanzelf kan (een doelgewicht dat de andere kant op gaat, te weinig trainingsdagen) leggen we voor.
-  function goalChanged(oldGoal) {
+  function goalChanged(oldGoal, reason) {
     var newGoal = prefs.goal; if (!oldGoal || oldGoal === newGoal) return;
     var cur = prefs.goal, kNew = dailyKcalTarget(), tNew = goalTarget(), fNew = trFocus(), pNew = gpPlan();
     prefs.goal = oldGoal; var kOld = dailyKcalTarget(), tOld = goalTarget(), fOld = trFocus(), pOld = gpPlan(); prefs.goal = cur;
@@ -15210,6 +15210,7 @@
       var r = document.createElement("div"); r.className = "gc-row"; r.innerHTML = "<span></span><b></b>";
       r.children[0].textContent = lbl; r.children[1].textContent = from && from !== to ? from + " \u2192 " + to : to; body.appendChild(r);
     }
+    if (reason) { var rp = document.createElement("p"); rp.className = "acc-sub gc-reason"; rp.id = "gcReason"; rp.textContent = reason; body.appendChild(rp); }
     var h = document.createElement("div"); h.className = "qa-h"; h.textContent = "Dit is meteen mee veranderd"; body.appendChild(h);
     if (kNew) line("Dagdoel", kOld ? kOld + " kcal" : "", kNew + " kcal");
     line("Macro's (kh / eiwit / vet)", tOld.kh + "/" + tOld.eiwit + "/" + tOld.vet + "%", tNew.kh + "/" + tNew.eiwit + "/" + tNew.vet + "%");
@@ -15293,8 +15294,7 @@
       card.appendChild(keep);
     }
     renderMeasureBlock(card, g);
-    wgCheckinRow(card);
-    wgWeighForm(card, g);
+    if (!opts.embedded) { wgCheckinRow(card); wgWeighForm(card, g); }   // in de doelkaart staan check-in en wegen onderaan
     main.appendChild(card);
     return card;
   }
@@ -16243,7 +16243,7 @@
       var newGoalW = goalForWeightGoal(prefs.weightGoal), oldGoalW = prefs.goal;
       if (newGoalW && !(isMinor() && MINOR_BLOCKED_GOALS.indexOf(newGoalW) > -1)) prefs.goal = newGoalW;
       savePrefs(); closeSheet(sh.ov); render();
-      if (prefs.goal !== oldGoalW) { setTimeout(function () { goalChanged(oldGoalW); }, 250); return; }
+      if (prefs.goal !== oldGoalW) { setTimeout(function () { goalChanged(oldGoalW, "Je doelgewicht ligt " + (target < cur ? "lager" : "hoger") + " dan je huidige gewicht, dus je doel staat nu op " + prefs.goal + ". Zo wijst alles dezelfde kant op."); }, 250); return; }
       showToast(g ? "Je doel is bijgewerkt." : "Je doel staat erin! Weeg je elke " + WG_DAYS[st.wDay] + " om " + st.wTime + ", nuchter. Het gaat om de trend, en elke week die je volhoudt telt.");
     };
     paint();
