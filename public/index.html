@@ -13183,11 +13183,12 @@
       document.body.appendChild(inp); inp.click();
     }
     // Maaltijd of los product? Zet moment en manier vanzelf goed, tenzij je zelf iets koos.
-    //  - maaltijd: twee of meer onderdelen, of 350 kcal of meer, of een foto/uit eten; moment volgt de tijd (of wat je typte: "als lunch")
+    //  - maaltijd: twee of meer onderdelen samen 250 kcal of meer, of 350 kcal of meer, of een foto/uit eten; moment volgt de tijd (of wat je typte: "als lunch")
     //  - los product/tussendoortje: snack, en het telt erbij
     //  - vandaag een maaltijd terwijl daar iets gepland staat dat je nog niet at: "in plaats van"; een andere dag: inplannen
     function classify(t) {
-      var meal = st.items.length >= 2 || t.kcal >= 350 || st.items.some(function (x) { return x.photo; }) || (st.out && !!st.place);
+      var meal = (st.items.length >= 2 && t.kcal >= 250) || t.kcal >= 350 ||   // twee kleine dingen (appel met pindakaas) is nog een tussendoortje
+        st.items.some(function (x) { return x.photo; }) || (st.out && !!st.place);
       if (st.hintMoment === "Snack") meal = false;
       var h = new Date().getHours() + new Date().getMinutes() / 60;
       var today = st.week === isoDateKey(getMonday(new Date())) && st.day === PLAN_DAYS[(new Date().getDay() + 6) % 7];
