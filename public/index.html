@@ -1536,6 +1536,20 @@
   .wg-weigh-l { flex: 1 1 100%; font-size: 13.5px; font-weight: 600; }
   .wg-weigh .textinput { flex: 1; min-width: 90px; }
   .wg-preview { margin-top: 12px; font-size: 14px; line-height: 1.5; }
+  .wg-tip { margin-top: 2px; padding: 14px; border-radius: 14px; background: color-mix(in srgb, var(--accent) 7%, var(--surface)); display: flex; flex-direction: column; gap: 10px; font-size: 14px; line-height: 1.5; }
+  .wg-tip p { margin: 0; color: var(--ink); }
+  .wg-tip-h { font-size: 15.5px; }
+  .wg-tip-item { display: flex; flex-direction: column; gap: 2px; padding-left: 10px; border-left: 3px solid var(--accent2, var(--accent)); }
+  .wg-tip-item strong { font-size: 14.5px; }
+  .wg-tip-long { color: var(--muted) !important; font-size: 13.5px; }
+  .wg-why { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 10px; font-size: 14px; line-height: 1.55; }
+  .wg-why summary { cursor: pointer; font-weight: 700; color: var(--accent); }
+  .wg-why p { margin: 8px 0 0; }
+  .wg-time { display: flex; align-items: center; gap: 10px; margin-top: 8px; font-size: 14px; font-weight: 600; }
+  .wg-time .textinput { max-width: 140px; }
+  .wg-how { margin: 10px 0 0; font-size: 13.5px; line-height: 1.5; color: var(--muted); }
+  .wg-fix { font-size: 13.5px; }
+  .wg-weigh-tip { flex: 1 1 100%; color: var(--muted); font-size: 12.5px; line-height: 1.45; }
   .wg-prefrow { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; font-size: 14px; }
   .hh-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 7px; font-size: 12px; color: var(--muted); }
   .hh-legend span { display: inline-flex; align-items: center; gap: 5px; }
@@ -4071,7 +4085,7 @@
         row3.appendChild(timeInput("notifyCookedTime", np.cookedTime || "20:30", "Tijd voor de vraag na het eten", function (v) { save({ cookedTime: v }); paint(); }));
         box.appendChild(row3);
       }
-      if (weightGoal()) box.appendChild(toggle("notifyWeigh", "Even op de weegschaal", "Maandagochtend een seintje als je die week nog niet woog (alleen met een doelgewicht)", np.weighIn !== false, function () { save({ weighIn: !(np.weighIn !== false) }); paint(); }));
+      if (weightGoal()) box.appendChild(toggle("notifyWeigh", "Tijd om te wegen", "Op je weegmoment (" + WG_DAYS[wgWeighDay(weightGoal())] + " " + wgWeighTime(weightGoal()) + ") een seintje als je die week nog niet woog", np.weighIn !== false, function () { save({ weighIn: !(np.weighIn !== false) }); paint(); }));
       box.appendChild(toggle("notifyRecap", "Weekterugblik", "Maandagochtend je vorige week in cijfers", np.recap !== false, function () { save({ recap: !(np.recap !== false) }); paint(); }));
       if (communityOn()) box.appendChild(toggle("notifyCommunity", "Nieuwe recepten in de community", "Hooguit één keer per dag, rond 17:00, en alleen recepten die passen bij je voedingsstijl, doel en wat je niet eet", np.community, function () { save({ community: !np.community }); paint(); }));
     }
@@ -6355,7 +6369,7 @@
         wgIn.value = state.wizTarget || (weightGoal() ? weightGoal().target : ""); wgIn.style.flex = "1";
         wgIn.oninput = function (e) { state.wizTarget = e.target.value; };
         wgRow.appendChild(wgIn); main.appendChild(wgRow);
-        var wgNote = document.createElement("div"); wgNote.className = "acc-sub"; wgNote.textContent = "Werk je naar een gewicht toe? Dan stemt Balanza je dagdoel erop af en zie je op Start hoe ver je bent. Later aan te passen.";
+        var wgNote = document.createElement("div"); wgNote.className = "acc-sub"; wgNote.textContent = "Werk je naar een gewicht toe? Dan stemt Balanza je dagdoel erop af en zie je op Start hoe ver je bent. Gezond afvallen gaat met zo'n halve kilo per week: geef het de tijd, het gaat om de trend. Later aan te passen.";
         main.appendChild(wgNote);
       }
       labelEl("Geslacht");
@@ -6420,7 +6434,7 @@
         var tw = Math.round(Number(String(state.wizTarget).replace(",", ".")) * 10) / 10, cw = Number(prefs.weightKg);
         if (!cw) { showToast("Vul ook je huidige gewicht in, dan kan Balanza je doel uitrekenen."); return; }
         var wmsg = wgCheck(tw, cw); if (wmsg) { showToast(wmsg); return; }
-        prefs.weightGoal = { target: tw, start: cw, startWeek: mondayKeyOffset(0), startedAt: new Date().toISOString(), pace: "normaal", hide: false, ms: [] };
+        prefs.weightGoal = { target: tw, start: cw, startWeek: mondayKeyOffset(0), startedAt: new Date().toISOString(), pace: "normaal", hide: false, ms: [], weighDay: 1, weighTime: "07:30" };
         var wj = journey(); wj.log = (Array.isArray(wj.log) ? wj.log : []).filter(function (x) { return !(x && x.w === mondayKeyOffset(0) && x.m === "gewicht"); }); wj.log.push({ w: mondayKeyOffset(0), m: "gewicht", v: cw, n: 1 });
       }
       if (isLast) { finishWizard(false); }
@@ -12548,6 +12562,7 @@
     ["journey", "Jouw reis", "Fases op weg naar je doel, met één focus per fase", null],
     ["challenge", "Weekuitdaging", "Elke week kies je zelf een kleine uitdaging (of sla je over)", null],
     ["milestones", "Mijlpalen", "Een kaartje als je iets bereikt, zoals 10 keer zelf gekookt", null],
+    ["goaltips", "Tips bij stilstand", "Staat je gewicht een paar weken stil? Dan een tip over eten of bewegen, op basis van wat je at", null],
     ["progress", "Voortgang bijhouden", "Optioneel: energie, verzadiging, kleding of gewicht, één keer per week", null],
     ["tips", "Tips over wat je kunt instellen", "Om de dag een tip in de chat, met een knop om het meteen te proberen", null],
     ["opener", "Balanza begint soms een gesprekje", "Hooguit één keer per dag een klein persoonlijk berichtje bij de chatknop", null],
@@ -14623,11 +14638,15 @@
   }
   function currentWeight() { var e = weightEntries(); return e.length ? Number(e[e.length - 1].v) : (Number(prefs.weightKg) || null); }
   function thisWeekWeight() { var wk = mondayKeyOffset(0); return weightEntries().filter(function (x) { return x.w === wk; })[0] || null; }
-  // Nog een weging deze week? Dan telt het gemiddelde.
+  // Eén weging per week, op een vaste dag en tijd (nuchter, na het plassen). Opnieuw invullen verbetert de weging van deze week.
+  var WG_DAYS = ["zondag", "maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag"];
+  function wgWeighDay(g) { var d = Number(g && g.weighDay); return d >= 0 && d <= 6 && g && g.weighDay !== undefined && g.weighDay !== null && g.weighDay !== "" ? d : 1; }
+  function wgWeighTime(g) { return g && /^([01]\d|2[0-3]):[0-5]\d$/.test(g.weighTime || "") ? g.weighTime : "07:30"; }
+  var WG_HOW = "Weeg je één keer per week, op dezelfde dag en hetzelfde tijdstip: \u2019s ochtends nuchter, na het plassen en zonder kleren. Elke dag wegen helpt niet: je ziet vooral schommelingen door vocht en zout, en dat haalt je motivatie onderuit.";
   function logWeight(v) {
     var j = journey(); j.log = Array.isArray(j.log) ? j.log : [];
     var wk = mondayKeyOffset(0), ex = j.log.filter(function (x) { return x && x.w === wk && x.m === "gewicht"; })[0];
-    if (ex) { var n = (Number(ex.n) || 1) + 1; ex.v = Math.round(((Number(ex.v) * (n - 1)) + v) / n * 10) / 10; ex.n = n; }
+    if (ex) { ex.v = v; ex.n = 1; }   // één weging per week; opnieuw invullen = verbeteren
     else j.log.push({ w: wk, m: "gewicht", v: v, n: 1 });
     j.log = j.log.slice(-80);
     prefs.weightKg = String(currentWeight());
@@ -14751,6 +14770,7 @@
     card.appendChild(ends);
     if (!hide) { var ch = wgChart(g); if (ch) card.appendChild(ch); }
     var st = document.createElement("div"); st.className = "acc-sub wg-status"; st.id = "wgStatus"; st.textContent = wgStatusText(g, pr); card.appendChild(st);
+    renderWgTipBox(card, g);
     if (pr.status === "reached" && prefs.goal !== "Onderhoud") {
       var keep = document.createElement("button"); keep.type = "button"; keep.className = "primary-btn small"; keep.id = "wgMaintain"; keep.textContent = "Overstappen op Onderhoud";
       keep.onclick = function () { prefs.goal = "Onderhoud"; savePrefs(); showToast("Je doel staat nu op Onderhoud. Zo hou je vast wat je bereikt hebt."); render(); };
@@ -14760,18 +14780,140 @@
     var mine = thisWeekWeight();
     var f = document.createElement("form"); f.className = "wg-weigh"; f.id = "wgWeigh";
     var lab = document.createElement("span"); lab.className = "wg-weigh-l";
-    lab.textContent = mine ? (hide ? "Deze week gewogen" : "Deze week: " + wgFmt(mine.v) + " kg" + (mine.n > 1 ? " (gemiddeld)" : "")) : "Je gewicht deze week";
+    var moment = WG_DAYS[wgWeighDay(g)] + " " + wgWeighTime(g).replace(/^0/, "");
+    lab.textContent = mine ? (hide ? "Deze week gewogen \u2713" : "Deze week: " + wgFmt(mine.v) + " kg \u2713") + " \u00b7 volgende keer " + moment : "Weegmoment: " + moment + " (nuchter, na het plassen)";
     var inp = document.createElement("input"); inp.className = "textinput"; inp.type = "text"; inp.inputMode = "decimal"; inp.autocomplete = "off"; inp.id = "wgWeight"; inp.placeholder = "kg";
-    var sb = document.createElement("button"); sb.type = "submit"; sb.className = "ghost-btn small"; sb.textContent = mine ? "Nog een weging" : "Opslaan";
+    var sb = document.createElement("button"); sb.type = "submit"; sb.className = "ghost-btn small"; sb.textContent = mine ? "Verbeteren" : "Opslaan";
+    if (mine) { inp.placeholder = "Verkeerd ingevuld? kg"; }
     f.onsubmit = function (e) {
       e.preventDefault();
       var v = Math.round(Number(String(inp.value).replace(",", ".")) * 10) / 10;
       if (!(v >= 30 && v <= 300)) { showToast("Vul je gewicht in kilo's in, bijvoorbeeld 78,4."); return; }
       logWeight(v); render();
+      if (mine) showToast("Je weging van deze week is verbeterd. Tot " + moment + "!");
     };
-    f.appendChild(lab); f.appendChild(inp); f.appendChild(sb); card.appendChild(f);
+    f.appendChild(lab);
+    if (!mine || f.dataset.edit) { f.appendChild(inp); f.appendChild(sb); }
+    else {
+      var fix = document.createElement("button"); fix.type = "button"; fix.className = "hh-link wg-fix"; fix.id = "wgFix"; fix.textContent = "Verkeerd ingevuld?";
+      fix.onclick = function () { fix.remove(); f.appendChild(inp); f.appendChild(sb); try { inp.focus(); } catch (e) {} };
+      f.appendChild(fix);
+      var tipW = document.createElement("small"); tipW.className = "wg-weigh-tip"; tipW.textContent = "Tussendoor wegen hoeft niet: dagelijkse schommelingen zeggen weinig en halen je motivatie onderuit.";
+      f.appendChild(tipW);
+    }
+    card.appendChild(f);
     main.appendChild(card);
     return card;
+  }
+  // ---- Stilstand: tips op basis van wat je de afgelopen weken at, plus een beweegtip ----
+  // Stilstand = de trend van de laatste 3+ weekwegingen is vlak of gaat de verkeerde kant op, en je bent minstens 3 weken bezig.
+  function wgPlateau(g) {
+    g = g || weightGoal(); if (!g || g.reachedAt) return null;
+    var d = wgDir(g); if (!d) return null;
+    var weeksIn = wgWeeksBetween(g.startWeek, mondayKeyOffset(0)); if (weeksIn < 3) return null;
+    var since = mondayKeyOffset(-4);
+    var pts = weightEntries().filter(function (x) { return x.w >= since && x.w >= g.startWeek; }).map(function (x) { return [wgWeeksBetween(g.startWeek, x.w), Number(x.v)]; });
+    if (pts.length < 3) return null;
+    var n = pts.length, sx = 0, sy = 0, sxx = 0, sxy = 0;
+    pts.forEach(function (p) { sx += p[0]; sy += p[1]; sxx += p[0] * p[0]; sxy += p[0] * p[1]; });
+    var den = n * sxx - sx * sx; if (!den) return null;
+    var slope = (n * sxy - sx * sy) / den;
+    if (slope * d > 0.1) return null;   // er zit beweging in de goede richting
+    // Hoe lang al? Sinds je (bijna) op je beste stand kwam en daarna niet meer verder.
+    var all = weightEntries().filter(function (x) { return x.w >= g.startWeek; });
+    var best = all.reduce(function (b, x) { var v = Number(x.v); return b === null ? v : (d < 0 ? Math.min(b, v) : Math.max(b, v)); }, null);
+    var firstNearBest = all.filter(function (x) { return Math.abs(Number(x.v) - best) <= 0.3; })[0];
+    var weeks = firstNearBest ? wgWeeksBetween(firstNearBest.w, mondayKeyOffset(0)) : 3;
+    return { weeks: Math.max(3, weeks), slope: slope };
+  }
+  // Wat zie je de afgelopen 14 dagen (vandaag niet meegeteld)?
+  function wgRecentDays() {
+    var target = dailyKcalTarget(), t = goalTarget(), out = { days: 0, tracked: 0, over: 0, kcal: 0, eiwitG: 0, khG: 0, vetG: 0, bal: [], wkndExtras: 0, wkdayExtras: 0, wkndPlanned: 0 };
+    for (var i = 1; i <= 14; i++) {
+      var dt = new Date(); dt.setDate(dt.getDate() - i);
+      var pw = weekByStart(isoDateKey(getMonday(dt))), dn = PLAN_DAYS[(dt.getDay() + 6) % 7];
+      if (!pw) continue;
+      var a = aggregateDayMacros(pw, dn), ex = dayExtras(pw, dn), wknd = dt.getDay() === 0 || dt.getDay() === 6;
+      var ticked = PLAN_SLOTS.some(function (sl) { var s = pw.slots[dn + "|" + sl]; return s && s.cooked !== undefined; }) || ex.length > 0;
+      if (wknd) { out.wkndExtras += ex.length; out.wkndPlanned += PLAN_SLOTS.filter(function (sl) { return pw.slots[dn + "|" + sl]; }).length; } else out.wkdayExtras += ex.length;
+      if (!a || !a.kcal) continue;
+      out.days++; if (ticked) out.tracked++;
+      if (target && a.kcal > target * 1.05) out.over++;
+      out.kcal += a.kcal; out.eiwitG += a.eiwitG; out.khG += a.khG; out.vetG += a.vetG;
+      var b = dayBal(a); if (b !== null) out.bal.push(b);
+    }
+    if (out.days) { out.kcal = Math.round(out.kcal / out.days); out.eiwitG = Math.round(out.eiwitG / out.days); out.khG = Math.round(out.khG / out.days); out.vetG = Math.round(out.vetG / out.days); }
+    out.balAvg = out.bal.length ? Math.round(out.bal.reduce(function (s, x) { return s + x; }, 0) / out.bal.length) : null;
+    out.target = target;
+    out.eiwitTarget = target ? Math.round(target * t.eiwit / 100 / 4) : null;
+    out.khPct = out.kcal ? Math.round(out.khG * 400 / out.kcal) : null; out.eiwitPct = out.kcal ? Math.round(out.eiwitG * 400 / out.kcal) : null; out.vetPct = out.kcal ? Math.round(out.vetG * 900 / out.kcal) : null;
+    return out;
+  }
+  var WG_MOVE_TIPS = [
+    ["stappen", "Beweeg wat meer op een gewone dag", "Extra stappen tellen echt mee: een half uur wandelen is al gauw 150 kcal. Neem de trap, loop een rondje na het eten of stap een halte eerder uit."],
+    ["kracht", "Train je spieren", "Twee à drie keer per week krachttraining (thuis of in de sportschool) helpt je spieren te behouden terwijl je afvalt. Dan komt wat je verliest vooral uit vet, en verbrand je in rust meer."],
+    ["activiteit", "Klopt je activiteitsniveau nog?", "Je dagdoel is gebaseerd op je activiteitsniveau. Sport of beweeg je minder dan je hebt ingevuld, zet het dan een stapje lager in je lichaamsprofiel; dan klopt je dagdoel weer."]
+  ];
+  var WG_MOVE_TIPS_GAIN = [
+    ["kracht", "Geef je spieren een reden om te groeien", "Aankomen in spiermassa lukt het best met twee tot vier keer per week krachttraining, waarbij je het gewicht of de herhalingen langzaam opvoert."],
+    ["herstel", "Slaap en herstel tellen mee", "Spieren groeien tussen je trainingen door. Zeven tot negen uur slaap en een rustdag tussendoor helpen meer dan je denkt."]
+  ];
+  // Kies de tip die het meest waarschijnlijk helpt; dezelfde tip blijft de hele week staan.
+  function wgTips(g) {
+    var pl = wgPlateau(g); if (!pl) return null;
+    var r = wgRecentDays(), d = wgDir(g), tips = [];
+    if (r.days >= 7 && r.tracked < 4) tips.push({ id: "bijhouden", t: "Houd het een week bij", x: "Je hebt de afgelopen twee weken " + r.tracked + " " + (r.tracked === 1 ? "dag" : "dagen") + " afgevinkt. Dan is lastig te zien waar het zit. Vink deze week af wat je at en zet erbij wat je extra nam; dan kan Balanza je gerichter helpen." });
+    if (d < 0 && r.target && r.days >= 5 && r.over / r.days >= 0.4) tips.push({ id: "porties", t: "Net iets te veel op een dag", x: "Je zat " + r.over + " van de " + r.days + " dagen boven je dagdoel (gemiddeld " + r.kcal + " van " + r.target + " kcal). Probeer bij het diner eens een kleinere portie; je kunt nu ook ½ portie afvinken." });
+    if (d > 0 && r.target && r.days >= 5 && r.kcal < r.target * 0.95) tips.push({ id: "tekort", t: "Eet net wat meer", x: "Je at gemiddeld " + r.kcal + " van " + r.target + " kcal. Om aan te komen heb je dat overschot echt nodig: een extra tussendoortje met eiwit, zoals kwark met noten, maakt al verschil." });
+    if (r.eiwitTarget && r.days >= 5 && r.eiwitG < r.eiwitTarget * 0.8) tips.push({ id: "eiwit", t: "Meer eiwit", x: "Je eiwit zit gemiddeld op " + Math.round(r.eiwitG / r.eiwitTarget * 100) + "% van je doel (" + r.eiwitG + " van " + r.eiwitTarget + " g). Eiwit houdt je langer verzadigd en beschermt je spieren. Skyr, kwark, eieren, kip of peulvruchten helpen." });
+    if (r.balAvg !== null && r.balAvg < 60 && r.khPct !== null) {
+      var t0 = goalTarget(), devs = [["koolhydraten", r.khPct, t0.kh], ["vet", r.vetPct, t0.vet], ["eiwit", r.eiwitPct, t0.eiwit]].sort(function (a, b) { return Math.abs(b[1] - b[2]) - Math.abs(a[1] - a[2]); });
+      var m = devs[0];
+      tips.push({ id: "balans", t: "Je verdeling kan beter", x: "Je dagen scoren gemiddeld " + r.balAvg + "% Balans: " + (m[1] > m[2] ? "veel " : "weinig ") + m[0] + " (" + m[1] + "% in plaats van " + m[2] + "%). " + (m[0] === "koolhydraten" && m[1] > m[2] ? "Wissel eens een pasta- of broodmaaltijd voor een gerecht met meer groente en eiwit." : m[0] === "vet" && m[1] > m[2] ? "Let op olie, kaas, noten en sauzen; die tikken snel aan." : "Kies gerechten met een hogere Balans; die staan bij je gerechten in het groen.") });
+    }
+    if (r.wkndExtras >= 3 && r.wkndExtras > r.wkdayExtras) tips.push({ id: "weekend", t: "Het weekend telt ook", x: "In het weekend komt er vaak iets bij (" + r.wkndExtras + " keer de afgelopen twee weken). Plan ook je zaterdag en zondag in, dan weet je vooraf wat er past." });
+    var mv = (d < 0 ? WG_MOVE_TIPS : WG_MOVE_TIPS_GAIN), wkNr = Math.floor(Date.now() / (7 * 86400000));
+    var move = mv[wkNr % mv.length];
+    var main = tips[0] || { id: "move-" + move[0], t: move[1], x: move[2] };
+    return { plateau: pl, recent: r, main: main, move: tips[0] ? { id: "move-" + move[0], t: move[1], x: move[2] } : null, long: pl.weeks >= 6 };
+  }
+  // Vraag voor de assistent: met de cijfers erbij, zodat de tip echt over jou gaat
+  function wgCoachQuestion(g, tp) {
+    var r = tp.recent, cur = currentWeight();
+    return "Mijn gewicht staat al ongeveer " + tp.plateau.weeks + " weken stil (doel " + wgFmt(g.target) + " kg, nu " + wgFmt(cur || g.start) + " kg, begonnen op " + wgFmt(g.start) + " kg). " +
+      (r.days ? "De afgelopen twee weken at ik gemiddeld " + r.kcal + " kcal per dag" + (r.target ? " (dagdoel " + r.target + ")" : "") + ", " + r.eiwitG + " g eiwit" + (r.eiwitTarget ? " (doel " + r.eiwitTarget + " g)" : "") + (r.balAvg !== null ? ", gemiddelde Balans " + r.balAvg + "%" : "") + ". " : "") +
+      "Mijn activiteitsniveau staat op " + (prefs.activityLevel || "niet ingevuld").toLowerCase() + ". Geef me één persoonlijke, haalbare tip over eten of bewegen.";
+  }
+  function renderWgTipBox(card, g) {
+    if (!coachOn("goaltips")) return;
+    var tp = wgTips(g); if (!tp) return;
+    var wk = mondayKeyOffset(0);
+    if (g.tipHidden === wk) return;
+    var box = document.createElement("div"); box.className = "wg-tip"; box.id = "wgTip";
+    var hd = document.createElement("b"); hd.className = "wg-tip-h"; hd.textContent = "Even stilstand? Dat hoort erbij."; box.appendChild(hd);
+    var intro = document.createElement("p"); intro.textContent = "Je gewicht beweegt al zo'n " + tp.plateau.weeks + " weken nauwelijks. Bijna iedereen heeft dat onderweg; vaak komt er daarna weer beweging in. Wat nu het meest kan helpen:";
+    box.appendChild(intro);
+    [tp.main, tp.move].filter(Boolean).forEach(function (t, i) {
+      var it = document.createElement("div"); it.className = "wg-tip-item"; it.id = "wgTip-" + t.id;
+      it.innerHTML = "<strong></strong><span></span>"; it.querySelector("strong").textContent = (i ? "Ook goed: " : "") + t.t; it.querySelector("span").textContent = t.x;
+      box.appendChild(it);
+    });
+    if (tp.long) {
+      var lg = document.createElement("p"); lg.className = "wg-tip-long";
+      lg.textContent = "Zit het al " + tp.plateau.weeks + " weken stil terwijl je je goed aan je plan houdt? Dan is het slim om eens met een diëtist of je huisarts te praten. Die kan meekijken naar wat er bij jou speelt.";
+      box.appendChild(lg);
+    }
+    var acts = document.createElement("div"); acts.className = "nudge-actions";
+    if (chatAvailable()) {
+      var ask = document.createElement("button"); ask.type = "button"; ask.className = "primary-btn small"; ask.id = "wgAskCoach"; ask.textContent = "Persoonlijke tip van Balanza";
+      ask.onclick = function () { openChat(); setTimeout(function () { sendChat(wgCoachQuestion(g, tp)); }, 250); };
+      acts.appendChild(ask);
+    }
+    var later = document.createElement("button"); later.type = "button"; later.className = "ghost-btn small"; later.id = "wgTipLater"; later.textContent = "Niet nu";
+    later.onclick = function () { g.tipHidden = wk; savePrefs(); render(); };
+    acts.appendChild(later);
+    box.appendChild(acts);
+    card.appendChild(box);
   }
   function openWeightGoalSheet() {
     if (!wgAllowed()) { showToast(isMinor() ? "Een doelgewicht is er niet voor wie jonger is dan 18." : "Hiervoor is toestemming voor gezondheidsgegevens nodig (Instellingen, Privacy)."); return; }
@@ -14792,6 +14934,20 @@
     var pr = document.createElement("div"); pr.className = "chiprow"; body.appendChild(pr);
     var prev = document.createElement("div"); prev.className = "wg-preview"; prev.id = "wgPreview"; body.appendChild(prev);
     var err = document.createElement("div"); err.className = "dietnote"; err.id = "wgError"; err.style.display = "none"; body.appendChild(err);
+    var why = document.createElement("details"); why.className = "wg-why"; why.id = "wgWhy"; why.open = !g;
+    why.innerHTML = "<summary>Waarom het tijd nodig heeft</summary>" +
+      "<p><b>Een kilo lichaamsvet is ongeveer 7.700 kcal.</b> Een halve kilo per week betekent elke dag zo'n 550 kcal minder dan je verbruikt. Sneller kan, maar dan verlies je ook spieren, krijg je meer honger en komt het er vaak weer bij.</p>" +
+      "<p><b>Je gewicht schommelt van dag tot dag</b> met een kilo of twee door vocht, zout en wat er nog in je maag zit. Daarom weeg je één keer per week, op een vaste dag en tijd (nuchter, na het plassen), en kijkt Balanza naar de trend over meerdere weken. Elke dag wegen helpt niet: je ziet vooral ruis, en dat werkt demotiverend.</p>" +
+      "<p><b>De eerste weken gaat het vaak snel</b> (vooral vocht), daarna rustiger. Even stilstand hoort erbij: je lichaam past zich aan. Wie dan gewoon doorgaat, ziet het meestal weer zakken.</p>" +
+      "<p><b>Wat het verschil maakt:</b> week na week je plan volgen, genoeg eiwit, goed slapen en bewegen. Elke week die je volhoudt, telt.</p>";
+    body.appendChild(why);
+    var wl = document.createElement("div"); wl.className = "qa-h"; wl.textContent = "Je weegmoment"; body.appendChild(wl);
+    st.wDay = g ? wgWeighDay(g) : 1; st.wTime = g ? wgWeighTime(g) : "07:30";
+    var wdRow = document.createElement("div"); wdRow.className = "chiprow wg-days"; body.appendChild(wdRow);
+    var wtRow = document.createElement("label"); wtRow.className = "wg-time"; wtRow.innerHTML = "<span>Tijd</span>";
+    var wtIn = document.createElement("input"); wtIn.type = "time"; wtIn.className = "textinput"; wtIn.id = "wgTime"; wtIn.value = st.wTime; wtIn.oninput = function () { if (/^\d\d:\d\d$/.test(wtIn.value)) st.wTime = wtIn.value; };
+    wtRow.appendChild(wtIn); body.appendChild(wtRow);
+    var how = document.createElement("p"); how.className = "wg-how"; how.textContent = WG_HOW + " Op je weegmoment krijg je een seintje (als je meldingen aan hebt)."; body.appendChild(how);
     var hideT = document.createElement("button"); hideT.type = "button"; hideT.className = "sheet-toggle"; hideT.id = "wgHide"; hideT.setAttribute("role", "switch");
     body.appendChild(hideT);
     var acts = document.createElement("div"); acts.className = "nudge-actions"; acts.style.marginTop = "14px";
@@ -14810,6 +14966,11 @@
         var p = WG_PACE[k], c = document.createElement("button"); c.type = "button"; c.className = "chip" + (st.pace === k ? " selected" : ""); c.id = "wgPace-" + k;
         c.textContent = p.label + " · " + (down ? "−" : "+") + String(down ? p.lose : p.gain).replace(".", ",") + " kg/week";
         c.onclick = function () { st.pace = k; paint(); }; pr.appendChild(c);
+      });
+      wdRow.innerHTML = "";
+      [1, 2, 3, 4, 5, 6, 0].forEach(function (dn) {
+        var dc = document.createElement("button"); dc.type = "button"; dc.className = "chip" + (st.wDay === dn ? " selected" : ""); dc.id = "wgDay-" + dn;
+        dc.textContent = WG_DAYS[dn].slice(0, 2); dc.setAttribute("aria-label", WG_DAYS[dn]); dc.onclick = function () { st.wDay = dn; paint(); }; wdRow.appendChild(dc);
       });
       hideT.setAttribute("aria-checked", st.hide ? "true" : "false");
       hideT.innerHTML = '<span class="st-txt"><b>Cijfers verbergen</b><small>Je ziet alleen je voortgang in procenten, zonder kilo’s</small></span><span class="st-track' + (st.hide ? " on" : "") + '"><i></i></span>';
@@ -14835,15 +14996,15 @@
       var cur = Math.round(Number(st.cur) * 10) / 10, target = Math.round(Number(st.target) * 10) / 10;
       if (wgCheck(target, cur)) return;
       var same = g && Math.sign(g.target - g.start) === Math.sign(target - cur);
-      prefs.weightGoal = same ? Object.assign({}, g, { target: target, pace: st.pace, hide: st.hide })
-        : { target: target, start: cur, startWeek: mondayKeyOffset(0), startedAt: new Date().toISOString(), pace: st.pace, hide: st.hide, ms: [] };
+      prefs.weightGoal = same ? Object.assign({}, g, { target: target, pace: st.pace, hide: st.hide, weighDay: st.wDay, weighTime: st.wTime })
+        : { target: target, start: cur, startWeek: mondayKeyOffset(0), startedAt: new Date().toISOString(), pace: st.pace, hide: st.hide, ms: [], weighDay: st.wDay, weighTime: st.wTime };
       if (prefs.weightGoal.reachedAt && wgProgress(prefs.weightGoal).left > 0.05) delete prefs.weightGoal.reachedAt;
       var mine = thisWeekWeight();
       if (!mine || Math.abs(mine.v - cur) > 0.05) { var j = journey(); j.log = (Array.isArray(j.log) ? j.log : []).filter(function (x) { return !(x && x.w === mondayKeyOffset(0) && x.m === "gewicht"); }); j.log.push({ w: mondayKeyOffset(0), m: "gewicht", v: cur, n: 1 }); }
       prefs.weightKg = String(cur);
       delete prefs.weightGoalDismissed;
       savePrefs(); closeSheet(sh.ov); render();
-      showToast(g ? "Je doel is bijgewerkt." : "Je doel staat erin. Weeg je één keer per week, dan zie je je voortgang.");
+      showToast(g ? "Je doel is bijgewerkt." : "Je doel staat erin! Weeg je elke " + WG_DAYS[st.wDay] + " om " + st.wTime + ", nuchter. Het gaat om de trend, en elke week die je volhoudt telt.");
     };
     paint();
   }
@@ -15337,6 +15498,12 @@
   function pickOpener() {
     var now = new Date(), h = now.getHours(), dow = now.getDay(), nm = firstName(), hi = nm ? nm + ", " : "";
     var cands = [];
+    var wgo = weightGoal(), wgt = wgo && coachOn("goaltips") ? wgTips(wgo) : null;
+    if (wgt && wgo.chatW !== mondayKeyOffset(0)) {   // stilstand: één keer per week een gesprekje, met een persoonlijke tip als je wilt
+      wgo.chatW = mondayKeyOffset(0); savePrefs();
+      return { text: hi + "je gewicht staat al een paar weken stil. Dat hoort er echt bij, dus niet opgeven. Wat nu het meest kan helpen: " + wgt.main.t.toLowerCase() + ". " + wgt.main.x,
+        quick: [{ label: "Geef me een persoonlijke tip", send: wgCoachQuestion(wgo, wgt) }, "Hoe kom ik aan meer eiwit?", "Later"] };
+    }
     var cw = weekByStart(mondayKeyOffset(0)), today = dayNameOf(now);
     var dinner = cw && cw.slots[today + "|Diner"] ? resolveAssignedDish(cw.slots[today + "|Diner"]) : null;
     if (dinner && h >= 11 && h < 19) cands.push({ text: hi + "vanavond staat " + dinner.day.name + " op het menu. Zin in een tip voor een lekker bijgerecht?", quick: ["Ja, geef een tip", "Kan het sneller?"] });
@@ -15482,7 +15649,7 @@
       if (m.tip) list.appendChild(chatTipCard(m, idx));
       if (m.quick && m.quick.length && idx === chat.msgs.length - 1 && !chat.busy) {
         var qr = document.createElement("div"); qr.className = "chiprow chat-sugg";
-        m.quick.forEach(function (q) { var c = document.createElement("button"); c.type = "button"; c.className = "chip"; c.textContent = q; c.onclick = function () { sendChat(q); }; qr.appendChild(c); });
+        m.quick.forEach(function (q) { var c = document.createElement("button"); c.type = "button"; c.className = "chip"; c.textContent = typeof q === "object" ? q.label : q; c.onclick = function () { sendChat(typeof q === "object" ? q.send : q); }; qr.appendChild(c); });
         list.appendChild(qr);
       }
     });

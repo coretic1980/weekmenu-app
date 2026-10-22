@@ -3965,13 +3965,16 @@ function notifyTickUser(uid, ctx) {
           url: "/?open=cooked&week=" + monToday + "&day=" + dayName } });
       }
     }
-    // 4a. Maandagochtend: even op de weegschaal, alleen met een doelgewicht en als je deze week nog niet woog
-    if (np.weighIn && now.weekday === 1 && inWindow(now.minutes, "08:30") && st.weighSentOn !== now.date) {
-      var wgoal = prefs.weightGoal, wlog = prefs.journey && Array.isArray(prefs.journey.log) ? prefs.journey.log : [];
-      if (wgoal && Number(wgoal.target) > 0 && !wgoal.reachedAt && !wlog.some(function (x) { return x && x.m === "gewicht" && x.w === monToday; })) {
+    // 4a. Op je eigen weegmoment (standaard maandag 07:30): alleen met een doelgewicht en als je deze week nog niet woog
+    var wgoal = prefs.weightGoal && typeof prefs.weightGoal === "object" ? prefs.weightGoal : null;
+    var wDay = wgoal && Number(wgoal.weighDay) >= 0 && Number(wgoal.weighDay) <= 6 && wgoal.weighDay !== null && wgoal.weighDay !== "" ? Number(wgoal.weighDay) : 1;
+    var wTime = wgoal && validHHMM(wgoal.weighTime) ? wgoal.weighTime : "07:30";
+    if (np.weighIn && wgoal && now.weekday === wDay && inWindow(now.minutes, wTime) && st.weighSentOn !== now.date) {
+      var wlog = prefs.journey && Array.isArray(prefs.journey.log) ? prefs.journey.log : [];
+      if (Number(wgoal.target) > 0 && !wgoal.reachedAt && !wlog.some(function (x) { return x && x.m === "gewicht" && x.w === monToday; })) {
         st.weighSentOn = now.date; changed = true;
-        jobs.push({ kind: "weigh-in", payload: { title: "Even op de weegschaal?", tag: "balanza-weigh",
-          body: "Eén keer per week is genoeg. Dan zie je hoe je ervoor staat richting je doel.", url: "/?open=goal" } });
+        jobs.push({ kind: "weigh-in", payload: { title: "Tijd om te wegen", tag: "balanza-weigh",
+          body: "Nuchter en na het plassen, net als vorige week. Eén keer per week is genoeg: elke dag wegen laat vooral schommelingen zien en dat werkt niet motiverend.", url: "/?open=goal" } });
       }
     }
     // 4. Maandag: je week in cijfers
