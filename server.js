@@ -4753,7 +4753,8 @@ function handleTips(req, res) {
     return readBody(req).then(function (body) {
       var prompt = buildTipsPrompt((body && body.params) || {});
       var usage = newUsage();
-      return usageCtx.run(usage, function () { return callAnthropicOnce(prompt, TIPS_MODEL, 2000); }).then(function (parsed) {
+      // Ruime limiet: je betaalt alleen voor wat het model echt schrijft; 2000 was te krap en gaf afgekapte JSON.
+      return usageCtx.run(usage, function () { return callAnthropicOnce(prompt, TIPS_MODEL, 4000); }).then(function (parsed) {
         return recordAccounting(user.uid, "tips", usage, 0, true).then(function () {
           var tips = cleanTipList(parsed);
           if (!tips.length) throw new Error("Geen bruikbare tips ontvangen");
@@ -4951,7 +4952,8 @@ function handleAssistant(req, res) {
           if (isMinorParams(stored)) { ctx.ageGroup = "16-17"; ctx.age = stored.age || ctx.age; }
           var usage = newUsage();
           al.use.n++; assistantUse.set(user.uid, al.use); dbSetDoc("assistant/" + user.uid, al.use).catch(function () {});
-          return usageCtx.run(usage, function () { return callAnthropicOnce(buildAssistantPrompt(msgs, ctx), ASSISTANT_MODEL, 1500); }).then(function (parsed) {
+          // Ruime limiet: een antwoord met acties plus een uitgeschreven "suggestion" paste niet altijd in 1500 tokens.
+          return usageCtx.run(usage, function () { return callAnthropicOnce(buildAssistantPrompt(msgs, ctx), ASSISTANT_MODEL, 4000); }).then(function (parsed) {
             var reply = cleanText(parsed && parsed.reply, 1200) || "Sorry, dat begreep ik niet helemaal. Kun je het anders zeggen?";
             var actions = cleanAssistantActions(parsed && parsed.actions, ctx);
             var suggestion = actions.length ? null : cleanSuggestion(parsed && parsed.suggestion);
