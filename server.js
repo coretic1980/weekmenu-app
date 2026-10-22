@@ -6,6 +6,7 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const zlib = require("zlib");
 const { AsyncLocalStorage } = require("async_hooks");
 const { MongoClient } = require("mongodb");
 
@@ -4803,6 +4804,7 @@ function assistantGuide() {
     "- Samen plannen met huisgenoten (Mijn profiel), community met recepten van anderen, meldingen, licht of donker thema, Start-scherm indelen.\n" +
     "- Plus: na de proefperiode zijn ontwerpen en plannen voor Plus. Prijzen en abonnement staan bij Mijn profiel.\n" +
     "- Automatisch plannen: één keer instellen (maaltijden, dagen, dag en tijd, standaard zaterdag 09:00); Balanza zet dan elke week de volgende week klaar en de gebruiker keurt hem goed in een carrousel. Voedingsnieuws: één bericht per dag onder Voor jou.\n" +
+    "- Snel toevoegen (knop \u201c\uFF0B Toevoegen\u201d op Start en \u201c\uFF0B Snel iets toevoegen\u201d per dag in de planner): zoeken in de NEVO-productenlijst, een hele zin (\u201c2 eieren, 1 snee brood met kaas\u201d), streepjescode scannen (Open Food Facts) of een eigen product van het etiket. Macro's en Balans worden zelf berekend; als extra bij een dag of ingepland als maaltijd (dan bewaard als gerecht).\n" +
     "- WAAR VIND JE WAT: rechtsboven de avatar opent het menu met Mijn profiel, Mijn voorkeuren, Automatisch plannen, Samen plannen, Jouw reis, Instellingen, Donkere weergave, Hoe werkt Balanza en Uitloggen. " +
     "Instellingen is een overzicht met per onderdeel een knop: Weergave, Meldingen, Automatisch plannen, Begeleiding, Privacy, Bring!, Account en beveiliging (wachtwoord, e-mail, uitloggen, account verwijderen) " +
     "en Mijn gegevens en reset (gegevens downloaden en 'Reset app, begin opnieuw'). Vraagt iemand hoe hij de app reset of opnieuw begint: Instellingen → Mijn gegevens en reset → Reset app.\n";
@@ -5015,6 +5017,103 @@ function handleEstimate(req, res) {
     console.error("estimate failed:", err && err.message);
     sendJSON(res, 502, { code: "error", message: "Schatten lukte even niet. Probeer het zo opnieuw." });
   });
+}
+
+// ---------- Snel toevoegen: productenlijst (NEVO), standaardporties en streepjescodes ----------
+// De app zoekt zelf in deze lijst (direct, ook zonder bereik). Alleen wat niet te vinden is, schat de AI (via /api/estimate).
+// NEVO mag niet tegen betaling worden aangeboden (voorwaarden RIVM): deze lijst is voor iedereen, ook zonder Plus.
+// Standaardporties zijn een Balanza-aanvulling (geen NEVO-gegevens): [patroon op de productnaam, omschrijving, gram].
+var FOOD_PORTIONS = [
+  ["^wafel stroop", "1 stroopwafel", 30], ["^koek gevulde|gevulde koek", "1 gevulde koek", 60], ["^wafel rijst", "1 rijstwafel", 8],
+  ["^ei kippen|\\bei\\b", "1 ei", 55], ["eiwit kippenei|eiwit van kippenei", "1 eiwit", 33],
+  ["^brood|brood volkoren|brood bruin|brood wit|brood meergranen|brood spelt|brood rogge|roggebrood", "1 snee", 35],
+  ["krentenbol|^bol |bolletje|pistolet|kaiserbroodje|broodje", "1 broodje", 50], ["beschuit", "1 beschuit", 10], ["knackebrod|knäckebröd|cracker", "1 cracker", 10],
+  ["rijstwafel", "1 rijstwafel", 8], ["croissant", "1 croissant", 45], ["pita|tortilla|wrap", "1 wrap", 60], ["ontbijtkoek", "1 plak", 25],
+  ["havermout|muesli|cruesli|granola|cornflakes|ontbijtgranen", "1 portie", 45],
+  ["^melk|melk halfvolle|melk magere|melk volle|karnemelk|chocolademelk|sojadrink|haverdrink|amandeldrink|drink soja|drink haver", "1 glas", 200],
+  ["yoghurt|kwark|skyr|vla|pap", "1 schaaltje", 150], ["kwark magere|kwark halfvolle|kwark volle", "1 bakje", 250],
+  ["kaas 48|kaas 30|kaas 20|kaas belegen|kaas jong|kaas oud|goudse|edammer|leerdammer|kaas gouda", "1 plak", 20],
+  ["smeerkaas|zuivelspread|roomkaas|philadelphia|kaas smeer", "1 portie", 15], ["cottage cheese|huttenkase", "1 portie", 75], ["mozzarella", "1 bol", 125], ["feta", "1 portie", 50],
+  ["^boter|roomboter|halvarine|margarine|bak  en braad|smeersel", "1 portie (besmeren)", 5], ["olie|olijfolie", "1 eetlepel", 10],
+  ["pindakaas|notenpasta|hazelnootpasta|chocoladepasta", "1 portie", 15], ["jam|honing|stroop|appelstroop|hagelslag|vlokken chocolade|muisjes", "1 portie", 15],
+  ["ham|kipfilet beleg|rookvlees|kalkoenfilet|filet american|salami|cervelaat|leverworst|boterhamworst|achterham|rosbief|fricandeau", "1 plak", 15],
+  ["^appel|appel m schil|appel z schil", "1 appel", 135], ["^peer", "1 peer", 150], ["banaan", "1 banaan", 120], ["sinaasappel", "1 sinaasappel", 140],
+  ["mandarijn|clementine", "1 mandarijn", 60], ["kiwi", "1 kiwi", 75], ["druiven", "1 handje", 80], ["aardbeien|frambozen|bosbessen|blauwe bessen|bessen", "1 bakje", 125],
+  ["perzik|nectarine", "1 stuk", 120], ["pruim", "1 pruim", 40], ["mango", "½ mango", 150], ["ananas", "1 schijf", 80], ["meloen", "1 part", 150], ["avocado", "½ avocado", 70],
+  ["dadel", "1 dadel", 8], ["rozijnen|krenten", "1 doosje", 15],
+  ["noten|amandelen|walnoten|cashewnoten|hazelnoten|pinda|pistache|pecan|macadamia|studentenhaver", "1 handje", 25], ["zaden|pitten|lijnzaad|chiazaad", "1 eetlepel", 10],
+  ["tomaat", "1 tomaat", 100], ["cherrytomaat|kerstomaat", "1 handje", 80], ["komkommer", "¼ komkommer", 100], ["paprika", "1 paprika", 150], ["wortel|winterpeen", "1 wortel", 80],
+  ["ui$|ui gewone|uien", "1 ui", 80], ["knoflook", "1 teen", 5], ["courgette", "1 courgette", 250], ["broccoli|bloemkool|sperziebonen|spinazie|boerenkool|andijvie|spruitjes|witlof|prei|champignons|groente|sla|rucola|bietjes|erwten|doperwten|wokgroente", "1 portie", 150],
+  ["aardappel", "1 portie", 200], ["zoete aardappel", "1 portie", 200], ["friet|patat", "1 portie", 150],
+  ["rijst|couscous|bulgur|quinoa|gierst", "1 portie (droog)", 75], ["pasta|spaghetti|macaroni|penne|noedels|mie", "1 portie (droog)", 80],
+  ["kipfilet|kippendij|kip ", "1 portie", 125], ["gehakt|rundvlees|varkensvlees|biefstuk|varkenshaas|karbonade|lamsvlees|kalfsvlees|schnitzel|slavink|hamburger|braadworst|rookworst", "1 portie", 120],
+  ["zalm|kabeljauw|tonijn|makreel|haring|koolvis|pangasius|tilapia|forel|vis ", "1 portie", 125], ["garnalen", "1 portie", 100], ["tofu|tempeh|seitan|vegetarische|vleesvervanger|vegaburger|falafel", "1 portie", 100],
+  ["bonen|kikkererwten|linzen", "1 portie (uitgelekt)", 120], ["hummus", "1 portie", 30],
+  ["soep", "1 kom", 250], ["pizza", "1 pizza", 350], ["lasagne|stamppot|ovenschotel|nasi|bami|maaltijd", "1 bord", 400], ["salade ", "1 bakje", 200],
+  ["koffie|thee|^water", "1 kop", 150], ["frisdrank|cola|sinas|limonade|sap|jus d orange|smoothie|sportdrank|energiedrank|ijsthee", "1 glas", 200],
+  ["bier|pils", "1 glas", 250], ["wijn", "1 glas", 125], ["sterke drank|jenever|whisky|wodka|likeur", "1 glaasje", 35],
+  ["chocolade|reep", "1 reepje", 25], ["koek|biscuit|speculaas|stroopwafel|bitterkoekje|mergpijp|gevulde koek|cake|brownie|muffin|taart|gebak", "1 stuk", 30],
+  ["chips|zoutjes|popcorn|nacho", "1 schaaltje", 30], ["snoep|drop|winegum|zuurtjes", "1 handje", 25], ["ijs |roomijs|waterijs|sorbetijs", "1 bolletje", 50],
+  ["eiwitreep|mueslireep|granenreep|notenreep|repen", "1 reep", 40], ["eiwitpoeder|whey", "1 schepje", 30],
+  ["saus|mayonaise|ketchup|curry|dressing|pesto|mosterd|sambal|ketjap|sojasaus", "1 eetlepel", 15], ["suiker", "1 schepje", 5]
+];
+var FOOD_BARCODE_TTL_MS = 30 * 86400000, FOOD_BARCODE_MISS_MS = 86400000;
+var barcodeLimiter = makeHourlyLimiter(60);
+var foodsPayloadCache = null;
+function foodsPayload() {
+  if (foodsPayloadCache) return foodsPayloadCache;
+  var idx = nevoLoad();
+  var foods = idx.list.map(function (it) { return [it.code, it.naam, it.kcal, it.eiwit, it.kh, it.vet, idx.staple[it.code] ? 1 : 0]; });
+  var aliases = {}; Object.keys(NEVO_ALIASES).forEach(function (k) { aliases[k] = String(NEVO_ALIASES[k]); });
+  var body = JSON.stringify({ version: NEVO_VERSION, reference: "Gebaseerd op gegevens van NEVO-online versie 2025/9.0, RIVM, Bilthoven en andere gegevens",
+    foods: foods, aliases: aliases, portions: FOOD_PORTIONS });
+  foodsPayloadCache = { body: body, etag: '"' + crypto.createHash("sha1").update(body).digest("hex").slice(0, 16) + '"' };
+  return foodsPayloadCache;
+}
+function handleFoods(req, res) {
+  var p = foodsPayload();
+  if (req.headers["if-none-match"] === p.etag) { res.writeHead(304, { ETag: p.etag }); return res.end(); }
+  var headers = { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "public, max-age=86400", ETag: p.etag };
+  var ae = String(req.headers["accept-encoding"] || "");
+  if (/\bgzip\b/.test(ae)) {
+    headers["Content-Encoding"] = "gzip"; headers["Vary"] = "Accept-Encoding";
+    if (!p.gz) p.gz = zlib.gzipSync(p.body);
+    res.writeHead(200, headers); return res.end(p.gz);
+  }
+  res.writeHead(200, headers); res.end(p.body);
+}
+// GET /api/foods/barcode/<ean> — productgegevens van Open Food Facts (open data, ODbL), 30 dagen bewaard.
+function handleFoodBarcode(req, res, ean) {
+  if (!/^\d{8,14}$/.test(ean)) return sendJSON(res, 400, { code: "bad_request", message: "Dit is geen geldige streepjescode." });
+  if (!barcodeLimiter("b:" + clientIp(req))) return sendJSON(res, 429, { code: "rate_limited", message: "Even te veel gescand. Probeer het zo opnieuw." });
+  var key = "foods/ean/" + ean;
+  return dbGetDoc(key).then(function (r) {
+    var v = r.exists ? r.value : null;
+    if (v && Date.now() - v.at < (v.found ? FOOD_BARCODE_TTL_MS : FOOD_BARCODE_MISS_MS)) return v;
+    var base = process.env.OFF_BASE_URL || "https://world.openfoodfacts.org";
+    var ctl = new AbortController(), t = setTimeout(function () { ctl.abort(); }, 8000);
+    return fetch(base + "/api/v2/product/" + ean + ".json?fields=product_name,product_name_nl,generic_name_nl,brands,nutriments,serving_quantity,serving_size,quantity",
+      { signal: ctl.signal, headers: { "User-Agent": "Balanza/1.0 (balanza voedingsapp)" } })
+      .then(function (x) { return x.ok || x.status === 404 ? x.json().catch(function () { return {}; }) : Promise.reject(new Error("HTTP " + x.status)); })
+      .then(function (d) {
+        clearTimeout(t);
+        var pr = d && d.product, n = pr && pr.nutriments || {};
+        var kcal = Number(n["energy-kcal_100g"]); if (!isFinite(kcal) && isFinite(Number(n["energy_100g"]))) kcal = Number(n["energy_100g"]) / 4.184;
+        var found = !!(pr && isFinite(kcal) && kcal >= 0 && (pr.product_name_nl || pr.product_name));
+        var doc = { at: Date.now(), found: found };
+        if (found) {
+          var num = function (k) { var x = Number(n[k]); return isFinite(x) && x >= 0 ? Math.round(x * 10) / 10 : 0; };
+          doc.food = { ean: ean, name: cleanText([pr.brands ? String(pr.brands).split(",")[0] : "", pr.product_name_nl || pr.product_name].filter(Boolean).join(" "), 80),
+            kcal: Math.round(kcal), eiwit: num("proteins_100g"), kh: num("carbohydrates_100g"), vet: num("fat_100g"),
+            portion: Number(pr.serving_quantity) > 0 && Number(pr.serving_quantity) < 2000 ? { label: cleanText(pr.serving_size || "1 portie", 30), g: Math.round(Number(pr.serving_quantity)) } : null };
+        }
+        return dbSetDoc(key, doc).then(function () { return doc; });
+      }, function (e) { clearTimeout(t); throw e; });
+  }).then(function (doc) {
+    logRequest({ ts: new Date().toISOString(), type: "estimate", action: "streepjescode", ok: !!doc.found, status: doc.found ? 200 : 404, ip: clientIp(req) });
+    if (!doc.found) return sendJSON(res, 404, { code: "not_found", message: "Dit product staat (nog) niet in Open Food Facts. Zoek het op naam of voeg het zelf toe." });
+    sendJSON(res, 200, { food: doc.food, source: "Open Food Facts" });
+  }).catch(function () { sendJSON(res, 502, { code: "error", message: "De productgegevens konden niet worden opgehaald. Probeer het zo opnieuw of zoek op naam." }); });
 }
 
 // ---------- Ideeën van gebruikers (uit de chat) en berichten terug ----------
@@ -7665,6 +7764,9 @@ var server = http.createServer(function (req, res) {
   if (req.method === "POST" && url.pathname === "/api/assistant") return handleAssistant(req, res);
   if (req.method === "POST" && url.pathname === "/api/estimate") return handleEstimate(req, res);
   if (req.method === "GET" && url.pathname === "/api/news") return handleNews(req, res);
+  if (req.method === "GET" && url.pathname === "/api/foods") return handleFoods(req, res);
+  var eanM = url.pathname.match(/^\/api\/foods\/barcode\/([0-9]{1,20})$/);
+  if (req.method === "GET" && eanM) return handleFoodBarcode(req, res, eanM[1]);
   if ((req.method === "GET" || req.method === "POST") && url.pathname === "/api/autoplan") return handleAutoPlan(req, res);
   if ((req.method === "GET" || req.method === "POST") && url.pathname === "/api/suggestions") return handleSuggestions(req, res);
   if ((req.method === "GET" && url.pathname === "/api/inbox") || (req.method === "POST" && url.pathname === "/api/inbox/read")) return handleInbox(req, res);

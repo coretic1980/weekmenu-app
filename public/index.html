@@ -679,6 +679,64 @@
   .recent-card > b { font-size: 14px; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 36px; }
   .recent-card .rc-meta { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
   .ap-h { font-size: 13px; font-weight: 700; margin: 16px 0 8px; }
+  /* Snel toevoegen */
+  .qa-overlay .sheet { max-height: 92vh; max-height: 92dvh; }
+  .qa-bar { display: flex; gap: 8px; align-items: center; position: sticky; top: 0; z-index: 2; background: var(--surface); padding: 6px 0 8px; }
+  .qa-input { flex: 1; min-width: 0; font-size: 16px; }
+  .qa-icon { flex: none; width: 46px; height: 46px; padding: 0; display: grid; place-items: center; border-radius: 12px; }
+  .qa-sentence-btn { width: 100%; text-align: left; display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border-radius: 14px; border: 1px dashed var(--accent2); background: transparent; color: var(--ink); font: inherit; cursor: pointer; margin-bottom: 6px; }
+  .qa-sentence-btn b { color: var(--accent2); font-size: 14px; }
+  .qa-sentence-btn span { font-size: 13px; color: var(--muted); }
+  .qa-results { display: flex; flex-direction: column; }
+  .qa-res { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 10px 4px; border: 0; border-bottom: 1px solid var(--line); background: none; color: var(--ink); font: inherit; cursor: pointer; min-height: 52px; }
+  .qa-res-txt { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .qa-res-txt b { font-size: 15px; font-weight: 600; }
+  .qa-res-txt small { font-size: 12.5px; color: var(--muted); }
+  .qa-plus { flex: none; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: var(--accent); color: var(--accent-ink); font-size: 20px; font-weight: 600; }
+  .qa-empty { padding: 12px 2px; font-size: 13.5px; color: var(--muted); line-height: 1.45; }
+  .qa-empty .nudge-actions { margin-top: 8px; }
+  .qa-h { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 14px 0 8px; }
+  .qa-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .qa-chips .chip { min-height: 38px; }
+  .qa-results:empty, .qa-start:empty, .qa-scanbox:empty, .qa-sentence:empty, .qa-items:empty { display: none; }
+  .chiprow.qa-days { margin-bottom: 8px !important; }
+  .chiprow.qa-days, .qa-days { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 -2px; padding: 0 2px 2px; }
+  .qa-days::-webkit-scrollbar { display: none; }
+  .qa-days .chip { flex: none; }
+  .qa-items { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+  .qa-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px; background: var(--bg); border: 1px solid var(--line); }
+  .qa-item-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .qa-item-txt b { font-size: 14.5px; font-weight: 600; overflow-wrap: anywhere; }
+  .qa-item-txt small { font-size: 12.5px; color: var(--muted); }
+  .qa-ctr { flex: none; display: flex; align-items: center; gap: 4px; }
+  .qa-step { width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font-size: 18px; line-height: 1; cursor: pointer; }
+  .qa-g { width: 56px; height: 34px; text-align: center; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; font-size: 14px; -moz-appearance: textfield; }
+  .qa-g::-webkit-outer-spin-button, .qa-g::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  .qa-gl { font-size: 12px; color: var(--muted); margin-right: 2px; }
+  .qa-sum { margin-top: 12px; }
+  .qa-sum > .primary-btn { width: 100%; margin-top: 14px; }
+  .qa-sum > .textinput { margin-top: 12px; width: 100%; }
+  .qa-total { display: flex; align-items: center; gap: 14px; padding: 14px; border-radius: 16px; background: var(--mint, var(--bg)); }
+  .qa-kcal { display: flex; flex-direction: column; align-items: flex-start; }
+  .qa-kcal b { font-family: "Fraunces", serif; font-size: 26px; font-weight: 600; line-height: 1; }
+  .qa-kcal span { font-size: 12px; color: var(--muted); }
+  .qa-mac { flex: 1; display: flex; gap: 10px; }
+  .qa-mac span { display: flex; flex-direction: column; font-size: 13px; }
+  .qa-mac small { font-size: 11.5px; color: var(--muted); }
+  .qa-fit { margin-top: 8px; font-size: 13px; color: var(--accent2); font-weight: 600; }
+  .qa-fit.over { color: #B0731B; }
+  .qa-seg { margin-top: 12px; }
+  .qa-expl { font-size: 12.5px; color: var(--muted); margin-top: 6px; line-height: 1.4; }
+  .qa-ref { font-size: 11px; color: var(--muted); margin-top: 14px; line-height: 1.4; }
+  .qa-own { padding: 14px; margin-top: 6px; }
+  .qa-own .qa-h { margin-top: 0; }
+  .qa-field { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--muted); margin-bottom: 8px; }
+  .qa-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; }
+  .qa-scan { display: flex; flex-direction: column; gap: 10px; margin-top: 6px; }
+  .qa-video { width: 100%; max-height: 260px; object-fit: cover; border-radius: 16px; background: #000; }
+  .qa-scan-status { font-size: 13px; color: var(--muted); text-align: center; }
+  .hh-acts .qa-main { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  .wk-meal.qa-add { justify-content: center; color: var(--accent2); font-weight: 600; font-size: 13px; }
   .ap-chips { display: flex; flex-wrap: wrap; gap: 8px; }
   .ap-days .chip { min-width: 40px; padding: 7px 0; text-align: center; }
   .ap-when { display: flex; gap: 8px; }
@@ -4977,6 +5035,11 @@
         var pt = document.createElement("button"); pt.type = "button"; pt.className = "hh-link"; pt.id = "planTodayBtn"; pt.textContent = "Liever alleen vandaag kiezen";
         pt.onclick = planToday; card.appendChild(pt);
       }
+      if (hasAnyDishes() || healthOk()) {
+        var qa = document.createElement("button"); qa.type = "button"; qa.className = "hh-link"; qa.id = "qaEmpty"; qa.textContent = "\uFF0B Snel iets toevoegen";
+        qa.onclick = function () { openQuickAdd({}); };
+        card.appendChild(qa);
+      }
       if (tools && moduleOn("generate")) {
         var al = document.createElement("button"); al.type = "button"; al.className = "hh-link"; al.id = "offPlanEmpty"; al.textContent = "Al iets gegeten? Leg het vast";
         al.onclick = function () { openOffPlanSheet(null); };
@@ -5078,8 +5141,12 @@
       list.appendChild(row);
     });
     if (list.childNodes.length) body.appendChild(list);
+    var acts = document.createElement("div"); acts.className = "hh-acts";
+    var a0 = document.createElement("button"); a0.type = "button"; a0.className = "ghost-btn small qa-main"; a0.id = "qaBtn"; a0.textContent = "\uFF0B Toevoegen";
+    a0.onclick = function () { openQuickAdd({}); };
+    acts.appendChild(a0);
+    if (!(tools && moduleOn("generate"))) body.appendChild(acts);
     if (tools && moduleOn("generate")) {
-      var acts = document.createElement("div"); acts.className = "hh-acts";
       var a1 = document.createElement("button"); a1.type = "button"; a1.className = "ghost-btn small"; a1.id = "offPlanBtn"; a1.textContent = "Anders gegeten";
       a1.onclick = function () { openOffPlanSheet(feat ? dayName + "|" + feat.slot : null); };
       acts.appendChild(a1);
@@ -8598,6 +8665,12 @@
           sn.innerHTML = "<small>Snacks</small><span></span>";
           sn.querySelector("span").textContent = snacks.length + (snacks.length === 1 ? " snack" : " snacks") + " \u00b7 " + sk + " kcal";
           meals.appendChild(sn);
+        }
+        if (!past) {
+          var qb = document.createElement("button"); qb.type = "button"; qb.className = "wk-meal qa-add"; qb.id = "qaDayBtn-" + dn;
+          qb.textContent = "\uFF0B Snel iets toevoegen";
+          qb.onclick = function () { openQuickAdd({ week: pw.weekStart, day: dn }); };
+          meals.appendChild(qb);
         }
         card.appendChild(meals);
       }
@@ -12812,6 +12885,555 @@
     requestAnimationFrame(function () { goTo(idx, false); });
   }
 
+  // =====================================================================================================
+  // Snel toevoegen: een maaltijd, snack of los product op basis van ingrediënten.
+  // Zoeken gebeurt hier in de app (NEVO-lijst, eenmalig geladen en bewaard), dus direct en zonder AI-kosten.
+  // Alleen wat niet te vinden is, schat de AI. Macro's en Balans rekent de app zelf uit.
+  // =====================================================================================================
+  var QA_FOODS_LS = "balanza_foods_v1", QA_HIST_LS = "balanza_qa_hist";
+  var qaFoods = null, qaFoodsLoading = null;
+  function qaNorm(s) {
+    return String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9%\s]/g, " ").replace(/\s+/g, " ").trim();
+  }
+  function qaIndex(data) {
+    var list = data.foods.map(function (r) {
+      var n = qaNorm(r[1]);
+      return { key: "n" + r[0], code: String(r[0]), name: r[1], kcal: r[2], e: r[3], kh: r[4], v: r[5], staple: !!r[6], src: String(r[0]).charAt(0) === "B" ? "balanza" : "nevo", norm: n, tokens: n.split(" ") };
+    });
+    var byCode = {}; list.forEach(function (f) { byCode[f.code] = f; });
+    var portions = (data.portions || []).map(function (p) { try { return { re: new RegExp(p[0], "i"), label: p[1], g: p[2] }; } catch (e) { return null; } }).filter(Boolean);
+    return { list: list, byCode: byCode, aliases: data.aliases || {}, portions: portions, reference: data.reference, version: data.version };
+  }
+  function qaLoadFoods() {
+    if (qaFoods) return Promise.resolve(qaFoods);
+    if (qaFoodsLoading) return qaFoodsLoading;
+    var cached = null;
+    try { cached = JSON.parse(lsGet(QA_FOODS_LS) || "null"); } catch (e) {}
+    if (cached && cached.foods && cached.foods.length) { qaFoods = qaIndex(cached); }
+    // Altijd even verversen op de achtergrond (de server antwoordt kort als er niets veranderde).
+    qaFoodsLoading = fetch("/api/foods").then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }).then(function (d) {
+      try { localStorage.setItem(QA_FOODS_LS, JSON.stringify(d)); } catch (e) {}
+      qaFoods = qaIndex(d); qaFoodsLoading = null; return qaFoods;
+    }).catch(function (e) { qaFoodsLoading = null; if (qaFoods) return qaFoods; throw e; });
+    return qaFoods ? Promise.resolve(qaFoods) : qaFoodsLoading;
+  }
+  function myFoods() { return Array.isArray(prefs.myFoods) ? prefs.myFoods : []; }
+  function qaMyAsFood(m) {
+    return { key: "m" + m.id, my: m.id, name: m.name, kcal: m.kcal, e: m.e, kh: m.kh, v: m.v, per: m.per || 100, portion: m.portion || null, src: m.src || "eigen", ean: m.ean || null, norm: qaNorm(m.name), tokens: qaNorm(m.name).split(" ") };
+  }
+  function qaHist() { try { var h = JSON.parse(lsGet(QA_HIST_LS + "_" + meId()) || "null"); return h && typeof h === "object" ? h : { foods: {}, meals: [] }; } catch (e) { return { foods: {}, meals: [] }; } }
+  function qaSaveHist(h) { lsSet(QA_HIST_LS + "_" + meId(), JSON.stringify(h)); }
+  // Standaardportie voor een product (Balanza-aanvulling op NEVO).
+  function qaPortion(f) {
+    if (f.portion && f.portion.g) return f.portion;
+    if (f.fixed) return { label: "1 portie", g: 0 };
+    var n = qaNorm(f.name);
+    var p = qaFoods ? qaFoods.portions.filter(function (x) { return x.re.test(n); })[0] : null;
+    return p ? { label: p.label, g: p.g } : { label: "100 gram", g: 100 };
+  }
+  function qaScore(f, qTokens, q) {
+    var s = 0;
+    if (f.norm === q) s += 3;
+    if (f.norm.indexOf(q) === 0) s += 2;
+    var hits = 0;
+    qTokens.forEach(function (qt) {
+      var best = 0;
+      f.tokens.forEach(function (t, i) {
+        var v = t === qt ? 1 : t.indexOf(qt) === 0 ? 0.85 : (qt.length >= 4 && t.indexOf(qt) > -1) ? 0.55 : (t.length >= 4 && qt.indexOf(t) === 0) ? 0.5 : 0;
+        if (v && i === 0) v += 0.25;   // eerste woord van de productnaam weegt zwaarder
+        if (v > best) best = v;
+      });
+      // Samenstellingen: "stroopwafel" hoort bij "Wafel stroop-", "kipfilet" bij "Filet kip"
+      if (best < 0.9 && qt.length >= 7 && f.tokens.length >= 2 && f.tokens[0].length >= 3 && f.tokens[1].length >= 3 &&
+          qt.indexOf(f.tokens[0]) > -1 && qt.indexOf(f.tokens[1]) > -1 && f.tokens[0].length + f.tokens[1].length >= qt.length - 2) best = 1.3;
+      if (best) hits++;
+      s += best;
+    });
+    if (hits < qTokens.length) return 0;
+    if (f.staple) s += 0.6;
+    if (f.my) s += 1.2;
+    if (/\b(rauw|onbereid)\b/.test(f.norm) && !/\b(gekookt|gebakken|bereid)\b/.test(q)) s += 0.15;
+    s -= f.tokens.length * 0.04;
+    return s;
+  }
+  function qaSearch(query, limit) {
+    var q = qaNorm(query); if (!q || !qaFoods) return [];
+    var qTokens = q.split(" ").filter(Boolean);
+    var pool = myFoods().map(qaMyAsFood).concat(qaFoods.list);
+    var al = qaFoods.aliases[q] || qaFoods.aliases[q.replace(/(en|s)$/, "")];
+    var out = [];
+    if (al && qaFoods.byCode[al]) out.push({ f: qaFoods.byCode[al], s: 99 });
+    pool.forEach(function (f) { var s = qaScore(f, qTokens, q); if (s > 0) out.push({ f: f, s: s }); });
+    // meervoud: "appels" -> "appel"
+    if (out.length < 3 && /(en|s)$/.test(q)) { var q2 = q.replace(/(en|s)$/, ""), t2 = q2.split(" "); pool.forEach(function (f) { var s = qaScore(f, t2, q2) - 0.2; if (s > 0) out.push({ f: f, s: s }); }); }
+    var seen = {};
+    return out.sort(function (a, b) { return b.s - a.s; }).filter(function (x) { if (seen[x.f.key]) return false; seen[x.f.key] = 1; return true; }).slice(0, limit || 8).map(function (x) { return x.f; });
+  }
+  // Eén regel in de lijst: een product met een hoeveelheid.
+  function qaItem(f, grams, count) {
+    var p = qaPortion(f);
+    var it = { key: f.key, name: f.name, src: f.src, code: f.code || null, my: f.my || null, ean: f.ean || null, per100: f.fixed ? null : { kcal: f.kcal, e: f.e, kh: f.kh, v: f.v }, fixed: f.fixed || null, portion: p };
+    if (f.fixed) { it.count = count || 1; it.g = 0; }
+    else it.g = Math.max(1, Math.round(grams || p.g || 100));
+    return it;
+  }
+  function qaItemMacros(it) {
+    if (it.fixed) { var c = it.count || 1; return { kcal: it.fixed.kcal * c, e: it.fixed.e * c, kh: it.fixed.kh * c, v: it.fixed.v * c }; }
+    var k = it.g / 100;
+    return { kcal: it.per100.kcal * k, e: it.per100.e * k, kh: it.per100.kh * k, v: it.per100.v * k };
+  }
+  function qaTotals(items) {
+    var t = { kcal: 0, e: 0, kh: 0, v: 0 };
+    items.forEach(function (it) { var m = qaItemMacros(it); t.kcal += m.kcal; t.e += m.e; t.kh += m.kh; t.v += m.v; });
+    return { kcal: Math.round(t.kcal), eiwitG: Math.round(t.e), khG: Math.round(t.kh), vetG: Math.round(t.v) };
+  }
+  function qaAmountText(it) {
+    if (it.fixed) return (it.count || 1) === 1 ? "1 portie" : it.count + " porties";
+    var p = it.portion;
+    if (p && p.g && p.g !== 100 && it.g % p.g === 0 && it.g / p.g <= 12) { var n = it.g / p.g, lb = n === 1 ? p.label : p.label.replace(/^1 ([a-z' ]+?)(\s*\(.*\))?$/i, function (m0, w, rest) { return n + " " + (QA_PLURAL[w] || w) + (rest || ""); }); return /\bg\)?$/.test(lb) && n === 1 ? lb : lb.replace(/\s*\(\d+\s*g\)$/, "") + " (" + it.g + " g)"; }
+    return it.g + " g";
+  }
+  var QA_PLURAL = { ei: "eieren", banaan: "bananen", appel: "appels", peer: "peren", sinaasappel: "sinaasappels", mandarijn: "mandarijnen", kiwi: "kiwi's", tomaat: "tomaten", wortel: "wortels", ui: "uien",
+    stroopwafel: "stroopwafels", rijstwafel: "rijstwafels", broodje: "broodjes", beschuit: "beschuiten", cracker: "crackers", reep: "repen", reepje: "reepjes", plak: "plakken", bakje: "bakjes", glas: "glazen", glaasje: "glaasjes",
+    kop: "koppen", kom: "kommen", schaaltje: "schaaltjes", portie: "porties", stuk: "stukken", handje: "handjes", eetlepel: "eetlepels", schepje: "schepjes", bolletje: "bolletjes", wrap: "wraps", croissant: "croissants",
+    dadel: "dadels", pruim: "pruimen", teen: "tenen", eiwit: "eiwitten", "gevulde koek": "gevulde koeken", schijf: "schijven", part: "parten", bol: "bollen", doosje: "doosjes", pizza: "pizza's", bord: "borden" };
+  function qaLineText(it) { return qaAmountText(it).replace(/ \((\d+) g\)$/, "") + " " + it.name.toLowerCase(); }
+
+  // ---- Een hele zin: "2 eieren, 2 sneetjes volkoren brood met 30 g kaas" ----
+  var QA_WORDNUM = { een: 1, een_: 1, twee: 2, drie: 3, vier: 4, vijf: 5, zes: 6, half: 0.5, halve: 0.5, anderhalf: 1.5, paar: 2 };
+  var QA_UNITS = [
+    [/^(kg|kilo)$/, "g", 1000], [/^(g|gr|gram)$/, "g", 1], [/^(ml)$/, "g", 1], [/^(dl)$/, "g", 100], [/^(l|liter)$/, "g", 1000],
+    [/^(el|eetlepels?|eetl)$/, "g", 15], [/^(tl|theelepels?)$/, "g", 5], [/^(glas|glazen|glaasjes?)$/, "p", 200], [/^(kop|kopjes?|koppen|mok|mokken)$/, "p", 150],
+    [/^(snee|sneetjes?|sneden|boterhams?)$/, "p", 35], [/^(plakjes?|plakken|plak)$/, "p", 20], [/^(stuks?|stukjes?)$/, "p", 0], [/^(bakjes?)$/, "p", 0], [/^(schaaltjes?|kom|kommen|kommetjes?)$/, "p", 0],
+    [/^(handjes?|handvol)$/, "p", 25], [/^(porties?)$/, "p", 0], [/^(blikjes?|blik)$/, "p", 0], [/^(repen|reep|reepjes?)$/, "p", 0], [/^(bolletjes?|bollen|bol)$/, "p", 0], [/^(teentjes?|tenen|teen)$/, "p", 5]
+  ];
+  function qaParse(text) {
+    var parts = String(text || "").split(/\s*(?:,|;|\n|\+|\ben\b|\bmet\b)\s*/i).map(function (x) { return x.trim(); }).filter(Boolean);
+    return parts.map(function (part) {
+      var words = part.replace(/(\d)([a-z])/gi, "$1 $2").split(/\s+/), qty = null, unit = null, i = 0;
+      var w0 = (words[0] || "").toLowerCase().replace(",", ".");
+      if (/^\d+(\.\d+)?$/.test(w0)) { qty = Number(w0); i = 1; }
+      else if (/^\d+\/\d+$/.test(w0)) { var fr = w0.split("/"); qty = Number(fr[0]) / Number(fr[1]); i = 1; }
+      else if (w0 === "½") { qty = 0.5; i = 1; }
+      else if (QA_WORDNUM[w0] !== undefined && words.length > 1) { qty = QA_WORDNUM[w0]; i = 1; }
+      var w1 = (words[i] || "").toLowerCase().replace(/\.$/, "");
+      QA_UNITS.some(function (u) { if (u[0].test(w1)) { unit = u; i++; return true; } return false; });
+      var food = words.slice(i).join(" ").replace(/^(van|de|het)\s+/i, "").trim();
+      return { raw: part, qty: qty, unit: unit, food: food || part };
+    });
+  }
+  function qaResolve(p) {
+    var hit = qaSearch(p.food, 1)[0];
+    if (!hit) return null;
+    var por = qaPortion(hit), g;
+    if (p.unit && p.unit[1] === "g") g = (p.qty || 1) * p.unit[2];
+    else if (p.unit && p.unit[2]) g = (p.qty || 1) * (por.g && /snee|plak|glas|kop|handje/.test(por.label) ? por.g : p.unit[2]);
+    else g = (p.qty || 1) * (por.g || 100);
+    return qaItem(hit, g);
+  }
+
+  // ---- Het invoerscherm ----
+  function qaDayOptions() {
+    var monday = getMonday(new Date()), out = [], todayIdx = (new Date().getDay() + 6) % 7;
+    PLAN_DAYS.forEach(function (dn, i) { if (i >= todayIdx) out.push({ week: isoDateKey(monday), day: dn, label: i === todayIdx ? "Vandaag" : PLAN_SHORT[dn].toLowerCase() }); });
+    var next = new Date(monday); next.setDate(next.getDate() + 7);
+    PLAN_DAYS.forEach(function (dn) { out.push({ week: isoDateKey(next), day: dn, label: PLAN_SHORT[dn].toLowerCase() + " (vlg)" }); });
+    return out;
+  }
+  function qaDefaultMoment() {
+    var h = new Date().getHours();
+    return h < 10 ? "Ontbijt" : h < 14 ? "Lunch" : h < 17 ? "Snack" : h < 21 ? "Diner" : "Snack";
+  }
+  // opts: { week: "2026-10-19", day: "Woensdag", moment: "Lunch" }
+  function openQuickAdd(opts) {
+    opts = opts || {};
+    var st = {
+      items: [], q: "", results: [],
+      week: opts.week || isoDateKey(getMonday(new Date())), day: opts.day || PLAN_DAYS[(new Date().getDay() + 6) % 7], moment: opts.moment || qaDefaultMoment(),
+      mode: healthOk() ? "extra" : "plan", save: false, name: "", busy: false, msg: "", scan: false
+    };
+    var sh = openSimpleSheet("quickAddSheet", "Snel toevoegen", "Macro's en Balans rekent Balanza zelf uit");
+    sh.ov.classList.add("qa-overlay");
+    var body = sh.body;
+    var input, list, sumBox;
+    qaLoadFoods().then(function () { if (st.q) { st.results = qaSearch(st.q); paintResults(); } paintStart(); }).catch(function () { st.msg = "De productenlijst kon niet worden geladen. Controleer je verbinding."; paintStart(); });
+    function addFood(f, grams) {
+      var it = qaItem(f, grams);
+      var ex = st.items.filter(function (x) { return x.key === it.key; })[0];
+      if (ex) { if (ex.fixed) ex.count = (ex.count || 1) + 1; else ex.g += it.g; } else st.items.push(it);
+      st.q = ""; input.value = ""; st.results = [];
+      paintItems(); paintResults(); paintStart(); paintSum();
+      try { input.focus(); } catch (e) {}
+    }
+    // Bovenaan: zoekveld met scan- en zinknop
+    var bar = document.createElement("div"); bar.className = "qa-bar";
+    input = document.createElement("input"); input.type = "search"; input.className = "textinput qa-input"; input.id = "qaInput"; input.autocomplete = "off"; input.enterKeyHint = "done";
+    input.placeholder = "Zoek, of typ: 2 eieren, 1 snee brood met kaas";
+    input.oninput = function () {
+      st.q = input.value;
+      st.results = /[,;]|\d|\b(en|met)\b/.test(st.q) && qaParse(st.q).length > 1 ? [] : qaSearch(st.q);
+      paintResults(); paintStart();
+    };
+    input.onkeydown = function (e) { if (e.key === "Enter") { e.preventDefault(); if (st.results.length === 1 || (st.results.length && !/\d|,/.test(st.q))) addFood(st.results[0]); else addSentence(); } };
+    bar.appendChild(input);
+    var scanB = document.createElement("button"); scanB.type = "button"; scanB.className = "ghost-btn small qa-icon"; scanB.id = "qaScan"; scanB.setAttribute("aria-label", "Streepjescode scannen"); scanB.title = "Streepjescode scannen";
+    scanB.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 8v8M10 8v8M13 8v8M16 8v8"/></svg>';
+    scanB.onclick = function () { openScanner(); };
+    bar.appendChild(scanB);
+    if (typeof SpeechRec !== "undefined" && SpeechRec && typeof voiceOn === "function" && voiceOn()) {
+      var mic = micButton(input, function () { input.oninput(); }, function () { addSentence(); });
+      mic.classList.add("qa-icon"); bar.appendChild(mic);
+    }
+    body.appendChild(bar);
+    var sentenceRow = document.createElement("div"); sentenceRow.className = "qa-sentence"; sentenceRow.id = "qaSentenceRow"; body.appendChild(sentenceRow);
+    var resBox = document.createElement("div"); resBox.className = "qa-results"; resBox.id = "qaResults"; body.appendChild(resBox);
+    var startBox = document.createElement("div"); startBox.className = "qa-start"; startBox.id = "qaStart"; body.appendChild(startBox);
+    var scanBox = document.createElement("div"); scanBox.className = "qa-scanbox"; scanBox.id = "qaScanBox"; body.appendChild(scanBox);
+    list = document.createElement("div"); list.className = "qa-items"; list.id = "qaItems"; body.appendChild(list);
+    sumBox = document.createElement("div"); sumBox.className = "qa-sum"; sumBox.id = "qaSum"; body.appendChild(sumBox);
+    var note = document.createElement("div"); note.className = "qa-ref"; body.appendChild(note);
+
+    function paintResults() {
+      resBox.innerHTML = "";
+      sentenceRow.innerHTML = "";
+      if (!st.q.trim()) return;
+      var parsed = qaParse(st.q);
+      if (parsed.length > 1 || (parsed[0] && (parsed[0].qty || parsed[0].unit))) {
+        var sb = document.createElement("button"); sb.type = "button"; sb.className = "qa-sentence-btn"; sb.id = "qaAddSentence";
+        sb.innerHTML = "<b>Voeg toe</b><span></span>";
+        sb.querySelector("span").textContent = parsed.map(function (p) { return p.raw; }).join(" · ");
+        sb.onclick = addSentence; sentenceRow.appendChild(sb);
+        if (parsed.length > 1) return;
+      }
+      if (!qaFoods) { resBox.innerHTML = '<div class="qa-empty">Productenlijst laden…</div>'; return; }
+      st.results.forEach(function (f, i) {
+        var b = document.createElement("button"); b.type = "button"; b.className = "qa-res"; b.id = "qaRes" + i;
+        var p = qaPortion(f);
+        b.innerHTML = '<span class="qa-res-txt"><b></b><small></small></span><span class="qa-plus" aria-hidden="true">+</span>';
+        b.querySelector("b").textContent = f.name;
+        b.querySelector("small").textContent = (f.fixed ? f.fixed.kcal + " kcal per portie" : Math.round(f.kcal * (p.g || 100) / 100) + " kcal per " + p.label + (p.g && p.label !== "100 gram" && !/\bg\)$/.test(p.label) ? " (" + p.g + " g)" : "")) + (f.my ? " · eigen product" : f.src === "balanza" ? " · Balanza-aanvulling" : "");
+        b.onclick = function () { addFood(f); };
+        resBox.appendChild(b);
+      });
+      if (!st.results.length) {
+        var none = document.createElement("div"); none.className = "qa-empty";
+        none.textContent = "Niet gevonden in de productenlijst.";
+        var ai = document.createElement("button"); ai.type = "button"; ai.className = "ghost-btn small"; ai.id = "qaAiOne"; ai.textContent = "Laat Balanza het schatten";
+        ai.onclick = function () { estimateUnknown([st.q]); };
+        var own = document.createElement("button"); own.type = "button"; own.className = "ghost-btn small"; own.id = "qaOwnBtn"; own.textContent = "Zelf toevoegen";
+        own.onclick = function () { openOwnFood(st.q); };
+        var row = document.createElement("div"); row.className = "nudge-actions"; if (moduleOn("generate")) row.appendChild(ai); row.appendChild(own);
+        none.appendChild(row); resBox.appendChild(none);
+      }
+    }
+    // Snelle keuze als het zoekveld leeg is: wat je vaak of laatst gebruikte, en je bewaarde maaltijden.
+    function paintStart() {
+      startBox.innerHTML = "";
+      if (st.q.trim() || st.scan) return;
+      if (st.msg) { var m = document.createElement("div"); m.className = "qa-empty"; m.textContent = st.msg; startBox.appendChild(m); }
+      var h = qaHist();
+      var meals = (h.meals || []).slice().sort(function (a, b) { return (b.n || 0) - (a.n || 0) || (b.last || "").localeCompare(a.last || ""); }).slice(0, 4);
+      if (meals.length) {
+        var l1 = document.createElement("div"); l1.className = "qa-h"; l1.textContent = "Mijn maaltijden"; startBox.appendChild(l1);
+        var r1 = document.createElement("div"); r1.className = "chiprow qa-chips";
+        meals.forEach(function (ml, i) {
+          var c = document.createElement("button"); c.type = "button"; c.className = "chip"; c.id = "qaMeal" + i; c.textContent = ml.name;
+          c.onclick = function () { ml.items.forEach(function (x) { var cp = JSON.parse(JSON.stringify(x)); var ex = st.items.filter(function (y) { return y.key === cp.key; })[0]; if (ex) { if (ex.fixed) ex.count += cp.count || 1; else ex.g += cp.g; } else st.items.push(cp); }); st.name = st.name || ml.name; paintItems(); paintSum(); };
+          r1.appendChild(c);
+        });
+        startBox.appendChild(r1);
+      }
+      var foods = Object.keys(h.foods || {}).map(function (k) { return h.foods[k]; }).sort(function (a, b) { return (b.n || 0) * 2 + (b.last > a.last ? 1 : 0) - (a.n || 0) * 2 - (a.last > b.last ? 1 : 0); }).slice(0, 10);
+      if (foods.length) {
+        var l2 = document.createElement("div"); l2.className = "qa-h"; l2.textContent = "Vaak en laatst"; startBox.appendChild(l2);
+        var r2 = document.createElement("div"); r2.className = "chiprow qa-chips";
+        foods.forEach(function (x, i) {
+          var c = document.createElement("button"); c.type = "button"; c.className = "chip"; c.id = "qaRecent" + i; c.textContent = x.item.name.length > 26 ? x.item.name.slice(0, 25) + "…" : x.item.name;
+          c.onclick = function () { var cp = JSON.parse(JSON.stringify(x.item)); var ex = st.items.filter(function (y) { return y.key === cp.key; })[0]; if (ex) { if (ex.fixed) ex.count += 1; else ex.g += cp.g; } else st.items.push(cp); paintItems(); paintSum(); };
+          r2.appendChild(c);
+        });
+        startBox.appendChild(r2);
+      }
+      if (!meals.length && !foods.length && !st.items.length) {
+        var tip = document.createElement("div"); tip.className = "qa-empty";
+        tip.textContent = "Typ een product (bijv. “kwark”), of een hele zin zoals “2 eieren, 2 sneetjes volkoren brood met 30 g kaas”. Scannen kan ook.";
+        startBox.appendChild(tip);
+      }
+    }
+    function paintItems() {
+      list.innerHTML = "";
+      st.items.forEach(function (it, idx) {
+        var row = document.createElement("div"); row.className = "qa-item"; row.id = "qaItem" + idx;
+        var m = qaItemMacros(it);
+        var tx = document.createElement("div"); tx.className = "qa-item-txt";
+        var b = document.createElement("b"); b.textContent = it.name;
+        var sm = document.createElement("small"); sm.textContent = qaAmountText(it) + " · " + Math.round(m.kcal) + " kcal" + (it.src === "ai" ? " · schatting" : it.src === "off" ? " · Open Food Facts" : "");
+        tx.appendChild(b); tx.appendChild(sm);
+        var minus = document.createElement("button"); minus.type = "button"; minus.className = "qa-step"; minus.textContent = "−"; minus.setAttribute("aria-label", "Minder " + it.name);
+        var plus = document.createElement("button"); plus.type = "button"; plus.className = "qa-step"; plus.textContent = "+"; plus.setAttribute("aria-label", "Meer " + it.name);
+        var step = it.fixed ? 1 : (it.portion && it.portion.g && it.portion.g !== 100 ? it.portion.g : (it.g >= 100 ? 25 : 10));
+        minus.onclick = function () { if (it.fixed) { it.count -= 1; if (it.count <= 0) st.items.splice(idx, 1); } else { it.g -= step; if (it.g <= 0) st.items.splice(idx, 1); } paintItems(); paintSum(); };
+        plus.onclick = function () { if (it.fixed) it.count += 1; else it.g += step; paintItems(); paintSum(); };
+        var gIn = null;
+        if (!it.fixed) {
+          gIn = document.createElement("input"); gIn.type = "number"; gIn.inputMode = "numeric"; gIn.className = "qa-g"; gIn.value = it.g; gIn.min = "1"; gIn.max = "3000"; gIn.setAttribute("aria-label", "Gram " + it.name);
+          gIn.onchange = function () { var v = Math.round(Number(gIn.value)); if (v > 0 && v <= 3000) { it.g = v; paintItems(); paintSum(); } else gIn.value = it.g; };
+        }
+        var ctr = document.createElement("div"); ctr.className = "qa-ctr"; ctr.appendChild(minus); if (gIn) { ctr.appendChild(gIn); var gl = document.createElement("span"); gl.className = "qa-gl"; gl.textContent = "g"; ctr.appendChild(gl); } ctr.appendChild(plus);
+        row.appendChild(tx); row.appendChild(ctr);
+        list.appendChild(row);
+      });
+    }
+    function paintSum() {
+      sumBox.innerHTML = "";
+      note.textContent = qaFoods ? qaFoods.reference + (st.items.some(function (x) { return x.src === "off"; }) ? "; productgegevens van Open Food Facts (ODbL)" : "") + "." : "";
+      if (!st.items.length) return;
+      var t = qaTotals(st.items), bal = gramsBal(t.kcal, t.khG, t.eiwitG, t.vetG);
+      var top = document.createElement("div"); top.className = "qa-total";
+      var kc = document.createElement("div"); kc.className = "qa-kcal"; kc.innerHTML = "<b></b><span>kcal</span>"; kc.querySelector("b").textContent = t.kcal;
+      top.appendChild(kc);
+      var mac = document.createElement("div"); mac.className = "qa-mac";
+      [["Eiwit", t.eiwitG], ["Koolh.", t.khG], ["Vet", t.vetG]].forEach(function (x) { var s = document.createElement("span"); s.innerHTML = "<b></b><small></small>"; s.querySelector("b").textContent = x[1] + " g"; s.querySelector("small").textContent = x[0]; mac.appendChild(s); });
+      top.appendChild(mac);
+      var seal = balPill(bal); seal.id = "qaBal"; top.appendChild(seal);
+      sumBox.appendChild(top);
+      // Hoe past het in die dag?
+      var target = dailyKcalTarget(), pw = weekByStart(st.week);
+      if (target && healthOk()) {
+        var used = pw ? (aggregateDayMacros(pw, st.day) || { kcal: 0 }).kcal : 0, left = target - used;
+        var fit = document.createElement("div"); fit.className = "qa-fit" + (t.kcal > left ? " over" : ""); fit.id = "qaFit";
+        fit.textContent = left > 0 ? (t.kcal <= left ? "Past: daarna nog " + (left - t.kcal) + " kcal over op " + (st.day === PLAN_DAYS[(new Date().getDay() + 6) % 7] && st.week === isoDateKey(getMonday(new Date())) ? "vandaag" : st.day.toLowerCase()) + "." : "Dit is " + (t.kcal - left) + " kcal meer dan er die dag nog over is.") : "Je dagdoel is die dag al bereikt.";
+        sumBox.appendChild(fit);
+      }
+      // Wanneer?
+      var l = document.createElement("div"); l.className = "qa-h"; l.textContent = "Wanneer"; sumBox.appendChild(l);
+      var dr = document.createElement("div"); dr.className = "chiprow qa-chips qa-days";
+      qaDayOptions().forEach(function (o, i) {
+        var c = document.createElement("button"); c.type = "button"; c.className = "chip" + (o.week === st.week && o.day === st.day ? " selected" : ""); c.id = "qaDay" + i; c.textContent = o.label;
+        c.onclick = function () { st.week = o.week; st.day = o.day; paintSum(); };
+        dr.appendChild(c);
+      });
+      sumBox.appendChild(dr);
+      var mr = document.createElement("div"); mr.className = "chiprow qa-chips";
+      ["Ontbijt", "Lunch", "Diner", "Snack"].forEach(function (mo) {
+        var c = document.createElement("button"); c.type = "button"; c.className = "chip" + (st.moment === mo ? " selected" : ""); c.id = "qaMoment-" + mo; c.textContent = mo;
+        c.onclick = function () { st.moment = mo; paintSum(); };
+        mr.appendChild(c);
+      });
+      sumBox.appendChild(mr);
+      // Hoe?
+      var slotKey = st.day + "|" + (st.moment === "Snack" ? "Snack na lunch" : st.moment);
+      var cur = pw && pw.slots[slotKey] ? resolveAssignedDish(pw.slots[slotKey]) : null;
+      var seg = document.createElement("div"); seg.className = "seg qa-seg";
+      var modes = [];
+      if (healthOk()) modes.push(["extra", "Erbij (telt mee)"]);
+      modes.push(["plan", cur ? "Vervang " + st.moment.toLowerCase() : "Inplannen als " + st.moment.toLowerCase()]);
+      if (modes.length > 1) {
+        modes.forEach(function (m) { var b = document.createElement("button"); b.type = "button"; b.className = "ghost-btn"; b.id = "qaMode-" + m[0]; b.textContent = m[1]; b.setAttribute("aria-pressed", st.mode === m[0] ? "true" : "false"); b.onclick = function () { st.mode = m[0]; paintSum(); }; seg.appendChild(b); });
+        sumBox.appendChild(seg);
+      } else st.mode = "plan";
+      var expl = document.createElement("div"); expl.className = "qa-expl";
+      expl.textContent = st.mode === "extra" ? "Komt bij wat er die dag al staat en telt mee in je dag." : cur ? "Komt in de plaats van " + cur.day.name + " en wordt bewaard als gerecht." : "Wordt bewaard als gerecht en ingepland, net als je andere gerechten.";
+      sumBox.appendChild(expl);
+      var nameIn = document.createElement("input"); nameIn.className = "textinput"; nameIn.id = "qaName"; nameIn.maxLength = 60;
+      nameIn.placeholder = st.items.length === 1 ? st.items[0].name : "Naam, bijv. Mijn ontbijt";
+      nameIn.value = st.name; nameIn.oninput = function () { st.name = nameIn.value; };
+      if (st.items.length > 1 || st.mode === "plan" || st.save) sumBox.appendChild(nameIn);
+      if (st.mode === "extra") {
+        var sv = document.createElement("button"); sv.type = "button"; sv.className = "sheet-toggle"; sv.id = "qaSaveToggle"; sv.setAttribute("role", "switch"); sv.setAttribute("aria-checked", st.save ? "true" : "false");
+        sv.innerHTML = '<span class="st-txt"><b>Bewaar ook als gerecht</b><small>Dan kun je het later inplannen en staat het bij je gerechten</small></span><span class="st-track' + (st.save ? " on" : "") + '"><i></i></span>';
+        sv.onclick = function () { st.save = !st.save; paintSum(); };
+        sumBox.appendChild(sv);
+      }
+      var go = document.createElement("button"); go.type = "button"; go.className = "primary-btn"; go.id = "qaGo";
+      go.textContent = st.mode === "extra" ? "Toevoegen aan " + (qaDayOptions().filter(function (o) { return o.week === st.week && o.day === st.day; })[0] || { label: st.day }).label.toLowerCase() : cur ? "Vervangen" : "Inplannen";
+      go.onclick = commit;
+      if (st.mode === "plan" && readOnlyMode()) lockEl(go, "Je planning aanpassen");
+      sumBox.appendChild(go);
+    }
+    function remember(name) {
+      var h = qaHist(), now = new Date().toISOString();
+      h.foods = h.foods || {};
+      st.items.forEach(function (it) { var k = it.key, prev = h.foods[k]; h.foods[k] = { item: JSON.parse(JSON.stringify(it)), n: (prev ? prev.n : 0) + 1, last: now }; });
+      var keys = Object.keys(h.foods); if (keys.length > 60) keys.sort(function (a, b) { return (h.foods[a].last || "").localeCompare(h.foods[b].last || ""); }).slice(0, keys.length - 60).forEach(function (k) { delete h.foods[k]; });
+      if (st.items.length > 1) {
+        h.meals = (h.meals || []).filter(function (m) { return m.name.toLowerCase() !== name.toLowerCase(); });
+        h.meals.unshift({ name: name, items: JSON.parse(JSON.stringify(st.items)), n: 1, last: now });
+        h.meals = h.meals.slice(0, 12);
+      } else if (st.items.length === 1) {
+        (h.meals || []).forEach(function (m) { if (m.name.toLowerCase() === name.toLowerCase()) { m.n = (m.n || 0) + 1; m.last = now; } });
+      }
+      qaSaveHist(h);
+    }
+    function asDish(name, t, mealType) {
+      var kh = t.kcal ? Math.round(t.khG * 400 / t.kcal) : 0, ei = t.kcal ? Math.round(t.eiwitG * 400 / t.kcal) : 0, ve = t.kcal ? Math.round(t.vetG * 900 / t.kcal) : 0;
+      var allNevo = st.items.every(function (x) { return x.src === "nevo"; });
+      return { id: "qa" + Date.now() + "_0", label: "Zelf samengesteld", name: name, kcal: t.kcal, kh: kh, eiwit: ei, vet: ve, balans: computeBalance(kh, ei, ve),
+        khG: t.khG, eiwitG: t.eiwitG, vetG: t.vetG, bereidingstijd: 0, fotoZoekterm: "", mealType: mealType, benodigdheden: "",
+        ingredienten: st.items.map(qaLineText), steps: [{ title: "Samenstellen", content: "Zelf samengesteld met Snel toevoegen." }],
+        macroBron: allNevo ? "nevo" : "schatting", nevo: null, quick: true, profile: currentProfileSnapshot() };
+    }
+    function commit() {
+      if (!st.items.length) return;
+      var t = qaTotals(st.items);
+      var name = (st.name || "").trim() || (st.items.length === 1 ? st.items[0].name : st.items.slice(0, 2).map(function (x) { return x.name.split(" ")[0]; }).join(" met "));
+      var monday = new Date(st.week + "T00:00:00");
+      var pw = addOrOpenPlannedWeek(monday);
+      var isToday = st.week === isoDateKey(getMonday(new Date())) && st.day === PLAN_DAYS[(new Date().getDay() + 6) % 7];
+      var dayLabel = isToday ? "vandaag" : st.day.toLowerCase() + (st.week !== isoDateKey(getMonday(new Date())) ? " volgende week" : "");
+      var mealType = st.moment;
+      var dish = null;
+      if (st.mode === "plan" || st.save) {
+        if (st.mode === "plan" && requirePlus("Je planning aanpassen")) return;
+        dish = asDish(name, t, mealType);
+        addToCacheLibrary([dish]); persistDishesToDb([dish]);
+      }
+      if (st.mode === "plan") {
+        var key = st.day + "|" + (mealType === "Snack" ? "Snack na lunch" : mealType);
+        var prev = pw.slots[key] ? JSON.parse(JSON.stringify(pw.slots[key])) : null;
+        pw.slots[key] = { name: dish.name, weekId: "cache", dayId: dish.id, balans: dish.balans };
+        savePlannedWeeks();
+        remember(name); closeSheet(sh.ov); render();
+        showUndoToast(name + " staat " + (dayLabel === "vandaag" ? "vandaag" : "op " + dayLabel) + " bij " + mealType.toLowerCase(), function () { if (prev) pw.slots[key] = prev; else delete pw.slots[key]; savePlannedWeeks(); render(); });
+        return;
+      }
+      pw.extra = pw.extra && typeof pw.extra === "object" ? pw.extra : {};
+      pw.extra[st.day] = Array.isArray(pw.extra[st.day]) ? pw.extra[st.day] : [];
+      var entry = { id: "x" + Date.now(), at: new Date().toISOString(), who: meId(), name: name, kcal: t.kcal, eiwitG: t.eiwitG, khG: t.khG, vetG: t.vetG, moment: mealType, quick: true, items: st.items.map(qaLineText) };
+      pw.extra[st.day].push(entry);
+      savePlannedWeeks();
+      remember(name); closeSheet(sh.ov); render();
+      showUndoToast(name + " toegevoegd aan " + dayLabel + " (" + t.kcal + " kcal)" + (dish ? ", en bewaard als gerecht" : ""), function () { pw.extra[st.day] = (pw.extra[st.day] || []).filter(function (x) { return x.id !== entry.id; }); savePlannedWeeks(); render(); });
+    }
+    // Een hele zin in één keer: wat de lijst kent, meteen; de rest laat Balanza schatten.
+    function addSentence() {
+      var parsed = qaParse(st.q); if (!parsed.length) return;
+      if (!qaFoods) { showToast("Even geduld, de productenlijst laadt nog."); return; }
+      var unknown = [];
+      parsed.forEach(function (p) { var it = qaResolve(p); if (it) st.items.push(it); else unknown.push(p.raw); });
+      st.q = ""; input.value = ""; st.results = [];
+      paintResults(); paintItems(); paintSum(); paintStart();
+      if (unknown.length) {
+        if (moduleOn("generate") && window.authToken) estimateUnknown(unknown);
+        else showToast("Niet gevonden: " + unknown.join(", ") + ". Zoek het op een andere naam of voeg het zelf toe.");
+      }
+    }
+    function estimateUnknown(parts) {
+      var holder = document.createElement("div"); holder.className = "qa-empty"; holder.id = "qaEstimating"; holder.textContent = "Balanza schat " + parts.join(", ") + "…";
+      list.appendChild(holder);
+      st.q = ""; input.value = ""; st.results = []; paintResults();
+      Promise.all(parts.map(function (p) {
+        return fetch("/api/estimate", { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, authHeaders()), body: JSON.stringify({ text: p }) })
+          .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { if (!r.ok) throw new Error(d.message || "Schatten lukte niet."); return d; }); })
+          .then(function (d) {
+            var f = { key: "a" + qaNorm(p).replace(/ /g, "_"), name: p.charAt(0).toUpperCase() + p.slice(1), src: "ai", fixed: { kcal: d.kcal, e: d.eiwitG, kh: d.khG, v: d.vetG } };
+            st.items.push(qaItem(f, 0, 1));
+          }, function (e) { showToast(e.message); });
+      })).then(function () { if (holder.parentNode) holder.parentNode.removeChild(holder); paintItems(); paintSum(); paintStart(); });
+    }
+    // Eigen product (bijv. iets van het etiket): per 100 gram, met een eigen portie.
+    function openOwnFood(name, preset) {
+      startBox.innerHTML = ""; resBox.innerHTML = ""; sentenceRow.innerHTML = "";
+      var box = document.createElement("div"); box.className = "qa-own card"; box.id = "qaOwn";
+      box.innerHTML = '<div class="qa-h">Eigen product (van het etiket, per 100 gram)</div>';
+      var f = function (id, label, val, type) { var w = document.createElement("label"); w.className = "qa-field"; w.innerHTML = "<span></span>"; w.querySelector("span").textContent = label; var i = document.createElement("input"); i.className = "textinput"; i.id = id; i.type = type || "number"; i.inputMode = type ? "text" : "decimal"; i.value = val == null ? "" : val; w.appendChild(i); box.appendChild(w); return i; };
+      var nI = f("qaOwnName", "Naam", name || "", "text"); nI.maxLength = 60;
+      var grid = document.createElement("div"); grid.className = "qa-grid"; box.appendChild(grid);
+      var kI = f("qaOwnKcal", "kcal", preset && preset.kcal), eI = f("qaOwnE", "Eiwit (g)", preset && preset.eiwit), cI = f("qaOwnKh", "Koolhydr. (g)", preset && preset.kh), vI = f("qaOwnV", "Vet (g)", preset && preset.vet);
+      [kI, eI, cI, vI].forEach(function (i) { grid.appendChild(i.parentNode); });
+      var pI = f("qaOwnPortion", "Portie in gram (optioneel)", preset && preset.portion ? preset.portion.g : "");
+      var ok = document.createElement("button"); ok.type = "button"; ok.className = "primary-btn"; ok.id = "qaOwnSave"; ok.textContent = "Bewaar en voeg toe";
+      ok.onclick = function () {
+        var num = function (i) { var v = Number(String(i.value).replace(",", ".")); return isFinite(v) && v >= 0 ? v : NaN; };
+        var item = { id: "my" + Date.now(), name: nI.value.trim(), kcal: Math.round(num(kI)), e: num(eI) || 0, kh: num(cI) || 0, v: num(vI) || 0, src: preset ? "off" : "eigen", ean: preset ? preset.ean : null };
+        if (!item.name || !isFinite(item.kcal)) return showToast("Vul in elk geval een naam en de kcal per 100 gram in.");
+        var pg = Math.round(num(pI)); if (pg > 0) item.portion = { label: preset && preset.portion ? preset.portion.label : "1 portie", g: pg };
+        prefs.myFoods = [item].concat(myFoods().filter(function (m) { return !(item.ean && m.ean === item.ean) && m.name.toLowerCase() !== item.name.toLowerCase(); })).slice(0, 150);
+        savePrefs();
+        box.parentNode.removeChild(box);
+        addFood(qaMyAsFood(item));
+      };
+      var cancel = document.createElement("button"); cancel.type = "button"; cancel.className = "ghost-btn"; cancel.textContent = "Annuleren"; cancel.onclick = function () { box.parentNode.removeChild(box); paintStart(); };
+      var row = document.createElement("div"); row.className = "nudge-actions"; row.appendChild(ok); row.appendChild(cancel); box.appendChild(row);
+      startBox.appendChild(box);
+      try { (name ? kI : nI).focus(); } catch (e) {}
+    }
+    // ---- Streepjescode: camera (waar de telefoon het kan) of het nummer intikken ----
+    var stopCam = null;
+    function lookupEan(ean) {
+      ean = String(ean || "").replace(/\D/g, "");
+      if (ean.length < 8) return showToast("Een streepjescode heeft minstens 8 cijfers.");
+      var known = myFoods().filter(function (m) { return m.ean === ean; })[0];
+      if (known) { closeScanner(); addFood(qaMyAsFood(known)); return; }
+      scanBox.querySelector(".qa-scan-status") && (scanBox.querySelector(".qa-scan-status").textContent = "Product opzoeken…");
+      fetch("/api/foods/barcode/" + ean).then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { if (!r.ok) { var e = new Error(d.message || "Niet gevonden."); e.status = r.status; throw e; } return d; }); })
+        .then(function (d) {
+          closeScanner();
+          var fd = d.food;
+          var item = { id: "my" + Date.now(), name: fd.name, kcal: fd.kcal, e: fd.eiwit, kh: fd.kh, v: fd.vet, src: "off", ean: fd.ean, portion: fd.portion };
+          prefs.myFoods = [item].concat(myFoods().filter(function (m) { return m.ean !== fd.ean; })).slice(0, 150); savePrefs();
+          addFood(qaMyAsFood(item));
+        }, function (e) {
+          closeScanner();
+          showToast(e.message);
+          if (e.status === 404) openOwnFood("", { ean: ean });
+        });
+    }
+    function closeScanner() { st.scan = false; if (stopCam) { try { stopCam(); } catch (e) {} stopCam = null; } scanBox.innerHTML = ""; paintStart(); }
+    function openScanner() {
+      if (st.scan) return closeScanner();
+      st.scan = true; startBox.innerHTML = ""; scanBox.innerHTML = "";
+      var wrap = document.createElement("div"); wrap.className = "qa-scan";
+      var video = document.createElement("video"); video.setAttribute("playsinline", ""); video.muted = true; video.className = "qa-video"; video.id = "qaVideo";
+      var status = document.createElement("div"); status.className = "qa-scan-status"; status.textContent = "Camera starten…";
+      var manual = document.createElement("div"); manual.className = "op-row";
+      var ei = document.createElement("input"); ei.className = "textinput"; ei.id = "qaEan"; ei.inputMode = "numeric"; ei.placeholder = "Of tik het nummer onder de streepjes in"; ei.maxLength = 14;
+      var eb = document.createElement("button"); eb.type = "button"; eb.className = "ghost-btn small"; eb.id = "qaEanGo"; eb.textContent = "Zoek"; eb.onclick = function () { lookupEan(ei.value); };
+      ei.onkeydown = function (e) { if (e.key === "Enter") lookupEan(ei.value); };
+      manual.appendChild(ei); manual.appendChild(eb);
+      var x = document.createElement("button"); x.type = "button"; x.className = "hh-link"; x.textContent = "Stoppen met scannen"; x.onclick = closeScanner;
+      wrap.appendChild(video); wrap.appendChild(status); wrap.appendChild(manual); wrap.appendChild(x);
+      scanBox.appendChild(wrap);
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { video.style.display = "none"; status.textContent = "Scannen met de camera kan op dit toestel niet. Tik het nummer in."; return; }
+      var done = false, stream = null;
+      var found = function (code) { if (done) return; done = true; try { navigator.vibrate && navigator.vibrate(30); } catch (e) {} lookupEan(code); };
+      navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false }).then(function (s) {
+        stream = s; video.srcObject = s; video.play().catch(function () {});
+        stopCam = function () { done = true; s.getTracks().forEach(function (t) { t.stop(); }); };
+        status.textContent = "Richt de camera op de streepjescode.";
+        if ("BarcodeDetector" in window) {
+          var det = new window.BarcodeDetector({ formats: ["ean_13", "ean_8", "upc_a", "upc_e"] });
+          var loop = function () { if (done) return; det.detect(video).then(function (r) { if (r && r[0]) found(r[0].rawValue); else setTimeout(loop, 250); }, function () { setTimeout(loop, 400); }); };
+          video.onloadeddata = loop;
+        } else {
+          // iPhone: geen ingebouwde herkenning in de browser, dan de open-source ZXing-lezer
+          loadScript("https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js").then(function () {
+            if (done || !window.ZXing) return;
+            var hints = new Map(); hints.set(window.ZXing.DecodeHintType.POSSIBLE_FORMATS, [window.ZXing.BarcodeFormat.EAN_13, window.ZXing.BarcodeFormat.EAN_8, window.ZXing.BarcodeFormat.UPC_A, window.ZXing.BarcodeFormat.UPC_E]);
+            var reader = new window.ZXing.BrowserMultiFormatReader(hints);
+            reader.decodeFromVideoElementContinuously(video, function (res) { if (res && !done) { try { reader.reset(); } catch (e) {} found(res.getText()); } });
+            var prevStop = stopCam; stopCam = function () { try { reader.reset(); } catch (e) {} prevStop(); };
+          }).catch(function () { status.textContent = "Scannen lukt hier niet. Tik het nummer in."; });
+        }
+      }).catch(function () { video.style.display = "none"; status.textContent = "Geen toegang tot de camera. Tik het nummer onder de streepjes in."; });
+    }
+    // Camera altijd uit als het scherm sluit (kruisje, ernaast tikken of Escape).
+    sh.ov.querySelector(".sheet-x").onclick = function () { closeScanner(); closeSheet(sh.ov); };
+    if (!sh.ov.qaWired) {
+      sh.ov.qaWired = true;
+      sh.ov.addEventListener("click", function (e) { if (e.target === sh.ov && sh.ov.qaStop) sh.ov.qaStop(); });
+      sh.ov.addEventListener("keydown", function (e) { if (e.key === "Escape" && sh.ov.qaStop) sh.ov.qaStop(); });
+    }
+    sh.ov.qaStop = closeScanner;
+    paintStart(); paintSum();
+    setTimeout(function () { try { input.focus(); } catch (e) {} }, 80);
+  }
+  function loadScript(src) {
+    return new Promise(function (resolve, reject) {
+      var s = document.createElement("script"); s.src = src; s.async = true; s.onload = resolve; s.onerror = reject; document.head.appendChild(s);
+    });
+  }
+
   // ---------- Voedingsnieuws: één kop per dag uit betrouwbare bronnen, met link naar het artikel ----------
   var NEWS_LS = "balanza_news", NEWS_SEEN_LS = "balanza_news_seen", NEWS_DAY_LS = "balanza_news_day";
   function newsData() {
@@ -14017,6 +14639,9 @@
   function markTip(id, how) { var t = tipsState(); t[id] = how + ":" + todayKeyLocal(); lsSet(TIPS_LS, JSON.stringify(t)); }
   function goSettingsThen(fn, page) { closeChat(); goto("settings", { settingsPage: page || null }); if (fn) setTimeout(fn, 250); }
   var SETTING_TIPS = [
+    { id: "quickadd", when: function () { return !lsGet(QA_HIST_LS + "_" + meId()); },
+      text: "Tip: met \u201c\uFF0B Toevoegen\u201d op Start zet je in een paar tikken iets in je dag of planning. Typ gewoon \u201c2 eieren en een snee brood\u201d of scan een streepjescode; Balanza rekent de macro's en Balans zelf uit.",
+      btn: "Probeer het", go: function () { closeChat(); goto("weeks"); setTimeout(function () { openQuickAdd({}); }, 200); } },
     { id: "autoplan", when: function () { return !autoPlanOn() && hasAnyDishes() && !readOnlyMode(); },
       text: "Tip: Balanza kan elke week vanzelf je volgende week klaarzetten. Jij kiest welke maaltijden en dagen, en elke zaterdag staat er een nieuwe week voor je klaar om te bekijken.",
       btn: "Automatisch plannen instellen", go: function () { closeChat(); openAutoPlanSheet(); } },
@@ -14482,6 +15107,7 @@
         coach: prefs.coach && typeof prefs.coach === "object" ? prefs.coach : {},
         water: prefs.water && typeof prefs.water === "object" ? { d: String(prefs.water.d || "").slice(0, 10), n: Number(prefs.water.n) || 0 } : null,
         places: Array.isArray(prefs.places) ? prefs.places.slice(0, 30) : [],
+        myFoods: Array.isArray(prefs.myFoods) ? prefs.myFoods.slice(0, 150) : [],
         proteinOut: Array.isArray(prefs.proteinOut) ? prefs.proteinOut.slice(0, 20) : [],
         journey: prefs.journey && typeof prefs.journey === "object" ? prefs.journey : {},
         ageGroup: AGE_GROUPS.some(function (g) { return g[0] === prefs.ageGroup; }) ? prefs.ageGroup : "",
@@ -15006,7 +15632,7 @@
               return;
             }
             var pdata = psnap.data() || {};
-            ["name", "bringListLink", "cuisines", "flavors", "level", "dietStyle", "health", "leftovers", "coach", "water", "places", "proteinOut", "journey", "ageGroup", "student", "sugarMode", "cheeseMode", "familyMode", "equipment", "exclude", "count", "mealTypes", "gender", "heightCm", "weightKg", "age", "activityLevel", "goal", "homeLayout", "mealCounts", "withImages", "pantry", "communityName"].forEach(function (k) {
+            ["name", "bringListLink", "cuisines", "flavors", "level", "dietStyle", "health", "leftovers", "coach", "water", "places", "proteinOut", "journey", "ageGroup", "student", "sugarMode", "cheeseMode", "familyMode", "equipment", "exclude", "count", "mealTypes", "gender", "heightCm", "weightKg", "age", "activityLevel", "goal", "homeLayout", "mealCounts", "withImages", "pantry", "communityName", "myFoods"].forEach(function (k) {
               if (pdata[k] !== undefined) prefs[k] = deepClone(pdata[k]);
             });
             var mig = migrateExcludeTerms();
