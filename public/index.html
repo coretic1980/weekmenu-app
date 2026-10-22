@@ -1541,6 +1541,15 @@
   .gp-move-sub { font-size: 12.5px; color: var(--muted); line-height: 1.35; }
   .gp-move-add { display: flex; gap: 6px; flex-wrap: wrap; }
   .gp-move-fix { border-style: dashed; }
+  .to-top { position: fixed; right: 16px; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); z-index: 35; width: 48px; height: 48px; border-radius: 50%; border: 1px solid var(--line, rgba(0,0,0,.08)); background: var(--surface, #fff); color: var(--accent); box-shadow: 0 6px 20px rgba(20, 30, 20, .18); display: flex; align-items: center; justify-content: center; cursor: pointer; opacity: 0; transform: translateY(16px) scale(.9); pointer-events: none; transition: opacity .2s ease, transform .2s ease; }
+  .to-top.on { opacity: 1; transform: none; pointer-events: auto; }
+  .to-top:active { transform: scale(.92); }
+  @media (max-width: 700px), (max-height: 500px) and (orientation: landscape) {
+    body.has-tabbar .to-top { bottom: calc(92px + env(safe-area-inset-bottom, 0px)); }
+    body.has-tabbar.busy-active .to-top { bottom: calc(132px + env(safe-area-inset-bottom, 0px)); }
+  }
+  body[data-view="cook"] .to-top, body[data-view="review"] .to-top { display: none; }
+  @media (prefers-reduced-motion: reduce) { .to-top { transition: none; } }
   .gp-home { gap: 14px; }
   .gp-chips { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin: -2px -2px 0; padding: 2px; }
   .gp-chips::-webkit-scrollbar { display: none; }
@@ -5691,6 +5700,30 @@
     savePlannedWeeks();
     render();
   }
+  // Zwevende knop "naar boven": verschijnt pas als je een flink stuk naar beneden bent gescrold
+  (function () {
+    var btn = null, shown = false, ticking = false;
+    function ensure() {
+      if (btn) return btn;
+      btn = document.createElement("button"); btn.type = "button"; btn.className = "to-top"; btn.id = "toTop";
+      btn.setAttribute("aria-label", "Terug naar boven"); btn.title = "Terug naar boven";
+      btn.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg>';
+      btn.onclick = function () {
+        var reduce = false; try { reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch (e) {}
+        try { window.scrollTo({ top: 0, behavior: reduce ? "auto" : "smooth" }); } catch (e) { window.scrollTo(0, 0); }
+        try { btn.blur(); } catch (e) {}
+      };
+      document.body.appendChild(btn);
+      return btn;
+    }
+    function check() {
+      ticking = false;
+      var y = window.pageYOffset || document.documentElement.scrollTop || 0, want = y > Math.max(600, window.innerHeight * 1.2);
+      if (want === shown) return;
+      shown = want; ensure().classList.toggle("on", want);
+    }
+    window.addEventListener("scroll", function () { if (!ticking) { ticking = true; requestAnimationFrame(check); } }, { passive: true });
+  })();
   // Escape sluit het bovenste open venster (ook zonder dat er iets in het venster de focus heeft)
   document.addEventListener("keydown", function (e) {
     if (e.key !== "Escape") return;
