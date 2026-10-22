@@ -522,6 +522,8 @@
   var GD = { q: "", meal: "", source: "", sort: "new", page: 1, pageSize: 25 };
 
   function signOutLocal(message) {
+    if (ssoInfo) message = "Je beheersessie via de app is afgelopen of je toegang is ingetrokken. Open het beheer opnieuw vanuit de app (Instellingen \u2192 Beheer).";
+    ssoInfo = null; try { sessionStorage.removeItem("balanza_admin_sso"); } catch (e) {}
     token = null; try { sessionStorage.removeItem(TOKEN_KEY); } catch (e) {}
     clearInterval(refreshTimer); refreshTimer = null; closeModal();
     showLogin(message);
@@ -557,7 +559,24 @@
     pw.focus && pw.focus();
   }
 
+  // Vanuit de app (single sign-on): /admin#sso=<eenmalige code>. Wissel hem in voor een beheersessie en haal hem uit de adresbalk.
+  var ssoInfo = null;
+  try { ssoInfo = JSON.parse(sessionStorage.getItem("balanza_admin_sso") || "null"); } catch (e) {}
+  function ssoFromHash() {
+    var m = String(window.location.hash || "").match(/^#sso=([A-Za-z0-9_-]{10,60})$/);
+    if (!m) return null;
+    try { history.replaceState(null, "", window.location.pathname + "#/overzicht"); } catch (e) { window.location.hash = "#/overzicht"; }
+    return m[1];
+  }
   function boot() {
+    var code = ssoFromHash();
+    if (code) {
+      return api("/api/admin/sso/exchange", { method: "POST", body: { code: code } }).then(function (d) {
+        token = d.token; ssoInfo = { email: d.email };
+        try { sessionStorage.setItem(TOKEN_KEY, token); sessionStorage.setItem("balanza_admin_sso", JSON.stringify(ssoInfo)); } catch (e) {}
+        boot();
+      }).catch(function (e) { showLogin(e.message); });
+    }
     if (!token) return showLogin();
     api("/api/admin/settings").then(function (s) { meta.settings = s; renderShell(); render(); startRefresh(); })
       .catch(function (e) { if (!e.silent) showLogin(e.message); });
@@ -576,7 +595,13 @@
     // Op de telefoon: één knop met de naam van het huidige scherm, die de tabbladen als menu openklapt.
     var menuBtn = h("button", { type: "button", class: "ghost menu-btn", id: "menuBtn", "aria-expanded": "false", "aria-controls": "tabs" });
     menuBtn.onclick = function () { var open = !nav.classList.contains("open"); nav.classList.toggle("open", open); menuBtn.setAttribute("aria-expanded", open ? "true" : "false"); };
-    root.appendChild(h("header", { class: "top" }, h("div", { class: "top-row" }, h("div", { class: "brand" }, h("h1", { text: "Balanza" }), h("span", { class: "muted brand-sub", text: "Beheer" })), menuBtn, h("div", { class: "row top-actions" }, status, logout)), nav));
+    var backApp = null;
+    if (ssoInfo) {
+      backApp = h("a", { class: "ghost small", id: "backToAppBtn", href: "/", text: "\u2039 Terug naar de app", title: "Ingelogd via de app als " + (ssoInfo.email || "") });
+      backApp.style.textDecoration = "none"; backApp.style.display = "inline-flex"; backApp.style.alignItems = "center"; backApp.style.padding = "8px 12px"; backApp.style.border = "1px solid var(--line)"; backApp.style.borderRadius = "10px"; backApp.style.color = "inherit";
+      logout.onclick = function () { api("/api/admin/logout", { method: "POST", body: {} }).catch(function () {}).then(function () { try { sessionStorage.removeItem("balanza_admin_sso"); sessionStorage.removeItem(TOKEN_KEY); } catch (e) {} window.location.href = "/"; }); };
+    }
+    root.appendChild(h("header", { class: "top" }, h("div", { class: "top-row" }, h("div", { class: "brand" }, h("h1", { text: "Balanza" }), h("span", { class: "muted brand-sub", text: ssoInfo && ssoInfo.email ? "Beheer \u00b7 " + ssoInfo.email : "Beheer" })), menuBtn, h("div", { class: "row top-actions" }, backApp, status, logout)), nav));
     root.appendChild(h("main", { id: "view" }));
     updateStatusPill();
   }
@@ -1006,6 +1031,22 @@
     panes.account.appendChild(card("Account", kv, h("div", { style: { height: "12px" } }),
       h("div", { class: "form-grid" }, isAcc ? field("E-mailadres", emailIn) : null, field("Naam", nameIn)),
       field("Notitie (alleen voor beheerders)", noteIn), saveAcc));
+
+    // ---- toegang tot het beheer vanuit de app (single sign-on) ----
+    if (isAcc) {
+      var admSw = switchBtn(!!d.appAdmin, function (on) {
+        if (!on) return confirmDialog({ title: "Beheertoegang intrekken", message: "Deze gebruiker kan het beheer dan niet meer openen vanuit de app. Een open beheersessie stopt meteen.", confirmLabel: "Intrekken" })
+          .then(function (ok) { if (ok) run(api(base + "/admin-revoke", { method: "POST", body: {} }), "Beheertoegang ingetrokken.", function () { reload(); }); else reload(); });
+        confirmDialog({ title: "Beheertoegang geven", message: (u.email || "Deze gebruiker") + " kan daarna vanuit de app (Instellingen \u2192 Beheer) het beheer openen, zonder wachtwoord. Dat geeft volledige toegang: gebruikers, instellingen en gegevens. Geef dit alleen aan mensen die je vertrouwt.", confirmLabel: "Toegang geven" })
+          .then(function (ok) { if (ok) run(api(base + "/admin-grant", { method: "POST", body: {} }), "Beheertoegang gegeven.", function () { reload(); }); else reload(); });
+      }, "Beheertoegang vanuit de app");
+      admSw.id = "appAdminSwitch";
+      panes.account.appendChild(card("Beheertoegang",
+        h("div", { class: "module", style: { padding: "0" } },
+          h("div", {}, h("div", { class: "name", text: d.appAdmin ? "Mag het beheer openen" : "Geen toegang tot het beheer" }),
+            h("div", { class: "desc", text: "Met toegang verschijnt in de app bij Instellingen een blok Beheer. Daarmee opent deze gebruiker het beheer met zijn eigen account (single sign-on), zonder het beheerderswachtwoord. Elke actie staat in het auditlog met zijn e-mailadres." })),
+          admSw)));
+    }
 
     // ---- abonnement ----
     var bl = d.billing;
@@ -1663,6 +1704,17 @@
         if (!on) return apply({ authRequired: false }, "Inloggen is niet meer verplicht.");
         confirmDialog({ title: "Inloggen verplicht maken", confirmLabel: "Verplicht maken", message: "Anonieme gebruikers hebben daarna geen toegang meer en zien het inlogscherm. Hun gegevens blijven bewaard, maar zonder account kunnen ze er niet meer bij." }).then(function (ok) { if (ok) apply({ authRequired: true }, "Inloggen is nu verplicht."); });
       }, "Inloggen verplicht"))));
+    // beheerders die via de app (single sign-on) mogen inloggen
+    var admList = h("div", { id: "appAdminsList" }, h("div", { class: "hint", text: "Laden\u2026" }));
+    put("toegang", card("Beheerders via de app", h("div", { class: "hint", style: { marginTop: "-4px", marginBottom: "10px" }, text: "Deze gebruikers openen het beheer vanuit de app (Instellingen \u2192 Beheer) met hun eigen account, zonder wachtwoord. Toegang geven of intrekken doe je bij de gebruiker zelf (Gebruikers \u2192 een gebruiker \u2192 Beheertoegang)." }), admList));
+    api("/api/admin/admins").then(function (d) {
+      clear(admList);
+      if (!d.admins.length) { admList.appendChild(h("div", { class: "hint", text: "Nog niemand. Alleen inloggen met het beheerderswachtwoord." })); return; }
+      d.admins.forEach(function (a) {
+        var l = h("button", { class: "link", type: "button", text: a.email || a.uid }); l.onclick = function () { navigate("#/gebruikers/" + encodeURIComponent(a.uid)); };
+        admList.appendChild(h("div", { class: "module", style: { padding: "8px 0" } }, h("div", {}, l, h("div", { class: "desc", text: "Sinds " + fmtDate(a.grantedAt) }))));
+      });
+    }).catch(function () { clear(admList); admList.appendChild(h("div", { class: "hint", text: "Kon de lijst niet laden." })); });
 
     // onderdelen
     var gateable = cfg.planGateableModules || [];
@@ -1897,7 +1949,8 @@
   // Auditlog: wie deed wat
   // =====================================================================================
   var AUDIT_LABELS = { "suggestion-accept": "Idee geaccepteerd", "suggestion-reject": "Idee afgewezen", "suggestion-delete": "Idee verwijderd",
-    "admin.login": "Beheerder ingelogd", "admin.login-mislukt": "Mislukte beheerder-login", "gebruiker.aanmaken": "Gebruiker aangemaakt", "gebruiker.wijzigen": "Gebruiker gewijzigd",
+    "admin.login": "Beheerder ingelogd", "admin.login-mislukt": "Mislukte beheerder-login", "admin.login-via-app": "Beheerder ingelogd via de app", "admin.sso-geweigerd": "Beheer via app geweigerd",
+    "gebruiker.beheerder-maken": "Beheertoegang gegeven", "gebruiker.beheerder-intrekken": "Beheertoegang ingetrokken", "gebruiker.aanmaken": "Gebruiker aangemaakt", "gebruiker.wijzigen": "Gebruiker gewijzigd",
     "gebruiker.blokkeren": "Gebruiker geblokkeerd", "gebruiker.deblokkeren": "Gebruiker gedeblokkeerd", "gebruiker.uitloggen": "Gebruiker uitgelogd", "gebruiker.wachtwoord-resetten": "Wachtwoord gereset",
     "gebruiker.resetlink": "Resetlink gemaakt", "gebruiker.gegevens-wissen": "Gegevens gewist", "gebruiker.verwijderen": "Gebruiker verwijderd", "gebruiker.exporteren": "Gegevens geëxporteerd",
     "gebruikers.bulk-disable": "Meerdere gebruikers geblokkeerd", "gebruikers.bulk-enable": "Meerdere gebruikers gedeblokkeerd", "gebruikers.bulk-logout": "Meerdere gebruikers uitgelogd", "gebruikers.bulk-delete": "Meerdere gebruikers verwijderd",
@@ -1942,11 +1995,11 @@
         if (my !== seq || !ctx.alive()) return;
         facets = d.facets.actions; if (d.page !== A.page) A.page = d.page; drawActionSelect(); clear(results);
         if (!d.entries.length) { results.appendChild(empty("Geen regels gevonden.")); return; }
-        results.appendChild(table([th("Wanneer"), th("Actie"), th("Doel"), th("Details"), th("IP")], d.entries.map(function (e) {
+        results.appendChild(table([th("Wanneer"), th("Actie"), th("Door"), th("Doel"), th("Details"), th("IP")], d.entries.map(function (e) {
           var target = null;
           if (e.target && /^(u_[0-9a-f]+|anon_[a-z0-9]+)$/.test(e.target)) { target = h("button", { class: "link mono", text: shortUid(e.target), title: e.target }); target.onclick = function () { navigate("#/gebruikers/" + encodeURIComponent(e.target)); }; }
           else if (e.target) target = h("span", { class: "mono", text: shortUid(e.target), title: e.target });
-          return h("tr", { class: "auditRow" }, h("td", { class: "nowrap", title: e.ts, text: fmtDate(e.ts) }), h("td", {}, h("strong", { text: AUDIT_LABELS[e.action] || e.action })), h("td", {}, target || "—"), h("td", { text: summarizeAudit(e) }), h("td", { class: "mono", text: e.ip || "—" }));
+          return h("tr", { class: "auditRow" }, h("td", { class: "nowrap", title: e.ts, text: fmtDate(e.ts) }), h("td", {}, h("strong", { text: AUDIT_LABELS[e.action] || e.action })), h("td", { class: "small", text: e.by || (e.action === "admin.login-via-app" && e.detail && e.detail.email) || (e.action === "admin.login" ? "wachtwoord" : "\u2014") }), h("td", {}, target || "—"), h("td", { text: summarizeAudit(e) }), h("td", { class: "mono", text: e.ip || "—" }));
         })));
         results.appendChild(pager(d, function (p) { A.page = p; load(); }, ["regel", "regels"]));
       }).catch(function (e) { if (!e.silent && my === seq) { clear(results); results.appendChild(errorBox("Kon het auditlog niet laden: " + e.message)); } });
@@ -1984,7 +2037,7 @@
   // =====================================================================================
   window.onhashchange = function () { render(); };
   document.onkeydown = function (e) { if (e && e.key === "Escape" && closeModalFn) closeModal(); };
-  if (token) boot(); else showLogin();
+  if (token || /^#sso=/.test(window.location.hash || "")) boot(); else showLogin();
 })();
 </script>
 </body>

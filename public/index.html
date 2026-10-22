@@ -4085,11 +4085,14 @@
     }) : renderTopbar("Instellingen", true, function () { navBack("weeks"); }));
     // Of dit account een wachtwoord heeft (accounts via Apple/Google hebben dat niet altijd).
     var ai = state.accountAuth;
-    if (loggedIn && (!ai || ai.token !== window.authToken)) {
-      state.accountAuth = { token: window.authToken, loading: true };
+    // Opnieuw ophalen bij een ander account, of als het overzicht na een minuut weer opent (bijv. net beheertoegang gekregen).
+    if (loggedIn && (!ai || ai.token !== window.authToken || (!page && !ai.loading && Date.now() - (ai.at || 0) > 60000))) {
+      var prevAi = ai && ai.token === window.authToken ? ai : null;
+      state.accountAuth = Object.assign({}, prevAi || {}, { token: window.authToken, loading: true });
       accountRequest("GET", "/api/account").then(function (d) {
-        state.accountAuth = { token: window.authToken, hasPassword: d.hasPassword !== false, providers: Array.isArray(d.providers) ? d.providers : [] };
-        if (state.view === "settings") render();
+        var was = prevAi ? prevAi.admin === true : null;
+        state.accountAuth = { token: window.authToken, hasPassword: d.hasPassword !== false, providers: Array.isArray(d.providers) ? d.providers : [], admin: d.admin === true, at: Date.now() };
+        if (state.view === "settings" && (was === null || was !== (d.admin === true))) render();
       }).catch(function () { state.accountAuth = { token: window.authToken, hasPassword: true, providers: [] }; });
     }
     var noPassword = !!(ai && ai.token === window.authToken && ai.hasPassword === false);
@@ -4307,6 +4310,19 @@
     }
     sumCard("bring", "refresh", prefs.bringListLink ? "Gekoppeld aan je Bring!-lijst" : "Nog niet gekoppeld");
     sumCard("account", "user", loggedIn ? "Ingelogd als " + (accountEmail() || "je account") + viaText : "Anoniem: je gegevens staan alleen op dit apparaat");
+    if (ai && ai.admin) {
+      // Alleen voor wie de beheerder toegang gaf: het beheer openen met je eigen account (single sign-on).
+      var adm = accCard(main, "Beheer"); adm.id = "settingsCard-admin";
+      var at = document.createElement("div"); at.className = "acc-sub settings-sum"; at.textContent = "Je hebt toegang tot de beheeromgeving. Je logt in met dit account, zonder apart wachtwoord.";
+      adm.appendChild(at);
+      var ab = accButton(adm, "settingsOpenAdmin", "gear", "Open beheeromgeving", function () {
+        ab.disabled = true;
+        fetch("/api/admin/sso", { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, authHeaders()), body: "{}" })
+          .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { if (!r.ok) throw new Error(d.message || "Het beheer openen lukte niet."); return d; }); })
+          .then(function (d) { window.location.href = "/admin#sso=" + encodeURIComponent(d.code); })
+          .catch(function (e) { ab.disabled = false; showToast(friendlyNetError(e)); });
+      });
+    }
     sumCard("data", "download", "Download je gegevens, of reset de app en begin opnieuw", "Downloaden of resetten");
     app.appendChild(main);
   }

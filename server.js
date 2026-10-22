@@ -772,17 +772,73 @@ function dbListUserIds() {
 var adminTokens = new Map(); // token -> expiry timestamp
 var ADMIN_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 
-function issueAdminToken() {
+function issueAdminToken(uid, email) {
   var token = crypto.randomBytes(24).toString("hex");
-  adminTokens.set(token, Date.now() + ADMIN_TOKEN_TTL_MS);
+  // Via de app (single sign-on) een kortere sessie, gekoppeld aan de gebruiker zodat intrekken hem meteen beëindigt.
+  adminTokens.set(token, { exp: Date.now() + (uid ? ADMIN_SSO_TTL_MS : ADMIN_TOKEN_TTL_MS), uid: uid || null, email: email || null });
   return token;
 }
 function isValidAdminToken(token) {
   if (!token) return false;
-  var expiry = adminTokens.get(token);
-  if (!expiry) return false;
-  if (Date.now() > expiry) { adminTokens.delete(token); return false; }
+  var t = adminTokens.get(token);
+  if (!t) return false;
+  if (Date.now() > t.exp) { adminTokens.delete(token); return false; }
   return true;
+}
+function adminTokenUid(token) { var t = adminTokens.get(token); return t ? t.uid : null; }
+function dropAdminTokensOf(uid) { adminTokens.forEach(function (t, k) { if (t.uid === uid) adminTokens.delete(k); }); }
+
+// ---------- Beheerders via de app (single sign-on) ----------
+// De beheerder (met het wachtwoord) wijst gebruikers aan in settings/admins. Zo'n gebruiker opent het beheer vanuit
+// Instellingen: de app vraagt met zijn eigen sessie een eenmalige code aan (60 s geldig), het beheer wisselt die in
+// voor een beheersessie van 8 uur. Geen wachtwoord, en de code staat niet in de geschiedenis.
+var ADMIN_SSO_TTL_MS = 8 * 60 * 60 * 1000;
+var ssoCodes = new Map();   // code -> { uid, email, exp }
+function getAdminUids() {
+  return dbGetDoc("settings/admins").then(function (r) { var v = r.exists && r.value && r.value.uids && typeof r.value.uids === "object" ? r.value.uids : {}; return v; }).catch(function () { return {}; });
+}
+function isAppAdmin(user) {
+  if (!user || !user.email) return Promise.resolve(false);
+  return Promise.all([getAdminUids(), getBlocked()]).then(function (r) { return !!r[0][user.uid] && !r[1].uids[user.uid]; });
+}
+function setAppAdmin(uid, email, on) {
+  return dbGetDoc("settings/admins").then(function (r) {
+    var v = r.exists && r.value && r.value.uids ? r.value : { uids: {} };
+    if (on) v.uids[uid] = { email: email || null, grantedAt: new Date().toISOString() }; else delete v.uids[uid];
+    return dbSetDoc("settings/admins", v);
+  }).then(function () { if (!on) dropAdminTokensOf(uid); });
+}
+// POST /api/admin/sso  (met de gewone sessie van de gebruiker) -> { code }
+function handleAdminSsoStart(req, res) {
+  var ip = clientIp(req), wait = adminLockedFor(ip);
+  if (wait) return sendJSON(res, 429, { code: "rate_limited", message: "Te veel pogingen. Probeer het over " + Math.ceil(wait / 60) + " min opnieuw." });
+  return resolveUser(req).then(function (user) {
+    if (!user) return sendUnauthorized(res);
+    return isAppAdmin(user).then(function (ok) {
+      if (!ok) { adminRegisterFail(ip); auditLog(req, "admin.sso-geweigerd", user.uid, { email: user.email || null }); return sendJSON(res, 403, { code: "forbidden", message: "Je hebt geen toegang tot het beheer." }); }
+      var code = crypto.randomBytes(18).toString("base64url");
+      ssoCodes.set(code, { uid: user.uid, email: user.email, exp: Date.now() + 60000 });
+      ssoCodes.forEach(function (v, k) { if (v.exp < Date.now()) ssoCodes.delete(k); });
+      sendJSON(res, 200, { code: code });
+    });
+  }).catch(function () { sendJSON(res, 400, { code: "bad_request", message: "Ongeldige aanvraag." }); });
+}
+// POST /api/admin/sso/exchange { code } -> { token, email }
+function handleAdminSsoExchange(req, res) {
+  var ip = clientIp(req), wait = adminLockedFor(ip);
+  if (wait) return sendJSON(res, 429, { code: "rate_limited", message: "Te veel pogingen. Probeer het over " + Math.ceil(wait / 60) + " min opnieuw." });
+  return readBody(req).then(function (body) {
+    var code = body && typeof body.code === "string" ? body.code : "";
+    var c = ssoCodes.get(code);
+    ssoCodes.delete(code);   // eenmalig
+    if (!c || c.exp < Date.now()) { adminRegisterFail(ip); return sendJSON(res, 401, { code: "unauthorized", message: "Deze inloglink is verlopen. Open het beheer opnieuw vanuit de app." }); }
+    return isAppAdmin({ uid: c.uid, email: c.email }).then(function (ok) {   // nog steeds beheerder?
+      if (!ok) return sendJSON(res, 403, { code: "forbidden", message: "Je hebt geen toegang (meer) tot het beheer." });
+      adminFails.delete(ip);
+      auditLog(req, "admin.login-via-app", c.uid, { email: c.email });
+      sendJSON(res, 200, { token: issueAdminToken(c.uid, c.email), email: c.email });
+    });
+  }).catch(function () { sendJSON(res, 400, { code: "bad_request", message: "Ongeldige aanvraag." }); });
 }
 function requireAdmin(req, res) {
   var auth = req.headers["authorization"] || "";
@@ -2805,9 +2861,9 @@ function cleanBodyPassword(v) { return typeof v === "string" ? v : ""; }
 
 function handleAccountInfo(req, res) {
   return withAccountUser(req, res, {}, function (user) {
-    return Promise.all([readAnonData(user.uid), user.email ? loadOwnAccount(user) : Promise.resolve(null)]).then(function (r) {
+    return Promise.all([readAnonData(user.uid), user.email ? loadOwnAccount(user) : Promise.resolve(null), isAppAdmin(user)]).then(function (r) {
       var s = anonSummary(r[0]), acc = r[1];
-      sendJSON(res, 200, { type: user.email ? "account" : "anon", uid: user.uid, email: user.email || null,
+      sendJSON(res, 200, { type: user.email ? "account" : "anon", uid: user.uid, email: user.email || null, admin: !!r[2],
         createdAt: acc ? acc.createdAt || null : null, lastLoginAt: acc ? acc.lastLoginAt || null : null, upgraded: !!(acc && acc.upgradedFrom),
         hasPassword: !!(acc && acc.hash), providers: acc && acc.providers ? Object.keys(acc.providers) : [],
         counts: { dishes: s.dishes, plannedWeeks: s.plannedWeeks, lists: s.lists } });
@@ -6053,6 +6109,11 @@ function cappedReadAll(collection, storeKey, limit) {
 }
 function auditLog(req, action, target, detail) {
   var entry = { ts: new Date().toISOString(), action: action, target: target || null, detail: detail || null, ip: req ? clientIp(req) : null };
+  // Wie deed het: bij een beheersessie via de app het e-mailadres van die beheerder, anders "wachtwoord".
+  try {
+    var au = req && req.headers ? String(req.headers["authorization"] || "") : "", tk = au.indexOf("Bearer ") === 0 ? adminTokens.get(au.slice(7)) : null;
+    if (tk) entry.by = tk.email || "wachtwoord";
+  } catch (e) {}
   return cappedInsert("audit", "audit", entry, AUDIT_CAP).catch(function () {});
 }
 function dbListDocs(prefix) {
@@ -6585,7 +6646,7 @@ function handleAdminUserDetail(req, res, uid) {
   return needSummary(uid).then(function (user) {
     return Promise.all([
       dbGetDoc("data/users/" + uid + "/prefs"), adminDataDoc(uid, "dishes"), adminDataDoc(uid, "plannedWeeks"),
-      listsOfUser(uid), getRecentLogs(LOG_CAP), withLocation(user), quotaState(uid), getBillingDoc(uid), dbGetDoc("consent/" + uid)
+      listsOfUser(uid), getRecentLogs(LOG_CAP), withLocation(user), quotaState(uid), getBillingDoc(uid), dbGetDoc("consent/" + uid), getAdminUids()
     ]).then(function (r) {
       var logs = r[4].filter(function (l) { return l.uid === uid; }).slice(0, 50).map(cleanLogRow);
       var q = r[6];
@@ -6596,7 +6657,8 @@ function handleAdminUserDetail(req, res, uid) {
         prefs: r[0].exists ? r[0].value : null,
         dishes: r[1].exists ? r[1].value : null,
         dishesOwner: r[1].owner !== uid ? r[1].owner : null,
-        consent: r[8].exists && r[8].value ? { version: r[8].value.version, at: r[8].value.at, health: !!r[8].value.health } : null,   // gedeeld huishouden: de gerechten staan bij deze gebruiker
+        consent: r[8].exists && r[8].value ? { version: r[8].value.version, at: r[8].value.at, health: !!r[8].value.health } : null,
+        appAdmin: !!(r[9] && r[9][uid]),   // gedeeld huishouden: de gerechten staan bij deze gebruiker
         plannedWeeks: r[2].exists ? r[2].value : null,
         lists: r[3],
         logs: logs
@@ -6621,6 +6683,7 @@ function deleteUserEverywhere(user) {
     var paths = ["data/users/" + uid + "/prefs", "data/users/" + uid + "/dishes", "data/users/" + uid + "/plannedWeeks", "data/users/" + uid + "/meta", "listsIndex/" + uid, "adminMeta/" + uid, "push/" + uid, "quota/" + uid, "billing/" + uid, "notify/" + uid, "inbox/" + uid, "assistant/" + uid];
     if (user.email) paths.push("auth/users/" + user.email);
     paths.push("consent/" + uid, "autoplan/" + uid, "notify/" + uid, "inbox/" + uid, "assistant/" + uid);
+    setAppAdmin(uid, null, false).catch(function () {});   // geen beheerder meer
     return Promise.all(paths.map(dbDeleteDoc));
   }).then(function () {
     // Een verwijderd account houdt zijn 'ingetrokken'-stempel: zijn uid komt nooit terug, dus oude sessies blijven ongeldig.
@@ -6636,6 +6699,17 @@ function handleAdminUserAction(req, res, uid, action) {
   return needSummary(uid).then(function (user) {
     return requireBody(req).then(function (body) {
       switch (action) {
+        case "admin-grant":
+          if (!user.email) throw HttpError(400, "bad_request", "Alleen gebruikers met een account (e-mailadres) kunnen beheerder worden.");
+          return setAppAdmin(uid, user.email, true).then(function () {
+            auditLog(req, "gebruiker.beheerder-maken", uid, { email: user.email });
+            sendJSON(res, 200, { appAdmin: true });
+          });
+        case "admin-revoke":
+          return setAppAdmin(uid, user.email, false).then(function () {
+            auditLog(req, "gebruiker.beheerder-intrekken", uid, { email: user.email });
+            sendJSON(res, 200, { appAdmin: false });
+          });
         case "billing-grant": {
           var days = body.days;
           if (typeof days !== "number" || !isFinite(days) || Math.floor(days) !== days || days < 1 || days > 3650) throw HttpError(400, "bad_request", "Vul een aantal dagen in tussen 1 en 3650.");
@@ -6667,6 +6741,7 @@ function handleAdminUserAction(req, res, uid, action) {
             sendJSON(res, 200, { billing: adminBillingView(r.doc) });
           });
         case "disable":
+          dropAdminTokensOf(uid);   // een geblokkeerde gebruiker heeft ook geen beheertoegang meer
           return updateBlocked(function (b) { b.uids[uid] = { at: new Date().toISOString(), reason: cleanText(body.reason, 200) }; }).then(function () {
             invalidateSummaries(); auditLog(req, "gebruiker.blokkeren", uid, { email: user.email, reden: cleanText(body.reason, 200) || undefined });
             sendJSON(res, 200, { ok: true });
@@ -7063,9 +7138,18 @@ function handleAdminListCleanup(req, res) {
 function handleAdminApi(req, res, url) {
   var p = url.pathname, m, method = req.method;
   if (method === "POST" && p === "/api/admin/login") return handleAdminLogin(req, res);
+  if (method === "POST" && p === "/api/admin/sso") return handleAdminSsoStart(req, res);
+  if (method === "POST" && p === "/api/admin/sso/exchange") return handleAdminSsoExchange(req, res);
   if (!requireAdmin(req, res)) return;
   var run = null;
-  if (method === "GET" && p === "/api/admin/me") run = function () { sendJSON(res, 200, { ok: true }); };
+  if (method === "GET" && p === "/api/admin/me") run = function () {
+    var tk = (req.headers["authorization"] || "").slice(7), au = adminTokenUid(tk);
+    if (!au) return sendJSON(res, 200, { ok: true, via: "password" });
+    return getAdminUids().then(function (a) { sendJSON(res, 200, { ok: true, via: "app", email: a[au] ? a[au].email : null }); });
+  };
+  else if (method === "GET" && p === "/api/admin/admins") run = function () {
+    return getAdminUids().then(function (a) { sendJSON(res, 200, { admins: Object.keys(a).map(function (u) { return { uid: u, email: a[u].email, grantedAt: a[u].grantedAt }; }) }); });
+  };
   else if (method === "POST" && p === "/api/admin/logout") run = function () {
     var auth = req.headers["authorization"] || "";
     adminTokens.delete(auth.slice(7));
