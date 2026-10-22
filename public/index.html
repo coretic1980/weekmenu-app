@@ -1578,6 +1578,13 @@
   .tr-ex summary { display: flex; justify-content: space-between; gap: 10px; cursor: pointer; font-size: 15px; list-style: none; }
   .tr-ex summary::-webkit-details-marker { display: none; }
 
+  .tr-vid { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+  .tr-vid-play { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line, rgba(0,0,0,.1)); background: var(--card, #fff); color: inherit; font: inherit; font-weight: 600; font-size: 14px; cursor: pointer; text-align: left; }
+  .tr-vid-ic { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 50%; background: #E62117; color: #fff; font-size: 12px; padding-left: 2px; flex: none; }
+  .tr-vid-frame { position: relative; width: 100%; padding-top: 56.25%; border-radius: 12px; overflow: hidden; background: #000; }
+  .tr-vid-frame iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+  .tr-vid-link { font-size: 12.5px; color: var(--accent); font-weight: 600; text-decoration: none; }
+  .tr-vid-note { font-size: 11.5px; color: var(--muted); line-height: 1.35; }
   .tr-light { display: block; margin-top: 6px; color: #C0502E; font-size: 12.5px; font-weight: 600; }
   .tr-l { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
   .tr-dose { color: var(--accent); font-weight: 700; white-space: nowrap; }
@@ -15335,6 +15342,38 @@
   // Intensiteit: elke set tot spierfalen, dat wil zeggen tot je geen herhaling meer met goede techniek kunt doen (technisch falen).
   // Bij zware vrije oefeningen (goblet squat, Roemeense deadlift, schouderpers) stop je bij de laatste nette herhaling, niet pas als het gewicht valt.
   // Beginners leren de eerste 4 weken eerst de techniek (1–2 herhalingen in reserve), daarna ook elke set tot falen.
+  // Uitlegfilmpjes (YouTube, vooral Nederlandstalig). Ze laden pas als je op afspelen tikt, via youtube-nocookie.com.
+  var EX_VIDEO = {
+    squat_bw: "ScWdRb6g1Rk", squat_goblet: "zbdAnLataMg", legpress: "8fHA4aArtgA", lunge: "t9hodsjwzQk", bridge: "coRpoEM6nvg",
+    rdl: "0-ymS90Ql3s", pushup_knee: "m_AkYHYSssI", pushup: "w28KD0SNlts", chestpress: "RFjvDpDN3ic", row_band: "en6PowFvp4w",
+    row_db: "KRJp_C1x7Aw", latpull: "AEejTiPaEjo", shoulder: "xyUmpL0pAzU", plank: "VwVeeJeAFJ0", sideplank: "zM8b-TZv0Xk",
+    deadbug: "iK2W1SXRFNI", stepup: "52kGkKu8mls", mountain: "Xg5VcGY5ExU", curl: "LCvpxTggyc4", dips: "k7RqGrWwKqI",
+    intervals: "Uej4l0e5l6I"
+  };
+  function trVideoBlock(exId, name) {
+    if (exId === "walk") return null;
+    var vid = EX_VIDEO[exId], wrap = document.createElement("div"); wrap.className = "tr-vid";
+    var watch = vid ? "https://www.youtube.com/watch?v=" + vid : "https://www.youtube.com/results?search_query=" + encodeURIComponent(name + " uitleg techniek");
+    if (vid) {
+      var play = document.createElement("button"); play.type = "button"; play.className = "tr-vid-play"; play.id = "trVid-" + exId;
+      play.innerHTML = "<span class=\"tr-vid-ic\">\u25B6</span><span>Bekijk hoe het moet</span>";
+      play.onclick = function () {
+        var box = document.createElement("div"); box.className = "tr-vid-frame";
+        var f = document.createElement("iframe");
+        f.src = "https://www.youtube-nocookie.com/embed/" + vid + "?autoplay=1&playsinline=1&rel=0&modestbranding=1";
+        f.title = "Uitleg: " + name; f.allow = "autoplay; encrypted-media; picture-in-picture; fullscreen"; f.allowFullscreen = true;
+        f.referrerPolicy = "strict-origin-when-cross-origin"; f.loading = "lazy";
+        box.appendChild(f); wrap.replaceChild(box, play);
+      };
+      wrap.appendChild(play);
+    }
+    var a = document.createElement("a"); a.className = "tr-vid-link"; a.href = watch; a.target = "_blank"; a.rel = "noopener";
+    a.textContent = vid ? "Speelt hij niet? Bekijk op YouTube" : "Zoek een uitlegfilmpje op YouTube";
+    wrap.appendChild(a);
+    var note = document.createElement("small"); note.className = "tr-vid-note"; note.textContent = "Filmpje van een externe maker op YouTube. Volg bij twijfel de uitleg hierboven en je eigen gevoel.";
+    if (vid) wrap.appendChild(note);
+    return wrap;
+  }
   var EX_FAIL_SAFE = ["squat_bw", "pushup_knee", "pushup", "chestpress", "row_band", "row_db", "latpull", "curl", "dips", "bridge", "legpress"];
   var EX_HOLD = ["plank", "sideplank"];
   function trIntensity(t, exId, wk) {
@@ -15498,7 +15537,7 @@
     var body = sh.body;
     var anyDeload = false, logInputs = [];
     if (s.items.length > 1) {
-      var wu = document.createElement("p"); wu.className = "tr-warm"; wu.textContent = "Begin met 5 minuten warm worden: rustig wandelen, armen rondzwaaien, een paar squats zonder gewicht. Rust 60–90 seconden tussen de sets.";
+      var wu = document.createElement("p"); wu.className = "tr-warm"; wu.textContent = "Begin met 5 minuten warm worden: rustig wandelen, armen rondzwaaien, een paar squats zonder gewicht. Rust 1,5 tot 3 minuten tussen de sets, zodat je elke set weer tot falen kunt gaan.";
       body.appendChild(wu);
     }
     s.items.forEach(function (it, i) {
@@ -15510,6 +15549,7 @@
       var it0 = trIntensity(t, it[0], s.week);
       if (it0) { var em = row.querySelector(".tr-int"); em.textContent = it0.txt; em.className = "tr-int " + it0.cls; } else row.querySelector(".tr-int").remove();
       row.querySelector("p").textContent = ex[1];
+      var vb = trVideoBlock(it[0], ex[0]); if (vb) row.querySelector("p").insertAdjacentElement("afterend", vb);
       // Per set: gewicht en herhalingen (of seconden). De vorige keer en het advies staan bij de oefening.
       if (!/^(walk|intervals)$/.test(it[0])) {
         var isTime = /sec/.test(dose.reps), last = trLast(t, it[0], s.key), mine = trLog(t, it[0]).filter(function (x) { return x.d === s.key; })[0];
