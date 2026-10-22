@@ -1540,6 +1540,17 @@
   .gp-move { display: flex; flex-direction: column; gap: 6px; }
   .gp-move-sub { font-size: 12.5px; color: var(--muted); line-height: 1.35; }
   .gp-move-add { display: flex; gap: 6px; flex-wrap: wrap; }
+  .gp-move-fix { border-style: dashed; }
+  .mv-list { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; }
+  .mv-row { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 12px; border: 1px solid var(--line, rgba(0,0,0,.08)); }
+  .mv-row.today { border-color: var(--accent); }
+  .mv-row.future { opacity: .45; }
+  .mv-day { font-weight: 600; font-size: 14px; text-transform: capitalize; }
+  .mv-tr { font-size: 12px; color: var(--muted); }
+  .mv-ctr { display: flex; align-items: center; gap: 6px; }
+  .mv-b { width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line, rgba(0,0,0,.12)); background: var(--card, #fff); color: inherit; font: inherit; font-size: 18px; font-weight: 700; cursor: pointer; }
+  .mv-b:disabled { opacity: .4; }
+  .mv-in { width: 58px; text-align: center; padding: 6px 4px; }
   .gp-wbars { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; height: 64px; align-items: end; }
   .gp-wbars span { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; gap: 4px; }
   .gp-wbars i { display: block; width: 100%; height: var(--h); border-radius: 6px; background: color-mix(in srgb, var(--accent) 35%, transparent); }
@@ -14984,6 +14995,47 @@
   // ---- Beweging: minuten per week. Trainingen die je afvinkt tellen vanzelf mee; de rest tik je er zelf bij. ----
   // prefs.moveLog = { "2026-10-22": 30, ... } (laatste 60 dagen)
   function moveLog() { return prefs.moveLog && typeof prefs.moveLog === "object" ? prefs.moveLog : {}; }
+  function setMove(k, min) {
+    var l = moveLog(); min = Math.max(0, Math.min(600, Math.round(Number(min) || 0)));
+    if (min) l[k] = min; else delete l[k];
+    prefs.moveLog = l; savePrefs();
+  }
+  // Corrigeren: per dag van deze week je eigen beweegminuten aanpassen (trainingen tellen via afvinken)
+  function openMoveSheet() {
+    var p = gpPlan(), sh = openSimpleSheet("moveSheet", "Bewegen deze week", "Doel: " + p.move + " minuten"), body = sh.body;
+    var mon = getMonday(new Date()), t = training(), todayKey = isoDateKey(new Date()), totalEl = document.createElement("div");
+    totalEl.className = "gp-move-h"; totalEl.id = "moveTotal"; body.appendChild(totalEl);
+    function paintTotal() { var mw = moveWeek(0); totalEl.innerHTML = "<b>Totaal</b><span></span>"; totalEl.querySelector("span").textContent = mw.total + " van " + p.move + " min"; }
+    paintTotal();
+    var list = document.createElement("div"); list.className = "mv-list"; body.appendChild(list);
+    for (var i = 0; i < 7; i++) {
+      (function (d) {
+        var k = isoDateKey(d), future = k > todayKey, tm = 0;
+        if (t && trIsDone(t, k)) { var se = trSessionFor(t, d); if (se) tm = trMinutes(t, se); }
+        var row = document.createElement("div"); row.className = "mv-row" + (k === todayKey ? " today" : "") + (future ? " future" : ""); row.id = "mvRow-" + k;
+        var lab = document.createElement("span"); lab.className = "mv-day"; lab.textContent = TR_DAYNAMES[d.getDay()] + " " + d.getDate(); row.appendChild(lab);
+        var info = document.createElement("small"); info.className = "mv-tr"; info.textContent = tm ? "+ " + tm + " min training" : ""; row.appendChild(info);
+        var ctr = document.createElement("span"); ctr.className = "mv-ctr";
+        var minus = document.createElement("button"); minus.type = "button"; minus.className = "mv-b"; minus.textContent = "\u2212"; minus.setAttribute("aria-label", "15 minuten minder");
+        var inp = document.createElement("input"); inp.className = "textinput mv-in"; inp.type = "text"; inp.inputMode = "numeric"; inp.id = "mvIn-" + k; inp.value = String(Number(moveLog()[k]) || 0); inp.setAttribute("aria-label", "Minuten bewogen op " + TR_DAYNAMES[d.getDay()]);
+        var plus = document.createElement("button"); plus.type = "button"; plus.className = "mv-b"; plus.textContent = "+"; plus.setAttribute("aria-label", "15 minuten meer");
+        function set(v) { setMove(k, v); inp.value = String(Number(moveLog()[k]) || 0); paintTotal(); }
+        minus.onclick = function () { set((Number(moveLog()[k]) || 0) - 15); };
+        plus.onclick = function () { set((Number(moveLog()[k]) || 0) + 15); };
+        inp.onchange = function () { set(parseInt(inp.value, 10) || 0); };
+        if (future) { minus.disabled = plus.disabled = inp.disabled = true; }
+        ctr.appendChild(minus); ctr.appendChild(inp); ctr.appendChild(plus); row.appendChild(ctr);
+        list.appendChild(row);
+      })(new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + i, 12));
+    }
+    var note = document.createElement("p"); note.className = "acc-sub"; note.textContent = "Minuten per dag, in stappen van 15 of zelf ingetypt. Trainingen tellen vanzelf mee als je ze afvinkt; klopt een training niet, zet hem dan terug in je training.";
+    body.appendChild(note);
+    var acts = document.createElement("div"); acts.className = "nudge-actions"; acts.style.marginTop = "12px";
+    var ok = document.createElement("button"); ok.type = "button"; ok.className = "primary-btn small"; ok.id = "mvDone"; ok.textContent = "Klaar";
+    ok.onclick = function () { closeSheet(sh.ov); render(); };
+    acts.appendChild(ok); body.appendChild(acts);
+    sh.ov.querySelector(".sheet-x").onclick = function () { closeSheet(sh.ov); render(); };
+  }
   function addMove(min) {
     var l = moveLog(), k = isoDateKey(new Date());
     l[k] = Math.max(0, Math.min(600, (Number(l[k]) || 0) + min));
@@ -15020,6 +15072,9 @@
       b.onclick = function () { addMove(o[0]); render(); showUndoToast(o[1].replace("+", "") + " bewegen erbij gezet.", function () { addMove(-o[0]); render(); }); };
       row.appendChild(b);
     });
+    var fix = document.createElement("button"); fix.type = "button"; fix.className = "chip gp-move-fix"; fix.id = "gpMoveEdit"; fix.textContent = "Aanpassen";
+    fix.onclick = function () { openMoveSheet(); };
+    row.appendChild(fix);
     box.appendChild(row);
     card.appendChild(box);
   }
