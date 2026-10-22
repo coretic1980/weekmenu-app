@@ -714,6 +714,9 @@
   .qa-g::-webkit-outer-spin-button, .qa-g::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
   .qa-gl { font-size: 12px; color: var(--muted); margin-right: 2px; }
   .qa-sum { margin-top: 12px; }
+  .qa-swap { align-self: flex-start; border: 0; background: none; padding: 2px 0 0; color: var(--accent2); font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+  .qa-alts { margin: -2px 0 4px; padding: 10px 12px; border-radius: 14px; border: 1px dashed var(--line); }
+  .qa-alts .textinput { width: 100%; margin-bottom: 4px; }
   .qa-sum > .primary-btn { width: 100%; margin-top: 14px; }
   .qa-sum > .textinput { margin-top: 12px; width: 100%; }
   .qa-total { display: flex; align-items: center; gap: 14px; padding: 14px; border-radius: 16px; background: var(--mint, var(--bg)); }
@@ -1538,6 +1541,9 @@
   .hh-meal.replaced .hh-meal-txt b { text-decoration: line-through; color: var(--muted); }
   .hh-meal.extra .hh-meal-go { font-size: 18px; }
   .hh-meal.is-feat .hh-meal-txt b { color: var(--accent2); }
+  .hh-meal.extra .extra-x { width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); color: var(--muted); font-size: 18px; line-height: 1; cursor: pointer; }
+  .plan-extras { padding: 4px 14px; }
+  .qa-day-add { width: 100%; margin: 6px 0 4px; border-style: dashed; color: var(--accent2); }
   .water-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-top: 6px; flex-wrap: wrap; }
   .water-lbl { font-size: 13px; color: var(--muted); }
   .water-lbl b { color: var(--ink); }
@@ -5141,19 +5147,7 @@
       if (!r.replacedBy) row.appendChild(eatButtons(pw, dayName, r));
       list.appendChild(row);
     });
-    function renderExtraRow(x) {
-      var row = document.createElement("button"); row.type = "button"; row.className = "hh-meal extra"; row.id = "extra-" + x.id;
-      var dot = document.createElement("i"); dot.style.background = "#8C8C8C"; row.appendChild(dot);
-      var tx = document.createElement("span"); tx.className = "hh-meal-txt";
-      var b = document.createElement("b"); b.textContent = x.name;
-      var sm = document.createElement("small"); sm.textContent = (x.place ? "Bij " + x.place : x.replaces ? x.replaces.split("|")[1] + ": anders gegeten" : x.moment ? x.moment + " \u00b7 erbij" : "Erbij") + " \u00b7 " + x.kcal + " kcal";
-      appendBal(sm, gramsBal(x.kcal, x.khG || 0, x.eiwitG || 0, x.vetG || 0), " ");
-      tx.appendChild(b); tx.appendChild(sm); row.appendChild(tx);
-      var st = document.createElement("span"); st.className = "hh-meal-go"; st.setAttribute("aria-hidden", "true"); st.textContent = "×"; row.appendChild(st);
-      row.setAttribute("aria-label", x.name + " weghalen");
-      row.onclick = function () { removeExtra(pw, dayName, x); };
-      list.appendChild(row);
-    }
+    function renderExtraRow(x) { list.appendChild(extraRow(pw, dayName, x)); }
     if (list.childNodes.length) body.appendChild(list);
     var acts = document.createElement("div"); acts.className = "hh-acts";
     var a0 = document.createElement("button"); a0.type = "button"; a0.className = "ghost-btn small qa-main"; a0.id = "qaBtn"; a0.textContent = "\uFF0B Toevoegen";
@@ -5261,6 +5255,47 @@
     if (idx === -1) return;
     list.splice(idx, 1); savePlannedWeeks(); render();
     showUndoToast("“" + x.name + "” weggehaald", function () { pw.extra[dayName].splice(idx, 0, x); savePlannedWeeks(); render(); });
+  }
+  // Tik op iets wat je erbij at: details, en pas dan weghalen (niet meer per ongeluk met één tik).
+  function openExtraSheet(pw, dayName, x) {
+    var sh = openSimpleSheet("extraSheet", x.name, (x.moment ? x.moment + " \u00b7 " : "") + dayName.toLowerCase() + (x.place ? " \u00b7 bij " + x.place : ""));
+    var body = sh.body;
+    var top = document.createElement("div"); top.className = "qa-total";
+    var kc = document.createElement("div"); kc.className = "qa-kcal"; kc.innerHTML = "<b></b><span>kcal</span>"; kc.querySelector("b").textContent = x.kcal; top.appendChild(kc);
+    var mac = document.createElement("div"); mac.className = "qa-mac";
+    [["Eiwit", x.eiwitG || 0], ["Koolh.", x.khG || 0], ["Vet", x.vetG || 0]].forEach(function (m) { var sp = document.createElement("span"); sp.innerHTML = "<b></b><small></small>"; sp.querySelector("b").textContent = m[1] + " g"; sp.querySelector("small").textContent = m[0]; mac.appendChild(sp); });
+    top.appendChild(mac); top.appendChild(balPill(gramsBal(x.kcal, x.khG || 0, x.eiwitG || 0, x.vetG || 0)));
+    body.appendChild(top);
+    if (Array.isArray(x.items) && x.items.length) {
+      var ul = document.createElement("ul"); ul.className = "ap-rules"; ul.style.color = "var(--ink)";
+      x.items.forEach(function (t) { var li = document.createElement("li"); li.textContent = t; ul.appendChild(li); });
+      body.appendChild(ul);
+    }
+    var note = document.createElement("div"); note.className = "qa-expl"; note.textContent = x.replaces ? "Kwam in de plaats van je geplande " + x.replaces.split("|")[1].toLowerCase() + "." : "Telt mee in je dag, naast wat er gepland staat.";
+    body.appendChild(note);
+    var row = document.createElement("div"); row.className = "nudge-actions"; row.style.marginTop = "14px";
+    var close = document.createElement("button"); close.type = "button"; close.className = "primary-btn small"; close.id = "extraClose"; close.textContent = "Klaar";
+    close.onclick = function () { closeSheet(sh.ov); };
+    var del = document.createElement("button"); del.type = "button"; del.className = "ghost-btn small"; del.id = "extraRemove"; del.textContent = "Weghalen";
+    del.onclick = function () { closeSheet(sh.ov); removeExtra(pw, dayName, x); };
+    row.appendChild(close); row.appendChild(del);
+    body.appendChild(row);
+  }
+  function extraRow(pw, dayName, x, cls) {
+    var row = document.createElement("div"); row.className = "hh-meal extra with-eat" + (cls ? " " + cls : ""); row.id = "extra-" + x.id;
+    var openB = document.createElement("button"); openB.type = "button"; openB.className = "hh-meal-open";
+    var dot = document.createElement("i"); dot.style.background = "#8C8C8C"; openB.appendChild(dot);
+    var tx = document.createElement("span"); tx.className = "hh-meal-txt";
+    var b = document.createElement("b"); b.textContent = x.name;
+    var sm = document.createElement("small"); sm.textContent = (x.place ? "Bij " + x.place : x.replaces ? x.replaces.split("|")[1] + ": anders gegeten" : x.moment ? x.moment + " \u00b7 erbij" : "Erbij") + " \u00b7 " + x.kcal + " kcal";
+    appendBal(sm, gramsBal(x.kcal, x.khG || 0, x.eiwitG || 0, x.vetG || 0), " ");
+    tx.appendChild(b); tx.appendChild(sm); openB.appendChild(tx);
+    openB.onclick = function () { openExtraSheet(pw, dayName, x); };
+    row.appendChild(openB);
+    var rm = document.createElement("button"); rm.type = "button"; rm.className = "hh-eat-b extra-x"; rm.setAttribute("aria-label", x.name + " weghalen"); rm.title = "Weghalen"; rm.textContent = "\u00d7";
+    rm.onclick = function () { removeExtra(pw, dayName, x); };
+    row.appendChild(rm);
+    return row;
   }
   function addExtra(entry) {
     var now = new Date(), dayName = PLAN_DAYS[(now.getDay() + 6) % 7];
@@ -8680,6 +8715,15 @@
           sn.querySelector("span").textContent = snacks.length + (snacks.length === 1 ? " snack" : " snacks") + " \u00b7 " + sk + " kcal";
           meals.appendChild(sn);
         }
+        var wx = dayExtras(pw, dn);
+        if (wx.length) {
+          var xk = 0; wx.forEach(function (x) { xk += x.kcal || 0; });
+          var xr = document.createElement("button"); xr.type = "button"; xr.className = "wk-meal snack"; xr.id = "wkExtra-" + dn;
+          xr.innerHTML = "<small>Erbij</small><span></span>";
+          xr.querySelector("span").textContent = (wx.length === 1 ? wx[0].name : wx.length + " dingen") + " \u00b7 " + xk + " kcal";
+          xr.onclick = function () { setPlanView("dag"); state.planDayName = dn; render(); window.scrollTo(0, 0); };
+          meals.appendChild(xr);
+        }
         if (!past) {
           var qb = document.createElement("button"); qb.type = "button"; qb.className = "wk-meal qa-add"; qb.id = "qaDayBtn-" + dn;
           qb.textContent = "\uFF0B Snel iets toevoegen";
@@ -9038,6 +9082,19 @@
     else { tone = "ok"; msg = "Mooi in balans met je dagdoel."; }
     adv.textContent = msg; adv.className = "dp-advice " + tone;
     main.appendChild(card);
+    // Wat je erbij at of zette (Snel toevoegen, Anders gegeten), en zelf iets toevoegen
+    var dx = dayExtras(pw, d);
+    if (dx.length) {
+      var xl = document.createElement("div"); xl.className = "eyebrow ps-label"; xl.textContent = "Erbij"; main.appendChild(xl);
+      var xbox = document.createElement("div"); xbox.className = "card hh-meals plan-extras"; xbox.id = "planExtras";
+      dx.forEach(function (x) { xbox.appendChild(extraRow(pw, d, x)); });
+      main.appendChild(xbox);
+    }
+    if (!isPastDay(pw, d)) {
+      var qd = document.createElement("button"); qd.type = "button"; qd.className = "ghost-btn qa-day-add"; qd.id = "qaPlanDay"; qd.textContent = "\uFF0B Snel iets toevoegen aan " + d.toLowerCase();
+      qd.onclick = function () { openQuickAdd({ week: pw.weekStart, day: d }); };
+      main.appendChild(qd);
+    }
     if (pw.autoFillError) { var ae = document.createElement("div"); ae.className = "errorbox"; ae.textContent = pw.autoFillError; main.appendChild(ae); }
 
     // Hoofdmaaltijden
@@ -12953,7 +13010,8 @@
     qTokens.forEach(function (qt) {
       var best = 0;
       f.tokens.forEach(function (t, i) {
-        var v = t === qt ? 1 : t.indexOf(qt) === 0 ? 0.85 : (qt.length >= 4 && t.indexOf(qt) > -1) ? 0.55 : (t.length >= 4 && qt.indexOf(t) === 0) ? 0.5 : 0;
+        var qs = qt.length > 4 ? qt.replace(/(en|s)$/, "") : qt;   // meervoud: crackers ~ cracker
+        var v = t === qt || (qs !== qt && t === qs) ? 1 : t.indexOf(qt) === 0 ? (t.length - qt.length > 3 ? 0.6 : 0.85) : (qs !== qt && t.indexOf(qs) === 0) ? 0.75 : (qt.length >= 4 && t.indexOf(qt) > -1) ? 0.55 : (t.length >= 4 && qt.indexOf(t) === 0) ? 0.5 : 0;
         if (v && i === 0) v += 0.25;   // eerste woord van de productnaam weegt zwaarder
         if (v > best) best = v;
       });
@@ -12970,8 +13028,21 @@
     s -= f.tokens.length * 0.04;
     return s;
   }
+  // Spreektaal en meervouden die NEVO anders noemt (alleen een verwijzing naar de zoekterm; de NEVO-gegevens blijven ongewijzigd).
+  var QA_WORDS = { bananen: "banaan", eieren: "ei", tomaten: "tomaat", appels: "appel", peren: "peer", aardappelen: "aardappel", aardappels: "aardappel", uien: "ui", wortels: "wortel", wortelen: "wortel",
+    sneetjes: "brood", sneetje: "brood", boterham: "brood", boterhammen: "brood", snee: "brood", crackers: "cracker", beschuiten: "beschuit", mandarijnen: "mandarijn", sinaasappels: "sinaasappel", kiwis: "kiwi",
+    druif: "druiven", aardbei: "aardbeien", noot: "noten", walnoot: "walnoten", amandel: "amandelen", champignon: "champignons", paprikas: "paprika", courgettes: "courgette", komkommers: "komkommer",
+    plakje: "", plakjes: "", stukje: "", stukjes: "", bakje: "", portie: "", glas: "", glaasje: "", kopje: "", schaaltje: "", handje: "", koffie: "koffie", thee: "thee", ontbijtkoek: "ontbijtkoek",
+    pindakaas: "pindakaas", hagelslag: "hagelslag", yoghurt: "yoghurt", kwark: "kwark", melk: "melk" };
+  function qaRewrite(q) {
+    var words = q.split(" ").map(function (w) { return QA_WORDS[w] !== undefined ? QA_WORDS[w] : w; }).filter(Boolean);
+    var r = words.join(" ");
+    if (r === "brood") r = "brood";   // los "brood": de gangbare (volkoren) uit de aliassen
+    return r || q;
+  }
   function qaSearch(query, limit) {
     var q = qaNorm(query); if (!q || !qaFoods) return [];
+    q = qaRewrite(q);
     var qTokens = q.split(" ").filter(Boolean);
     var pool = myFoods().map(qaMyAsFood).concat(qaFoods.list);
     var al = qaFoods.aliases[q] || qaFoods.aliases[q.replace(/(en|s)$/, "")];
@@ -13040,10 +13111,11 @@
     var hit = qaSearch(p.food, 1)[0];
     if (!hit) return null;
     var por = qaPortion(hit), g;
+    var keepQ = p.food;
     if (p.unit && p.unit[1] === "g") g = (p.qty || 1) * p.unit[2];
     else if (p.unit && p.unit[2]) g = (p.qty || 1) * (por.g && /snee|plak|glas|kop|handje/.test(por.label) ? por.g : p.unit[2]);
     else g = (p.qty || 1) * (por.g || 100);
-    return qaItem(hit, g);
+    var it = qaItem(hit, g); it.q = keepQ; return it;
   }
 
   // ---- Het invoerscherm ----
@@ -13183,6 +13255,12 @@
         var b = document.createElement("b"); b.textContent = it.name;
         var sm = document.createElement("small"); sm.textContent = qaAmountText(it) + " · " + Math.round(m.kcal) + " kcal" + (it.src === "ai" ? " · schatting" : it.src === "off" ? " · Open Food Facts" : "");
         tx.appendChild(b); tx.appendChild(sm);
+        if (!it.fixed) {
+          // Klopt het product niet? Tik voor andere producten met dezelfde zoekterm (de hoeveelheid blijft staan).
+          var sw = document.createElement("button"); sw.type = "button"; sw.className = "qa-swap"; sw.id = "qaSwap" + idx; sw.textContent = st.swapIdx === idx ? "Sluiten" : "Ander product?";
+          sw.onclick = function () { st.swapIdx = st.swapIdx === idx ? null : idx; paintItems(); };
+          tx.appendChild(sw);
+        }
         var minus = document.createElement("button"); minus.type = "button"; minus.className = "qa-step"; minus.textContent = "−"; minus.setAttribute("aria-label", "Minder " + it.name);
         var plus = document.createElement("button"); plus.type = "button"; plus.className = "qa-step"; plus.textContent = "+"; plus.setAttribute("aria-label", "Meer " + it.name);
         var step = it.fixed ? 1 : (it.portion && it.portion.g && it.portion.g !== 100 ? it.portion.g : (it.g >= 100 ? 25 : 10));
@@ -13196,6 +13274,27 @@
         var ctr = document.createElement("div"); ctr.className = "qa-ctr"; ctr.appendChild(minus); if (gIn) { ctr.appendChild(gIn); var gl = document.createElement("span"); gl.className = "qa-gl"; gl.textContent = "g"; ctr.appendChild(gl); } ctr.appendChild(plus);
         row.appendChild(tx); row.appendChild(ctr);
         list.appendChild(row);
+        if (st.swapIdx === idx) {
+          var box = document.createElement("div"); box.className = "qa-alts"; box.id = "qaAlts";
+          var sIn = document.createElement("input"); sIn.type = "search"; sIn.className = "textinput"; sIn.id = "qaAltSearch"; sIn.placeholder = "Zoek een ander product"; sIn.value = it.q || "";
+          var altList = document.createElement("div");
+          var paintAlts = function (arr) {
+            altList.innerHTML = "";
+            arr.forEach(function (f, j) {
+              var a = document.createElement("button"); a.type = "button"; a.className = "qa-res"; a.id = "qaAlt" + j;
+              a.innerHTML = '<span class="qa-res-txt"><b></b><small></small></span>';
+              a.querySelector("b").textContent = f.name; a.querySelector("small").textContent = f.fixed ? "eigen portie" : Math.round(f.kcal * it.g / 100) + " kcal voor " + it.g + " g";
+              a.onclick = function () { var n = qaItem(f, f.fixed ? 0 : it.g); n.q = it.q; st.items[idx] = n; st.swapIdx = null; paintItems(); paintSum(); };
+              altList.appendChild(a);
+            });
+            if (!arr.length) { var e = document.createElement("div"); e.className = "qa-empty"; e.textContent = "Niets gevonden. Probeer een ander woord."; altList.appendChild(e); }
+          };
+          sIn.oninput = function () { paintAlts(qaSearch(sIn.value, 6).filter(function (f) { return f.key !== it.key; })); };
+          var baseQ = it.q || it.name.split(" ").slice(0, 2).join(" "), lastW = qaRewrite(qaNorm(baseQ)).split(" ").pop(), seenA = {};
+          paintAlts(qaSearch(baseQ, 7).concat(qaSearch(lastW, 10)).filter(function (f) { if (f.key === it.key || seenA[f.key]) return false; seenA[f.key] = 1; return true; }).slice(0, 6));
+          box.appendChild(sIn); box.appendChild(altList);
+          list.appendChild(box);
+        }
       });
     }
     function paintSum() {
@@ -13324,7 +13423,14 @@
       var parsed = qaParse(st.q); if (!parsed.length) return;
       if (!qaFoods) { showToast("Even geduld, de productenlijst laadt nog."); return; }
       var unknown = [];
-      parsed.forEach(function (p) { var it = qaResolve(p); if (it) st.items.push(it); else unknown.push(p.raw); });
+      var prevRaw = "";
+      parsed.forEach(function (p) {
+        var it = qaResolve(p);
+        // "koffie met melk": een scheutje, geen glas
+        if (it && !p.qty && !p.unit && /^(melk|room|koffiemelk|halfvolle melk|havermelk)$/.test(qaNorm(p.food)) && /koffie|thee|cappuccino|latte/.test(qaNorm(prevRaw))) it.g = 30;
+        if (it) st.items.push(it); else unknown.push(p.raw);
+        prevRaw = p.raw;
+      });
       st.q = ""; input.value = ""; st.results = [];
       paintResults(); paintItems(); paintSum(); paintStart();
       if (unknown.length) {
