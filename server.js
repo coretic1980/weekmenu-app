@@ -2990,7 +2990,7 @@ function stripHealthData(subpath, value) {
   if (subpath === "prefs") {
     HEALTH_PREF_FIELDS.forEach(function (k) { if (k in v) v[k] = k === "health" ? [] : k === "water" ? null : ""; });
     if (v.coach && typeof v.coach === "object") { v.coach.water = false; v.coach.daytools = false; }
-    if (v.journey && Array.isArray(v.journey.log)) v.journey.log = v.journey.log.filter(function (x) { return x && x.m !== "gewicht"; });
+    if (v.journey && Array.isArray(v.journey.log)) v.journey.log = v.journey.log.filter(function (x) { return x && ["gewicht", "middel", "nek", "heup", "borst", "arm", "been"].indexOf(x.m) === -1; });
     if (v.journey && v.journey.metric === "gewicht") v.journey.metric = "";
     delete v.weightGoal;
   } else if (subpath === "plannedWeeks") {
@@ -3973,8 +3973,10 @@ function notifyTickUser(uid, ctx) {
       var wlog = prefs.journey && Array.isArray(prefs.journey.log) ? prefs.journey.log : [];
       if (Number(wgoal.target) > 0 && !wgoal.reachedAt && !wlog.some(function (x) { return x && x.m === "gewicht" && x.w === monToday; })) {
         st.weighSentOn = now.date; changed = true;
-        jobs.push({ kind: "weigh-in", payload: { title: "Tijd om te wegen", tag: "balanza-weigh",
-          body: "Nuchter en na het plassen, net als vorige week. Eén keer per week is genoeg: elke dag wegen laat vooral schommelingen zien en dat werkt niet motiverend.", url: "/?open=goal" } });
+        var mWeeks = wlog.filter(function (x) { return x && ["middel", "nek", "heup"].indexOf(x.m) > -1; }).map(function (x) { return x.w; }).sort();
+        var measDue = !mWeeks.length || (Date.parse(monToday + "T12:00:00Z") - Date.parse(mWeeks[mWeeks.length - 1] + "T12:00:00Z")) / 86400000 >= 28;
+        jobs.push({ kind: "weigh-in", payload: { title: measDue && mWeeks.length ? "Tijd om te wegen en te meten" : "Tijd om te wegen", tag: "balanza-weigh",
+          body: "Nuchter en na het plassen, net als vorige week." + (measDue && mWeeks.length ? " Meet ook even je omtrekken; dat doe je eens per maand." : "") + " Eén keer per week wegen is genoeg: elke dag wegen laat vooral schommelingen zien en dat werkt niet motiverend.", url: "/?open=goal" } });
       }
     }
     // 4. Maandag: je week in cijfers
@@ -4828,7 +4830,7 @@ function assistantGuide() {
     "- Samen plannen met huisgenoten (Mijn profiel), community met recepten van anderen, meldingen, licht of donker thema, Start-scherm indelen.\n" +
     "- Plus: na de proefperiode zijn ontwerpen en plannen voor Plus. Prijzen en abonnement staan bij Mijn profiel.\n" +
     "- Automatisch plannen: één keer instellen (maaltijden, dagen, dag en tijd, standaard zaterdag 09:00); Balanza zet dan elke week de volgende week klaar en de gebruiker keurt hem goed in een carrousel. Voedingsnieuws: één bericht per dag onder Voor jou.\n" +
-    "- Doelgewicht: tegel \u201cJouw doel\u201d op Start, of Mijn voorkeuren \u2192 Lichaamsprofiel \u2192 Doelgewicht. Tempo rustig, normaal of stevig; het dagdoel past zich aan, binnen veilige grenzen. Eén keer per week wegen; \u201cCijfers verbergen\u201d toont alleen procenten. Niet onder een gezond gewicht en niet voor minderjarigen.\n" +
+    "- Doelgewicht: tegel \u201cJouw doel\u201d op Start, of Mijn voorkeuren \u2192 Lichaamsprofiel \u2192 Doelgewicht. Tempo rustig, normaal of stevig; het dagdoel past zich aan, binnen veilige grenzen. Eén keer per week wegen op een vast weegmoment (nuchter); eens per maand omtrekken meten, waarmee Balanza het vetpercentage schat (Navy-methode); \u201cCijfers verbergen\u201d toont alleen procenten. Niet onder een gezond gewicht en niet voor minderjarigen.\n" +
     "- Snel toevoegen (knop \u201c\uFF0B Toevoegen\u201d op Start en \u201c\uFF0B Snel iets toevoegen\u201d per dag in de planner; vervangt het oude \u201cAnders gegeten\u201d): zoeken in de NEVO-productenlijst, een foto van je bord, uit eten (restaurant inchecken), \u201cin plaats van\u201d een geplande maaltijd, een hele zin (\u201c2 eieren, 1 snee brood met kaas\u201d), streepjescode scannen (Open Food Facts) of een eigen product van het etiket. Macro's en Balans worden zelf berekend; als extra bij een dag of ingepland als maaltijd (dan bewaard als gerecht).\n" +
     "- WAAR VIND JE WAT: rechtsboven de avatar opent het menu met Mijn profiel, Mijn voorkeuren, Automatisch plannen, Samen plannen, Jouw reis, Instellingen, Donkere weergave, Hoe werkt Balanza en Uitloggen. " +
     "Instellingen is een overzicht met per onderdeel een knop: Weergave, Meldingen, Automatisch plannen, Begeleiding, Privacy, Bring!, Account en beveiliging (wachtwoord, e-mail, uitloggen, account verwijderen) " +

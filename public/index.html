@@ -1550,6 +1550,12 @@
   .wg-how { margin: 10px 0 0; font-size: 13.5px; line-height: 1.5; color: var(--muted); }
   .wg-fix { font-size: 13.5px; }
   .wg-weigh-tip { flex: 1 1 100%; color: var(--muted); font-size: 12.5px; line-height: 1.45; }
+  .wg-meas { padding-top: 10px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 6px; }
+  .wg-meas-h { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 14.5px; }
+  .wg-meas-facts { font-size: 13.5px; font-weight: 600; }
+  .meas-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; margin-top: 12px; }
+  .meas-field small { display: block; font-size: 11.5px; line-height: 1.35; color: var(--muted); margin: 1px 0 4px; min-height: 2.7em; }
+  @media (max-width: 360px) { .meas-grid { grid-template-columns: 1fr; } }
   .wg-prefrow { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; font-size: 14px; }
   .hh-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 7px; font-size: 12px; color: var(--muted); }
   .hh-legend span { display: inline-flex; align-items: center; gap: 5px; }
@@ -7591,7 +7597,7 @@
 { title: "Stel je voorkeuren in", body: "Bij het eerste gebruik loop je een korte wizard door die alles in stapjes uitvraagt, elk met uitleg over wat die keuze precies doet. Later kun je alles terugvinden en aanpassen bij \u201cGerechten ontwerpen\u201d: doel (Onderhoud, Vetverlies, Cutting, Spieropbouw of Atleet), voedingsstijl, keukenstijl, smaakprofiel, culinair niveau, kindvriendelijk (gezinsmodus), beschikbare apparatuur, wat je niet wilt eten, en optioneel je lichaamsprofiel (geslacht, lengte, gewicht, leeftijd, activiteitsniveau)." },
     { title: "Navigeren op je telefoon", body: "Onderin staat een vaste balk met Start, Ontwerpen, Plannen, Gerechten en Lijst. Tik nogmaals op het actieve onderdeel om terug te gaan naar het begin ervan. Het getal bij Lijst laat zien hoeveel boodschappen voor deze week nog open staan. Rechtsboven vind je de assistent (het tekstwolkje) en je accountmenu (je avatar) met Instellingen, Hoe werkt Balanza en je abonnement." },
     { title: "Je dag op Start", body: "Op Start zie je alles wat vandaag gepland staat, plus wat je er los bij at. De gekleurde balk is je dag in calorie\u00ebn tegenover je dagdoel: elk blokje is een maaltijd in de kleur van het moment (de legenda staat eronder), een lichter blokje heb je nog niet gegeten. Daaronder zie je eiwit, koolhydraten en vet tegenover je doel. Vink een maaltijd af met het vinkje als je hem gegeten hebt. Tik op de maaltijd zelf om iets te wijzigen: iets anders gegeten, niet gegeten, of meer of minder (\u00bd tot 2 porties); wat je niet at, telt niet mee. Alles kun je ongedaan maken. \u201cWat past nog?\u201d laat zien wat er nog in je dag past. Met \u201cStartscherm aanpassen\u201d onderaan Start zet je de tegels in jouw volgorde of verberg je wat je niet nodig hebt." },
-    { title: "Jouw doelgewicht", body: "Werk je naar een gewicht toe? Stel op Start (tegel \u201cJouw doel\u201d), in Mijn voorkeuren of in de startwizard een doelgewicht in, met een tempo: rustig, normaal of stevig. Balanza stemt je dagdoel daarop af, binnen veilige grenzen, en laat zien hoe ver je bent: van start naar doel, je weekgemiddelden in een grafiekje en, na drie wegingen, of je op schema ligt en wanneer je je doel verwacht. Weeg je \u00e9\u00e9n keer per week op je vaste weegmoment (zelf te kiezen, standaard maandag 7:30): nuchter, na het plassen en zonder kleren. Elke dag wegen helpt niet; je ziet vooral schommelingen door vocht. Staat je gewicht een paar weken stil, dan geeft Balanza een tip over eten of bewegen, gebaseerd op wat je de afgelopen weken at, en kun je de assistent om een persoonlijke tip vragen. Wil je geen kilo\u2019s zien, zet dan \u201cCijfers verbergen\u201d aan. Een doel onder een gezond gewicht kan niet, en voor wie jonger is dan 18 is deze functie er niet." },
+    { title: "Jouw doelgewicht", body: "Werk je naar een gewicht toe? Stel op Start (tegel \u201cJouw doel\u201d), in Mijn voorkeuren of in de startwizard een doelgewicht in, met een tempo: rustig, normaal of stevig. Balanza stemt je dagdoel daarop af, binnen veilige grenzen, en laat zien hoe ver je bent: van start naar doel, je weekgemiddelden in een grafiekje en, na drie wegingen, of je op schema ligt en wanneer je je doel verwacht. Weeg je \u00e9\u00e9n keer per week op je vaste weegmoment (zelf te kiezen, standaard maandag 7:30): nuchter, na het plassen en zonder kleren. Elke dag wegen helpt niet; je ziet vooral schommelingen door vocht. Meet eens per maand je omtrekken (middel, nek, heup en eventueel borst, arm en bovenbeen): dan zie je ook vooruitgang als de weegschaal stilstaat, en schat Balanza met de Navy-methode je vetpercentage. Dat gebruikt Balanza ook om te checken of je doelgewicht gezond is: zo telt je bouw mee en niet alleen je BMI. Staat je gewicht een paar weken stil, dan geeft Balanza een tip over eten of bewegen, gebaseerd op wat je de afgelopen weken at, en kun je de assistent om een persoonlijke tip vragen. Wil je geen kilo\u2019s zien, zet dan \u201cCijfers verbergen\u201d aan. Een doel onder een gezond gewicht kan niet, en voor wie jonger is dan 18 is deze functie er niet." },
     { title: "Het Balans-keurmerk", body: "Elk gerecht, elke dag en elke week krijgt een Balans-score: hoe dicht de verdeling van koolhydraten, eiwit en vet bij jouw doel ligt. Groen (75\u2013100%) is dichtbij, geel, oranje en rood wijken steeds meer af. Is een score laag, dan staat er waarom (bijvoorbeeld weinig eiwit en veel koolhydraten) met een tip wat helpt. De Balans van je dag rekent naar verhouding: een grote maaltijd telt zwaarder dan een tussendoortje." },
     { title: "Snel iets toevoegen", body: "At je iets wat niet gepland stond? Tik op Start op \u201c\uff0b Toevoegen\u201d of in de planner op \u201c\uff0b Snel iets toevoegen\u201d. Zoek een product, of typ een hele zin zoals \u201c2 eieren met 2 sneetjes volkoren brood en 30 g kaas\u201d: Balanza zoekt alles op in de NEVO-productenlijst en rekent kcal, macro's en Balans direct uit. Klopt een product niet, tik dan op \u201cAnder product?\u201d. Verder kun je een foto van je bord maken, een streepjescode scannen, een eigen product van het etiket toevoegen of \u201cUit eten\u201d kiezen (dan onthoudt Balanza het restaurant en wat je er nam). Snel toevoegen is gratis." },
     { title: "Maaltijd of los product", body: "Balanza herkent zelf of je een maaltijd of iets kleins invoert en kiest het moment erbij (ontbijt, lunch, diner of snack, op basis van de tijd of van woorden als \u201clunch\u201d of \u201ctussendoortje\u201d in je zin). Alles wat je toevoegt komt in je planning: op een leeg moment komt het op die plek, naast iets wat al gepland staat komt het onder \u201cErbij\u201d. Kies \u201cIn plaats van \u2026\u201d en het geplande gerecht wordt echt vervangen. Met ongedaan maken zet je het terug; wat je zelf kiest, gaat altijd voor." },
@@ -14720,15 +14726,26 @@
     if (!r) return "Vul eerst je lengte in (bij je lichaamsprofiel), dan kan Balanza checken of je doel gezond is voor jou.";
     var range = "Een gezond gewicht voor jouw lengte (" + r.h + " cm" + (r.old ? ", vanaf 70 jaar" : "") + ") ligt tussen " + wgFmt(r.loKg) + " en " + wgFmt(r.hiKg) + " kg.";
     if (target < r.loKg) return "Dit doel ligt onder een gezond gewicht. " + range + " Kies een doel van minstens " + wgFmt(Math.ceil(r.loKg * 10) / 10) + " kg, en overleg bij twijfel met je huisarts of een diëtist.";
-    if (cur && target > cur + 0.05 && target > r.hiAllowedKg) return "Dit doel ligt boven een gezond gewicht (BMI " + String(r.bmi(target)).replace(".", ",") + "). " + range + (r.muscle ? " Omdat je spieren opbouwt, mag het iets hoger: tot ongeveer " + wgFmt(r.hiAllowedKg) + " kg." : "") + " Kies een lager doel, en overleg bij twijfel met je huisarts of een diëtist.";
+    var bfx = wgBodyFatProjection(target, cur);
+    if (bfx && bfx.tooLow) return "Dan zakt je vetpercentage naar ongeveer " + wgFmt(bfx.newPct) + "%, onder het gezonde minimum van " + bfx.range[0] + "% voor jouw leeftijd (op basis van je omtrekken). Kies een hoger doel, en overleg bij twijfel met je huisarts of een diëtist.";
+    if (cur && target > cur + 0.05 && target > r.hiAllowedKg && !(bfx && bfx.ok)) return "Dit doel ligt boven een gezond gewicht (BMI " + String(r.bmi(target)).replace(".", ",") + "). " + range + (r.muscle ? " Omdat je spieren opbouwt, mag het iets hoger: tot ongeveer " + wgFmt(r.hiAllowedKg) + " kg." : "") + " Kies een lager doel, en overleg bij twijfel met je huisarts of een diëtist.";
     if (cur && Math.abs(target - cur) > 40) return "Dat is een groot verschil. Kies liever een tussendoel; daarna stel je een nieuw doel in.";
     return "";
+  }
+  // Met je omtrekken (Navy-methode) kijkt Balanza verder dan BMI: bij aankomen gaat ongeveer de helft naar vet, bij afvallen driekwart.
+  function wgBodyFatProjection(target, cur) {
+    var bf = currentBodyFat(); if (!bf || !bf.fresh || !bf.range || !cur) return null;
+    var fat = bf.pct / 100 * cur, newFat = target >= cur ? fat + 0.5 * (target - cur) : fat - 0.75 * (cur - target);
+    var newPct = Math.max(0, newFat / target * 100);
+    return { pct: bf.pct, newPct: Math.round(newPct * 10) / 10, range: bf.range, ok: newPct <= bf.range[1], tooLow: target < cur && newPct < bf.range[0] };
   }
   // Ligt je doel nog boven een gezond gewicht terwijl je afvalt? Dan is het een mooie tussenstap: dat zeggen we positief.
   function wgRangeNote(target, cur) {
     var r = wgHealthyRange(); if (!r || !target) return "";
     if (cur && target < cur && target > r.hiAllowedKg) return " Een mooie tussenstap. Een gezond gewicht voor jouw lengte ligt tussen " + wgFmt(r.loKg) + " en " + wgFmt(r.hiKg) + " kg; daar kun je later een volgend doel voor zetten.";
-    if (target >= r.loKg && target <= r.hiAllowedKg) return " Dit doel past bij een gezond gewicht voor jouw lengte.";
+    var bfx = wgBodyFatProjection(target, cur);
+    if (bfx && target > r.hiAllowedKg && bfx.ok) return " Je BMI komt boven de 25, maar volgens je omtrekken is je vetpercentage gezond (ongeveer " + wgFmt(bfx.newPct) + "% bij je doel): je bouw weegt meer dan BMI denkt.";
+    if (target >= r.loKg && target <= r.hiAllowedKg) return " Dit doel past bij een gezond gewicht voor jouw lengte." + (bfx ? " Je vetpercentage komt dan rond " + wgFmt(bfx.newPct) + "%." : "");
     return "";
   }
   // Kleine grafiek: je weekgemiddelden, met een stippellijn op je doel
@@ -14795,6 +14812,7 @@
       keep.onclick = function () { prefs.goal = "Onderhoud"; savePrefs(); showToast("Je doel staat nu op Onderhoud. Zo hou je vast wat je bereikt hebt."); render(); };
       card.appendChild(keep);
     }
+    renderMeasureBlock(card, g);
     // Wegen: hooguit één keer per week nodig; vaker mag, dan telt het gemiddelde
     var mine = thisWeekWeight();
     var f = document.createElement("form"); f.className = "wg-weigh"; f.id = "wgWeigh";
@@ -14933,6 +14951,125 @@
     acts.appendChild(later);
     box.appendChild(acts);
     card.appendChild(box);
+  }
+  // ---------- Omtrekken en geschat vetpercentage (Navy-methode) ----------
+  // Metingen staan per week in journey.log ({ w, m: "middel" | "nek" | "heup" | "borst" | "arm" | "been", v: cm }).
+  // Navy-methode (Hodgdon & Beckett): uit nek, middel (en heup bij vrouwen) en lengte. Schatting, ± 3–4%.
+  var MEAS = [
+    ["middel", "Middel", "Ter hoogte van je navel, ontspannen na een rustige uitademing.", true],
+    ["nek", "Nek", "Net onder je adamsappel, het lint iets schuin naar voren omlaag.", true],
+    ["heup", "Heup", "Op het breedste punt van je billen, voeten tegen elkaar.", true],
+    ["borst", "Borst", "Op tepelhoogte, armen ontspannen langs je lichaam.", false],
+    ["arm", "Bovenarm", "Midden tussen schouder en elleboog, arm ontspannen.", false],
+    ["been", "Bovenbeen", "Op het breedste punt, gewicht op beide benen.", false]
+  ];
+  var MEAS_KEYS = MEAS.map(function (m) { return m[0]; });
+  var MEAS_DUE_DAYS = 28;
+  function measEntries(k) {
+    var log = prefs.journey && Array.isArray(prefs.journey.log) ? prefs.journey.log : [];
+    return log.filter(function (x) { return x && x.m === k && Number(x.v) > 0; }).sort(function (a, b) { return a.w < b.w ? -1 : a.w > b.w ? 1 : 0; });
+  }
+  function measLast(k) { var e = measEntries(k); return e.length ? e[e.length - 1] : null; }
+  function measFirst(k) { var e = measEntries(k); return e.length ? e[0] : null; }
+  function measLastWeek() { var w = null; MEAS_KEYS.forEach(function (k) { var l = measLast(k); if (l && (!w || l.w > w)) w = l.w; }); return w; }
+  function measDue() { var w = measLastWeek(); return !w || (new Date(mondayKeyOffset(0) + "T12:00:00") - new Date(w + "T12:00:00")) / 86400000 >= MEAS_DUE_DAYS; }
+  function saveMeasurements(vals) {
+    var j = journey(); j.log = Array.isArray(j.log) ? j.log : [];
+    var wk = mondayKeyOffset(0);
+    Object.keys(vals).forEach(function (k) {
+      var v = Math.round(Number(vals[k]) * 10) / 10; if (!(v >= 20 && v <= 250)) return;
+      j.log = j.log.filter(function (x) { return !(x && x.w === wk && x.m === k); });
+      j.log.push({ w: wk, m: k, v: v });
+    });
+    j.log = j.log.slice(-200);
+    savePrefs();
+  }
+  function navyBodyFat(o) {
+    var h = Number(prefs.heightCm), sex = prefs.gender;
+    var nek = Number(o.nek), mid = Number(o.middel), heup = Number(o.heup);
+    if (!h || !nek || !mid || (sex !== "Man" && sex !== "Vrouw")) return null;
+    var log10 = function (x) { return Math.log(x) / Math.LN10; }, bf;
+    if (sex === "Man") { if (mid - nek <= 0) return null; bf = 495 / (1.0324 - 0.19077 * log10(mid - nek) + 0.15456 * log10(h)) - 450; }
+    else { if (!heup || mid + heup - nek <= 0) return null; bf = 495 / (1.29579 - 0.35004 * log10(mid + heup - nek) + 0.22100 * log10(h)) - 450; }
+    return bf > 2 && bf < 70 ? Math.round(bf * 10) / 10 : null;
+  }
+  // Gezond vetpercentage naar leeftijd en geslacht (Gallagher e.a. 2000)
+  function healthyFatRange() {
+    var a = Number(prefs.age) || 35, sex = prefs.gender;
+    if (sex === "Man") return a < 40 ? [8, 20] : a < 60 ? [11, 22] : [13, 25];
+    if (sex === "Vrouw") return a < 40 ? [21, 33] : a < 60 ? [23, 34] : [24, 36];
+    return null;
+  }
+  function currentBodyFat() {
+    var o = {}, oldest = null;
+    ["nek", "middel", "heup"].forEach(function (k) { var l = measLast(k); if (l) { o[k] = l.v; if (!oldest || l.w < oldest) oldest = l.w; } });
+    var bf = navyBodyFat(o); if (bf === null) return null;
+    var age = oldest ? (Date.now() - new Date(oldest + "T12:00:00")) / 86400000 : 999;
+    return { pct: bf, fresh: age <= 42, range: healthyFatRange() };
+  }
+  // Verhouding middel/lengte: onder 0,5 is gezond, ongeacht je bouw
+  function waistRatio() { var m = measLast("middel"), h = Number(prefs.heightCm); return m && h ? Math.round(m.v / h * 100) / 100 : null; }
+  function renderMeasureBlock(card, g) {
+    var box = document.createElement("div"); box.className = "wg-meas"; box.id = "wgMeas";
+    var head = document.createElement("div"); head.className = "wg-meas-h";
+    head.innerHTML = "<b>Omtrekken</b>";
+    var go = document.createElement("button"); go.type = "button"; go.className = measDue() ? "primary-btn small" : "hh-link"; go.id = "wgMeasure";
+    go.textContent = !measLastWeek() ? "Eerste keer meten" : measDue() ? "Tijd om te meten" : "Meten";
+    go.onclick = function () { openMeasureSheet(); };
+    head.appendChild(go); box.appendChild(head);
+    var parts = [];
+    MEAS.forEach(function (m) {
+      var l = measLast(m[0]), f = measFirst(m[0]); if (!l) return;
+      var d = f && f.w !== l.w ? Math.round((l.v - f.v) * 10) / 10 : null;
+      parts.push(m[1] + " " + wgFmt(l.v) + " cm" + (d ? " (" + (d > 0 ? "+" : "−") + wgFmt(Math.abs(d)) + ")" : ""));
+    });
+    var p = document.createElement("div"); p.className = "acc-sub";
+    p.textContent = parts.length ? parts.join(" · ") : "Meet één keer per maand je middel, nek en heup. Dan zie je ook vooruitgang als de weegschaal stilstaat, en schat Balanza je vetpercentage.";
+    box.appendChild(p);
+    var bf = currentBodyFat(), wr = waistRatio(), facts = [];
+    if (bf) facts.push("Geschat vetpercentage " + wgFmt(bf.pct) + "%" + (bf.range ? " (gezond voor jou: " + bf.range[0] + "–" + bf.range[1] + "%)" : ""));
+    if (wr) facts.push("Middel/lengte " + String(wr).replace(".", ",") + (wr < 0.5 ? " (gezond)" : wr < 0.6 ? " (iets verhoogd)" : " (verhoogd)"));
+    if (facts.length) { var fx = document.createElement("div"); fx.className = "wg-meas-facts"; fx.textContent = facts.join(" · "); box.appendChild(fx); }
+    card.appendChild(box);
+  }
+  function openMeasureSheet() {
+    if (!wgAllowed()) return;
+    var sh = openSimpleSheet("measSheet", "Omtrekken meten", "Eén keer per maand is genoeg, op je weegmoment");
+    var body = sh.body, vals = {};
+    var how = document.createElement("details"); how.className = "wg-why"; how.id = "measHow"; how.open = !measLastWeek();
+    how.innerHTML = "<summary>Zo meet je goed</summary><p>Gebruik een zacht meetlint, meet op je blote huid, ’s ochtends nuchter, op dezelfde plek als de vorige keer. Houd het lint recht en strak tegen je huid, maar trek het niet aan. Meet elke maat twee keer en vul het gemiddelde in.</p>";
+    body.appendChild(how);
+    var grid = document.createElement("div"); grid.className = "meas-grid";
+    MEAS.forEach(function (m) {
+      var l = measLast(m[0]);
+      var w = document.createElement("label"); w.className = "qa-field meas-field";
+      w.innerHTML = "<span></span><small></small>";
+      w.querySelector("span").textContent = m[1] + (m[3] ? "" : " (optioneel)") + (l ? " · vorige keer " + wgFmt(l.v) : "");
+      w.querySelector("small").textContent = m[2];
+      var i = document.createElement("input"); i.className = "textinput"; i.type = "text"; i.inputMode = "decimal"; i.id = "meas-" + m[0]; i.placeholder = "cm"; i.autocomplete = "off";
+      i.oninput = function () { var v = Number(String(i.value).replace(",", ".")); if (v > 0) vals[m[0]] = v; else delete vals[m[0]]; paint(); };
+      w.appendChild(i); grid.appendChild(w);
+    });
+    body.appendChild(grid);
+    var res = document.createElement("div"); res.className = "wg-preview"; res.id = "measResult"; body.appendChild(res);
+    var acts = document.createElement("div"); acts.className = "nudge-actions"; acts.style.marginTop = "12px";
+    var save = document.createElement("button"); save.type = "button"; save.className = "primary-btn small"; save.id = "measSave"; save.textContent = "Opslaan";
+    save.onclick = function () {
+      if (!Object.keys(vals).length) { showToast("Vul minstens één maat in."); return; }
+      saveMeasurements(vals); closeSheet(sh.ov); render();
+      var bf = currentBodyFat();
+      showToast(bf ? "Opgeslagen. Je geschatte vetpercentage is " + wgFmt(bf.pct) + "%." : "Opgeslagen. Over een maand zie je wat er veranderd is.");
+    };
+    acts.appendChild(save); body.appendChild(acts);
+    function paint() {
+      var o = {}; ["nek", "middel", "heup"].forEach(function (k) { var l = measLast(k); o[k] = vals[k] || (l && l.v); });
+      var bf = navyBodyFat(o), r = healthyFatRange();
+      if (prefs.gender !== "Man" && prefs.gender !== "Vrouw") res.textContent = "Het vetpercentage kan Balanza alleen schatten als je bij je lichaamsprofiel Man of Vrouw invult (de formule verschilt). Je omtrekken houden we wel bij.";
+      else if (!Number(prefs.heightCm)) res.textContent = "Vul je lengte in bij je lichaamsprofiel, dan schat Balanza je vetpercentage.";
+      else if (bf !== null) res.textContent = "Geschat vetpercentage: " + wgFmt(bf) + "%" + (r ? ". Gezond voor jouw leeftijd: " + r[0] + "–" + r[1] + "%." : ".") + " Een schatting (± 3–4%): het gaat vooral om hoe het verandert.";
+      else res.textContent = "Met nek, middel" + (prefs.gender === "Vrouw" ? " en heup" : "") + " schat Balanza je vetpercentage (Navy-methode).";
+    }
+    paint();
   }
   function openWeightGoalSheet() {
     if (!wgAllowed()) { showToast(isMinor() ? "Een doelgewicht is er niet voor wie jonger is dan 18." : "Hiervoor is toestemming voor gezondheidsgegevens nodig (Instellingen, Privacy)."); return; }
@@ -16364,7 +16501,7 @@
     ["heightCm", "weightKg", "age"].forEach(function (k) { prefs[k] = ""; });
     prefs.health = []; prefs.water = null;
     prefs.coach = Object.assign({}, prefs.coach || {}, { water: false, daytools: false });
-    if (prefs.journey && Array.isArray(prefs.journey.log)) prefs.journey.log = prefs.journey.log.filter(function (x) { return x && x.m !== "gewicht"; });
+    if (prefs.journey && Array.isArray(prefs.journey.log)) prefs.journey.log = prefs.journey.log.filter(function (x) { return x && x.m !== "gewicht" && MEAS_KEYS.indexOf(x.m) === -1; });
     if (prefs.journey && prefs.journey.metric === "gewicht") prefs.journey.metric = "";
     delete prefs.weightGoal;
     plannedWeeks.forEach(function (w) { if (w.extra) delete w.extra; });
