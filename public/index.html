@@ -8457,33 +8457,19 @@
     var vetPct = totalKcal ? Math.round((totalVetG * 9 / totalKcal) * 100) : 0;
     return { kcal: Math.round(totalKcal), kh: khPct, eiwit: eiwitPct, vet: vetPct,
       khG: Math.round(totalKhG), eiwitG: Math.round(totalEiwitG), vetG: Math.round(totalVetG),
-      balans: Math.round(totalBalans / count), count: count };
+      balans: computeBalance(khPct, eiwitPct, vetPct), count: count };   // Balans van de hele dag, naar verhouding van wat je at
   }
 
+  // Week = optelsom van de dagen: met wat je erbij at, zonder wat je oversloeg of verving.
   function aggregateWeekMacros(pw) {
-    var totalKcal = 0, totalKhG = 0, totalEiwitG = 0, totalVetG = 0, totalBalans = 0, count = 0;
+    var k = 0, kh = 0, e = 0, v = 0, count = 0;
     PLAN_DAYS.forEach(function (d) {
-      PLAN_SLOTS.forEach(function (m) {
-        var assigned = pw.slots[d + "|" + m];
-        if (!assigned) return;
-        var resolved = resolveAssignedDish(assigned);
-        if (!resolved) return;
-        var day = resolved.day;
-        count++;
-        totalKcal += day.kcal;
-        totalKhG += (day.kh / 100 * day.kcal) / 4;
-        totalEiwitG += (day.eiwit / 100 * day.kcal) / 4;
-        totalVetG += (day.vet / 100 * day.kcal) / 9;
-        totalBalans += day.balans;
-      });
+      var a = aggregateDayMacros(pw, d); if (!a) return;
+      k += a.kcal; kh += a.khG; e += a.eiwitG; v += a.vetG; count += a.count;
     });
     if (!count) return null;
-    var khPct = totalKcal ? Math.round((totalKhG * 4 / totalKcal) * 100) : 0;
-    var eiwitPct = totalKcal ? Math.round((totalEiwitG * 4 / totalKcal) * 100) : 0;
-    var vetPct = totalKcal ? Math.round((totalVetG * 9 / totalKcal) * 100) : 0;
-    return { kcal: Math.round(totalKcal), kh: khPct, eiwit: eiwitPct, vet: vetPct,
-      khG: Math.round(totalKhG), eiwitG: Math.round(totalEiwitG), vetG: Math.round(totalVetG),
-      balans: Math.round(totalBalans / count), count: count };
+    var khPct = k ? Math.round(kh * 400 / k) : 0, eiwitPct = k ? Math.round(e * 400 / k) : 0, vetPct = k ? Math.round(v * 900 / k) : 0;
+    return { kcal: k, kh: khPct, eiwit: eiwitPct, vet: vetPct, khG: kh, eiwitG: e, vetG: v, balans: computeBalance(khPct, eiwitPct, vetPct), count: count };
   }
 
   // ---------- Plannen: week en dag in één scherm ----------
