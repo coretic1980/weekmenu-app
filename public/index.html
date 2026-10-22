@@ -8415,7 +8415,14 @@
     ov.classList.add("active");
     setTimeout(function () { var f = ov.querySelector(".sheet button"); if (f) f.focus(); }, 0);
   }
-  function closeSheet(ov) { if (ov) ov.classList.remove("active"); }
+  function closeSheet(ov) { if (ov) { ov.classList.remove("active"); stopVideos(ov); } }
+  // Een filmpje mag niet doorspelen als je het scherm sluit of de oefening inklapt: haal de speler weg en zet de afspeelknop terug.
+  function stopVideos(root) {
+    if (!root || !root.querySelectorAll) return;
+    [].slice.call(root.querySelectorAll(".tr-vid-frame")).forEach(function (box) {
+      if (box._play && box.parentNode) box.parentNode.replaceChild(box._play, box); else box.remove();
+    });
+  }
   function openLibFilters(count) {
     var ov = document.getElementById("libFilterSheet");
     if (!ov) {
@@ -15363,7 +15370,7 @@
         f.src = "https://www.youtube-nocookie.com/embed/" + vid + "?autoplay=1&playsinline=1&rel=0&modestbranding=1";
         f.title = "Uitleg: " + name; f.allow = "autoplay; encrypted-media; picture-in-picture; fullscreen"; f.allowFullscreen = true;
         f.referrerPolicy = "strict-origin-when-cross-origin"; f.loading = "lazy";
-        box.appendChild(f); wrap.replaceChild(box, play);
+        box._play = play; box.appendChild(f); wrap.replaceChild(box, play);
       };
       wrap.appendChild(play);
     }
@@ -15550,6 +15557,7 @@
       if (it0) { var em = row.querySelector(".tr-int"); em.textContent = it0.txt; em.className = "tr-int " + it0.cls; } else row.querySelector(".tr-int").remove();
       row.querySelector("p").textContent = ex[1];
       var vb = trVideoBlock(it[0], ex[0]); if (vb) row.querySelector("p").insertAdjacentElement("afterend", vb);
+      row.addEventListener("toggle", function () { if (!this.open) stopVideos(this); });
       // Per set: gewicht en herhalingen (of seconden). De vorige keer en het advies staan bij de oefening.
       if (!/^(walk|intervals)$/.test(it[0])) {
         var isTime = /sec/.test(dose.reps), last = trLast(t, it[0], s.key), mine = trLog(t, it[0]).filter(function (x) { return x.d === s.key; })[0];
