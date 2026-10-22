@@ -15230,7 +15230,7 @@
     var g = weightGoal();
     var sh = openSimpleSheet("wgSheet", g ? "Je doelgewicht" : "Doelgewicht instellen", "Balanza stemt je dagdoel erop af en laat zien hoe ver je bent.");
     var body = sh.body;
-    var st = { cur: currentWeight() || "", target: g ? g.target : "", pace: g ? (g.pace || "normaal") : "normaal", hide: g ? !!g.hide : false };
+    var st = { cur: currentWeight() || "", target: g ? g.target : "", start: g ? g.start : "", pace: g ? (g.pace || "normaal") : "normaal", hide: g ? !!g.hide : false };
     var grid = document.createElement("div"); grid.className = "qa-grid wg-grid";
     function field(id, label, val, on) {
       var w = document.createElement("label"); w.className = "qa-field"; w.innerHTML = "<span></span>"; w.querySelector("span").textContent = label;
@@ -15239,6 +15239,12 @@
     }
     field("wgCur", "Je gewicht nu (kg)", st.cur ? wgFmt(st.cur) : "", function (v) { st.cur = v; });
     field("wgTarget", "Je doelgewicht (kg)", st.target ? wgFmt(st.target) : "", function (v) { st.target = v; });
+    if (g) {   // startgewicht aanpassen, bijvoorbeeld als je eerder al begonnen was of je eerste weging niet klopte
+      field("wgStart", "Je startgewicht (kg)", wgFmt(st.start), function (v) { st.start = v; });
+      var sn = document.createElement("div"); sn.className = "acc-sub wg-startnote"; sn.style.gridColumn = "1 / -1";
+      sn.textContent = "Vanaf hier rekent Balanza je voortgang. Begon je eerder al, vul dan je gewicht van toen in.";
+      grid.appendChild(sn);
+    }
     body.appendChild(grid);
     var pl = document.createElement("div"); pl.className = "qa-h"; pl.textContent = "Tempo"; body.appendChild(pl);
     var pr = document.createElement("div"); pr.className = "chiprow"; body.appendChild(pr);
@@ -15285,6 +15291,8 @@
       hideT.setAttribute("aria-checked", st.hide ? "true" : "false");
       hideT.innerHTML = '<span class="st-txt"><b>Cijfers verbergen</b><small>Je ziet alleen je voortgang in procenten, zonder kilo’s</small></span><span class="st-track' + (st.hide ? " on" : "") + '"><i></i></span>';
       var msg = st.target && st.cur ? wgCheck(st.target, st.cur) : "";
+      if (!msg && g && !(Number(st.start) >= 30 && Number(st.start) <= 300)) msg = "Vul een startgewicht in tussen 30 en 300 kg.";
+      if (!msg && g && st.target && Math.abs(Number(st.start) - st.target) < 0.1) msg = "Je startgewicht en je doel zijn gelijk; pas een van beide aan.";
       err.style.display = msg ? "" : "none"; err.textContent = msg;
       prev.textContent = "";
       if (st.target && st.cur && !msg) {
@@ -15305,10 +15313,14 @@
     save.onclick = function () {
       var cur = Math.round(Number(st.cur) * 10) / 10, target = Math.round(Number(st.target) * 10) / 10;
       if (wgCheck(target, cur)) return;
-      var same = g && Math.sign(g.target - g.start) === Math.sign(target - cur);
-      prefs.weightGoal = same ? Object.assign({}, g, { target: target, pace: st.pace, hide: st.hide, weighDay: st.wDay, weighTime: st.wTime })
+      var start = g ? Math.round(Number(st.start) * 10) / 10 : cur;
+      var same = g && Math.sign(target - start) === Math.sign(g.target - g.start);   // zelfde richting: zelfde doel, met aangepaste getallen
+      prefs.weightGoal = same ? Object.assign({}, g, { target: target, start: start, pace: st.pace, hide: st.hide, weighDay: st.wDay, weighTime: st.wTime })
         : { target: target, start: cur, startWeek: mondayKeyOffset(0), startedAt: new Date().toISOString(), pace: st.pace, hide: st.hide, ms: [], weighDay: st.wDay, weighTime: st.wTime };
       if (prefs.weightGoal.reachedAt && wgProgress(prefs.weightGoal).left > 0.05) delete prefs.weightGoal.reachedAt;
+      // mijlpalen opnieuw bepalen na een ander start- of doelgewicht (zonder felicitaties voor wat al gehaald was)
+      var pctNow = Math.round(wgProgress(prefs.weightGoal).pct * 100);
+      prefs.weightGoal.ms = WG_MS.filter(function (m) { return pctNow >= m; });
       var mine = thisWeekWeight();
       if (!mine || Math.abs(mine.v - cur) > 0.05) { var j = journey(); j.log = (Array.isArray(j.log) ? j.log : []).filter(function (x) { return !(x && x.w === mondayKeyOffset(0) && x.m === "gewicht"); }); j.log.push({ w: mondayKeyOffset(0), m: "gewicht", v: cur, n: 1 }); }
       prefs.weightKg = String(cur);
