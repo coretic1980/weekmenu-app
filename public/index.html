@@ -1577,7 +1577,21 @@
   .tr-ex { border: 1.5px solid var(--line); border-radius: 14px; padding: 10px 14px; margin-bottom: 8px; background: var(--surface); }
   .tr-ex summary { display: flex; justify-content: space-between; gap: 10px; cursor: pointer; font-size: 15px; list-style: none; }
   .tr-ex summary::-webkit-details-marker { display: none; }
-  .tr-ex summary span { color: var(--accent); font-weight: 700; white-space: nowrap; }
+
+  .tr-light { display: block; margin-top: 6px; color: #C0502E; font-size: 12.5px; font-weight: 600; }
+  .tr-l { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+  .tr-dose { color: var(--accent); font-weight: 700; white-space: nowrap; }
+  .tr-prev { display: block; font-size: 12.5px; color: var(--accent); font-weight: 600; margin-top: 3px; line-height: 1.35; }
+  .tr-sets { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+  .tr-set { display: grid; grid-template-columns: 36px 1fr 1fr; gap: 8px; align-items: center; font-size: 13px; }
+  .tr-set.time { grid-template-columns: 36px 1fr; }
+  .tr-set-h { color: var(--muted); font-size: 12px; font-weight: 600; }
+  .tr-set > span:first-child { text-align: center; color: var(--muted); font-weight: 700; }
+  .tr-set .textinput { padding: 8px 10px; min-width: 0; }
+  .tr-int { display: block; font-style: normal; font-size: 12.5px; font-weight: 600; margin-top: 4px; }
+  .tr-int.fail { color: #C0502E; }
+  .tr-int.near { color: var(--muted); }
+  .tr-fail { margin-top: 6px; }
   .tr-ex p { margin: 8px 0 2px; font-size: 13.5px; line-height: 1.5; color: var(--muted); }
   .tr-wk.done span { color: #2E9A5C; }
   .tr-daycard { display: flex; flex-direction: column; gap: 4px; text-align: left; width: 100%; font: inherit; color: var(--ink); cursor: pointer; padding: 14px 16px; border: 1px solid var(--line); }
@@ -7627,7 +7641,7 @@
     { title: "Navigeren op je telefoon", body: "Onderin staat een vaste balk met Start, Ontwerpen, Plannen, Gerechten en Lijst. Tik nogmaals op het actieve onderdeel om terug te gaan naar het begin ervan. Het getal bij Lijst laat zien hoeveel boodschappen voor deze week nog open staan. Rechtsboven vind je de assistent (het tekstwolkje) en je accountmenu (je avatar) met Instellingen, Hoe werkt Balanza en je abonnement." },
     { title: "Je dag op Start", body: "Op Start zie je alles wat vandaag gepland staat, plus wat je er los bij at. De gekleurde balk is je dag in calorie\u00ebn tegenover je dagdoel: elk blokje is een maaltijd in de kleur van het moment (de legenda staat eronder), een lichter blokje heb je nog niet gegeten. Daaronder zie je eiwit, koolhydraten en vet tegenover je doel. Vink een maaltijd af met het vinkje als je hem gegeten hebt. Tik op de maaltijd zelf om iets te wijzigen: iets anders gegeten, niet gegeten, of meer of minder (\u00bd tot 2 porties); wat je niet at, telt niet mee. Alles kun je ongedaan maken. \u201cWat past nog?\u201d laat zien wat er nog in je dag past. Met \u201cStartscherm aanpassen\u201d onderaan Start zet je de tegels in jouw volgorde of verberg je wat je niet nodig hebt." },
     { title: "Jouw doelgewicht", body: "Werk je naar een gewicht toe? Stel op Start (tegel \u201cJouw doel\u201d), in Mijn voorkeuren of in de startwizard een doelgewicht in, met een tempo: rustig, normaal of stevig. Balanza stemt je dagdoel daarop af, binnen veilige grenzen, en laat zien hoe ver je bent: van start naar doel, je weekgemiddelden in een grafiekje en, na drie wegingen, of je op schema ligt en wanneer je je doel verwacht. Weeg je \u00e9\u00e9n keer per week op je vaste weegmoment (zelf te kiezen, standaard maandag 7:30): nuchter, na het plassen en zonder kleren. Elke dag wegen helpt niet; je ziet vooral schommelingen door vocht. Meet eens per maand je omtrekken (middel, nek, heup en eventueel borst, arm en bovenbeen): dan zie je ook vooruitgang als de weegschaal stilstaat, en schat Balanza met de Navy-methode je vetpercentage. Dat gebruikt Balanza ook om te checken of je doelgewicht gezond is: zo telt je bouw mee en niet alleen je BMI. Na je weging vraagt Balanza kort hoe je week ging: je motivatie, op welke dag je veel honger had, wat goed ging en wat lastig was. Balanza kijkt dan naar wat je op die dagen at (kcal, eiwit, overgeslagen maaltijden, verdeling) en geeft je tips voor komende week; met \u201cBespreek met Balanza\u201d ga je er in de chat over door. Staat je gewicht een paar weken stil, dan geeft Balanza een tip over eten of bewegen, gebaseerd op wat je de afgelopen weken at, en kun je de assistent om een persoonlijke tip vragen. Wil je geen kilo\u2019s zien, zet dan \u201cCijfers verbergen\u201d aan. Een doel onder een gezond gewicht kan niet, en voor wie jonger is dan 18 is deze functie er niet." },
-    { title: "Je trainingsschema", body: "Wil je er een trainingsschema bij? Kies op Start in de tegel \u201cTraining\u201d of je thuis traint (eigen gewicht, elastiek of dumbbells) of in de sportschool, op welke 2 tot 4 dagen en hoe fit je nu bent. Balanza kiest een vast schema dat bij je doel past (afvallen met behoud van spieren, spieren opbouwen, conditie of fit blijven) en bouwt rustig op: elke paar weken iets zwaarder, elke 6e week een herstelweek. Je trainingen staan in je week bij Plannen; tik erop voor de oefeningen met uitleg en vink af als je klaar bent. Heb je klachten, een blessure of twijfel, overleg dan eerst met je huisarts." },
+    { title: "Je trainingsschema", body: "Wil je er een trainingsschema bij? Kies op Start in de tegel \u201cTraining\u201d of je thuis traint (eigen gewicht, elastiek of dumbbells) of in de sportschool, op welke 2 tot 4 dagen en hoe fit je nu bent. Balanza kiest een vast schema dat bij je doel past (afvallen met behoud van spieren, spieren opbouwen, conditie of fit blijven) en bouwt rustig op: elke paar weken iets zwaarder, elke 6e week een herstelweek. Je trainingen staan in je week bij Plannen; tik erop voor de oefeningen met uitleg. Train tot (bijna) spierfalen: bij machines en eigen gewicht gaat je laatste set tot je geen herhaling meer netjes kunt doen, bij zware vrije oefeningen stop je 1 \u00e0 2 herhalingen eerder. Vul per set je gewicht en herhalingen in: de volgende keer zie je wat je deed en zegt Balanza wanneer het zwaarder mag. Haal je meer herhalingen dan de bovenkant (bijvoorbeeld meer dan 12), dan is het gewicht te licht. Vink af als je klaar bent; de tegel laat zien hoeveel weken op rij je alles deed. Heb je klachten, een blessure of twijfel, overleg dan eerst met je huisarts." },
     { title: "Het Balans-keurmerk", body: "Elk gerecht, elke dag en elke week krijgt een Balans-score: hoe dicht de verdeling van koolhydraten, eiwit en vet bij jouw doel ligt. Groen (75\u2013100%) is dichtbij, geel, oranje en rood wijken steeds meer af. Is een score laag, dan staat er waarom (bijvoorbeeld weinig eiwit en veel koolhydraten) met een tip wat helpt. De Balans van je dag rekent naar verhouding: een grote maaltijd telt zwaarder dan een tussendoortje." },
     { title: "Snel iets toevoegen", body: "At je iets wat niet gepland stond? Tik op Start op \u201c\uff0b Toevoegen\u201d of in de planner op \u201c\uff0b Snel iets toevoegen\u201d. Zoek een product, of typ een hele zin zoals \u201c2 eieren met 2 sneetjes volkoren brood en 30 g kaas\u201d: Balanza zoekt alles op in de NEVO-productenlijst en rekent kcal, macro's en Balans direct uit. Klopt een product niet, tik dan op \u201cAnder product?\u201d. Verder kun je een foto van je bord maken, een streepjescode scannen, een eigen product van het etiket toevoegen of \u201cUit eten\u201d kiezen (dan onthoudt Balanza het restaurant en wat je er nam). Snel toevoegen is gratis." },
     { title: "Maaltijd of los product", body: "Balanza herkent zelf of je een maaltijd of iets kleins invoert en kiest het moment erbij (ontbijt, lunch, diner of snack, op basis van de tijd of van woorden als \u201clunch\u201d of \u201ctussendoortje\u201d in je zin). Alles wat je toevoegt komt in je planning: op een leeg moment komt het op die plek, naast iets wat al gepland staat komt het onder \u201cErbij\u201d. Kies \u201cIn plaats van \u2026\u201d en het geplande gerecht wordt echt vervangen. Met ongedaan maken zet je het terug; wat je zelf kiest, gaat altijd voor." },
@@ -15318,6 +15332,19 @@
             ["Bewegen", [["walk", 1, "30 min"]]]]
     }
   };
+  // Intensiteit: werken tot (bijna) spierfalen. Bij oefeningen waar dat veilig kan (machines, eigen gewicht, isolatie) gaat de laatste set tot echt falen;
+  // bij zware vrije oefeningen (goblet squat, Roemeense deadlift, schouderpers) stop je 1 à 2 herhalingen eerder: falen met een gewicht boven je hoofd of in je rug is riskant.
+  // Beginners leren de eerste 4 weken eerst de techniek (1–2 herhalingen in reserve), daarna ook tot falen.
+  var EX_FAIL_SAFE = ["squat_bw", "pushup_knee", "pushup", "chestpress", "row_band", "row_db", "latpull", "curl", "dips", "bridge", "legpress"];
+  var EX_HOLD = ["plank", "sideplank"];
+  function trIntensity(t, exId, wk) {
+    if (/^(walk|intervals)$/.test(exId)) return null;
+    var learning = t.level !== "gevorderd" && wk < 4;
+    if (EX_HOLD.indexOf(exId) > -1) return learning ? { cls: "near", txt: "Houd vast tot het net nog netjes gaat" } : { cls: "fail", txt: "Laatste set: houd vast tot je de houding niet meer goed kunt houden" };
+    if (learning) return { cls: "near", txt: "Techniek eerst: stop 1–2 herhalingen voor falen" };
+    if (EX_FAIL_SAFE.indexOf(exId) > -1) return { cls: "fail", txt: "Laatste set tot spierfalen" };
+    return { cls: "near", txt: "Tot 1–2 herhalingen voor falen (zwaar, maar veilig)" };
+  }
   var TR_FOCUS = { afvallen: "afvallen met behoud van spieren", spier: "spieren opbouwen", conditie: "conditie en kracht", fit: "fit en sterk blijven" };
   var TR_DAYS = ["zo", "ma", "di", "wo", "do", "vr", "za"];
   function training() { var t = prefs.training; return t && typeof t === "object" && t.on ? t : null; }
@@ -15396,7 +15423,8 @@
     head.innerHTML = '<div><div class="eyebrow">Training</div><b class="tr-title"></b><small class="wg-sub"></small></div>';
     var today = trSessionFor(t, new Date());
     head.querySelector(".tr-title").textContent = today ? (trIsDone(t, today.key) ? "Vandaag gedaan: " + today.name : "Vandaag: " + today.name) : nx ? "Volgende: " + nx.s.name + " op " + ["zondag", "maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag"][nx.date.getDay()] : "Rustdag";
-    head.querySelector(".wg-sub").textContent = "Deze week " + wc.done + " van " + wc.n + " · " + TR_FOCUS[trFocus()] + " · " + (t.place === "sportschool" ? "sportschool" : "thuis");
+    var stk = trStreak(t);
+    head.querySelector(".wg-sub").textContent = "Deze week " + wc.done + " van " + wc.n + (stk >= 2 ? " \u00b7 " + stk + " weken op rij alles gedaan" : stk === 1 ? " \u00b7 vorige week alles gedaan" : "") + " \u00b7 " + TR_FOCUS[trFocus()] + " \u00b7 " + (t.place === "sportschool" ? "sportschool" : "thuis");
     var ed = document.createElement("button"); ed.type = "button"; ed.className = "hh-link"; ed.id = "trEdit"; ed.textContent = "Aanpassen"; ed.onclick = function () { openTrainingSetup(); };
     head.appendChild(ed); card.appendChild(head);
     var dots = document.createElement("div"); dots.className = "tr-dots";
@@ -15423,11 +15451,52 @@
     }
     main.appendChild(card);
   }
+  // ---- Gewichten en herhalingen bijhouden, per set: zo zie je wat je de vorige keer deed en wanneer het zwaarder mag (dubbele progressie) ----
+  // t.log = { oefening: [{ d: datum, sets: [{ kg, r }] }] }   (r = herhalingen, of seconden bij een houdoefening)
+  function trLog(t, exId) { t.log = t.log && typeof t.log === "object" ? t.log : {}; return Array.isArray(t.log[exId]) ? t.log[exId] : []; }
+  function trLast(t, exId, beforeKey) { var l = trLog(t, exId).filter(function (x) { return !beforeKey || x.d < beforeKey; }); return l.length ? l[l.length - 1] : null; }
+  function trSaveLog(t, exId, key, sets) {
+    var l = trLog(t, exId).filter(function (x) { return x.d !== key; });
+    if (sets.length) l.push({ d: key, sets: sets });
+    l.sort(function (a, b) { return a.d < b.d ? -1 : 1; });
+    t.log[exId] = l.slice(-30);
+  }
+  function trTopReps(reps) { var m = /(\d+)(?:\s*–\s*(\d+))?/.exec(String(reps)); return m ? Number(m[2] || m[1]) : null; }
+  function trAdvice(t, exId, dose, last) {
+    if (!last || !Array.isArray(last.sets) || !last.sets.length) return "";
+    var isTime = /sec/.test(dose.reps), top = trTopReps(dose.reps), sets = last.sets;
+    var kgs = sets.map(function (x) { return x.kg || 0; }), maxKg = Math.max.apply(null, kgs);
+    var prevTxt = "Vorige keer: " + (maxKg ? wgFmt(maxKg) + " kg \u00d7 " : "") + sets.map(function (x) { return x.r || "\u2013"; }).join(", ") + (isTime ? " sec" : "");
+    if (!top || sets.some(function (x) { return !x.r; })) return prevTxt + ".";
+    var allTop = sets.every(function (x) { return x.r >= top; }), maxR = Math.max.apply(null, sets.map(function (x) { return x.r || 0; }));
+    if (!isTime && maxR > top) {   // meer herhalingen dan de bovenkant: het gewicht is te licht
+      if (maxKg) { var st2 = maxKg >= 20 ? 2.5 : 1, jump = maxR >= top + 4 ? 2 : 1; return prevTxt + ". Meer dan " + top + " herhalingen betekent: te licht. Neem nu " + wgFmt(maxKg + st2 * jump) + " kg en ga weer tot falen."; }
+      return prevTxt + ". Meer dan " + top + " herhalingen: maak het zwaarder (langzamer zakken, een pauze onderin, of met gewicht of elastiek).";
+    }
+    if (allTop) {
+      if (isTime) return prevTxt + ". Houd deze keer 5 tot 10 seconden langer vast.";
+      if (maxKg) { var step = maxKg >= 20 ? 2.5 : 1; return prevTxt + ". Alle sets op de bovenkant: neem nu " + wgFmt(maxKg + step) + " kg."; }
+      return prevTxt + ". Alle sets op de bovenkant: maak het zwaarder (langzamer, of met gewicht).";
+    }
+    return prevTxt + ". Zelfde gewicht, probeer in elke set 1 herhaling meer.";
+  }
+  // Consequent zijn: hoeveel weken op rij heb je al je trainingen gedaan?
+  function trStreak(t) {
+    var n = 0, startKey = t.startWeek || "";
+    for (var w = 1; w <= 52; w++) {
+      var mon = getMonday(new Date()); mon.setDate(mon.getDate() - 7 * w);
+      var planned = 0, done = 0;
+      for (var i = 0; i < 7; i++) { var d = new Date(mon); d.setDate(d.getDate() + i); var k = isoDateKey(d); if (k >= startKey && (t.days || []).indexOf(d.getDay()) > -1) { planned++; if (trIsDone(t, k)) done++; } }
+      if (!planned) break;
+      if (done >= planned) n++; else break;
+    }
+    return n;
+  }
   function openWorkout(t, s) {
     var dd = new Date(s.key + "T12:00:00");
     var sh = openSimpleSheet("trSheet", s.name, ["zondag", "maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag"][dd.getDay()] + " " + dd.getDate() + " · ±" + trMinutes(t, s) + " min · week " + (s.week + 1));
     var body = sh.body;
-    var anyDeload = false;
+    var anyDeload = false, logInputs = [];
     if (s.items.length > 1) {
       var wu = document.createElement("p"); wu.className = "tr-warm"; wu.textContent = "Begin met 5 minuten warm worden: rustig wandelen, armen rondzwaaien, een paar squats zonder gewicht. Rust 60–90 seconden tussen de sets.";
       body.appendChild(wu);
@@ -15435,21 +15504,77 @@
     s.items.forEach(function (it, i) {
       var ex = EX[it[0]] || [it[0], ""], dose = trDose(t, it, s.week); if (dose.deload) anyDeload = true;
       var row = document.createElement("details"); row.className = "tr-ex"; row.id = "trEx-" + i;
-      row.innerHTML = "<summary><b></b><span></span></summary><p></p>";
+      row.innerHTML = "<summary><span class=\"tr-l\"><b></b><em class=\"tr-int\"></em><small class=\"tr-prev\"></small></span><span class=\"tr-dose\"></span></summary><p></p>";
       row.querySelector("b").textContent = ex[0];
-      row.querySelector("span").textContent = dose.sets > 1 ? dose.sets + " × " + dose.reps : dose.reps;
+      row.querySelector(".tr-dose").textContent = dose.sets > 1 ? dose.sets + " × " + dose.reps : dose.reps;
+      var it0 = trIntensity(t, it[0], s.week);
+      if (it0) { var em = row.querySelector(".tr-int"); em.textContent = it0.txt; em.className = "tr-int " + it0.cls; } else row.querySelector(".tr-int").remove();
       row.querySelector("p").textContent = ex[1];
+      // Per set: gewicht en herhalingen (of seconden). De vorige keer en het advies staan bij de oefening.
+      if (!/^(walk|intervals)$/.test(it[0])) {
+        var isTime = /sec/.test(dose.reps), last = trLast(t, it[0], s.key), mine = trLog(t, it[0]).filter(function (x) { return x.d === s.key; })[0];
+        var adv = trAdvice(t, it[0], dose, last); if (adv) row.querySelector(".tr-prev").textContent = adv; else row.querySelector(".tr-prev").remove();
+        var grid = document.createElement("div"); grid.className = "tr-sets";
+        var hd = document.createElement("div"); hd.className = "tr-set tr-set-h"; hd.innerHTML = "<span>Set</span>" + (isTime ? "" : "<span>kg</span>") + "<span>" + (isTime ? "sec" : "herh.") + "</span>"; grid.appendChild(hd);
+        var ins = [];
+        for (var k = 0; k < dose.sets; k++) {
+          var r0 = document.createElement("div"); r0.className = "tr-set" + (isTime ? " time" : "");
+          var nr = document.createElement("span"); nr.textContent = String(k + 1); r0.appendChild(nr);
+          var prevSet = last && Array.isArray(last.sets) ? last.sets[Math.min(k, last.sets.length - 1)] : null, my = mine && mine.sets ? mine.sets[k] : null;
+          var kgIn = document.createElement("input"); kgIn.className = "textinput"; kgIn.type = "text"; kgIn.inputMode = "decimal"; kgIn.id = "trKg-" + i + "-" + k;
+          kgIn.placeholder = prevSet && prevSet.kg ? wgFmt(prevSet.kg) : "kg"; if (my && my.kg) kgIn.value = wgFmt(my.kg);
+          var rIn = document.createElement("input"); rIn.className = "textinput"; rIn.type = "text"; rIn.inputMode = "numeric"; rIn.id = "trR-" + i + "-" + k;
+          rIn.placeholder = prevSet && prevSet.r ? String(prevSet.r) : (isTime ? "sec" : "herh."); if (my && my.r) rIn.value = my.r;
+          if (!isTime) r0.appendChild(kgIn); r0.appendChild(rIn); grid.appendChild(r0);
+          (function (rI, topR, rowEl) {
+            if (isTime || !topR) return;
+            rI.addEventListener("input", function () {
+              var v = Math.max.apply(null, [].map.call(rowEl.querySelectorAll(".tr-set input[id^=trR-]"), function (x) { return parseInt(x.value, 10) || 0; })), warn = rowEl.querySelector(".tr-light");
+              if (v > topR) { if (!warn) { warn = document.createElement("small"); warn.className = "tr-light"; rowEl.appendChild(warn); } warn.textContent = "Meer dan " + topR + " herhalingen? Dan is het gewicht te licht: neem de volgende set of de volgende keer zwaarder."; }
+              else if (warn) warn.remove();
+            });
+          })(rIn, trTopReps(dose.reps), row);
+          ins.push({ kg: kgIn, r: rIn });
+          (function (kIn, idx) { kIn.addEventListener("change", function () { for (var z = idx + 1; z < ins.length; z++) if (!ins[z].kg.value) ins[z].kg.value = kIn.value; }); })(kgIn, k);   // gewicht doorzetten naar de volgende sets
+        }
+        row.appendChild(grid);
+        logInputs.push({ ex: it[0], sets: ins, time: isTime });
+        if (!mine) row.open = i === 0;
+      } else row.querySelector(".tr-prev").remove();
       body.appendChild(row);
     });
     if (anyDeload) { var dl = document.createElement("p"); dl.className = "acc-sub"; dl.textContent = "Dit is een herstelweek: iets minder sets, zodat je lichaam kan bijkomen. Daarna gaat het weer verder."; body.appendChild(dl); }
     var strength = s.items.length > 1;
-    var tip = document.createElement("p"); tip.className = "acc-sub"; tip.textContent = (strength ? "Kies een gewicht waarbij de laatste 2 herhalingen zwaar zijn maar netjes lukken. " : "Rustig opbouwen gaat voor snelheid. ") + "Pijn (anders dan spierpijn)? Stop en overleg met je huisarts of fysiotherapeut.";
+    if (strength) {
+      var why = document.createElement("details"); why.className = "wg-why tr-fail"; why.id = "trFailWhy";
+      why.innerHTML = "<summary>Waarom tot spierfalen?</summary>" +
+        "<p><b>Spierfalen</b> betekent: je kunt geen enkele herhaling meer doen met goede techniek. Vooral die laatste, zware herhalingen geven je spieren het signaal om sterker te worden of behouden te blijven, ook als je afvalt.</p>" +
+        "<p><b>Het aantal herhalingen is een richtlijn.</b> Lukken er meer, ga dan door tot falen en neem de volgende keer iets zwaarder. Lukken er minder, neem dan iets lichter.</p>" +
+        "<p><b>Veilig:</b> bij machines, eigen gewicht en kleine oefeningen ga je in je laatste set echt tot falen. Bij zware vrije oefeningen (goblet squat, Roemeense deadlift, schouderpers) stop je 1 à 2 herhalingen eerder, of train je met iemand die je helpt. " +
+        (t.level !== "gevorderd" ? "De eerste 4 weken leer je eerst de techniek; daarna ga je ook tot falen." : "") + "</p>";
+      body.appendChild(why);
+    }
+    var tip = document.createElement("p"); tip.className = "acc-sub"; tip.textContent = (strength ? "Techniek gaat altijd voor: een herhaling die niet netjes gaat, telt niet. " : "Rustig opbouwen gaat voor snelheid. ") + "Pijn (anders dan spierpijn)? Stop en overleg met je huisarts of fysiotherapeut.";
     body.appendChild(tip);
     var acts = document.createElement("div"); acts.className = "nudge-actions"; acts.style.marginTop = "12px";
     var isToday = s.key === isoDateKey(new Date()), past = new Date(s.key + "T23:59:59") < new Date() || isToday;
     if (past) {
-      var done = document.createElement("button"); done.type = "button"; done.className = "primary-btn small"; done.id = "trSheetDone"; done.textContent = trIsDone(t, s.key) ? "Gedaan ✓ (terugzetten)" : "Training gedaan";
-      done.onclick = function () { closeSheet(sh.ov); trToggleDone(t, s.key); };
+      var done = document.createElement("button"); done.type = "button"; done.className = "primary-btn small"; done.id = "trSheetDone"; done.textContent = trIsDone(t, s.key) ? "Opslaan" : "Training gedaan";
+      done.onclick = function () {
+        var n = 0;
+        logInputs.forEach(function (li) {
+          var sets = [];
+          li.sets.forEach(function (x) {
+            var kg = li.time ? 0 : Number(String(x.kg.value || "").replace(",", ".")), r = parseInt(x.r.value, 10);
+            kg = kg > 0 && kg < 500 ? Math.round(kg * 10) / 10 : null; r = r > 0 && r < 1000 ? r : null;
+            if (kg || r) sets.push({ kg: kg, r: r });
+          });
+          if (sets.length) { trSaveLog(t, li.ex, s.key, sets); n++; }
+        });
+        closeSheet(sh.ov);
+        if (trIsDone(t, s.key)) { savePrefs(); render(); showToast(n ? "Je sets zijn bijgewerkt." : "Opgeslagen."); return; }
+        trToggleDone(t, s.key);
+      };
       acts.appendChild(done);
     }
     var cl = document.createElement("button"); cl.type = "button"; cl.className = "ghost-btn small"; cl.textContent = "Sluiten"; cl.onclick = function () { closeSheet(sh.ov); };
@@ -15485,7 +15610,7 @@
     save.onclick = function () {
       if (st.days.length < 2) { showToast("Kies minstens 2 dagen."); return; }
       var keep = t && t.on && t.place === st.place;
-      prefs.training = { on: true, place: st.place, days: st.days.slice().sort(), level: st.level, startWeek: keep ? t.startWeek : isoDateKey(new Date()), done: t ? trDoneSet(t) : [] };   // startWeek = startdatum
+      prefs.training = { on: true, place: st.place, days: st.days.slice().sort(), level: st.level, startWeek: keep ? t.startWeek : isoDateKey(new Date()), done: t ? trDoneSet(t) : [], log: t && t.log ? t.log : {} };   // startWeek = startdatum
       delete prefs.trainingDismissed; savePrefs(); closeSheet(sh.ov); render();
       showToast(keep ? "Je schema is bijgewerkt." : "Je schema staat klaar. Je trainingen staan nu ook in je week.");
     };
