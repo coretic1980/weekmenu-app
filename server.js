@@ -5269,6 +5269,90 @@ function ghLiveCheck(force) {
 var ghTimer = setInterval(function () { ghLiveCheck(false); }, 10 * 60 * 1000);
 if (ghTimer.unref) ghTimer.unref();
 
+// ---------- Fouten als GitHub-issue: met één knop vanuit Beheer ----------
+// Gelijke fouten (zelfde soort, actie en melding, getallen weggelaten) delen één issue: nog een keer melden zet er een
+// reactie bij (en heropent het als het al dicht was). Er gaan nooit e-mailadressen, IP-adressen, gebruikers-id's of
+// sleutels mee: de repo kan openbaar zijn. Labels: fout + nieuw. Een geplande Claude-taak pakt nieuwe fout-issues op.
+var GH_ERROR_LABEL = "fout";
+function errScrub(t) {
+  return String(t || "").replace(/[\w.+-]+@[\w-]+\.[\w.-]+/g, "[e-mail]").replace(/\b\d{1,3}(\.\d{1,3}){3}\b/g, "[ip]")
+    .replace(/\bu_[0-9a-f]{8,}\b/gi, "[gebruiker]").replace(/\b(Bearer\s+)?[A-Za-z0-9_\-]{28,}\b/g, "[sleutel]").slice(0, 600);
+}
+function errSignature(l) {
+  var msg = errScrub(l.error || ("status " + (l.status || ""))).replace(/\d+/g, "#").trim().toLowerCase();
+  return crypto.createHash("sha1").update((l.type || "") + "|" + (l.action || "") + "|" + msg).digest("hex").slice(0, 16);
+}
+function errFence(msg) { return "```\n" + String(msg).replace(/```/g, "` ` `") + "\n```"; }
+function handleAdminErrorIssues(req, res) {
+  return dbListDocs("errissues/").then(function (docs) {
+    var by = {};
+    docs.forEach(function (d) { if (d.value && d.value.issueNumber) by[d.value.sig] = { number: d.value.issueNumber, url: d.value.issueUrl, reportedAt: d.value.lastReportedAt }; });
+    sendJSON(res, 200, { github: githubOn() ? { repo: GITHUB_REPO } : null, bySig: by });
+  });
+}
+function handleAdminErrorToIssue(req, res) {
+  if (!githubOn()) return Promise.resolve(sendJSON(res, 400, { code: "not_configured", message: "GitHub is nog niet gekoppeld: zet GITHUB_TOKEN in Render (fine-grained, alleen Issues: read and write)." }));
+  return requireBody(req).then(function (body) {
+    var l = { type: cleanText(body && body.type, 30), action: cleanText(body && body.action, 60), status: Number(body && body.status) || null,
+      error: String(body && body.error || "").slice(0, 2000), ts: String(body && body.ts || "") };
+    if (!l.error && !l.status) throw HttpError(400, "bad_request", "Geen fout meegegeven.");
+    var sig = errSignature(l), key = "errissues/" + sig;
+    var note = cleanNote(body && body.note, 1000);
+    return Promise.all([dbGetDoc(key), getRecentLogs(LOG_CAP)]).then(function (r) {
+      var doc = r[0].exists && r[0].value ? r[0].value : { sig: sig, createdAt: new Date().toISOString() };
+      var since = Date.now() - 7 * 86400000;
+      var same = r[1].map(cleanLogRow).filter(function (x) { return !x.ok && x.sig === sig && Date.parse(x.ts) >= since; });
+      var users = {}; same.forEach(function (x) { if (x.uid) users[x.uid] = 1; });
+      var first = null, last = null; same.forEach(function (x) { if (!first || x.ts < first) first = x.ts; if (!last || x.ts > last) last = x.ts; });
+      var durs = same.map(function (x) { return x.durationMs; }).filter(function (d) { return d != null; });
+      var stats = "**Hoe vaak (laatste 7 dagen):** " + Math.max(1, same.length) + " keer, bij " + Object.keys(users).length + " gebruiker(s)" +
+        (first ? "  \n**Eerste / laatste keer:** " + first + " / " + last : "") +
+        (durs.length ? "  \n**Duur:** " + Math.min.apply(null, durs) + "–" + Math.max.apply(null, durs) + " ms" : "");
+      var msg = errScrub(l.error || ("status " + l.status));
+      var shortMsg = msg.replace(/\s+/g, " ").slice(0, 80);
+      if (doc.issueNumber) {
+        var comment = "Opnieuw gemeld vanuit Beheer.\n\n" + stats + (note ? "\n\n**Toelichting:** " + ghMd(note) : "") + "\n\n**Melding:**\n" + errFence(msg);
+        return ghApi("POST", "/issues/" + doc.issueNumber + "/comments", { body: comment }).then(function () {
+          return ghApi("PATCH", "/issues/" + doc.issueNumber, { state: "open" }).catch(function () {});
+        }).then(function () {
+          doc.lastReportedAt = new Date().toISOString(); doc.count = (doc.count || 1) + 1;
+          return dbSetDoc(key, doc);
+        }).then(function () {
+          auditLog(req, "fout-naar-github", "#" + doc.issueNumber, { actie: l.action, opnieuw: true });
+          sendJSON(res, 200, { issueNumber: doc.issueNumber, issueUrl: doc.issueUrl, reused: true });
+        });
+      }
+      var bodyMd = [
+        "> Fout uit de Balanza-app, met één knop doorgestuurd vanuit Beheer. Er staan geen namen, e-mailadressen, IP-adressen of gebruikers-id's in.",
+        "",
+        "**Soort:** " + ghMd(l.type || "—") + " · **Actie:** " + ghMd(l.action || "—") + " · **Status:** " + (l.status || "—") + "  ",
+        stats,
+        note ? "\n### Toelichting van de beheerder\n" + ghMd(note) : "",
+        "",
+        "### Melding",
+        errFence(msg),
+        "",
+        "### Te doen",
+        "- [ ] Oorzaak gevonden",
+        "- [ ] Oplossing beoordeeld en live",
+        "",
+        "---",
+        "<sub>Balanza-fout " + sig + "</sub>"
+      ].join("\n");
+      return ghApi("POST", "/issues", { title: "Fout: " + ghMd(l.action || l.type || "onbekend") + " – " + ghMd(shortMsg), body: bodyMd, labels: [GH_ERROR_LABEL, "nieuw"] }).then(function (iss) {
+        doc.issueNumber = iss.number; doc.issueUrl = iss.html_url; doc.lastReportedAt = new Date().toISOString(); doc.count = 1; doc.title = shortMsg; doc.action = l.action;
+        return dbSetDoc(key, doc).then(function () {
+          auditLog(req, "fout-naar-github", "#" + iss.number, { actie: l.action });
+          sendJSON(res, 200, { issueNumber: iss.number, issueUrl: iss.html_url, reused: false });
+        });
+      });
+    }).catch(function (e) {
+      if (e && e.status) throw e;
+      throw HttpError(502, "github_error", "Het issue kon niet worden gemaakt: " + String(e && e.message || e).slice(0, 200));
+    });
+  });
+}
+
 // Beheer: lijst, detail, besluit (met bericht en melding naar de indiener) en verwijderen.
 function handleAdminSuggestions(req, res, url) {
   var status = url.searchParams.get("status") || "";
@@ -6955,6 +7039,7 @@ function cleanLogRow(l) {
   var o = Object.assign({}, l);
   delete o._id;
   o.type = logType(l);
+  if (!o.ok) o.sig = errSignature(o);
   return o;
 }
 function handleAdminLogs(req, res, url) {
@@ -7078,7 +7163,7 @@ function handleAdminStats(req, res) {
         avgDurationMs: durations.length ? Math.round(durations.reduce(function (s, d) { return s + d; }, 0) / durations.length) : 0,
         p95DurationMs: durations.length ? durations[Math.min(durations.length - 1, Math.floor(durations.length * 0.95))] : 0,
         byAction: byAction, perDay: perDay,
-        recentErrors: ai.filter(function (l) { return !l.ok; }).sort(function (a, b) { return Date.parse(b.ts) - Date.parse(a.ts); }).slice(0, 8)
+        recentErrors: ai.filter(function (l) { return !l.ok; }).sort(function (a, b) { return Date.parse(b.ts) - Date.parse(a.ts); }).slice(0, 8).map(cleanLogRow)
       },
       auth: {
         loginsToday: authToday.filter(function (l) { return l.action === "login" && l.ok; }).length,
@@ -7288,6 +7373,8 @@ function handleAdminApi(req, res, url) {
   else if (method === "POST" && p === "/api/admin/suggestions/sync") run = function () { return ghLiveCheck(true).then(function () { sendJSON(res, 200, { ok: true }); }); };
   else if ((m = p.match(/^\/api\/admin\/suggestions\/([a-f0-9]{16})\/(accept|reject|reopen|delete)$/)) && method === "POST") { var sid = m[1], sact = m[2]; run = function () { return handleAdminSuggestionAction(req, res, sid, sact); }; }
   else if (method === "GET" && p === "/api/admin/lists") run = function () { return handleAdminLists(req, res, url); };
+  else if (method === "GET" && p === "/api/admin/errors/issues") run = function () { return handleAdminErrorIssues(req, res); };
+  else if (method === "POST" && p === "/api/admin/errors/issue") run = function () { return handleAdminErrorToIssue(req, res); };
   else if (method === "POST" && p === "/api/admin/lists/cleanup") run = function () { return handleAdminListCleanup(req, res); };
   else if ((m = p.match(/^\/api\/admin\/lists\/([A-Za-z0-9_-]{22})(?:\/(delete))?$/))) {
     var token = m[1];

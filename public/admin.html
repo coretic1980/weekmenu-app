@@ -658,7 +658,7 @@
   }
 
   VIEWS.overzicht = function (view, route, ctx) {
-    return Promise.all([api("/api/admin/stats"), api("/api/admin/settings"), api("/api/admin/system")]).then(function (r) {
+    return Promise.all([api("/api/admin/stats"), api("/api/admin/settings"), api("/api/admin/system"), loadErrIssues()]).then(function (r) {
       meta.settings = r[1]; updateStatusPill();
       if (ctx.alive()) drawOverview(view, r[0], r[1], r[2]);
     }).catch(function (e) { if (!e.silent) view.appendChild(errorBox("Kon het overzicht niet laden: " + e.message)); });
@@ -772,11 +772,11 @@
     var acts = Object.keys(rq.byAction).sort(function (a, b) { return rq.byAction[b] - rq.byAction[a]; });
     var actCard = card("Vandaag per actie", acts.length ? h("dl", { class: "kv" }, acts.map(function (a) { return [h("dt", { text: a }), h("dd", { text: String(rq.byAction[a]) })]; })) : h("div", { class: "muted", text: "Nog geen verzoeken vandaag." }));
     var errRows = rq.recentErrors.map(function (l) {
-      return h("tr", {}, h("td", { class: "nowrap", text: relTime(l.ts) }), h("td", { text: l.action || "—" }), h("td", { class: "err", text: l.error || ("status " + l.status) }));
+      return h("tr", {}, h("td", { class: "nowrap", text: relTime(l.ts) }), h("td", { text: l.action || "—" }), h("td", { class: "err", text: l.error || ("status " + l.status) }), errIssueCell(l));
     });
     var allErr = h("button", { class: "link", text: "Alle fouten in de activiteit" });
     allErr.onclick = function () { resetLogFilters(); L.status = "error"; navigate("#/activiteit"); };
-    var errCard = card("Laatste fouten", errRows.length ? table([th("Wanneer"), th("Actie"), th("Melding")], errRows) : h("div", { class: "muted", text: "Geen fouten. Mooi." }), errRows.length ? h("div", { style: { marginTop: "8px" } }, allErr) : null);
+    var errCard = card("Laatste fouten", errRows.length ? table([th("Wanneer"), th("Actie"), th("Melding"), th("GitHub")], errRows) : h("div", { class: "muted", text: "Geen fouten. Mooi." }), errRows.length ? h("div", { style: { marginTop: "8px" } }, allErr) : null);
     view.appendChild(h("div", { class: "two" }, costChart, actCard));
     view.appendChild(errCard);
 
@@ -1310,6 +1310,39 @@
   // =====================================================================================
   var TYPE_LABELS = { generate: "AI", tips: "Tips", auth: "Account", push: "Melding", billing: "Betaling" };
   var LOG_ACTION_LABELS = { login: "Inloggen", register: "Registreren", upgrade: "Anoniem omgezet naar account", "password-change": "Wachtwoord gewijzigd (door gebruiker)", notify: "Melding: gerechten klaar", "remind-week": "Melding: plan je week", "remind-today": "Melding: diner van vandaag", "community-digest": "Melding: nieuwe recepten", "week-ready": "Melding: week klaargezet", "cooked-check": "Melding: na het eten", recap: "Melding: weekterugblik", "trial-recap": "Melding: proefweek in cijfers", chat: "Assistent: bericht", submit: "Idee ingestuurd", "suggestion-reply": "Melding: reactie op idee", "suggestion-live": "Melding: idee staat live", invite: "Huishouden: uitnodiging gemaakt", join: "Huishouden: lid geworden", leave: "Huishouden: vertrokken", disband: "Huishouden: gestopt", webhook: "Betaalmelding (Mollie)", "email-change": "E-mailadres gewijzigd (door gebruiker)", "logout-others": "Op andere apparaten uitgelogd", "self-delete": "Account zelf verwijderd", export: "Gegevens gedownload", "reset-request": "Reset aangevraagd", "reset-done": "Wachtwoord gereset" };
+  // ---- Fouten met één knop naar GitHub (als issue, om op te pakken en te beoordelen) ----
+  var ERRISS = { by: {}, github: null, painters: {} };
+  function loadErrIssues() {
+    return api("/api/admin/errors/issues").then(function (d) { ERRISS.by = d.bySig || {}; ERRISS.github = d.github; }).catch(function () {});
+  }
+  function errIssueCell(l) {
+    var td = h("td", { class: "nowrap err-gh" });
+    if (l.ok || !l.sig) return td;
+    var busy = false;
+    (ERRISS.painters[l.sig] = (ERRISS.painters[l.sig] || []).filter(function (f) { return document.body.contains(f.td); })).push({ td: td, paint: function () { paint(); } });
+    function paint() {
+      clear(td);
+      var iss = ERRISS.by[l.sig];
+      if (iss) {
+        td.appendChild(h("a", { href: iss.url, target: "_blank", rel: "noopener", class: "link", text: "Issue #" + iss.number }));
+        var again = h("button", { class: "link small muted", text: "opnieuw melden", title: "Zet er een reactie bij met hoe vaak het nu voorkomt" });
+        again.onclick = send; td.appendChild(h("div", {}, again));
+      } else {
+        var b = h("button", { class: "ghost small", text: busy ? "Bezig…" : "Naar GitHub", title: ERRISS.github ? "Maak een issue in " + ERRISS.github.repo : "GitHub is nog niet gekoppeld (GITHUB_TOKEN)" });
+        b.disabled = busy; b.onclick = send; td.appendChild(b);
+      }
+    }
+    function send(e) {
+      if (e && e.stopPropagation) e.stopPropagation();
+      if (busy) return; busy = true; paint();
+      api("/api/admin/errors/issue", { method: "POST", body: { type: l.type, action: l.action, status: l.status, error: l.error, ts: l.ts } }).then(function (r) {
+        ERRISS.by[l.sig] = { number: r.issueNumber, url: r.issueUrl };
+        toast(r.reused ? "Toegevoegd aan issue #" + r.issueNumber + " (al eerder gemeld)." : "Issue #" + r.issueNumber + " aangemaakt op GitHub.");
+      }).catch(function (err) { if (!err.silent) toast(err.message, "bad"); }).then(function () { busy = false; (ERRISS.painters[l.sig] || []).forEach(function (f) { f.paint(); }); });
+    }
+    paint();
+    return td;
+  }
   function logRow(l, compact) {
     var who = null;
     if (!compact) {
@@ -1323,6 +1356,7 @@
       h("td", {}, l.ok ? badge("OK" + (l.status && l.status !== 200 ? " " + l.status : ""), "good") : badge("Fout " + (l.status || ""), "bad")),
       h("td", { class: "nowrap", text: l.durationMs != null ? fmtMs(l.durationMs) : "—" }),
       compact ? null : who, compact ? null : h("td", { class: "mono", text: l.ip || "—" }),
+      compact ? null : errIssueCell(l),
       h("td", { class: l.ok ? "" : "err", text: (l.error ? l.error + (l.tokensIn != null ? " (" + fmtUsd(l.costUsd) + " verbruikt)" : "") : l.tokensIn != null ? fmtTok(l.tokensIn) + " in · " + fmtTok(l.tokensOut) + " uit · " + fmtUsd(l.costUsd) + (l.dishes ? " · " + l.dishes + (l.dishes === 1 ? " gerecht" : " gerechten") : "") + (l.aiCalls > 1 ? " · " + l.aiCalls + " aanroepen" : "") : "") || (l.type === "push" && l.sent != null ? l.sent + " van " + (l.sent + (l.failed || 0)) + (l.sent + (l.failed || 0) === 1 ? " toestel" : " toestellen") + " bereikt" : "") }));
   }
 
@@ -1359,11 +1393,11 @@
     view.appendChild(results);
     function load() {
       var my = ++seq;
-      return api("/api/admin/logs" + qs(filters(false))).then(function (d) {
+      return Promise.all([api("/api/admin/logs" + qs(filters(false))), loadErrIssues()]).then(function (rr) { var d = rr[0];
         if (my !== seq || !ctx.alive()) return;
         facets = d.facets; if (d.page !== L.page) L.page = d.page; drawActionSelect(); clear(results);
         if (!d.logs.length) { results.appendChild(empty("Geen activiteit gevonden met deze filters.")); return; }
-        results.appendChild(table([th("Wanneer"), th("Soort"), th("Actie"), th("Uitkomst"), th("Duur"), th("Gebruiker"), th("IP"), th("Melding")], d.logs.map(function (l) { return logRow(l, false); })));
+        results.appendChild(table([th("Wanneer"), th("Soort"), th("Actie"), th("Uitkomst"), th("Duur"), th("Gebruiker"), th("IP"), th("GitHub"), th("Melding")], d.logs.map(function (l) { return logRow(l, false); })));
         results.appendChild(pager(d, function (p) { L.page = p; load(); }, ["regel", "regels"]));
         if (d.capped) results.appendChild(h("div", { class: "hint", text: "Het logboek bewaart de laatste 5.000 regels; oudere activiteit wordt vanzelf opgeruimd." }));
       }).catch(function (e) { if (!e.silent && my === seq) { clear(results); results.appendChild(errorBox("Kon het logboek niet laden: " + e.message)); } });
