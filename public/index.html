@@ -1528,9 +1528,16 @@
   .hh-prep::before { content: "\23F0  "; }
   .hh-acts { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 2px; }
   .hh-acts .ghost-btn { flex: 1 1 0; width: auto; min-width: 0; margin: 0; white-space: nowrap; }
+  /* Telefoon: Toevoegen over de hele breedte, de andere twee eronder naast elkaar */
+  @media (max-width: 560px) {
+    .hh-acts .ghost-btn.qa-main { flex: 1 1 100%; }
+    .hh-acts .ghost-btn { padding-left: 8px; padding-right: 8px; font-size: 14px; }
+  }
+  @media (max-width: 360px) { .hh-acts .ghost-btn { font-size: 13px; padding-left: 4px; padding-right: 4px; } }
   .hh-link { appearance: none; border: 0; background: none; font: inherit; font-size: 14px; font-weight: 600; color: var(--accent2); padding: 4px 0; cursor: pointer; align-self: center; }
   .hh-meal.replaced .hh-meal-txt b { text-decoration: line-through; color: var(--muted); }
   .hh-meal.extra .hh-meal-go { font-size: 18px; }
+  .hh-meal.is-feat .hh-meal-txt b { color: var(--accent2); }
   .water-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-top: 6px; flex-wrap: wrap; }
   .water-lbl { font-size: 13px; color: var(--muted); }
   .water-lbl b { color: var(--ink); }
@@ -5111,35 +5118,42 @@
         ["Koolhydraten", agg.khG, Math.round(target * t.kh / 100 / 4), "kh"], ["Vet", agg.vetG, Math.round(target * t.vet / 100 / 9), "vet"]]));
     }
     var list = document.createElement("div"); list.className = "hh-meals";
-    rows.filter(function (r) { return r !== feat; }).forEach(function (r) {
+    // Alles wat vandaag gepland staat, op volgorde van de dag (ook de uitgelichte maaltijd); wat je erbij zette staat bij zijn moment.
+    var MOMENT_POS = { Ontbijt: 0.5, Lunch: 2.5, Snack: 3.5, Diner: 4.5 };
+    var dayItems = rows.map(function (r) { return { pos: PLAN_SLOTS.indexOf(r.slot), r: r }; })
+      .concat(extras.map(function (x, i) { var p = x.replaces ? PLAN_SLOTS.indexOf(x.replaces.split("|")[1]) + 0.4 : MOMENT_POS[x.moment] !== undefined ? MOMENT_POS[x.moment] : 9; return { pos: p + i / 1000, x: x }; }))
+      .sort(function (a, b) { return a.pos - b.pos; });
+    dayItems.forEach(function (di) {
+      if (di.x) { renderExtraRow(di.x); return; }
+      var r = di.r;
       var skipped = r.a.cooked === false && !r.replacedBy;
-      var row = document.createElement("div"); row.className = "hh-meal with-eat" + (r.a.cooked === true ? " done" : "") + (r.replacedBy ? " replaced" : "") + (skipped ? " skipped" : "");
+      var row = document.createElement("div"); row.className = "hh-meal with-eat" + (r.a.cooked === true ? " done" : "") + (r.replacedBy ? " replaced" : "") + (skipped ? " skipped" : "") + (r === feat ? " is-feat" : "");
       row.id = "meal-" + r.slot.replace(/\s+/g, "-");
       var openB = document.createElement("button"); openB.type = "button"; openB.className = "hh-meal-open";
       var dot = document.createElement("i"); dot.style.background = MEAL_DOT[r.mt] || MEAL_DOT.Snack; openB.appendChild(dot);
       var tx = document.createElement("span"); tx.className = "hh-meal-txt";
       var b = document.createElement("b"); b.textContent = r.dish.name;
-      var sm = document.createElement("small"); sm.textContent = r.replacedBy ? r.slot + ": anders gegeten" : skipped ? r.slot + ": niet gegeten" : r.slot + ", " + r.dish.kcal + " kcal" + (r.a.cooked === true ? ", gegeten" : "");
-      if (!r.replacedBy && !skipped) appendBal(sm, dishBal(r.dish), ", ");
+      var sm = document.createElement("small"); sm.textContent = r.replacedBy ? r.slot + ": anders gegeten" : skipped ? r.slot + ": niet gegeten" : r.slot.replace(/^Snack na .*/, "Snack") + (r === feat && r.a.cooked === undefined ? " \u00b7 " + when.toLowerCase() : "") + " \u00b7 " + r.dish.kcal + " kcal" + (r.a.cooked === true ? " \u00b7 gegeten" : "");
+      if (!r.replacedBy && !skipped) appendBal(sm, dishBal(r.dish), " ");
       tx.appendChild(b); tx.appendChild(sm); openB.appendChild(tx);
       openB.onclick = function () { open(r); };
       row.appendChild(openB);
       if (!r.replacedBy) row.appendChild(eatButtons(pw, dayName, r));
       list.appendChild(row);
     });
-    extras.forEach(function (x) {
+    function renderExtraRow(x) {
       var row = document.createElement("button"); row.type = "button"; row.className = "hh-meal extra"; row.id = "extra-" + x.id;
       var dot = document.createElement("i"); dot.style.background = "#8C8C8C"; row.appendChild(dot);
       var tx = document.createElement("span"); tx.className = "hh-meal-txt";
       var b = document.createElement("b"); b.textContent = x.name;
-      var sm = document.createElement("small"); sm.textContent = (x.place ? "Bij " + x.place : x.replaces ? x.replaces.split("|")[1] + ", anders gegeten" : "Extra") + ", " + x.kcal + " kcal";
-      appendBal(sm, gramsBal(x.kcal, x.khG || 0, x.eiwitG || 0, x.vetG || 0), ", ");
+      var sm = document.createElement("small"); sm.textContent = (x.place ? "Bij " + x.place : x.replaces ? x.replaces.split("|")[1] + ": anders gegeten" : x.moment ? x.moment + " \u00b7 erbij" : "Erbij") + " \u00b7 " + x.kcal + " kcal";
+      appendBal(sm, gramsBal(x.kcal, x.khG || 0, x.eiwitG || 0, x.vetG || 0), " ");
       tx.appendChild(b); tx.appendChild(sm); row.appendChild(tx);
       var st = document.createElement("span"); st.className = "hh-meal-go"; st.setAttribute("aria-hidden", "true"); st.textContent = "×"; row.appendChild(st);
       row.setAttribute("aria-label", x.name + " weghalen");
       row.onclick = function () { removeExtra(pw, dayName, x); };
       list.appendChild(row);
-    });
+    }
     if (list.childNodes.length) body.appendChild(list);
     var acts = document.createElement("div"); acts.className = "hh-acts";
     var a0 = document.createElement("button"); a0.type = "button"; a0.className = "ghost-btn small qa-main"; a0.id = "qaBtn"; a0.textContent = "\uFF0B Toevoegen";
@@ -12561,15 +12575,15 @@
       return dbCap.doc("data/users/" + uid + "/plannedWeeks").get().then(function (snap) {
         var list = snap.exists && snap.data() && Array.isArray(snap.data().list) ? snap.data().list : null;
         if (!list) return false;
-        var before = JSON.stringify(plannedWeeks.map(function (w) { return [w.id, w.slots, w.draft || null]; }));
-        var after = JSON.stringify(list.map(function (w) { return [w.id, w.slots || {}, w.draft || null]; }));
+        var before = JSON.stringify(plannedWeeks.map(function (w) { return [w.id, w.slots, w.draft || null, w.extra || null]; }));
+        var after = JSON.stringify(list.map(function (w) { return [w.id, w.slots || {}, w.draft || null, w.extra || null]; }));
         if (before === after) return false;
         var byId = {}; plannedWeeks.forEach(function (w) { byId[w.id] = w; });
         plannedWeeks.length = 0;
         list.forEach(function (item) {
           var old = byId[item.id] || {};
           plannedWeeks.push({ id: item.id, weekStart: item.weekStart, slots: item.slots ? deepClone(item.slots) : {}, dynamicPrep: item.dynamicPrep ? deepClone(item.dynamicPrep) : null,
-            draft: item.draft ? deepClone(item.draft) : null, prepGenerating: false, prepError: old.prepError || null, autoFilling: false, autoFillError: null });
+            draft: item.draft ? deepClone(item.draft) : null, extra: item.extra && typeof item.extra === "object" ? deepClone(item.extra) : undefined, prepGenerating: false, prepError: old.prepError || null, autoFilling: false, autoFillError: null });
         });
         // Nieuwe gerechten die de server voor de planning maakte, ook in de bibliotheek zetten.
         return dbCap.doc("data/users/" + uid + "/dishes").get().then(function (ds) {
@@ -13710,15 +13724,15 @@
       dbCap.doc("data/users/" + uid + "/plannedWeeks").get().then(function (snap) {
         var list = snap.exists && snap.data() && Array.isArray(snap.data().list) ? snap.data().list : null;
         if (!list) return;
-        var before = JSON.stringify(plannedWeeks.map(function (w) { return [w.id, w.slots, w.draft || null]; }));
-        var after = JSON.stringify(list.map(function (w) { return [w.id, w.slots || {}, w.draft || null]; }));
+        var before = JSON.stringify(plannedWeeks.map(function (w) { return [w.id, w.slots, w.draft || null, w.extra || null]; }));
+        var after = JSON.stringify(list.map(function (w) { return [w.id, w.slots || {}, w.draft || null, w.extra || null]; }));
         if (before === after) return;
         var byId = {}; plannedWeeks.forEach(function (w) { byId[w.id] = w; });
         plannedWeeks.length = 0;
         list.forEach(function (item) {
           var old = byId[item.id] || {};
           plannedWeeks.push({ id: item.id, weekStart: item.weekStart, slots: item.slots ? deepClone(item.slots) : {}, dynamicPrep: item.dynamicPrep ? deepClone(item.dynamicPrep) : null,
-            draft: item.draft ? deepClone(item.draft) : null, prepGenerating: false, prepError: old.prepError || null, autoFilling: false, autoFillError: null });
+            draft: item.draft ? deepClone(item.draft) : null, extra: item.extra && typeof item.extra === "object" ? deepClone(item.extra) : undefined, prepGenerating: false, prepError: old.prepError || null, autoFilling: false, autoFillError: null });
         });
         render();
       }).catch(function () {});
@@ -15142,7 +15156,8 @@
           weekStart: pw.weekStart,
           slots: pw.slots,
           dynamicPrep: pw.dynamicPrep || null,
-          draft: pw.draft || null
+          draft: pw.draft || null,
+          extra: pw.extra && typeof pw.extra === "object" && Object.keys(pw.extra).some(function (d) { return Array.isArray(pw.extra[d]) && pw.extra[d].length; }) ? pw.extra : null   // wat je erbij at (Anders gegeten, Snel toevoegen)
         };
       });
       dbCap.doc("data/users/" + uid + "/plannedWeeks").set({ list: list }).catch(function () {});
@@ -15652,6 +15667,7 @@
                 slots: item.slots ? deepClone(item.slots) : {},
                 dynamicPrep: item.dynamicPrep ? deepClone(item.dynamicPrep) : null,
                 draft: item.draft ? deepClone(item.draft) : null,
+                extra: item.extra && typeof item.extra === "object" ? deepClone(item.extra) : undefined,
                 prepGenerating: false,
                 prepError: null,
                 autoFilling: false,
