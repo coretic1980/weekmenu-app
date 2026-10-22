@@ -14705,11 +14705,30 @@
     if (m === 100) { g.reachedAt = new Date().toISOString(); setTimeout(function () { showToast("Je hebt je doel bereikt. Wat een prestatie!"); }, 300); }
     else setTimeout(function () { showToast(m === 50 ? "Halverwege je doel. Mooi volgehouden!" : m === 25 ? "Een kwart van je doel is binnen. Goed bezig!" : "Driekwart van je doel. Het einde is in zicht!"); }, 300);
   }
+  // Gezond gewicht voor jouw lengte (BMI). Vanaf 70 jaar ligt de gezonde marge hoger (22–28, Voedingscentrum).
+  // Bij spieropbouw of als atleet mag je doel wat hoger liggen: spieren wegen mee.
+  function wgHealthyRange() {
+    var h = Number(prefs.heightCm), a = Number(prefs.age); if (!h) return null;
+    var old = a >= 70, lo = old ? 22 : 18.5, hi = old ? 28 : 25;
+    var muscle = /Spieropbouw|Atleet/.test(prefs.goal || ""), hiAllowed = hi + (muscle ? 2 : 0);
+    var m2 = Math.pow(h / 100, 2), kg = function (b) { return Math.round(b * m2 * 10) / 10; };
+    return { h: h, lo: lo, hi: hi, hiAllowed: hiAllowed, muscle: muscle, old: old, loKg: kg(lo), hiKg: kg(hi), hiAllowedKg: kg(hiAllowed), bmi: function (w) { return Math.round(w / m2 * 10) / 10; } };
+  }
   function wgCheck(target, cur) {
-    var h = Number(prefs.heightCm);
     if (!(target >= 35 && target <= 250)) return "Vul een doelgewicht in tussen 35 en 250 kg.";
-    if (h && target / Math.pow(h / 100, 2) < 18.5) return "Dit doel ligt onder een gezond gewicht voor jouw lengte (" + h + " cm). Kies een doel van minstens " + wgFmt(Math.ceil(18.5 * Math.pow(h / 100, 2) * 10) / 10) + " kg, en overleg bij twijfel met je huisarts of een diëtist.";
+    var r = wgHealthyRange();
+    if (!r) return "Vul eerst je lengte in (bij je lichaamsprofiel), dan kan Balanza checken of je doel gezond is voor jou.";
+    var range = "Een gezond gewicht voor jouw lengte (" + r.h + " cm" + (r.old ? ", vanaf 70 jaar" : "") + ") ligt tussen " + wgFmt(r.loKg) + " en " + wgFmt(r.hiKg) + " kg.";
+    if (target < r.loKg) return "Dit doel ligt onder een gezond gewicht. " + range + " Kies een doel van minstens " + wgFmt(Math.ceil(r.loKg * 10) / 10) + " kg, en overleg bij twijfel met je huisarts of een diëtist.";
+    if (cur && target > cur + 0.05 && target > r.hiAllowedKg) return "Dit doel ligt boven een gezond gewicht (BMI " + String(r.bmi(target)).replace(".", ",") + "). " + range + (r.muscle ? " Omdat je spieren opbouwt, mag het iets hoger: tot ongeveer " + wgFmt(r.hiAllowedKg) + " kg." : "") + " Kies een lager doel, en overleg bij twijfel met je huisarts of een diëtist.";
     if (cur && Math.abs(target - cur) > 40) return "Dat is een groot verschil. Kies liever een tussendoel; daarna stel je een nieuw doel in.";
+    return "";
+  }
+  // Ligt je doel nog boven een gezond gewicht terwijl je afvalt? Dan is het een mooie tussenstap: dat zeggen we positief.
+  function wgRangeNote(target, cur) {
+    var r = wgHealthyRange(); if (!r || !target) return "";
+    if (cur && target < cur && target > r.hiAllowedKg) return " Een mooie tussenstap. Een gezond gewicht voor jouw lengte ligt tussen " + wgFmt(r.loKg) + " en " + wgFmt(r.hiKg) + " kg; daar kun je later een volgend doel voor zetten.";
+    if (target >= r.loKg && target <= r.hiAllowedKg) return " Dit doel past bij een gezond gewicht voor jouw lengte.";
     return "";
   }
   // Kleine grafiek: je weekgemiddelden, met een stippellijn op je doel
@@ -14985,7 +15004,7 @@
           var kgw = Math.min(down ? WG_PACE[st.pace].lose : WG_PACE[st.pace].gain, st.cur * 0.01);
           var tdee = wgTdee();
           var kc = tdee ? (down ? Math.max(tdee - kgw * 1100, tdee * 0.75, prefs.gender === "Man" ? 1500 : prefs.gender === "Vrouw" ? 1200 : 1350) : Math.min(tdee + kgw * 1100, tdee * 1.15)) : null;
-          prev.textContent = (down ? "Afvallen: " : "Aankomen: ") + wgFmt(diff) + " kg. In dit tempo ben je er rond " + wgDateIn(diff / kgw) + "." + (kc ? " Je dagdoel wordt dan ongeveer " + Math.round(kc / 10) * 10 + " kcal." : " Vul je lengte en leeftijd in voor een dagdoel op maat.");
+          prev.textContent = (down ? "Afvallen: " : "Aankomen: ") + wgFmt(diff) + " kg. In dit tempo ben je er rond " + wgDateIn(diff / kgw) + "." + (kc ? " Je dagdoel wordt dan ongeveer " + Math.round(kc / 10) * 10 + " kcal." : " Vul je lengte en leeftijd in voor een dagdoel op maat.") + wgRangeNote(st.target, st.cur);
           void tmp;
         }
       }
