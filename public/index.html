@@ -1566,6 +1566,23 @@
   .ci-res { padding: 12px 14px; border-radius: 14px; background: color-mix(in srgb, var(--accent) 6%, var(--surface)); margin-bottom: 10px; font-size: 14px; line-height: 1.5; }
   .ci-res p { margin: 4px 0 0; }
   .ci-res.good { background: color-mix(in srgb, #2E9A5C 10%, var(--surface)); }
+  .tr-card { display: flex; flex-direction: column; gap: 10px; }
+  .tr-title { display: block; font-family: "Fraunces", serif; font-size: 21px; font-weight: 600; margin-top: 4px; }
+  .tr-dots { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+  .tr-dot { text-align: center; font-size: 12px; font-weight: 600; padding: 7px 0; border-radius: 10px; color: var(--muted); background: rgba(26, 20, 12, 0.04); }
+  .tr-dot.train { color: var(--ink); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+  .tr-dot.done { color: #fff; background: #2E9A5C; }
+  .tr-dot.today { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .tr-warm { margin: 0 0 10px; font-size: 14px; line-height: 1.5; }
+  .tr-ex { border: 1.5px solid var(--line); border-radius: 14px; padding: 10px 14px; margin-bottom: 8px; background: var(--surface); }
+  .tr-ex summary { display: flex; justify-content: space-between; gap: 10px; cursor: pointer; font-size: 15px; list-style: none; }
+  .tr-ex summary::-webkit-details-marker { display: none; }
+  .tr-ex summary span { color: var(--accent); font-weight: 700; white-space: nowrap; }
+  .tr-ex p { margin: 8px 0 2px; font-size: 13.5px; line-height: 1.5; color: var(--muted); }
+  .tr-wk.done span { color: #2E9A5C; }
+  .tr-daycard { display: flex; flex-direction: column; gap: 4px; text-align: left; width: 100%; font: inherit; color: var(--ink); cursor: pointer; padding: 14px 16px; border: 1px solid var(--line); }
+  .tr-daycard small { color: var(--muted); font-size: 13px; }
+  .tr-daycard.done b { color: #2E9A5C; }
   .wg-prefrow { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; font-size: 14px; }
   .hh-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 7px; font-size: 12px; color: var(--muted); }
   .hh-legend span { display: inline-flex; align-items: center; gap: 5px; }
@@ -5891,7 +5908,7 @@
   // ---------- Startscherm: eigen indeling ----------
   // Versie 2 (rustiger startscherm): oude indelingen beginnen één keer opnieuw vanaf de nieuwe standaard.
   var HOME_LAYOUT_V = 2;
-  var HOME_DEFAULT_ORDER = ["vandaag", "doel", "week", "voorjou", "recent", "reis", "seizoen", "volgendeweek", "foto", "genereren", "community", "boodschappen", "tip", "uitleg"];
+  var HOME_DEFAULT_ORDER = ["vandaag", "doel", "training", "week", "voorjou", "recent", "reis", "seizoen", "volgendeweek", "foto", "genereren", "community", "boodschappen", "tip", "uitleg"];
   var HOME_DEFAULT_HIDDEN = ["reis", "seizoen", "volgendeweek", "foto", "genereren", "community", "boodschappen", "tip", "uitleg"];
   function homeLayout() {
     var hl = prefs.homeLayout && typeof prefs.homeLayout === "object" && prefs.homeLayout.v === HOME_LAYOUT_V ? prefs.homeLayout : null;
@@ -5958,6 +5975,8 @@
       render: function (main) { renderForYou(main); } },
     volgendeweek: { label: "Volgende week", desc: "Alvast vooruit plannen", available: function () { return true; },
       render: function (main) { renderWeekStrip(main, 1); } },
+    training: { label: "Training", desc: "Je trainingsschema en wat er vandaag op staat", available: function () { return !!training() || (!prefs.trainingDismissed && (!!weightGoal() || /Spieropbouw|Atleet|Vetverlies|Cutting/.test(prefs.goal || ""))); },
+      render: function (main) { renderTrainingCard(main); } },
     doel: { label: "Jouw doel", desc: "Je doelgewicht en hoe ver je bent", available: function () { return wgAllowed() && (!!weightGoal() || (!prefs.weightGoalDismissed && !!prefs.weightKg)); },
       render: function (main) { renderWeightGoalCard(main, { id: "homeGoal", dismissable: true }); } },
     reis: { label: "Jouw reis", desc: "Je fase, focus en uitdaging van deze week", available: function () { return journeyOn() && !journey().quiet; },
@@ -7608,6 +7627,7 @@
     { title: "Navigeren op je telefoon", body: "Onderin staat een vaste balk met Start, Ontwerpen, Plannen, Gerechten en Lijst. Tik nogmaals op het actieve onderdeel om terug te gaan naar het begin ervan. Het getal bij Lijst laat zien hoeveel boodschappen voor deze week nog open staan. Rechtsboven vind je de assistent (het tekstwolkje) en je accountmenu (je avatar) met Instellingen, Hoe werkt Balanza en je abonnement." },
     { title: "Je dag op Start", body: "Op Start zie je alles wat vandaag gepland staat, plus wat je er los bij at. De gekleurde balk is je dag in calorie\u00ebn tegenover je dagdoel: elk blokje is een maaltijd in de kleur van het moment (de legenda staat eronder), een lichter blokje heb je nog niet gegeten. Daaronder zie je eiwit, koolhydraten en vet tegenover je doel. Vink een maaltijd af met het vinkje als je hem gegeten hebt. Tik op de maaltijd zelf om iets te wijzigen: iets anders gegeten, niet gegeten, of meer of minder (\u00bd tot 2 porties); wat je niet at, telt niet mee. Alles kun je ongedaan maken. \u201cWat past nog?\u201d laat zien wat er nog in je dag past. Met \u201cStartscherm aanpassen\u201d onderaan Start zet je de tegels in jouw volgorde of verberg je wat je niet nodig hebt." },
     { title: "Jouw doelgewicht", body: "Werk je naar een gewicht toe? Stel op Start (tegel \u201cJouw doel\u201d), in Mijn voorkeuren of in de startwizard een doelgewicht in, met een tempo: rustig, normaal of stevig. Balanza stemt je dagdoel daarop af, binnen veilige grenzen, en laat zien hoe ver je bent: van start naar doel, je weekgemiddelden in een grafiekje en, na drie wegingen, of je op schema ligt en wanneer je je doel verwacht. Weeg je \u00e9\u00e9n keer per week op je vaste weegmoment (zelf te kiezen, standaard maandag 7:30): nuchter, na het plassen en zonder kleren. Elke dag wegen helpt niet; je ziet vooral schommelingen door vocht. Meet eens per maand je omtrekken (middel, nek, heup en eventueel borst, arm en bovenbeen): dan zie je ook vooruitgang als de weegschaal stilstaat, en schat Balanza met de Navy-methode je vetpercentage. Dat gebruikt Balanza ook om te checken of je doelgewicht gezond is: zo telt je bouw mee en niet alleen je BMI. Na je weging vraagt Balanza kort hoe je week ging: je motivatie, op welke dag je veel honger had, wat goed ging en wat lastig was. Balanza kijkt dan naar wat je op die dagen at (kcal, eiwit, overgeslagen maaltijden, verdeling) en geeft je tips voor komende week; met \u201cBespreek met Balanza\u201d ga je er in de chat over door. Staat je gewicht een paar weken stil, dan geeft Balanza een tip over eten of bewegen, gebaseerd op wat je de afgelopen weken at, en kun je de assistent om een persoonlijke tip vragen. Wil je geen kilo\u2019s zien, zet dan \u201cCijfers verbergen\u201d aan. Een doel onder een gezond gewicht kan niet, en voor wie jonger is dan 18 is deze functie er niet." },
+    { title: "Je trainingsschema", body: "Wil je er een trainingsschema bij? Kies op Start in de tegel \u201cTraining\u201d of je thuis traint (eigen gewicht, elastiek of dumbbells) of in de sportschool, op welke 2 tot 4 dagen en hoe fit je nu bent. Balanza kiest een vast schema dat bij je doel past (afvallen met behoud van spieren, spieren opbouwen, conditie of fit blijven) en bouwt rustig op: elke paar weken iets zwaarder, elke 6e week een herstelweek. Je trainingen staan in je week bij Plannen; tik erop voor de oefeningen met uitleg en vink af als je klaar bent. Heb je klachten, een blessure of twijfel, overleg dan eerst met je huisarts." },
     { title: "Het Balans-keurmerk", body: "Elk gerecht, elke dag en elke week krijgt een Balans-score: hoe dicht de verdeling van koolhydraten, eiwit en vet bij jouw doel ligt. Groen (75\u2013100%) is dichtbij, geel, oranje en rood wijken steeds meer af. Is een score laag, dan staat er waarom (bijvoorbeeld weinig eiwit en veel koolhydraten) met een tip wat helpt. De Balans van je dag rekent naar verhouding: een grote maaltijd telt zwaarder dan een tussendoortje." },
     { title: "Snel iets toevoegen", body: "At je iets wat niet gepland stond? Tik op Start op \u201c\uff0b Toevoegen\u201d of in de planner op \u201c\uff0b Snel iets toevoegen\u201d. Zoek een product, of typ een hele zin zoals \u201c2 eieren met 2 sneetjes volkoren brood en 30 g kaas\u201d: Balanza zoekt alles op in de NEVO-productenlijst en rekent kcal, macro's en Balans direct uit. Klopt een product niet, tik dan op \u201cAnder product?\u201d. Verder kun je een foto van je bord maken, een streepjescode scannen, een eigen product van het etiket toevoegen of \u201cUit eten\u201d kiezen (dan onthoudt Balanza het restaurant en wat je er nam). Snel toevoegen is gratis." },
     { title: "Maaltijd of los product", body: "Balanza herkent zelf of je een maaltijd of iets kleins invoert en kiest het moment erbij (ontbijt, lunch, diner of snack, op basis van de tijd of van woorden als \u201clunch\u201d of \u201ctussendoortje\u201d in je zin). Alles wat je toevoegt komt in je planning: op een leeg moment komt het op die plek, naast iets wat al gepland staat komt het onder \u201cErbij\u201d. Kies \u201cIn plaats van \u2026\u201d en het geplande gerecht wordt echt vervangen. Met ongedaan maken zet je het terug; wat je zelf kiest, gaat altijd voor." },
@@ -8840,6 +8860,14 @@
           if (sk) { var sb = balPill(gramsBal(sk, sKh, sE, sV)); sb.classList.add("mini"); sn.appendChild(sb); }
           meals.appendChild(sn);
         }
+        var trT = training(), trS = trT ? trSessionFor(trT, planDayDate(pw, dn)) : null;
+        if (trS) {
+          var tr = document.createElement("button"); tr.type = "button"; tr.className = "wk-meal snack tr-wk" + (trIsDone(trT, trS.key) ? " done" : ""); tr.id = "wkTrain-" + dn;
+          tr.innerHTML = "<small>Training</small><span></span>";
+          tr.querySelector("span").textContent = trS.name + " \u00b7 \u00b1" + trMinutes(trT, trS) + " min" + (trIsDone(trT, trS.key) ? " \u2713" : "");
+          (function (s0) { tr.onclick = function () { openWorkout(trT, s0); }; })(trS);
+          meals.appendChild(tr);
+        }
         var wx = dayExtras(pw, dn);
         if (wx.length) {
           var xk = 0, xKh = 0, xE = 0, xV = 0; wx.forEach(function (x) { var f = mealPortion(x); xk += (Number(x.kcal) || 0) * f; xKh += (Number(x.khG) || 0) * f; xE += (Number(x.eiwitG) || 0) * f; xV += (Number(x.vetG) || 0) * f; }); xk = Math.round(xk);
@@ -9209,6 +9237,16 @@
     else { tone = "ok"; msg = "Mooi in balans met je dagdoel."; }
     adv.textContent = msg; adv.className = "dp-advice " + tone;
     main.appendChild(card);
+    var trT2 = training(), trS2 = trT2 ? trSessionFor(trT2, planDayDate(pw, d)) : null;
+    if (trS2) {
+      var tl = document.createElement("div"); tl.className = "eyebrow ps-label"; tl.textContent = "Training"; main.appendChild(tl);
+      var tc = document.createElement("button"); tc.type = "button"; tc.className = "card tr-daycard" + (trIsDone(trT2, trS2.key) ? " done" : ""); tc.id = "planTraining";
+      tc.innerHTML = "<b></b><small></small>";
+      tc.querySelector("b").textContent = trS2.name + (trIsDone(trT2, trS2.key) ? " \u2713" : "");
+      tc.querySelector("small").textContent = trS2.items.map(function (it) { return (EX[it[0]] || [it[0]])[0]; }).join(", ") + " \u00b7 \u00b1" + trMinutes(trT2, trS2) + " min";
+      tc.onclick = function () { openWorkout(trT2, trS2); };
+      main.appendChild(tc);
+    }
     // Wat je erbij at of zette (Snel toevoegen, Anders gegeten), en zelf iets toevoegen
     var dx = dayExtras(pw, d);
     if (dx.length) {
@@ -15225,6 +15263,246 @@
       (rec.note ? " Verder: " + rec.note : "") + (pr && g ? " Mijn doel is " + wgFmt(g.target) + " kg, ik ben " + wgFmt(pr.done) + " kg van de " + wgFmt(pr.total) + " kg op weg." : "") +
       " Kijk naar wat ik die dagen at en geef me één of twee haalbare tips voor komende week.";
   }
+  // ---------- Trainingsschema (optioneel): vaste schema's per doel, thuis of in de sportschool ----------
+  // prefs.training = { on, place: "thuis"|"sportschool", days: [1,3,5] (0 = zondag), level: "beginner"|"gevorderd", startWeek, done: ["2026-10-20", ...] }
+  // De schema's zijn algemeen en rustig opbouwend; geen medisch of persoonlijk advies.
+  var EX = {
+    squat_bw: ["Squat", "Voeten op heupbreedte, borst omhoog. Zak alsof je op een stoel gaat zitten tot je bovenbenen ongeveer horizontaal zijn, knieën in de richting van je tenen. Duw via je hielen omhoog."],
+    squat_goblet: ["Goblet squat", "Houd een dumbbell of kettlebell voor je borst. Zak met rechte rug tot je bovenbenen horizontaal zijn, knieën naar buiten. Duw via je hielen omhoog."],
+    legpress: ["Beenpers", "Voeten op heupbreedte midden op het platform. Laat langzaam zakken tot je knieën ongeveer 90 graden zijn, druk weg zonder je knieën op slot te zetten."],
+    lunge: ["Lunges", "Stap ver naar voren en zak tot beide knieën ongeveer 90 graden zijn; je achterste knie net boven de grond. Duw terug en wissel van been."],
+    bridge: ["Bilbrug", "Op je rug, knieën gebogen. Duw je heupen omhoog tot je lichaam een rechte lijn is van knieën tot schouders, knijp je billen aan, langzaam zakken."],
+    rdl: ["Roemeense deadlift", "Dumbbells of stang voor je benen, knieën licht gebogen. Duw je heupen naar achteren met rechte rug tot je de rek in je hamstrings voelt, kom terug door je heupen naar voren te duwen."],
+    pushup_knee: ["Push-up (op je knieën)", "Handen iets breder dan je schouders, lichaam recht van knieën tot hoofd. Zak tot je borst bijna de grond raakt en duw terug. Te zwaar? Doe ze tegen een tafel."],
+    pushup: ["Push-up", "Handen iets breder dan je schouders, lichaam recht als een plank. Zak tot je borst bijna de grond raakt en duw terug."],
+    chestpress: ["Borstpers (machine of dumbbells)", "Rug tegen de bank, schouderbladen naar achteren. Duw de handgrepen of dumbbells beheerst weg en laat ze langzaam terugkomen tot borsthoogte."],
+    row_band: ["Roeien met elastiek", "Elastiek om een deurklink of je voeten. Trek je ellebogen langs je lichaam naar achteren en knijp je schouderbladen samen, langzaam terug."],
+    row_db: ["Eenarmig roeien", "Hand en knie op een bank of stoel, rug recht. Trek de dumbbell naar je heup, elleboog langs je lichaam, langzaam laten zakken."],
+    latpull: ["Lat pulldown", "Brede greep, borst omhoog. Trek de stang naar je bovenborst door je ellebogen naar beneden te brengen, langzaam terug."],
+    shoulder: ["Schouderpers", "Dumbbells op schouderhoogte, buik aangespannen. Duw ze recht omhoog zonder je rug hol te trekken en laat beheerst zakken."],
+    plank: ["Plank", "Op je onderarmen en tenen (of knieën), lichaam in één rechte lijn. Buik en billen aanspannen, rustig doorademen."],
+    sideplank: ["Zijplank", "Op één onderarm, lichaam recht op zijn kant, heupen omhoog. Houd vast en wissel van kant."],
+    deadbug: ["Dead bug", "Op je rug, armen omhoog, knieën 90 graden. Strek langzaam tegelijk één arm en het andere been uit, onderrug blijft op de grond. Wissel."],
+    stepup: ["Step-ups", "Stap met één voet op een stevige trede of bank, duw je helemaal omhoog en stap beheerst terug. Wissel van been."],
+    walk: ["Stevig wandelen", "Wandel in een tempo waarbij je nog kunt praten maar niet kunt zingen. Buiten of op een loopband."],
+    intervals: ["Intervallen", "Fiets, loopband, roeien of buiten: na 5 minuten inlopen afwisselend 30 seconden stevig en 90 seconden rustig. Sluit af met 5 minuten uitlopen."],
+    mountain: ["Mountain climbers", "In opdrukhouding, trek om en om je knieën in een rustig tempo naar je borst. Houd je heupen laag."],
+    curl: ["Biceps curl", "Dumbbells langs je lichaam, ellebogen stil. Krul ze omhoog naar je schouders en laat beheerst zakken."],
+    dips: ["Dips op een stoel", "Handen op de rand van een stevige stoel, benen gebogen. Zak tot je ellebogen ongeveer 90 graden zijn en duw terug."]
+  };
+  // [oefening, sets, herhalingen of "tijd"] per niveau: beginner, gevorderd. Twee of drie trainingen die om de beurt terugkomen.
+  var PLANS = {
+    thuis: {
+      afvallen: [["Kracht A", [["squat_bw", 3, "12"], ["pushup_knee", 3, "8"], ["row_band", 3, "12"], ["bridge", 3, "15"], ["plank", 3, "30 sec"]]],
+                 ["Kracht B", [["lunge", 3, "10 per been"], ["stepup", 3, "10 per been"], ["shoulder", 3, "12"], ["deadbug", 3, "10"], ["mountain", 3, "30 sec"]]],
+                 ["Wandelen", [["walk", 1, "30 min"]]]],
+      spier: [["Boven", [["pushup", 4, "8–12"], ["row_db", 4, "10"], ["shoulder", 3, "10"], ["curl", 3, "12"], ["dips", 3, "10"]]],
+              ["Onder", [["squat_goblet", 4, "10"], ["rdl", 4, "10"], ["lunge", 3, "10 per been"], ["bridge", 3, "15"], ["plank", 3, "45 sec"]]]],
+      conditie: [["Kracht", [["squat_bw", 3, "15"], ["pushup_knee", 3, "10"], ["row_band", 3, "15"], ["lunge", 3, "10 per been"], ["plank", 3, "40 sec"]]],
+                 ["Intervallen", [["intervals", 1, "8 × 30 sec"]]],
+                 ["Duur", [["walk", 1, "40 min"]]]],
+      fit: [["Heel lichaam", [["squat_bw", 2, "12"], ["pushup_knee", 2, "8"], ["row_band", 2, "12"], ["bridge", 2, "15"], ["sideplank", 2, "20 sec"]]],
+            ["Bewegen", [["walk", 1, "30 min"]]]]
+    },
+    sportschool: {
+      afvallen: [["Kracht A", [["legpress", 3, "12"], ["chestpress", 3, "10"], ["latpull", 3, "12"], ["bridge", 3, "15"], ["plank", 3, "30 sec"]]],
+                 ["Kracht B", [["squat_goblet", 3, "10"], ["rdl", 3, "10"], ["shoulder", 3, "10"], ["row_db", 3, "10"], ["deadbug", 3, "10"]]],
+                 ["Cardio", [["intervals", 1, "8 × 30 sec"]]]],
+      spier: [["Duwen", [["chestpress", 4, "8–10"], ["shoulder", 4, "10"], ["dips", 3, "10"], ["pushup", 3, "max"]]],
+              ["Trekken", [["latpull", 4, "8–10"], ["row_db", 4, "10"], ["curl", 3, "12"], ["plank", 3, "45 sec"]]],
+              ["Benen", [["squat_goblet", 4, "8–10"], ["legpress", 4, "12"], ["rdl", 3, "10"], ["lunge", 3, "10 per been"]]]],
+      conditie: [["Kracht", [["legpress", 3, "15"], ["chestpress", 3, "12"], ["latpull", 3, "12"], ["stepup", 3, "10 per been"], ["plank", 3, "40 sec"]]],
+                 ["Intervallen", [["intervals", 1, "10 × 30 sec"]]],
+                 ["Duur", [["walk", 1, "40 min"]]]],
+      fit: [["Heel lichaam", [["legpress", 2, "12"], ["chestpress", 2, "10"], ["latpull", 2, "12"], ["bridge", 2, "15"], ["plank", 2, "30 sec"]]],
+            ["Bewegen", [["walk", 1, "30 min"]]]]
+    }
+  };
+  var TR_FOCUS = { afvallen: "afvallen met behoud van spieren", spier: "spieren opbouwen", conditie: "conditie en kracht", fit: "fit en sterk blijven" };
+  var TR_DAYS = ["zo", "ma", "di", "wo", "do", "vr", "za"];
+  function training() { var t = prefs.training; return t && typeof t === "object" && t.on ? t : null; }
+  function trFocus() {
+    var g = typeof weightGoal === "function" ? weightGoal() : null;
+    if (g && g.target > g.start + 0.05) return "spier";
+    if (g && g.target < g.start - 0.05) return "afvallen";
+    var goal = prefs.goal || "";
+    return /Vetverlies|Cutting/.test(goal) ? "afvallen" : /Spieropbouw/.test(goal) ? "spier" : /Atleet/.test(goal) ? "conditie" : "fit";
+  }
+  function trPlan(t) { return (PLANS[t.place] || PLANS.thuis)[trFocus()] || PLANS.thuis.fit; }
+  function trDoneSet(t) { return Array.isArray(t.done) ? t.done : []; }
+  // Welke training valt op deze datum? Om de beurt A, B (, C), geteld over alle trainingsdagen sinds de start.
+  function trSessionFor(t, date) {
+    var days = (t.days || []).slice().sort(); if (days.indexOf(date.getDay()) === -1) return null;
+    var start = new Date((t.startWeek || mondayKeyOffset(0)) + "T12:00:00"), d = new Date(date); d.setHours(12, 0, 0, 0);
+    if (d < start) return null;
+    var n = 0, cur = new Date(start);
+    while (cur < d) { if (days.indexOf(cur.getDay()) > -1) n++; cur.setDate(cur.getDate() + 1); }
+    var plan = trPlan(t), s = plan[n % plan.length];
+    var wk = Math.max(0, Math.floor((d - start) / (7 * 86400000)));
+    return { name: s[0], items: s[1], index: n, week: wk, key: isoDateKey(d) };
+  }
+  // Rustig opbouwen: elke 2 weken een herhaling erbij, na 4 weken een set erbij; elke 6e week lichter (herstelweek). Gevorderd start een stap verder.
+  function trDose(t, item, wk) {
+    var sets = item[1], reps = item[2], lvl = t.level === "gevorderd" ? 1 : 0;
+    if (EX[item[0]] && /walk|intervals/.test(item[0])) {
+      if (item[0] === "walk") { var min = parseInt(reps, 10) + 5 * Math.min(4, Math.floor(wk / 2) + lvl * 2); return { sets: 1, reps: min + " min", deload: false }; }
+      var rounds = parseInt(reps, 10) + Math.min(4, Math.floor(wk / 2) + lvl * 2); return { sets: 1, reps: rounds + " × 30 sec", deload: false };
+    }
+    var deload = wk > 0 && (wk + 1) % 6 === 0;
+    var extraSets = (wk >= 4 ? 1 : 0) + lvl; sets = Math.min(sets + extraSets, 5);
+    if (deload) sets = Math.max(2, sets - 1);
+    var m = /^(\d+)(.*)$/.exec(reps);
+    if (m && !/sec/.test(reps) && !/–/.test(reps)) reps = (Number(m[1]) + Math.min(4, Math.floor(wk / 2))) + m[2];
+    if (m && /sec/.test(reps)) reps = (Number(m[1]) + 5 * Math.min(6, Math.floor(wk / 2) + lvl * 2)) + m[2];
+    return { sets: sets, reps: reps, deload: deload };
+  }
+  function trMinutes(t, s) {
+    if (s.items.length === 1) { var d0 = trDose(t, s.items[0], s.week); return parseInt(d0.reps, 10) > 20 ? parseInt(d0.reps, 10) : 25; }
+    var sets = s.items.reduce(function (n, it) { return n + trDose(t, it, s.week).sets; }, 0);
+    return Math.round((sets * 1.8 + 8) / 5) * 5;   // ± 1 min per set + rust, plus warming-up
+  }
+  function trIsDone(t, key) { return trDoneSet(t).indexOf(key) > -1; }
+  function trToggleDone(t, key) {
+    var d = trDoneSet(t), i = d.indexOf(key);
+    if (i > -1) d.splice(i, 1); else d.push(key);
+    t.done = d.slice(-150); savePrefs(); render();
+    if (i === -1) { try { if (navigator.vibrate) navigator.vibrate(12); } catch (e) {} showUndoToast("Training gedaan. Lekker bezig!", function () { var x = trDoneSet(t); var j = x.indexOf(key); if (j > -1) x.splice(j, 1); savePrefs(); render(); }); }
+  }
+  function trWeekCount(t) {
+    var mon = getMonday(new Date()), n = 0, done = 0;
+    var startKey = t.startWeek || "";
+    for (var i = 0; i < 7; i++) { var d = new Date(mon); d.setDate(d.getDate() + i); var k = isoDateKey(d); if (k >= startKey && (t.days || []).indexOf(d.getDay()) > -1) { n++; if (trIsDone(t, k)) done++; } }
+    return { n: n, done: done };
+  }
+  function trNext(t) {
+    for (var i = 0; i < 8; i++) { var d = new Date(); d.setDate(d.getDate() + i); var s = trSessionFor(t, d); if (s && !trIsDone(t, s.key)) return { s: s, date: d, today: i === 0 }; }
+    return null;
+  }
+  // Tegel op Start
+  function renderTrainingCard(main) {
+    var t = training();
+    var card = document.createElement("div"); card.className = "card tr-card"; card.id = "homeTraining";
+    if (!t) {
+      card.innerHTML = '<div class="eyebrow">Training</div><b class="wg-inv-t">Wil je er een trainingsschema bij?</b><p class="acc-sub"></p>';
+      card.querySelector("p").textContent = "Een eenvoudig schema voor " + TR_FOCUS[trFocus()] + ", thuis of in de sportschool. Balanza bouwt rustig op en zet je trainingen in je week.";
+      var row = document.createElement("div"); row.className = "nudge-actions";
+      var go = document.createElement("button"); go.type = "button"; go.className = "primary-btn small"; go.id = "trSetup"; go.textContent = "Schema kiezen"; go.onclick = function () { openTrainingSetup(); };
+      var no = document.createElement("button"); no.type = "button"; no.className = "ghost-btn small"; no.id = "trDismiss"; no.textContent = "Niet nodig";
+      no.onclick = function () { prefs.trainingDismissed = true; savePrefs(); render(); };
+      row.appendChild(go); row.appendChild(no); card.appendChild(row); main.appendChild(card); return;
+    }
+    var wc = trWeekCount(t), nx = trNext(t);
+    var head = document.createElement("div"); head.className = "wg-head";
+    head.innerHTML = '<div><div class="eyebrow">Training</div><b class="tr-title"></b><small class="wg-sub"></small></div>';
+    var today = trSessionFor(t, new Date());
+    head.querySelector(".tr-title").textContent = today ? (trIsDone(t, today.key) ? "Vandaag gedaan: " + today.name : "Vandaag: " + today.name) : nx ? "Volgende: " + nx.s.name + " op " + ["zondag", "maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag"][nx.date.getDay()] : "Rustdag";
+    head.querySelector(".wg-sub").textContent = "Deze week " + wc.done + " van " + wc.n + " · " + TR_FOCUS[trFocus()] + " · " + (t.place === "sportschool" ? "sportschool" : "thuis");
+    var ed = document.createElement("button"); ed.type = "button"; ed.className = "hh-link"; ed.id = "trEdit"; ed.textContent = "Aanpassen"; ed.onclick = function () { openTrainingSetup(); };
+    head.appendChild(ed); card.appendChild(head);
+    var dots = document.createElement("div"); dots.className = "tr-dots";
+    var mon = getMonday(new Date());
+    for (var i = 0; i < 7; i++) {
+      var d = new Date(mon); d.setDate(d.getDate() + i); var on = (t.days || []).indexOf(d.getDay()) > -1, k = isoDateKey(d);
+      var sp = document.createElement("span"); sp.className = "tr-dot" + (on ? " train" : "") + (on && trIsDone(t, k) ? " done" : "") + (k === isoDateKey(new Date()) ? " today" : "");
+      sp.textContent = TR_DAYS[d.getDay()]; dots.appendChild(sp);
+    }
+    card.appendChild(dots);
+    var s = today || (nx && nx.s);
+    if (s) {
+      var acts = document.createElement("div"); acts.className = "nudge-actions";
+      var open = document.createElement("button"); open.type = "button"; open.className = today && !trIsDone(t, today.key) ? "primary-btn small" : "ghost-btn small"; open.id = "trOpen";
+      open.textContent = (today ? "Bekijk training" : "Bekijk " + s.name) + " (±" + trMinutes(t, s) + " min)";
+      open.onclick = function () { openWorkout(t, s); };
+      acts.appendChild(open);
+      if (today) {
+        var dn = document.createElement("button"); dn.type = "button"; dn.className = "ghost-btn small"; dn.id = "trDone"; dn.textContent = trIsDone(t, today.key) ? "Gedaan ✓" : "Gedaan";
+        dn.onclick = function () { trToggleDone(t, today.key); };
+        acts.appendChild(dn);
+      }
+      card.appendChild(acts);
+    }
+    main.appendChild(card);
+  }
+  function openWorkout(t, s) {
+    var dd = new Date(s.key + "T12:00:00");
+    var sh = openSimpleSheet("trSheet", s.name, ["zondag", "maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag"][dd.getDay()] + " " + dd.getDate() + " · ±" + trMinutes(t, s) + " min · week " + (s.week + 1));
+    var body = sh.body;
+    var anyDeload = false;
+    if (s.items.length > 1) {
+      var wu = document.createElement("p"); wu.className = "tr-warm"; wu.textContent = "Begin met 5 minuten warm worden: rustig wandelen, armen rondzwaaien, een paar squats zonder gewicht. Rust 60–90 seconden tussen de sets.";
+      body.appendChild(wu);
+    }
+    s.items.forEach(function (it, i) {
+      var ex = EX[it[0]] || [it[0], ""], dose = trDose(t, it, s.week); if (dose.deload) anyDeload = true;
+      var row = document.createElement("details"); row.className = "tr-ex"; row.id = "trEx-" + i;
+      row.innerHTML = "<summary><b></b><span></span></summary><p></p>";
+      row.querySelector("b").textContent = ex[0];
+      row.querySelector("span").textContent = dose.sets > 1 ? dose.sets + " × " + dose.reps : dose.reps;
+      row.querySelector("p").textContent = ex[1];
+      body.appendChild(row);
+    });
+    if (anyDeload) { var dl = document.createElement("p"); dl.className = "acc-sub"; dl.textContent = "Dit is een herstelweek: iets minder sets, zodat je lichaam kan bijkomen. Daarna gaat het weer verder."; body.appendChild(dl); }
+    var strength = s.items.length > 1;
+    var tip = document.createElement("p"); tip.className = "acc-sub"; tip.textContent = (strength ? "Kies een gewicht waarbij de laatste 2 herhalingen zwaar zijn maar netjes lukken. " : "Rustig opbouwen gaat voor snelheid. ") + "Pijn (anders dan spierpijn)? Stop en overleg met je huisarts of fysiotherapeut.";
+    body.appendChild(tip);
+    var acts = document.createElement("div"); acts.className = "nudge-actions"; acts.style.marginTop = "12px";
+    var isToday = s.key === isoDateKey(new Date()), past = new Date(s.key + "T23:59:59") < new Date() || isToday;
+    if (past) {
+      var done = document.createElement("button"); done.type = "button"; done.className = "primary-btn small"; done.id = "trSheetDone"; done.textContent = trIsDone(t, s.key) ? "Gedaan ✓ (terugzetten)" : "Training gedaan";
+      done.onclick = function () { closeSheet(sh.ov); trToggleDone(t, s.key); };
+      acts.appendChild(done);
+    }
+    var cl = document.createElement("button"); cl.type = "button"; cl.className = "ghost-btn small"; cl.textContent = "Sluiten"; cl.onclick = function () { closeSheet(sh.ov); };
+    acts.appendChild(cl); body.appendChild(acts);
+  }
+  function openTrainingSetup() {
+    var t = prefs.training && typeof prefs.training === "object" ? prefs.training : null;
+    var st = { place: t ? t.place : "thuis", days: t && Array.isArray(t.days) ? t.days.slice() : [1, 3, 5], level: t ? t.level : "beginner" };
+    var sh = openSimpleSheet("trSetupSheet", t && t.on ? "Je trainingsschema" : "Trainingsschema kiezen", "Gericht op " + TR_FOCUS[trFocus()] + " (volgt je doel)");
+    var body = sh.body;
+    function lab(x) { var e = document.createElement("div"); e.className = "qa-h"; e.textContent = x; body.appendChild(e); }
+    var rows = {};
+    function chipRow(id, opts, get, set) {
+      var r = document.createElement("div"); r.className = "chiprow"; r.id = id; rows[id] = function () {
+        r.innerHTML = "";
+        opts.forEach(function (o) { var c = document.createElement("button"); c.type = "button"; c.className = "chip" + (get(o[0]) ? " selected" : ""); c.id = id + "-" + o[0]; c.textContent = o[1]; c.onclick = function () { set(o[0]); paint(); }; r.appendChild(c); });
+      };
+      body.appendChild(r);
+    }
+    lab("Waar train je?");
+    chipRow("trPlace", [["thuis", "Thuis (eigen gewicht, elastiek of dumbbells)"], ["sportschool", "In de sportschool"]], function (v) { return st.place === v; }, function (v) { st.place = v; });
+    lab("Op welke dagen? (2 tot 4)");
+    chipRow("trDays", [[1, "ma"], [2, "di"], [3, "wo"], [4, "do"], [5, "vr"], [6, "za"], [0, "zo"]], function (v) { return st.days.indexOf(v) > -1; }, function (v) {
+      var i = st.days.indexOf(v); if (i > -1) st.days.splice(i, 1); else if (st.days.length < 4) st.days.push(v); else showToast("Kies hooguit 4 dagen; rust hoort er ook bij.");
+    });
+    lab("Hoe fit ben je nu?");
+    chipRow("trLevel", [["beginner", "Beginner of lang niet getraind"], ["gevorderd", "Ik train al regelmatig"]], function (v) { return st.level === v; }, function (v) { st.level = v; });
+    var prev = document.createElement("div"); prev.className = "wg-preview"; prev.id = "trPreview"; body.appendChild(prev);
+    var safe = document.createElement("p"); safe.className = "acc-sub"; safe.textContent = "Heb je klachten, een blessure, een hartaandoening of ben je zwanger? Overleg eerst met je huisarts. De schema's zijn algemeen en bouwen rustig op.";
+    body.appendChild(safe);
+    var acts = document.createElement("div"); acts.className = "nudge-actions"; acts.style.marginTop = "12px";
+    var save = document.createElement("button"); save.type = "button"; save.className = "primary-btn small"; save.id = "trSave"; save.textContent = t && t.on ? "Opslaan" : "Start mijn schema";
+    save.onclick = function () {
+      if (st.days.length < 2) { showToast("Kies minstens 2 dagen."); return; }
+      var keep = t && t.on && t.place === st.place;
+      prefs.training = { on: true, place: st.place, days: st.days.slice().sort(), level: st.level, startWeek: keep ? t.startWeek : isoDateKey(new Date()), done: t ? trDoneSet(t) : [] };   // startWeek = startdatum
+      delete prefs.trainingDismissed; savePrefs(); closeSheet(sh.ov); render();
+      showToast(keep ? "Je schema is bijgewerkt." : "Je schema staat klaar. Je trainingen staan nu ook in je week.");
+    };
+    acts.appendChild(save);
+    if (t && t.on) {
+      var off = document.createElement("button"); off.type = "button"; off.className = "ghost-btn small"; off.id = "trOff"; off.textContent = "Schema stoppen";
+      off.onclick = function () { prefs.training.on = false; savePrefs(); closeSheet(sh.ov); render(); showToast("Je schema staat uit. Je kunt het altijd weer aanzetten."); };
+      acts.appendChild(off);
+    }
+    body.appendChild(acts);
+    function paint() {
+      Object.keys(rows).forEach(function (k) { rows[k](); });
+      var plan = (PLANS[st.place] || PLANS.thuis)[trFocus()];
+      prev.textContent = st.days.length + "× per week, om de beurt: " + plan.map(function (p) { return p[0]; }).join(", ") + ". Elke paar weken iets zwaarder, elke 6e week een herstelweek.";
+    }
+    paint();
+  }
   function openWeightGoalSheet() {
     if (!wgAllowed()) { showToast(isMinor() ? "Een doelgewicht is er niet voor wie jonger is dan 18." : "Hiervoor is toestemming voor gezondheidsgegevens nodig (Instellingen, Privacy)."); return; }
     var g = weightGoal();
@@ -16226,6 +16504,8 @@
         myFoods: Array.isArray(prefs.myFoods) ? prefs.myFoods.slice(0, 150) : [],
         weightGoal: prefs.weightGoal && typeof prefs.weightGoal === "object" && healthOk() ? prefs.weightGoal : null,
         weightGoalDismissed: !!prefs.weightGoalDismissed,
+        training: prefs.training && typeof prefs.training === "object" ? prefs.training : null,
+        trainingDismissed: !!prefs.trainingDismissed,
         proteinOut: Array.isArray(prefs.proteinOut) ? prefs.proteinOut.slice(0, 20) : [],
         journey: prefs.journey && typeof prefs.journey === "object" ? prefs.journey : {},
         ageGroup: AGE_GROUPS.some(function (g) { return g[0] === prefs.ageGroup; }) ? prefs.ageGroup : "",
@@ -16753,7 +17033,7 @@
               return;
             }
             var pdata = psnap.data() || {};
-            ["name", "bringListLink", "cuisines", "flavors", "level", "dietStyle", "health", "leftovers", "coach", "water", "places", "proteinOut", "journey", "ageGroup", "student", "sugarMode", "cheeseMode", "familyMode", "equipment", "exclude", "count", "mealTypes", "gender", "heightCm", "weightKg", "age", "activityLevel", "goal", "homeLayout", "mealCounts", "withImages", "pantry", "communityName", "myFoods", "weightGoal", "weightGoalDismissed"].forEach(function (k) {
+            ["name", "bringListLink", "cuisines", "flavors", "level", "dietStyle", "health", "leftovers", "coach", "water", "places", "proteinOut", "journey", "ageGroup", "student", "sugarMode", "cheeseMode", "familyMode", "equipment", "exclude", "count", "mealTypes", "gender", "heightCm", "weightKg", "age", "activityLevel", "goal", "homeLayout", "mealCounts", "withImages", "pantry", "communityName", "myFoods", "weightGoal", "weightGoalDismissed", "training", "trainingDismissed"].forEach(function (k) {
               if (pdata[k] !== undefined) prefs[k] = deepClone(pdata[k]);
             });
             var mig = migrateExcludeTerms();
