@@ -1512,6 +1512,7 @@
   .hh-cap b { font-family: "Fraunces", serif; font-weight: 700; font-size: 27px; line-height: 1.08; letter-spacing: -0.01em; text-wrap: balance; text-shadow: 0 1px 12px rgba(0,0,0,.25); }
   .hh-cap small { font-size: 13px; opacity: .9; white-space: pre; font-variant-numeric: tabular-nums; }
   .hh-body { padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 10px; }
+  .hh-body.hh-body-empty { width: 100%; padding: 14px 0 0; margin-top: 16px; border-top: 1px solid var(--line); text-align: left; align-self: stretch; }
   .hh-line { display: flex; justify-content: space-between; align-items: baseline; font-size: 13.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
   .hh-line b { color: var(--ink); font-size: 15px; }
   .hh-pct { font-weight: 700; color: var(--ink); }
@@ -5050,6 +5051,47 @@
     return h;
   }
   // Grote kaart bovenaan: de eerstvolgende maaltijd van vandaag als foto, de rest klein eronder.
+  // De dagteller op Start: kcal tegenover je dagdoel, de balk per moment met legenda en eiwit/koolhydraten/vet.
+  // Staat er altijd, ook als er vandaag nog niets gepland of gegeten is (dan alles op nul).
+  function renderDayTracker(body, agg, target, t, live, extras) {
+    var line = document.createElement("div"); line.className = "hh-line";
+    var kc = agg ? agg.kcal : 0;
+    line.innerHTML = '<span><b>' + kc + '</b> van ' + target + ' kcal</span><span class="hh-pct">' + Math.min(999, Math.round(kc / target * 100)) + '%</span>';
+    var db = dayBal(agg); if (db !== null) line.appendChild(balPill(db, "dayBal"));
+    body.appendChild(line);
+    var bar = document.createElement("div"); bar.className = "hh-bar"; bar.setAttribute("aria-hidden", "true");
+    // De balk is opgebouwd uit de maaltijden van vandaag, elk in de kleur van zijn moment.
+    live.filter(function (r) { return r.a.cooked !== false; }).forEach(function (r) {
+      var seg = document.createElement("span"); seg.style.width = Math.max(1, Math.min(100, r.dish.kcal / target * 100)) + "%"; seg.style.background = MEAL_DOT[r.mt] || MEAL_DOT.Snack;
+      if (r.a.cooked !== true) seg.className = "todo"; bar.appendChild(seg);
+    });
+    extras.forEach(function (x) {
+      var seg = document.createElement("span"); seg.style.width = Math.max(1, Math.min(100, (x.kcal || 0) / target * 100)) + "%"; seg.style.background = "#8C8C8C"; bar.appendChild(seg);
+    });
+    body.appendChild(bar);
+    // Legenda: welke kleur bij welk moment, en wat een lichter blokje betekent
+    var leg = document.createElement("div"); leg.className = "hh-legend"; leg.id = "hhLegend";
+    var seenMt = {}, anyTodo = false;
+    live.filter(function (r) { return r.a.cooked !== false; }).forEach(function (r) {
+      if (r.a.cooked !== true) anyTodo = true;
+      var lab = /^Snack/.test(r.mt) ? "Snack" : r.mt;
+      if (seenMt[lab]) return; seenMt[lab] = 1;
+      var it = document.createElement("span"); it.innerHTML = "<i></i>"; it.querySelector("i").style.background = MEAL_DOT[r.mt] || MEAL_DOT.Snack;
+      it.appendChild(document.createTextNode(lab.toLowerCase())); leg.appendChild(it);
+    });
+    if (extras.length) { var ie = document.createElement("span"); ie.innerHTML = "<i></i>erbij"; ie.querySelector("i").style.background = "#8C8C8C"; leg.appendChild(ie); }
+    if (anyTodo) { var nt = document.createElement("span"); nt.className = "hh-legend-note"; nt.textContent = "licht = nog niet gegeten"; leg.appendChild(nt); }
+    if (leg.childNodes.length) body.appendChild(leg);
+    if (agg) body.appendChild(macroGauges([["Eiwit", agg.eiwitG, Math.round(target * t.eiwit / 100 / 4), "eiwit"],
+      ["Koolhydraten", agg.khG, Math.round(target * t.kh / 100 / 4), "kh"], ["Vet", agg.vetG, Math.round(target * t.vet / 100 / 9), "vet"]]));
+    if (!live.length && !extras.length) {
+      var none = document.createElement("div"); none.className = "hh-legend"; none.id = "hhLegend";
+      none.textContent = "Nog niets gepland of gegeten vandaag";
+      if (!body.querySelector("#hhLegend")) body.appendChild(none);
+    }
+    if (!agg) body.appendChild(macroGauges([["Eiwit", 0, Math.round(target * t.eiwit / 100 / 4), "eiwit"],
+      ["Koolhydraten", 0, Math.round(target * t.kh / 100 / 4), "kh"], ["Vet", 0, Math.round(target * t.vet / 100 / 9), "vet"]]));
+  }
   function renderHomeHero(main) {
     var now = new Date(), dayName = PLAN_DAYS[(now.getDay() + 6) % 7], hr = now.getHours();
     var pw = plannedWeeks.filter(function (w) { return w.weekStart === isoDateKey(getMonday(now)); })[0];
@@ -5096,6 +5138,7 @@
         card.appendChild(qa);
       }
 
+      if (target) { var tb = document.createElement("div"); tb.className = "hh-body hh-body-empty"; renderDayTracker(tb, agg, target, t, [], extras); card.appendChild(tb); }
       renderWaterRow(card);
       main.appendChild(card);
       return;
@@ -5142,38 +5185,7 @@
       nl.innerHTML = "<span><b>" + agg.kcal + "</b> kcal vandaag</span>"; nl.appendChild(balPill(dayBal(agg), "dayBal"));
       body.appendChild(nl);
     }
-    if (target) {
-      var line = document.createElement("div"); line.className = "hh-line";
-      var kc = agg ? agg.kcal : 0;
-      line.innerHTML = '<span><b>' + kc + '</b> van ' + target + ' kcal</span><span class="hh-pct">' + Math.min(999, Math.round(kc / target * 100)) + '%</span>';
-      var db = dayBal(agg); if (db !== null) line.appendChild(balPill(db, "dayBal"));
-      body.appendChild(line);
-      var bar = document.createElement("div"); bar.className = "hh-bar"; bar.setAttribute("aria-hidden", "true");
-      // De balk is opgebouwd uit de maaltijden van vandaag, elk in de kleur van zijn moment.
-      live.filter(function (r) { return r.a.cooked !== false; }).forEach(function (r) {
-        var seg = document.createElement("span"); seg.style.width = Math.max(1, Math.min(100, r.dish.kcal / target * 100)) + "%"; seg.style.background = MEAL_DOT[r.mt] || MEAL_DOT.Snack;
-        if (r.a.cooked !== true) seg.className = "todo"; bar.appendChild(seg);
-      });
-      extras.forEach(function (x) {
-        var seg = document.createElement("span"); seg.style.width = Math.max(1, Math.min(100, (x.kcal || 0) / target * 100)) + "%"; seg.style.background = "#8C8C8C"; bar.appendChild(seg);
-      });
-      body.appendChild(bar);
-      // Legenda: welke kleur bij welk moment, en wat een lichter blokje betekent
-      var leg = document.createElement("div"); leg.className = "hh-legend"; leg.id = "hhLegend";
-      var seenMt = {}, anyTodo = false;
-      live.filter(function (r) { return r.a.cooked !== false; }).forEach(function (r) {
-        if (r.a.cooked !== true) anyTodo = true;
-        var lab = /^Snack/.test(r.mt) ? "Snack" : r.mt;
-        if (seenMt[lab]) return; seenMt[lab] = 1;
-        var it = document.createElement("span"); it.innerHTML = "<i></i>"; it.querySelector("i").style.background = MEAL_DOT[r.mt] || MEAL_DOT.Snack;
-        it.appendChild(document.createTextNode(lab.toLowerCase())); leg.appendChild(it);
-      });
-      if (extras.length) { var ie = document.createElement("span"); ie.innerHTML = "<i></i>erbij"; ie.querySelector("i").style.background = "#8C8C8C"; leg.appendChild(ie); }
-      if (anyTodo) { var nt = document.createElement("span"); nt.className = "hh-legend-note"; nt.textContent = "licht = nog niet gegeten"; leg.appendChild(nt); }
-      if (leg.childNodes.length) body.appendChild(leg);
-      if (agg) body.appendChild(macroGauges([["Eiwit", agg.eiwitG, Math.round(target * t.eiwit / 100 / 4), "eiwit"],
-        ["Koolhydraten", agg.khG, Math.round(target * t.kh / 100 / 4), "kh"], ["Vet", agg.vetG, Math.round(target * t.vet / 100 / 9), "vet"]]));
-    }
+    if (target) renderDayTracker(body, agg, target, t, live, extras);
     var list = document.createElement("div"); list.className = "hh-meals";
     // Alles wat vandaag gepland staat, op volgorde van de dag (ook de uitgelichte maaltijd); wat je erbij zette staat bij zijn moment.
     var MOMENT_POS = { Ontbijt: 0.5, Lunch: 2.5, Snack: 3.5, Diner: 4.5 };
