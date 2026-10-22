@@ -8569,18 +8569,23 @@
         });
         var snacks = SNACK_SLOTS.filter(function (sl) { return pw.slots[dn + "|" + sl]; });
         if (snacks.length) {
-          var sk = 0; snacks.forEach(function (sl) { var r = resolveAssignedDish(pw.slots[dn + "|" + sl]); if (r) sk += r.day.kcal; });
+          var sk = 0, sKh = 0, sE = 0, sV = 0;
+          snacks.forEach(function (sl) { var r = resolveAssignedDish(pw.slots[dn + "|" + sl]); if (r) { var dk = r.day.kcal || 0; sk += dk; sKh += (r.day.kh || 0) / 100 * dk / 4; sE += (r.day.eiwit || 0) / 100 * dk / 4; sV += (r.day.vet || 0) / 100 * dk / 9; } });
           var sn = document.createElement("div"); sn.className = "wk-meal snack";
-          sn.innerHTML = "<small>Snacks</small><span></span>";
-          sn.querySelector("span").textContent = snacks.length + (snacks.length === 1 ? " snack" : " snacks") + " \u00b7 " + sk + " kcal";
+          sn.innerHTML = "<small></small><span></span>";
+          sn.querySelector("small").textContent = snacks.length === 1 ? "Snack" : "Snacks (" + snacks.length + ")";
+          sn.querySelector("span").textContent = sk + " kcal";
+          if (sk) { var sb = balPill(gramsBal(sk, sKh, sE, sV)); sb.classList.add("mini"); sn.appendChild(sb); }
           meals.appendChild(sn);
         }
         var wx = dayExtras(pw, dn);
         if (wx.length) {
-          var xk = 0; wx.forEach(function (x) { xk += x.kcal || 0; });
+          var xk = 0, xKh = 0, xE = 0, xV = 0; wx.forEach(function (x) { xk += Number(x.kcal) || 0; xKh += Number(x.khG) || 0; xE += Number(x.eiwitG) || 0; xV += Number(x.vetG) || 0; });
           var xr = document.createElement("button"); xr.type = "button"; xr.className = "wk-meal snack"; xr.id = "wkExtra-" + dn;
-          xr.innerHTML = "<small>Erbij</small><span></span>";
-          xr.querySelector("span").textContent = (wx.length === 1 ? wx[0].name : wx.length + " dingen") + " \u00b7 " + xk + " kcal";
+          xr.innerHTML = "<small></small><span></span>";
+          xr.querySelector("small").textContent = wx.length === 1 ? "Erbij" : "Erbij (" + wx.length + ")";
+          xr.querySelector("span").textContent = xk + " kcal";
+          if (xk) { var xb = balPill(gramsBal(xk, xKh, xE, xV)); xb.classList.add("mini"); xr.appendChild(xb); }
           xr.onclick = function () { setPlanView("dag"); state.planDayName = dn; render(); window.scrollTo(0, 0); };
           meals.appendChild(xr);
         }
