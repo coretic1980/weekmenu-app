@@ -11984,8 +11984,8 @@
   var VAR_MEATFISH = /(kip|kalkoen|rund|varken|gehakt|biefstuk|steak|spek|bacon|ham\b|hamblokjes|worst|chorizo|salami|lam(s|svlees|skotelet)|kalf|eend|konijn|vlees|schnitzel|shoarma|gyros|pulled|zalm|tonijn|kabeljauw|koolvis|pangasius|tilapia|forel|makreel|haring|sardine|ansjovis|garnal|gamba|scampi|mossel|inktvis|vis\b|visfilet|krab|kreeft|schelvis|heek|zeebaars|dorade|scholvis)/;
   var VAR_VEGPROT = /(tofu|tempeh|seitan|vleesvervanger|vegaburger|vegetarisch(e)? (gehakt|burger|kipstuk|balletjes)|vega |falafel|kikkererwt|linzen|kidneybon|zwarte bonen|witte bonen|bruine bonen|edamame|sojabonen|lupine)/;
   var VAR_OTHERPROT = /(\bei\b|\beieren\b|eiwit|kwark|skyr|yoghurt|cottage|huttenk|feta|halloumi|mozzarella|kaas|paneer|whey|eiwitpoeder)/;
-  var VAR_CARB = /((^|[^a-z])pasta\b|spaghetti|penne|fusilli|macaroni|tagliatelle|lasagne|orzo|gnocchi|noedel|\bmie\b|ramen|udon|rijst(?!azijn|wijn|e azijn)|risotto|couscous|bulgur|quinoa|parelgort|gierst|aardappel|krieltje|puree|friet|patat|zoete aardappel|(^|[^a-z])brood(?!kruim)|stokbrood|bolletje|broodje|pistolet|wrap|tortilla|pita|naan|flatbread|crackers?|beschuit|havermout|muesli|granola|cruesli|polenta|pannenkoek)/;
-  var VAR_SAVORY = /(ui\b|uien|knoflook|zout|peper|bouillon|tomaat|paprika|courgette|spinazie|broccoli|kip|vlees|vis|kaas|sojasaus|kerrie|curry|komijn|chili)/;
+  var VAR_CARB = /((^|[^a-z])pasta\b|spaghetti|penne|fusilli|macaroni|tagliatelle|lasagne|orzo|gnocchi|noedel|\bmie\b|ramen|udon|rijst(?!azijn|wijn|e azijn)|risotto|couscous|bulgur|quinoa|parelgort|gierst|aardappel|krieltje|puree|friet|patat|zoete aardappel|(^|[^a-z])brood(?!kruim)|stokbrood|bolletje|broodje|pistolet|wrap|tortilla|pita|naan|flatbread|crackers?|beschuit|havermout|haver(vlokken)?\b|vlokken haver|muesli|granola|cruesli|polenta|pannenkoek)/;
+  var VAR_SAVORY = /((^|[^a-z])ui\b|uien|knoflook|(^|[^a-z])zout\b|zeezout|(^|[^a-z])peper\b|bouillon|tomaat|paprika|courgette|spinazie|broccoli|kip|vlees|vis|kaas|sojasaus|kerrie|curry|komijn|chili)/;
   var VAR_SWEET = /(yoghurt|kwark|skyr|granola|muesli|havermout|honing|ahornsiroop|banaan|aardbei|bessen|blauwe bes|frambo|appel|peer|mango|smoothie|chocolade|cacao|kaneel|vanille|jam|suiker|pannenkoek|taart|cake|toetje)/;
   function dishProteinKind(day) {
     var all = (String(day.name || "") + " \n " + (day.ingredienten || []).filter(function (x) { return !/bouillon|fond\b|vissaus|oestersaus/i.test(String(x)); }).join(" \n ")).toLowerCase();
@@ -11997,7 +11997,7 @@
     var steps = (day.steps || []).length;
     var meat = VAR_MEATFISH.test(all), veg = VAR_VEGPROT.test(all), other = VAR_OTHERPROT.test(all), carb = VAR_CARB.test(all);
     var sweet = VAR_SWEET.test(all) && !VAR_SAVORY.test(all);
-    var simple = lines.length <= 4 && steps <= 2;
+    var simple = day.quick || steps <= 1 || (lines.length <= 4 && steps <= 2);   // zelf samengesteld of al één stap: simpeler kan niet
     var out = [];
     if (!sweet) out.push(["Pittiger", "pittiger"]);
     if (!simple) out.push(["Simpeler (basic)", "simpeler"]);
