@@ -4,7 +4,7 @@
 // request fails (e.g. briefly offline). Bump CACHE_NAME whenever you want to
 // force-invalidate old cached assets after a deploy.
 
-var CACHE_NAME = "weekmenu-shell-v12";
+var CACHE_NAME = "weekmenu-shell-v13";
 var SHELL_FILES = [
   "/",
   "/manifest.json",
@@ -40,6 +40,7 @@ self.addEventListener("fetch", function (event) {
   // Never intercept API calls — those must always hit the live server.
   if (event.request.url.indexOf("/api/") !== -1) return;
   if (event.request.url.indexOf("/admin") !== -1) return;
+  if (event.request.url.indexOf("/media/") !== -1) return;   // filmpjes: rechtstreeks (Range-verzoeken horen niet in de cache)
   if (event.request.method !== "GET") return;
 
   event.respondWith(

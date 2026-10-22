@@ -89,6 +89,17 @@
   @media (max-width: 860px) { .hero-grid { grid-template-columns: 1fr; gap: 40px; } .hero { padding-top: 32px; } }
   .eyebrow { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
     color: var(--mint-ink); background: var(--mint); padding: 6px 12px; border-radius: 999px; margin: 0 0 18px; }
+  .demos { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 22px; margin-top: 28px; }
+  .demo { margin: 0; display: flex; flex-direction: column; gap: 12px; }
+  .phone { position: relative; border-radius: 30px; padding: 7px; background: #0F2219; box-shadow: 0 24px 50px -28px rgba(15, 34, 25, 0.55); }
+  .phone video { display: block; width: 100%; aspect-ratio: 540 / 1168; border-radius: 24px; background: #F2F6F3; object-fit: cover; }
+  .demo h3 { margin: 4px 0 0; font-size: 17px; }
+  .demo p { margin: 0; color: var(--muted); font-size: 14.5px; line-height: 1.55; }
+  @media (max-width: 900px) {
+    .demos { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; gap: 16px; padding-bottom: 8px; margin-left: -16px; margin-right: -16px; padding-left: 16px; padding-right: 16px; scrollbar-width: none; }
+    .demos::-webkit-scrollbar { display: none; }
+    .demo { flex: 0 0 68%; max-width: 280px; scroll-snap-align: center; }
+  }
   .eyebrow::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--accent2); }
   .hero h1 { font-size: clamp(36px, 5.6vw, 58px); line-height: 1.04; max-width: 15ch; }
   .hero h1 em { font-style: italic; color: var(--accent2); }
@@ -348,6 +359,38 @@
     [["M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9", "M13.73 21a2 2 0 0 1-3.46 0"], "Meldingen", "Een seintje als je gerechten of je week klaarstaan, voor het diner van vandaag en je weekterugblik, ook op je iPhone."],
     [["M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4", "M7 10l5 5 5-5", "M12 15V3"], "PDF-export", "Boodschappenlijst of weekmenu als kookboek, om te printen of te bewaren."]
   ];
+  // Korte schermopnames uit de app (demo-account, nagespeeld): spelen af zodra ze in beeld komen.
+  var DEMOS = [
+    ["genereren", "Gerechten laten maken", "Kies hoeveel ontbijt, lunch en diner je wilt en een wens voor deze keer. Balanza maakt ze op jouw doel, met Balans-score en NEVO-macro's."],
+    ["plannen", "Je week in één tik", "Vul de lege plekken in met je eigen gerechten. Per dag zie je kcal en Balans tegenover je dagdoel."],
+    ["snel-toevoegen", "Snel toevoegen wat je at", "Typ gewoon wat je at. Balanza zoekt alles op, rekent het uit en past je planning aan."],
+    ["boodschappen", "Boodschappen zonder gedoe", "Alles samengevoegd per afdeling. Afvinken in de winkel, zelf iets toevoegen of de lijst delen."]
+  ];
+  function demoVideos() {
+    var vids = [];
+    var row = h("div", { class: "demos", id: "demos" }, DEMOS.map(function (d) {
+      var v = h("video", { muted: "", loop: "", playsinline: "", preload: "none", poster: "/media/" + d[0] + ".jpg", "aria-label": "Schermopname: " + d[1] });
+      v.muted = true; v.setAttribute("muted", ""); v.setAttribute("playsinline", ""); v.setAttribute("webkit-playsinline", "");
+      v.appendChild(h("source", { src: "/media/" + d[0] + ".mp4", type: "video/mp4" }));
+      v.appendChild(h("source", { src: "/media/" + d[0] + ".webm", type: "video/webm" }));
+      vids.push(v);
+      return h("figure", { class: "demo" }, h("div", { class: "phone" }, v), h("h3", { text: d[1] }), h("p", { text: d[2] }));
+    }));
+    var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if ("IntersectionObserver" in window && !reduce) {
+      var io = new IntersectionObserver(function (entries) {
+        entries.forEach(function (e) {
+          var v = e.target;
+          if (e.isIntersecting && e.intersectionRatio > 0.5) { var p = v.play(); if (p && p.catch) p.catch(function () {}); }
+          else v.pause();
+        });
+      }, { threshold: [0, 0.5, 0.9] });
+      vids.forEach(function (v) { io.observe(v); });
+    } else {
+      vids.forEach(function (v) { v.controls = true; v.preload = "metadata"; });
+    }
+    return row;
+  }
   function featureList(list) {
     return h("div", { class: "feature-list" }, list.map(function (f) {
       return h("div", { class: "feature" }, h("div", { class: "ic" }, icon(f[0])), h("h4", { text: f[1] }), h("p", { text: f[2] }));
@@ -383,6 +426,10 @@
         ["Plan je week", "Sleep gerechten in je week of laat hem automatisch vullen."],
         ["Kook en geniet", "Boodschappenlijst, prepdag en kookmodus met timers."]
       ].map(function (st, i) { return h("div", { class: "step" }, h("div", { class: "n", text: String(i + 1) }), h("h4", { text: st[0] }), h("p", { text: st[1] })); })))));
+    frag.appendChild(h("div", { class: "wrap" }, h("section", { id: "inActie" },
+      h("div", { class: "lead-block" }, h("h2", { text: "Zo werkt het in de app" }),
+        h("p", { text: "Echte opnames uit Balanza, met een voorbeeldaccount." })),
+      demoVideos())));
     frag.appendChild(h("div", { class: "wrap" }, h("section", {},
       h("div", { class: "lead-block" }, h("h2", { text: "In het kort, wat maakt Balanza anders" })),
       diffsGrid(DIFFS.slice(0, 2)),
@@ -397,6 +444,7 @@
       h("p", { class: "eyebrow", text: "Functies" }),
       h("h1", { text: "Alles wat je nodig hebt, in één planner" }),
       h("p", { text: "Van het eerste idee voor een maaltijd tot het bord op tafel — Balanza dekt de hele week." })));
+    frag.appendChild(h("div", { class: "wrap" }, h("section", {}, demoVideos())));
     frag.appendChild(h("div", { class: "wrap" }, h("section", {}, featureList(FEATURES))));
     frag.appendChild(finalCta());
     return frag;

@@ -6187,8 +6187,37 @@ var MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
   ".png": "image/png",
   ".svg": "image/svg+xml",
-  ".ico": "image/x-icon"
+  ".ico": "image/x-icon",
+  ".mp4": "video/mp4",
+  ".webm": "video/webm",
+  ".jpg": "image/jpeg",
+  ".webp": "image/webp"
 };
+
+// Filmpjes en plaatjes voor de welkomstpagina (/media/...): met Range-ondersteuning, want Safari speelt een video
+// alleen af als de server stukjes kan leveren (206). Een week in de cache van de browser.
+function serveMedia(req, res, relativePath) {
+  var safePath = path.normalize(relativePath).replace(/^(\.\.[\/\\])+/, "");
+  var filePath = path.join(PUBLIC_DIR, safePath);
+  if (!filePath.startsWith(path.join(PUBLIC_DIR, "media"))) { res.writeHead(403); res.end("Forbidden"); return; }
+  fs.stat(filePath, function (err, st) {
+    if (err || !st.isFile()) { res.writeHead(404); res.end("Not found"); return; }
+    var type = MIME_TYPES[path.extname(filePath)] || "application/octet-stream";
+    var base = { "Content-Type": type, "Accept-Ranges": "bytes", "Cache-Control": "public, max-age=604800" };
+    var m = /^bytes=(\d*)-(\d*)$/.exec(String(req.headers.range || ""));
+    if (m && (m[1] || m[2])) {
+      var start = m[1] ? parseInt(m[1], 10) : Math.max(0, st.size - parseInt(m[2], 10));
+      var end = m[1] && m[2] ? Math.min(parseInt(m[2], 10), st.size - 1) : st.size - 1;
+      if (start >= st.size || start > end) { res.writeHead(416, { "Content-Range": "bytes */" + st.size }); res.end(); return; }
+      res.writeHead(206, Object.assign(base, { "Content-Range": "bytes " + start + "-" + end + "/" + st.size, "Content-Length": end - start + 1 }));
+      if (req.method === "HEAD") return res.end();
+      return fs.createReadStream(filePath, { start: start, end: end }).pipe(res);
+    }
+    res.writeHead(200, Object.assign(base, { "Content-Length": st.size }));
+    if (req.method === "HEAD") return res.end();
+    fs.createReadStream(filePath).pipe(res);
+  });
+}
 
 function serveFile(req, res, relativePath) {
   var safePath = path.normalize(relativePath).replace(/^(\.\.[\/\\])+/, "");
@@ -7907,6 +7936,7 @@ var server = http.createServer(function (req, res) {
   if (req.method === "GET" && url.pathname === "/sw.js") return serveFile(req, res, "sw.js");
   if (req.method === "GET" && url.pathname === "/favicon.png") return serveFile(req, res, "favicon.png");
   if (req.method === "GET" && url.pathname.indexOf("/icons/") === 0) return serveFile(req, res, url.pathname);
+  if ((req.method === "GET" || req.method === "HEAD") && url.pathname.indexOf("/media/") === 0) return serveMedia(req, res, url.pathname);
   if (req.method === "GET" && url.pathname === "/api/config") return handleConfig(req, res);
   if (url.pathname.indexOf("/api/admin/") === 0) return handleAdminApi(req, res, url);
   if (req.method === "GET" && url.pathname === "/admin") return serveFile(req, res, "admin.html");
