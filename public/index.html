@@ -728,6 +728,11 @@
   .qa-thumb { flex: 0 0 auto; width: 40px; height: 40px; border-radius: 10px; background: #fff; border: 1px solid var(--line); overflow: hidden; display: inline-flex; align-items: center; justify-content: center; }
   .qa-thumb img { width: 100%; height: 100%; object-fit: contain; }
   .qa-thumb.none { display: none; }
+  .qa-thumb[role=button] { cursor: zoom-in; }
+  .img-view { position: fixed; inset: 0; z-index: 9999; background: rgba(0,0,0,.82); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 24px 16px; animation: qaDockIn .15s ease-out; }
+  .img-view img { max-width: min(92vw, 520px); max-height: 72vh; border-radius: 14px; background: #fff; object-fit: contain; }
+  .img-view small { color: rgba(255,255,255,.7); font-size: 11px; }
+  .img-view-x { position: absolute; top: calc(14px + env(safe-area-inset-top)); right: 14px; width: 44px; height: 44px; border-radius: 50%; border: 0; background: rgba(255,255,255,.95); color: #111; font-size: 26px; line-height: 1; cursor: pointer; }
   .qa-thumb-float { float: left; width: 36px; height: 36px; margin: 2px 8px 2px 0; }
   .qa-dock-info { flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-start; min-width: 0; background: none; border: 0; padding: 2px 0; color: inherit; font: inherit; text-align: left; cursor: pointer; }
   .qa-dock-when { display: inline-flex; align-items: center; gap: 5px; padding: 6px 10px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); white-space: nowrap; }
@@ -13950,11 +13955,30 @@
   }
   // Productfoto (Open Food Facts, CC BY-SA) via onze eigen server
   function offImgOk(p) { return typeof p === "string" && /^\/images\/products\/[0-9\/]+\/[a-z0-9_.-]+\.(jpg|png|webp)$/i.test(p) ? p : ""; }
+  function openImgView(p) {
+    var ov = document.createElement("div"); ov.className = "img-view"; ov.id = "imgView"; ov.setAttribute("role", "dialog"); ov.setAttribute("aria-modal", "true"); ov.setAttribute("aria-label", "Productfoto");
+    var big = p.replace(/\.(100|200)\.(jpg|png|webp)$/i, ".400.$2");
+    ov.innerHTML = '<button type="button" class="img-view-x" aria-label="Sluiten">\u00d7</button><img alt=""><small>Foto: Open Food Facts, CC BY-SA</small>';
+    var im = ov.querySelector("img");
+    im.src = "/api/foods/img" + big;
+    im.onerror = function () { if (im.dataset.step === "2") return; if (!im.dataset.step) { im.dataset.step = "1"; im.src = "/api/foods/img" + p; } else { im.dataset.step = "2"; im.src = "https://images.openfoodfacts.org" + p; } };
+    var close = function () { document.removeEventListener("keydown", onKey, true); ov.remove(); };
+    var onKey = function (e) { if (e.key === "Escape") { e.stopPropagation(); close(); } };
+    ov.querySelector(".img-view-x").onclick = close;
+    ov.addEventListener("click", function (e) { if (e.target === ov) close(); });
+    document.addEventListener("keydown", onKey, true);
+    document.body.appendChild(ov);
+    try { ov.querySelector(".img-view-x").focus(); } catch (e) {}
+  }
   function qaThumb(p) {
     var ok = offImgOk(p), el = document.createElement("span"); el.className = "qa-thumb" + (ok ? "" : " none"); el.setAttribute("aria-hidden", "true");
     if (ok) { var im = document.createElement("img"); im.loading = "lazy"; im.decoding = "async"; im.alt = ""; im.src = "/api/foods/img" + ok; im.referrerPolicy = "no-referrer";
       // Lukt het niet via onze server, dan rechtstreeks bij Open Food Facts; lukt dat ook niet, dan geen foto
-      im.onerror = function () { if (!im.dataset.direct) { im.dataset.direct = "1"; im.src = "https://images.openfoodfacts.org" + ok; } else { el.classList.add("none"); im.remove(); } }; el.appendChild(im); }
+      im.onerror = function () { if (!im.dataset.direct) { im.dataset.direct = "1"; im.src = "https://images.openfoodfacts.org" + ok; } else { el.classList.add("none"); im.remove(); } };
+      // Tik op de foto: groot bekijken (niet het product toevoegen)
+      el.setAttribute("role", "button"); el.setAttribute("tabindex", "0"); el.setAttribute("aria-label", "Foto groter bekijken"); el.removeAttribute("aria-hidden");
+      var openBig = function (e) { e.preventDefault(); e.stopPropagation(); openImgView(ok); };
+      el.addEventListener("click", openBig); el.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") openBig(e); }); el.appendChild(im); }
     return el;
   }
   function offWhere(f) { var st0 = Array.isArray(f.stores) ? f.stores : []; return st0.length ? st0.slice(0, 2).join(", ") : ""; }
