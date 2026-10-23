@@ -689,6 +689,8 @@
   .qa-sentence-btn span { font-size: 13px; color: var(--muted); }
   .qa-results { display: flex; flex-direction: column; }
   .qa-typing .qa-shortcuts { display: none; }
+  .qa-off-h { display: flex; align-items: baseline; gap: 8px; margin-top: 12px; }
+  .qa-off-h small { font-size: 11px; font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--muted); }
   .qa-res { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 10px 4px; border: 0; border-bottom: 1px solid var(--line); background: none; color: var(--ink); font: inherit; cursor: pointer; min-height: 52px; }
   .qa-res-txt { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
   .qa-res-txt b { font-size: 15px; font-weight: 600; }
@@ -7927,6 +7929,7 @@
     { title: "Je dag op Start", body: "Op Start zie je alles wat vandaag gepland staat, plus wat je er los bij at. De gekleurde balk is je dag in calorie\u00ebn tegenover je dagdoel: elk blokje is een maaltijd in de kleur van het moment (de legenda staat eronder), een lichter blokje heb je nog niet gegeten. Daaronder zie je eiwit, koolhydraten en vet tegenover je doel. Vink een maaltijd af met het vinkje als je hem gegeten hebt. Tik op de maaltijd zelf om iets te wijzigen: iets anders gegeten, niet gegeten, of meer of minder (\u00bd tot 2 porties); wat je niet at, telt niet mee. Alles kun je ongedaan maken. \u201cWat past nog?\u201d laat zien wat er nog in je dag past. Met \u201cStartscherm aanpassen\u201d onderaan Start zet je de tegels in jouw volgorde of verberg je wat je niet nodig hebt." },
     { title: "Ingredi\u00ebnten van een gerecht aanpassen", body: "De ingredi\u00ebnten van een gerecht pas je aan op een eigen scherm: via de drie puntjes bij je gerechten, de knop Ingredi\u00ebnten in het recept, of in de planner en bij je dag op Start. Per ingredi\u00ebnt wijzig je los de hoeveelheid, de eenheid (gram, ml, stuks, eetlepel, theelepel, snee, teentje, snufje of naar smaak) en het product; tik een paar letters en kies het product uit de lijst. Terwijl je wijzigt rekent Balanza de kcal, eiwit, koolhydraten, vet en de Balans opnieuw uit met NEVO, het voedingsstoffenbestand van het RIVM. De bereiding blijft zoals hij is. Staat het gerecht in je planning, dan gelden de nieuwe waarden daar ook; met \u201cOpslaan als kopie\u201d laat je het origineel staan." },
     { title: "Op meerdere dagen tegelijk inplannen", body: "Een gerecht zet je in \u00e9\u00e9n keer op meerdere dagen en momenten. Tik op Inplannen bij een gerecht (de drie puntjes bij je gerechten), in het recept zelf, of kies in de planner of bij je dag op Start \u201cOok op andere dagen\u201d. Tik de dagen aan in de komende twee weken, of kies snel Werkdagen, Weekend, 7 dagen of 2 weken, en kies een of meer momenten (ontbijt, lunch, diner, snack). Een groene stip betekent vrij, grijs dat er al iets staat. Standaard komt het alleen op lege plekken; vink \u201cVervang wat er al staat\u201d aan als je dat wilt. Je ziet vooraf wat er gebeurt, en met \u00e9\u00e9n tik maak je alles weer ongedaan." },
+    { title: "Producten met merk en supermarkt", body: "Zoek je in Snel toevoegen een product, dan zie je eerst de algemene producten uit NEVO (RIVM) en daaronder \u201cIn de winkel\u201d: echte producten met merk en supermarkt, zoals AH Magere kwark bij Albert Heijn, uit de open database Open Food Facts. Scan je een streepjescode, dan zie je ook het merk en waar het te koop is. Wat je kiest, bewaart Balanza bij je eigen producten, met de winkel erbij. De winkelgegevens worden door vrijwilligers bijgehouden en zijn niet altijd compleet." },
     { title: "Weetjes en je avondsnack", body: "Onderaan je doel staat elke dag een weetje: een stelling als \u201cLaat eten maakt dikker\u201d. Tik op Waar of Niet waar en lees waarom. Via \u201cX van 17 ontdekt\u201d (of Aanpak \u2192 Weetjes) veeg je door alle weetjes over eten, slapen, trainen en bewegen; Balanza onthoudt wat je al ontdekte en laat eerst zien wat bij jouw doel en je week past. Geef je in de wekelijkse check-in aan dat je \u2019s avonds honger of trek had, dan stelt Balanza een eiwitrijke avondsnack voor die in je dagdoel past (kwark, skyr, h\u00fcttenk\u00e4se, eieren; plantaardig: sojayoghurt of edamame) en zet die met \u00e9\u00e9n tik de rest van de week in je planning, na het diner." },
     { title: "Jouw doel en je aanpak", body: "Je doel (Onderhoud, Vetverlies, Cutting, Spieropbouw of Atleet) bepaalt je hele aanpak. De tegel \u201cJouw doel\u201d op Start laat in \u00e9\u00e9n oogopslag zien hoe je ervoor staat: je aanpak in een regel (dagdoel, macro's, sport, beweging; tik voor uitleg), drie meters die bij je doel passen en alleen wat nu te doen is, zoals wegen, je check-in of een half uur bewegen. Tik op een meter of op \u201cJouw voortgang\u201d voor alles in detail. Ook je voortgang past bij je doel: bij afvallen je gewicht, middel en of je kracht blijft; bij spieropbouw hoe sterk je wordt per oefening; bij presteren je trainingen; bij onderhoud je Balans en een stabiel gewicht. Beweging telt voor elk doel: afgevinkte trainingen tellen vanzelf mee, de rest tik je erbij (+15 min, +30 min, +1 uur). Pas je je doel aan, dan gaat alles mee: dagdoel, macro's, Balans-scores, trainingsschema, beweegdoel en voortgang. Je ziet meteen wat er veranderd is. Een doelgewicht dat niet meer past (bijvoorbeeld afvallen terwijl je nu spieren opbouwt) stopt; je wegingen blijven bewaard." },
     { title: "Jouw doelgewicht", body: "Werk je naar een gewicht toe? Stel op Start (tegel \u201cJouw doel\u201d), in Mijn voorkeuren of in de startwizard een doelgewicht in, met een tempo: rustig, normaal of stevig. Balanza stemt je dagdoel daarop af, binnen veilige grenzen, en laat zien hoe ver je bent: van start naar doel, je weekgemiddelden in een grafiekje en, na drie wegingen, of je op schema ligt en wanneer je je doel verwacht. Weeg je \u00e9\u00e9n keer per week op je vaste weegmoment (zelf te kiezen, standaard maandag 7:30): nuchter, na het plassen en zonder kleren. Elke dag wegen helpt niet; je ziet vooral schommelingen door vocht. Meet eens per maand je omtrekken (middel, nek, heup en eventueel borst, arm en bovenbeen): dan zie je ook vooruitgang als de weegschaal stilstaat, en schat Balanza met de Navy-methode je vetpercentage. Dat gebruikt Balanza ook om te checken of je doelgewicht gezond is: zo telt je bouw mee en niet alleen je BMI. Na je weging vraagt Balanza kort hoe je week ging: je motivatie, op welke dag je veel honger had, wat goed ging en wat lastig was. Balanza kijkt dan naar wat je op die dagen at (kcal, eiwit, overgeslagen maaltijden, verdeling) en geeft je tips voor komende week; met \u201cBespreek met Balanza\u201d ga je er in de chat over door. Staat je gewicht een paar weken stil, dan geeft Balanza een tip over eten of bewegen, gebaseerd op wat je de afgelopen weken at, en kun je de assistent om een persoonlijke tip vragen. Wil je geen kilo\u2019s zien, zet dan \u201cCijfers verbergen\u201d aan. Een doel onder een gezond gewicht kan niet, en voor wie jonger is dan 18 is deze functie er niet." },
@@ -13836,7 +13839,18 @@
   }
   function myFoods() { return Array.isArray(prefs.myFoods) ? prefs.myFoods : []; }
   function qaMyAsFood(m) {
-    return { key: "m" + m.id, my: m.id, name: m.name, kcal: m.kcal, e: m.e, kh: m.kh, v: m.v, per: m.per || 100, portion: m.portion || null, src: m.src || "eigen", ean: m.ean || null, norm: qaNorm(m.name), tokens: qaNorm(m.name).split(" ") };
+    return { key: "m" + m.id, my: m.id, name: m.name, kcal: m.kcal, e: m.e, kh: m.kh, v: m.v, per: m.per || 100, portion: m.portion || null, src: m.src || "eigen", ean: m.ean || null, brand: m.brand || "", stores: Array.isArray(m.stores) ? m.stores : [], norm: qaNorm(m.name), tokens: qaNorm(m.name).split(" ") };
+  }
+  // Een product uit Open Food Facts (gescand of gezocht) als eigen product bewaren, met merk en winkel
+  function offAsMyFood(fd) {
+    return { id: "my" + Date.now(), name: fd.name, kcal: fd.kcal, e: fd.eiwit, kh: fd.kh, v: fd.vet, src: "off", ean: fd.ean, portion: fd.portion, brand: fd.brand || "", stores: Array.isArray(fd.stores) ? fd.stores.slice(0, 3) : [] };
+  }
+  function offWhere(f) { var st0 = Array.isArray(f.stores) ? f.stores : []; return st0.length ? st0.slice(0, 2).join(", ") : ""; }
+  var offSearchCache = {};
+  function offSearch(q) {
+    q = String(q || "").trim().toLowerCase(); if (q.length < 3) return Promise.resolve([]);
+    if (offSearchCache[q]) return Promise.resolve(offSearchCache[q]);
+    return fetch("/api/foods/search?q=" + encodeURIComponent(q)).then(function (r) { return r.ok ? r.json() : { items: [] }; }).then(function (d) { var it = Array.isArray(d.items) ? d.items : []; offSearchCache[q] = it; return it; }, function () { return []; });
   }
   function qaHist() { try { var h = JSON.parse(lsGet(QA_HIST_LS + "_" + meId()) || "null"); return h && typeof h === "object" ? h : { foods: {}, meals: [] }; } catch (e) { return { foods: {}, meals: [] }; } }
   function qaSaveHist(h) { lsSet(QA_HIST_LS + "_" + meId(), JSON.stringify(h)); }
@@ -14144,14 +14158,44 @@
         var p = qaPortion(f);
         b.innerHTML = '<span class="qa-res-txt"><b></b><small></small></span><span class="qa-plus" aria-hidden="true">+</span>';
         b.querySelector("b").textContent = f.name;
-        b.querySelector("small").textContent = (f.fixed ? f.fixed.kcal + " kcal per portie" : Math.round(f.kcal * (p.g || 100) / 100) + " kcal per " + p.label + (p.g && p.label !== "100 gram" && !/\bg\)$/.test(p.label) ? " (" + p.g + " g)" : "")) + (f.my ? " · eigen product" : f.src === "balanza" ? " · Balanza-aanvulling" : "");
+        b.querySelector("small").textContent = (f.fixed ? f.fixed.kcal + " kcal per portie" : Math.round(f.kcal * (p.g || 100) / 100) + " kcal per " + p.label + (p.g && p.label !== "100 gram" && !/\bg\)?$/.test(p.label) ? " (" + p.g + " g)" : "")) + (f.my ? (offWhere(f) ? " · " + offWhere(f) : f.src === "off" ? " · gescand" : " · eigen product") : f.src === "balanza" ? " · Balanza-aanvulling" : "");
         if (!f.fixed && f.kcal > 0) appendBal(b.querySelector("small"), gramsBal(f.kcal, f.kh, f.e, f.v), " ");
         b.onclick = function () { addFood(f); };
         resBox.appendChild(b);
       });
+      // Producten uit de winkel (Open Food Facts): met merk en supermarkt, onder de algemene producten
+      var offBox = document.createElement("div"); offBox.className = "qa-off"; offBox.id = "qaOff"; resBox.appendChild(offBox);
+      var qNow = st.q.trim();
+      clearTimeout(st.offT);
+      if (qNow.length >= 3 && !parsed.some(function (p) { return p.qty; })) {
+        offBox.innerHTML = '<div class="qa-h qa-off-h">In de winkel <small>zoeken\u2026</small></div>';
+        st.offT = setTimeout(function () {
+          offSearch(qNow).then(function (items) {
+            if (st.q.trim() !== qNow || !offBox.isConnected) return;
+            offBox.innerHTML = "";
+            if (!items.length) return;
+            var hh = document.createElement("div"); hh.className = "qa-h qa-off-h"; hh.innerHTML = "In de winkel <small>merk en supermarkt via Open Food Facts</small>"; offBox.appendChild(hh);
+            items.slice(0, 6).forEach(function (fd, j) {
+              var b = document.createElement("button"); b.type = "button"; b.className = "qa-res qa-res-off"; b.id = "qaOff" + j;
+              b.innerHTML = '<span class="qa-res-txt"><b></b><small></small></span><span class="qa-plus" aria-hidden="true">+</span>';
+              b.querySelector("b").textContent = fd.name;
+              var por = fd.portion && fd.portion.g ? fd.portion : null, where = offWhere(fd);
+              b.querySelector("small").textContent = (por ? Math.round(fd.kcal * por.g / 100) + " kcal per " + por.label : fd.kcal + " kcal per 100 g") + (where ? " \u00b7 " + where : fd.quantity ? " \u00b7 " + fd.quantity : "");
+              if (fd.kcal > 0) appendBal(b.querySelector("small"), gramsBal(fd.kcal, fd.kh, fd.eiwit, fd.vet), " ");
+              b.onclick = function () {
+                var item = offAsMyFood(fd);
+                prefs.myFoods = [item].concat(myFoods().filter(function (m) { return m.ean !== fd.ean; })).slice(0, 150); savePrefs();
+                addFood(qaMyAsFood(item));
+              };
+              offBox.appendChild(b);
+            });
+            var none0 = document.getElementById("qaNone"); if (none0) none0.querySelector(".qa-none-t").textContent = "Staat het er niet tussen?";
+          });
+        }, 450);
+      }
       if (!st.results.length) {
-        var none = document.createElement("div"); none.className = "qa-empty";
-        none.textContent = "Niet gevonden in de productenlijst.";
+        var none = document.createElement("div"); none.className = "qa-empty"; none.id = "qaNone";
+        none.innerHTML = '<span class="qa-none-t">Niet gevonden in de productenlijst.</span>';
         var ai = document.createElement("button"); ai.type = "button"; ai.className = "ghost-btn small"; ai.id = "qaAiOne"; ai.textContent = "Laat Balanza het schatten";
         ai.onclick = function () { estimateUnknown([st.q]); };
         var own = document.createElement("button"); own.type = "button"; own.className = "ghost-btn small"; own.id = "qaOwnBtn"; own.textContent = "Zelf toevoegen";
@@ -14485,7 +14529,7 @@
         .then(function (d) {
           closeScanner();
           var fd = d.food;
-          var item = { id: "my" + Date.now(), name: fd.name, kcal: fd.kcal, e: fd.eiwit, kh: fd.kh, v: fd.vet, src: "off", ean: fd.ean, portion: fd.portion };
+          var item = offAsMyFood(fd);
           prefs.myFoods = [item].concat(myFoods().filter(function (m) { return m.ean !== fd.ean; })).slice(0, 150); savePrefs();
           addFood(qaMyAsFood(item));
         }, function (e) {
