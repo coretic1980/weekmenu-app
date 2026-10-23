@@ -13936,7 +13936,9 @@
   function offImgOk(p) { return typeof p === "string" && /^\/images\/products\/[0-9\/]+\/[a-z0-9_.-]+\.(jpg|png|webp)$/i.test(p) ? p : ""; }
   function qaThumb(p) {
     var ok = offImgOk(p), el = document.createElement("span"); el.className = "qa-thumb" + (ok ? "" : " none"); el.setAttribute("aria-hidden", "true");
-    if (ok) { var im = document.createElement("img"); im.loading = "lazy"; im.decoding = "async"; im.alt = ""; im.src = "/api/foods/img" + ok; im.onerror = function () { el.classList.add("none"); im.remove(); }; el.appendChild(im); }
+    if (ok) { var im = document.createElement("img"); im.loading = "lazy"; im.decoding = "async"; im.alt = ""; im.src = "/api/foods/img" + ok; im.referrerPolicy = "no-referrer";
+      // Lukt het niet via onze server, dan rechtstreeks bij Open Food Facts; lukt dat ook niet, dan geen foto
+      im.onerror = function () { if (!im.dataset.direct) { im.dataset.direct = "1"; im.src = "https://images.openfoodfacts.org" + ok; } else { el.classList.add("none"); im.remove(); } }; el.appendChild(im); }
     return el;
   }
   function offWhere(f) { var st0 = Array.isArray(f.stores) ? f.stores : []; return st0.length ? st0.slice(0, 2).join(", ") : ""; }

@@ -5191,22 +5191,33 @@ function offImgPath(u) {
   return OFF_IMG_RE.test(p) ? p : "";
 }
 var offImgCache = new Map();   // klein geheugen-cachetje voor veelgebruikte foto's
-function handleFoodImg(req, res, p) {
+function handleFoodImg(req, res, p, debug) {
   if (!OFF_IMG_RE.test(p)) { res.writeHead(404); return res.end(); }
   var hit = offImgCache.get(p);
   var send = function (buf, type) { res.writeHead(200, { "Content-Type": type, "Cache-Control": "public, max-age=2592000, immutable", "Content-Length": buf.length }); res.end(buf); };
-  if (hit) return send(hit.buf, hit.type);
-  var ctl = new AbortController(), t = setTimeout(function () { ctl.abort(); }, 8000);
-  fetch("https://images.openfoodfacts.org" + p, { signal: ctl.signal, headers: { "User-Agent": "Balanza/1.0 (balanza voedingsapp)" } }).then(function (x) {
-    clearTimeout(t);
-    var type = String(x.headers.get("content-type") || "");
-    if (!x.ok || type.indexOf("image/") !== 0) throw new Error("HTTP " + x.status);
-    return x.arrayBuffer().then(function (ab) {
-      var buf = Buffer.from(ab); if (buf.length > 400000) throw new Error("te groot");
-      offImgCache.set(p, { buf: buf, type: type }); if (offImgCache.size > 400) offImgCache.delete(offImgCache.keys().next().value);
-      send(buf, type);
-    });
-  }).catch(function () { clearTimeout(t); res.writeHead(404, { "Cache-Control": "public, max-age=3600" }); res.end(); });
+  if (hit && !debug) return send(hit.buf, hit.type);
+  // Eerst de gewone fotoserver, dan de oude; geeft die een HTML-pagina (botbescherming), dan proberen we de volgende
+  var hosts = ["https://images.openfoodfacts.org", "https://static.openfoodfacts.org", "https://world.openfoodfacts.org"], tries = [];
+  var attempt = function (i) {
+    if (i >= hosts.length) return Promise.reject(new Error("geen"));
+    var ctl = new AbortController(), t = setTimeout(function () { ctl.abort(); }, 7000);
+    return fetch(hosts[i] + p, { signal: ctl.signal, redirect: "follow", headers: { "User-Agent": "Balanza/1.0 (balanza voedingsapp; contact via balanza.nl)", Accept: "image/avif,image/webp,image/jpeg,image/png,image/*;q=0.8" } }).then(function (x) {
+      clearTimeout(t);
+      var type = String(x.headers.get("content-type") || "");
+      tries.push({ host: hosts[i], status: x.status, type: type.slice(0, 30) });
+      if (!x.ok || type.indexOf("image/") !== 0) return attempt(i + 1);
+      return x.arrayBuffer().then(function (ab) { var buf = Buffer.from(ab); if (buf.length > 600000) throw new Error("te groot"); return { buf: buf, type: type }; });
+    }, function (e) { clearTimeout(t); tries.push({ host: hosts[i], error: String(e && e.message || e).slice(0, 60) }); return attempt(i + 1); });
+  };
+  attempt(0).then(function (r) {
+    offImgCache.set(p, r); if (offImgCache.size > 400) offImgCache.delete(offImgCache.keys().next().value);
+    if (debug) return sendJSON(res, 200, { ok: true, bytes: r.buf.length, tries: tries });
+    send(r.buf, r.type);
+  }).catch(function () {
+    console.warn("[foods/img] niet gelukt voor " + p + ": " + JSON.stringify(tries));
+    if (debug) return sendJSON(res, 200, { ok: false, tries: tries });
+    res.writeHead(404, { "Cache-Control": "no-store" }); res.end();
+  });
 }
 // GET /api/foods/search?q=… — producten uit Nederlandse winkels zoeken in Open Food Facts (met merk en winkel), 7 dagen bewaard.
 var offSearchLimiter = makeHourlyLimiter(120);
@@ -8293,7 +8304,7 @@ var server = http.createServer(function (req, res) {
   if (req.method === "GET" && url.pathname === "/api/news") return handleNews(req, res);
   if (req.method === "GET" && url.pathname === "/api/foods") return handleFoods(req, res);
   if (req.method === "GET" && url.pathname === "/api/foods/search") return handleFoodSearch(req, res, url);
-  if (req.method === "GET" && url.pathname.indexOf("/api/foods/img/") === 0) return handleFoodImg(req, res, url.pathname.slice("/api/foods/img".length));
+  if (req.method === "GET" && url.pathname.indexOf("/api/foods/img/") === 0) return handleFoodImg(req, res, url.pathname.slice("/api/foods/img".length), url.searchParams.get("debug") === "1");
   var eanM = url.pathname.match(/^\/api\/foods\/barcode\/([0-9]{1,20})$/);
   if (req.method === "GET" && eanM) return handleFoodBarcode(req, res, eanM[1]);
   if ((req.method === "GET" || req.method === "POST") && url.pathname === "/api/autoplan") return handleAutoPlan(req, res);
