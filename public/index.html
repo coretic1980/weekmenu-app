@@ -13964,7 +13964,8 @@
     var m = String(p.label).match(/^1 ([a-z' ]+?)(\s*\(.*\))?$/i);
     if (m && !/^(portie|portion|serving)$/i.test(m[1])) return m[1].toLowerCase();
     // Ook binnen samenstellingen: havermout"repen" -> reep, rijst"wafels" -> wafel
-    var pm = qaNorm(it.name).match(/(repen|reepjes|reepje|reep|koekjes|koekje|koeken|koek|wafels|wafel|broodjes|broodje|bolletjes|bolletje|crackers|cracker|beschuiten|beschuit|sticks|stick|bars|bar|croissants|croissant|wraps|wrap|\beieren|\bei)\b/);
+    var nmP = qaNorm(it.name); if (it.brand) { var bP = qaNorm(it.brand); if (bP && nmP.indexOf(bP) === 0) nmP = nmP.slice(bP.length); }   // het merk telt niet mee
+    var pmAll = nmP.match(new RegExp(/(repen|reepjes|reepje|reep|koekjes|koekje|koeken|koek|wafels|wafel|broodjes|broodje|bolletjes|bolletje|crackers|cracker|beschuiten|beschuit|sticks|stick|bars|bar|croissants|croissant|wraps|wrap|\beieren|\bei)\b/.source, "g")), pm = pmAll ? [null, pmAll[pmAll.length - 1].trim()] : null;   // het laatste: het product zelf
     if (pm) return { repen: "reep", reepjes: "reepje", koekjes: "koekje", koeken: "koek", wafels: "wafel", broodjes: "broodje", bolletjes: "bolletje", crackers: "cracker", beschuiten: "beschuit", sticks: "stick", bars: "reep", bar: "reep", croissants: "croissant", wraps: "wrap", eieren: "ei" }[pm[1]] || pm[1];
     return "portie";
   }
@@ -14001,6 +14002,7 @@
     if (it.fixed) return (it.count || 1) === 1 ? "1 portie" : it.count + " porties";
     if (it.unit === "g" || it.unit === "100") return it.g + " g";
     if (it.unit === "ml") return it.g + " ml";
+    if (it.unit === "p" && it.portion && it.portion.g) { var wP = qaPortionWord(it), nP = Math.round(it.g / it.portion.g * 100) / 100; if (wP) return String(nP).replace(".", ",") + " " + (nP === 1 ? wP : (QA_PLURAL[wP] || wP)) + " (" + it.g + " g)"; }
     if (it.unit === "el" || it.unit === "tl") { var nU = Math.round(it.g / (it.unit === "el" ? 15 : 5) * 10) / 10; return String(nU).replace(".", ",") + " " + (it.unit === "el" ? (nU === 1 ? "eetlepel" : "eetlepels") : (nU === 1 ? "theelepel" : "theelepels")) + " (" + it.g + " g)"; }
     var p = it.portion;
     if (p && p.g && p.g !== 100 && it.g % p.g === 0 && it.g / p.g <= 12) { var n = it.g / p.g, lb = n === 1 ? p.label : p.label.replace(/^1 ([a-z' ]+?)(\s*\(.*\))?$/i, function (m0, w, rest) { return n + " " + (QA_PLURAL[w] || w) + (rest || ""); }); return /\bg\)?$/.test(lb) && n === 1 ? lb : lb.replace(/\s*\(\d+\s*g\)$/, "") + " (" + it.g + " g)"; }
