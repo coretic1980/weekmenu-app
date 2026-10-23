@@ -8391,6 +8391,7 @@ function handleDomainMove(req, res, url) {
 }
 
 var server = http.createServer(function (req, res) {
+  try { diagStart(req, res); } catch (e) {}
   var url = new URL(req.url, "http://localhost");
   if (handleDomainMove(req, res, url)) return;
 
@@ -8485,13 +8486,79 @@ var server = http.createServer(function (req, res) {
   res.end("Not found");
 });
 
+// ---------- Diagnose: wat doet de server, en waarom loopt hij vast? ----------
+// Houdt bij welke verzoeken lopen, hoe lang de server "bevroren" is (event-loop-vertraging), geheugen en fouten.
+// Elke 30 s een momentopname in de database (diag/last), zodat we na een herstart zien wat er vlak daarvoor gebeurde.
+// Verslag als reactie op één GitHub-issue "Diagnose: serverlogboek" (publieke repo: alleen paden, tijden en cijfers,
+// nooit namen, e-mailadressen, zoektermen of andere inhoud van gebruikers).
+var DIAG = { started: Date.now(), commit: String(process.env.RENDER_GIT_COMMIT || "").slice(0, 7), inflight: new Map(), seq: 0, lags: [], errors: [], slow: [], mem: [], reqs: 0, maxLag: 0, lastPost: 0, issue: null, prev: null };
+function diagPath(p) { return String(p || "").replace(/\?.*$/, "").replace(/\/\d{6,}/g, "/<nr>").replace(/\/images\/products\/.*/, "/<foto>").replace(/[^\w\/.-]/g, "").slice(0, 60); }
+function diagScrub(t) { return String(t || "").replace(/[\w.+-]+@[\w-]+\.[\w.]+/g, "<email>").replace(/u_[0-9a-f]{8,}/g, "<uid>").replace(/anon_[0-9a-f]{8,}/g, "<anon>"); }
+function diagClean(t) { return String(t || "").replace(/[\w.+-]+@[\w-]+\.[\w.]+/g, "<email>").replace(/u_[0-9a-f]{8,}/g, "<uid>").slice(0, 400); }
+function diagPush(arr, x, max) { arr.push(x); if (arr.length > max) arr.splice(0, arr.length - max); }
+function diagStart(req, res) {
+  var id = ++DIAG.seq, t = Date.now(), p = diagPath(req.url); DIAG.reqs++;
+  DIAG.inflight.set(id, { p: req.method + " " + p, t: t });
+  var done = function () { if (!DIAG.inflight.has(id)) return; DIAG.inflight.delete(id); var d = Date.now() - t; if (d > 5000) diagPush(DIAG.slow, { at: new Date().toISOString(), p: req.method + " " + p, ms: d, st: res.statusCode }, 30); };
+  res.on("finish", done); res.on("close", done);
+}
+function diagInflight() { var now = Date.now(), out = []; DIAG.inflight.forEach(function (v) { out.push(v.p + " (" + Math.round((now - v.t) / 1000) + " s)"); }); return out.slice(0, 15); }
+(function () {
+  var expected = Date.now() + 1000;
+  setInterval(function () {
+    var lag = Date.now() - expected; expected = Date.now() + 1000;
+    if (lag > DIAG.maxLag) DIAG.maxLag = lag;
+    if (lag > 1500) diagPush(DIAG.lags, { at: new Date().toISOString(), ms: lag, inflight: diagInflight() }, 30);
+  }, 1000).unref();
+  setInterval(function () {
+    var m = process.memoryUsage(); diagPush(DIAG.mem, { at: new Date().toISOString().slice(11, 16), rss: Math.round(m.rss / 1048576), heap: Math.round(m.heapUsed / 1048576) }, 60);
+  }, 60000).unref();
+})();
+function diagSnapshot() {
+  var m = process.memoryUsage();
+  return { at: new Date().toISOString(), commit: DIAG.commit, startedAt: new Date(DIAG.started).toISOString(), uptimeMin: Math.round((Date.now() - DIAG.started) / 60000),
+    rss: Math.round(m.rss / 1048576), heap: Math.round(m.heapUsed / 1048576), reqs: DIAG.reqs, maxLagMs: DIAG.maxLag, inflight: diagInflight(),
+    lags: DIAG.lags.slice(-8), errors: DIAG.errors.slice(-8), slow: DIAG.slow.slice(-8), mem: DIAG.mem.slice(-15) };
+}
+function diagReport(title, extra) {
+  if (!githubOn() || Date.now() - DIAG.lastPost < 4 * 60000) return Promise.resolve();
+  DIAG.lastPost = Date.now();
+  var snap = diagSnapshot();
+  var body = "### " + title + "\n\n" + (extra ? extra + "\n\n" : "") + "```json\n" + diagScrub(JSON.stringify(snap, null, 1)).slice(0, 60000) + "\n```";
+  var ensure = DIAG.issue ? Promise.resolve(DIAG.issue) : dbGetDoc("diag/issue").then(function (r) {
+    if (r.exists && r.value && r.value.number) return (DIAG.issue = r.value.number);
+    return ghApi("POST", "/issues", { title: "Diagnose: serverlogboek", body: "Automatisch verslag van de server (geheugen, vertraging, lopende verzoeken, fouten). Bevat geen gegevens van gebruikers." })
+      .then(function (iss) { DIAG.issue = iss.number; return dbSetDoc("diag/issue", { number: iss.number }).then(function () { return iss.number; }); });
+  });
+  return ensure.then(function (n) { return ghApi("POST", "/issues/" + n + "/comments", { body: body }); }).catch(function (e) { console.warn("[diag] verslag mislukt: " + (e && e.message)); });
+}
+// Opstarten: wat was de laatste momentopname van de vorige keer? Daarna elke 30 s opslaan, en verslag bij problemen of elk uur.
+setTimeout(function () {
+  dbGetDoc("diag/last").then(function (r) {
+    DIAG.prev = r.exists ? r.value : null;
+    var p = DIAG.prev;
+    var extra = p ? "Vorige keer (laatste momentopname " + p.at + ", " + p.uptimeMin + " min na start, rss " + p.rss + " MB, max vertraging " + p.maxLagMs + " ms). Lopende verzoeken toen: " + (p.inflight && p.inflight.length ? p.inflight.join("; ") : "geen") + "\n\nVertragingen toen: " + JSON.stringify((p.lags || []).slice(-5)) + "\n\nFouten toen: " + JSON.stringify((p.errors || []).slice(-5)) : "Geen eerdere momentopname.";
+    DIAG.lastPost = 0;
+    return diagReport("Server gestart (" + (DIAG.commit || "?") + ")", diagScrub(extra).slice(0, 4000));
+  }).catch(function () {});
+  setInterval(function () { dbSetDoc("diag/last", diagSnapshot()).catch(function () {}); }, 30000).unref();
+  var lastSeen = { lags: 0, errors: 0 };
+  setInterval(function () {
+    var newLags = DIAG.lags.length !== lastSeen.lags, newErr = DIAG.errors.length !== lastSeen.errors, m = process.memoryUsage().rss / 1048576;
+    lastSeen.lags = DIAG.lags.length; lastSeen.errors = DIAG.errors.length;
+    if (newLags || newErr || m > 380) diagReport("Opvallend: " + [newLags ? "server bevroor" : "", newErr ? "fouten" : "", m > 380 ? "veel geheugen" : ""].filter(Boolean).join(", "));
+    else if (Date.now() - DIAG.lastPost > 60 * 60000) diagReport("Uurlijks: alles rustig");
+  }, 5 * 60000).unref();
+}, 15000);
 // Vangnet: één fout in een verzoek mag niet de hele server laten crashen (dat gaf een 502 voor iedereen).
 // De fout wordt gelogd met "[crash-vangnet]" zodat hij in de Render-logs te vinden is.
 process.on("unhandledRejection", function (reason) {
   console.error("[crash-vangnet] onafgehandelde fout:", reason && reason.stack || reason);
+  diagPush(DIAG.errors, { at: new Date().toISOString(), kind: "rejection", msg: diagClean(reason && reason.stack || reason).slice(0, 300) }, 30);
 });
 process.on("uncaughtException", function (err) {
   console.error("[crash-vangnet] onverwachte fout:", err && err.stack || err);
+  diagPush(DIAG.errors, { at: new Date().toISOString(), kind: "exception", msg: diagClean(err && err.stack || err).slice(0, 300) }, 30);
 });
 setInterval(function () {
   var m = process.memoryUsage();
