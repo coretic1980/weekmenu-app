@@ -13925,6 +13925,20 @@
     return qaFoods ? Promise.resolve(qaFoods) : qaFoodsLoading;
   }
   function myFoods() { return Array.isArray(prefs.myFoods) ? prefs.myFoods : []; }
+  // Eigen producten die al eerder (zonder foto) zijn bewaard: foto erbij halen via de streepjescode, één keer per sessie
+  var imgTried = {};
+  function fillFoodImgs(eans, done) {
+    var todo = eans.filter(function (e) { return e && !imgTried[e]; }).slice(0, 6); if (!todo.length) return;
+    todo.forEach(function (e) { imgTried[e] = 1; });
+    Promise.all(todo.map(function (e) { return fetch("/api/foods/barcode/" + e).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; }); })).then(function (rs) {
+      var changed = false;
+      rs.forEach(function (d, i) {
+        var img = d && d.food && offImgOk(d.food.img); if (!img) return;
+        myFoods().forEach(function (m) { if (m.ean === todo[i] && !m.img) { m.img = img; changed = true; } });
+      });
+      if (changed) { savePrefs(); if (done) done(); }
+    });
+  }
   function qaMyAsFood(m) {
     return { key: "m" + m.id, my: m.id, name: m.name, kcal: m.kcal, e: m.e, kh: m.kh, v: m.v, per: m.per || 100, portion: m.portion || null, src: m.src || "eigen", ean: m.ean || null, brand: m.brand || "", stores: Array.isArray(m.stores) ? m.stores : [], img: m.img || "", norm: qaNorm(m.name), tokens: qaNorm(m.name).split(" ") };
   }
@@ -14292,11 +14306,14 @@
         if (parsed.length > 1) return;
       }
       if (!qaFoods) { resBox.innerHTML = '<div class="qa-empty">Productenlijst laden…</div>'; return; }
+      var needImg = [];
+      setTimeout(function () { if (needImg.length) fillFoodImgs(needImg, function () { st.results = st.results.map(function (f) { if (!f.my) return f; var m = myFoods().filter(function (x) { return "m" + x.id === f.key; })[0]; return m ? qaMyAsFood(m) : f; }); paintResults(); }); }, 0);
       st.results.forEach(function (f, i) {
         var b = document.createElement("button"); b.type = "button"; b.className = "qa-res"; b.id = "qaRes" + i;
         var p = qaPortion(f);
         b.innerHTML = '<span class="qa-res-txt"><b></b><small></small></span><span class="qa-plus" aria-hidden="true">+</span>';
         if (f.img) b.insertBefore(qaThumb(f.img), b.firstChild);
+        else if (f.my && f.ean) needImg.push(f.ean);
         b.querySelector("b").textContent = f.name;
         b.querySelector("small").textContent = (f.fixed ? f.fixed.kcal + " kcal per portie" : Math.round(f.kcal * (p.g || 100) / 100) + " kcal per " + p.label + (p.g && p.label !== "100 gram" && !/\bg\)?$/.test(p.label) ? " (" + p.g + " g)" : "")) + (f.my ? (offWhere(f) ? " · " + offWhere(f) : f.src === "off" ? " · gescand" : " · eigen product") : f.src === "balanza" ? " · Balanza-aanvulling" : "");
         if (!f.fixed && f.kcal > 0) appendBal(b.querySelector("small"), gramsBal(f.kcal, f.kh, f.e, f.v), " ");
@@ -14389,6 +14406,7 @@
         var sm = document.createElement("small"); sm.textContent = qaAmountText(it) + " · " + Math.round(m.kcal) + " kcal" + (it.photo ? " · schatting van je foto" : it.src === "ai" ? " · schatting" : it.src === "off" ? " · Open Food Facts" : "");
         if (m.kcal > 0) appendBal(sm, gramsBal(m.kcal, m.kh, m.e, m.v), " ");
         if (it.img) { var th = qaThumb(it.img); th.classList.add("qa-thumb-float"); tx.appendChild(th); }
+        else if (it.ean) fillFoodImgs([it.ean], function () { var m = myFoods().filter(function (x) { return x.ean === it.ean && x.img; })[0]; if (m) { it.img = m.img; paintItems(); } });
         tx.appendChild(b); tx.appendChild(sm);
         if (!it.fixed) {
           // Klopt het product niet? Tik voor andere producten met dezelfde zoekterm (de hoeveelheid blijft staan).
