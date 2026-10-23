@@ -14082,7 +14082,7 @@
       if (ex) { if (ex.fixed) ex.count = (ex.count || 1) + 1; else ex.g += it.g; } else st.items.push(it);
       st.q = ""; input.value = ""; st.results = [];
       paintItems(); paintResults(); paintStart(); paintSum();
-      try { input.focus(); } catch (e) {}
+      try { input.blur(); if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); } catch (e) {}   // toetsenbord weg na kiezen
     }
     // Bovenaan: zoekveld met scan- en zinknop
     var bar = document.createElement("div"); bar.className = "qa-bar";
@@ -14558,6 +14558,7 @@
       });
       st.q = ""; input.value = ""; st.results = [];
       paintResults(); paintItems(); paintSum(); paintStart();
+      try { input.blur(); } catch (e) {}
       if (unknown.length) {
         if (moduleOn("generate") && window.authToken) estimateUnknown(unknown);
         else showToast("Niet gevonden: " + unknown.join(", ") + ". Zoek het op een andere naam of voeg het zelf toe.");
