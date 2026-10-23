@@ -5468,7 +5468,8 @@ function offnlImport() {
 }
 // Bij het opstarten laden; is de kopie ouder dan een week (of er is er nog geen), dan 's nachts of meteen verversen.
 function offnlEnsure() {
-  if (process.env.OFFNL_DISABLE === "1" || offnl.status.state === "bezig") return;
+  // Voorlopig alleen met OFFNL_ENABLE=1: het verwerken van de volledige export kan op een kleine server te veel geheugen kosten
+  if (process.env.OFFNL_ENABLE !== "1" || process.env.OFFNL_DISABLE === "1" || offnl.status.state === "bezig") return;
   var p = offnl.items ? Promise.resolve(true) : offnlLoad();
   p.then(function () {
     var stale = !offnl.items || Date.now() - offnl.at > OFFNL_MAX_AGE_MS;
