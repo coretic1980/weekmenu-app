@@ -19841,6 +19841,17 @@
     gerechten: '<circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="2.2"/><path d="M3 4v4.5a1.5 1.5 0 0 0 1.5 1.5v10M4.5 4v4M6 4v4.5A1.5 1.5 0 0 1 4.5 10"/><path d="M19.5 20V4c1.4 1 2 3 2 5.5s-.8 3.5-2 3.5"/>',
     lijst: '<path d="M3 10h18l-1.6 8.4a2 2 0 0 1-2 1.6H6.6a2 2 0 0 1-2-1.6z"/><path d="M8 10l3-6M16 10l-3-6"/><path d="M9 13.5v3M12 13.5v3M15 13.5v3"/>'
   };
+  // Alleen de tabbladen die bij je gebruik passen (zonder keuze: allemaal, zoals vroeger)
+  function visibleTabs() {
+    var i = intent(); if (!i) return TABS;
+    var dishes = dishesWanted(i), plan = i.uses.indexOf("plan") > -1;
+    return TABS.filter(function (t) {
+      if (t[0] === "ontwerpen" || t[0] === "gerechten") return dishes;
+      if (t[0] === "plannen") return plan || dishes;
+      if (t[0] === "lijst") return plan;
+      return true;
+    });
+  }
   var TABS = [["start", "Start"], ["ontwerpen", "Ontwerpen"], ["plannen", "Plannen"], ["gerechten", "Gerechten"], ["lijst", "Lijst"]];
   var TAB_OF_VIEW = { weeks: "start", guide: "start", prefs: "ontwerpen", myprefs: "ontwerpen", genresult: "ontwerpen", plan: "plannen", planadd: "plannen", planweek: "plannen",
     planday: "plannen", planprep: "plannen", planpick: "plannen", library: "gerechten", community: "gerechten" };
@@ -19929,7 +19940,7 @@
   function renderTabbar() {
     var bar = document.getElementById("tabbar");
     if (!bar) return;
-    var hidden = state.view === "cook" || state.view === "wizard";
+    var hidden = state.view === "cook" || state.view === "wizard" || (visibleTabs().length < 2 && !isSidebarMode());   // alleen Start? dan geen balk
     document.body.classList.toggle("has-tabbar", !hidden);
     var tab = activeTab();
     state.tab = tab;
@@ -19946,7 +19957,9 @@
     brand.className = "tabbar-brand";
     brand.innerHTML = '<span class="brandmark" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v16M7 20h10M5 8h14"/><path d="M5 8l-3 6a3 3 0 0 0 6 0zM19 8l-3 6a3 3 0 0 0 6 0z"/></svg></span><span>Balanza</span>';
     bar.appendChild(brand);
-    TABS.forEach(function (t) {
+    var tabs = visibleTabs();
+    if (!isSidebarMode() && tabs.length !== TABS.length) bar.style.gridTemplateColumns = "repeat(" + tabs.length + ", 1fr)";
+    tabs.forEach(function (t) {
       var b = document.createElement("button");
       b.type = "button";
       b.className = "tab";
