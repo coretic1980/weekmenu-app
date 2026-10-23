@@ -1864,9 +1864,9 @@
   .hh-sum-next { display: flex; align-items: center; gap: 10px; width: 100%; margin-top: 12px; padding: 10px 12px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface, #fff); color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
   .hh-sum-next > span:first-child { font-size: 20px; } .hh-sum-nt { flex: 1; min-width: 0; display: flex; flex-direction: column; } .hh-sum-nt small { font-size: 11.5px; color: var(--muted); } .hh-sum-nt b { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .hh-sum-go { color: var(--muted); font-size: 18px; }
-  .mac-mini { display: flex; align-items: center; gap: 3px; flex-wrap: wrap; font-size: 11.5px; color: var(--muted); margin-top: 2px; font-variant-numeric: tabular-nums; }
-  .mac-mini b { color: var(--ink); font-weight: 600; } .mac-mini i { width: 6px; height: 6px; border-radius: 50%; display: inline-block; margin-left: 5px; }
-  .mac-mini i:first-child { margin-left: 0; } .mac-mini i.e { background: #3A7BD5; } .mac-mini i.k { background: #D9941E; } .mac-mini i.v { background: #1E9C8A; }
+  .mac-mini { display: flex; align-items: center; gap: 4px 12px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-top: 3px; font-variant-numeric: tabular-nums; }
+  .mac-mini > span { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+  .mac-mini b { color: var(--ink); font-weight: 600; } .mac-mini i { width: 7px; height: 7px; border-radius: 50%; display: inline-block; } .mac-mini i.e { background: #3A7BD5; } .mac-mini i.k { background: #D9941E; } .mac-mini i.v { background: #1E9C8A; }
   .x-edit { margin-top: 12px; width: 100%; }
   .reset-acts { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
   .ghost-btn.danger { color: #C24A33; border-color: rgba(194,74,51,.4); }
@@ -5970,8 +5970,8 @@
   // Kleine regel met eiwit, koolhydraten en vet (gram)
   function macroMini(e, kh, v) {
     var sp = document.createElement("span"); sp.className = "mac-mini";
-    sp.innerHTML = '<i class="e"></i><b></b> E <i class="k"></i><b></b> K <i class="v"></i><b></b> V';
-    var bs = sp.querySelectorAll("b"); bs[0].textContent = Math.round(e || 0); bs[1].textContent = Math.round(kh || 0); bs[2].textContent = Math.round(v || 0);
+    sp.innerHTML = '<span><i class="e"></i>Eiwit <b></b></span><span><i class="k"></i>Koolh. <b></b></span><span><i class="v"></i>Vet <b></b></span>';
+    var bs = sp.querySelectorAll("b"); bs[0].textContent = Math.round(e || 0) + " g"; bs[1].textContent = Math.round(kh || 0) + " g"; bs[2].textContent = Math.round(v || 0) + " g";
     sp.setAttribute("aria-label", Math.round(e || 0) + " gram eiwit, " + Math.round(kh || 0) + " gram koolhydraten, " + Math.round(v || 0) + " gram vet");
     return sp;
   }
