@@ -665,7 +665,11 @@ var mongoReady = MONGODB_URI
     })
   : Promise.resolve(null);
 
+function diagDb(kind, p) {
+  try { if (typeof DIAG === "undefined") return; var k = kind + " " + String(p || "").replace(/(u_|anon_)[0-9a-f]+/g, "<uid>").split("/").slice(0, 3).join("/").slice(0, 40); DIAG.db = DIAG.db || {}; DIAG.db[k] = (DIAG.db[k] || 0) + 1; } catch (e) {}
+}
 function dbGetDoc(docPath) {
+  diagDb("get", docPath);
   return mongoReady.then(function (db) {
     if (!db) {
       var store = loadStore();
@@ -679,6 +683,7 @@ function dbGetDoc(docPath) {
 }
 
 function dbSetDoc(docPath, value) {
+  diagDb("set", docPath);
   return mongoReady.then(function (db) {
     if (!db) {
       var store = loadStore();
@@ -5452,6 +5457,7 @@ function offnlSave(rows, at) {
   });
 }
 function offnlLoad() {
+  if (typeof diagStage === "function") diagStage("productkopie laden");
   return dbGetDoc("offnl/meta").then(function (r) {
     var m = r.exists ? r.value : null; if (!m) return null;
     return mongoReady.then(function (db) {
@@ -5473,6 +5479,7 @@ function offnlLoad() {
 function offnlImport() {
   if (offnl.status.state === "bezig") return Promise.resolve(false);
   var st = offnl.status = { state: "bezig", startedAt: Date.now(), mb: 0, lines: 0, kept: 0 };
+  if (typeof diagStage === "function") diagStage("productkopie ophalen");
   var Readable = require("stream").Readable, readline = require("readline");
   var ctl = new AbortController(), idle = null, poke = function () { clearTimeout(idle); idle = setTimeout(function () { ctl.abort(); }, 120000); };
   poke();
@@ -6882,6 +6889,7 @@ function auditLog(req, action, target, detail) {
   return cappedInsert("audit", "audit", entry, AUDIT_CAP).catch(function () {});
 }
 function dbListDocs(prefix) {
+  diagDb("list", prefix);
   return mongoReady.then(function (db) {
     if (!db) {
       var store = loadStore();
@@ -8533,6 +8541,8 @@ function diagSnapshot() {
     rss: Math.round(m.rss / 1048576), heap: Math.round(m.heapUsed / 1048576), heapTotal: Math.round(m.heapTotal / 1048576), ext: Math.round(m.external / 1048576), ab: Math.round((m.arrayBuffers || 0) / 1048576),
     imgCache: offImgCache.size, reqs: DIAG.reqs, paths: Object.keys(DIAG.paths || {}).sort(function (a, b) { return DIAG.paths[b] - DIAG.paths[a]; }).slice(0, 15).map(function (k) { return k + " \u00d7" + DIAG.paths[k]; }),
     maxLagMs: DIAG.maxLag, inflight: diagInflight(), stages: (DIAG.stages || []).slice(-10),
+    db: Object.keys(DIAG.db || {}).sort(function (a, b) { return DIAG.db[b] - DIAG.db[a]; }).slice(0, 20).map(function (k) { return k + " \u00d7" + DIAG.db[k]; }),
+    offnl: { enable: process.env.OFFNL_ENABLE || null, state: offnl.status.state, count: offnl.count, mb: offnl.status.mb || null, kept: offnl.status.kept || null },
     lags: DIAG.lags.slice(-8), errors: DIAG.errors.slice(-8), slow: DIAG.slow.slice(-8), mem: DIAG.mem.slice(-15) };
 }
 function diagReport(title, extra) {
@@ -8552,7 +8562,7 @@ setTimeout(function () {
   dbGetDoc("diag/last").then(function (r) {
     DIAG.prev = r.exists ? r.value : null;
     var p = DIAG.prev;
-    var extra = p ? "Vorige keer (laatste momentopname " + p.at + ", " + p.uptimeMin + " min na start, rss " + p.rss + " MB, heap " + p.heap + " MB, extern " + p.ext + " MB, buffers " + p.ab + " MB, fotocache " + p.imgCache + ", verzoeken " + p.reqs + ", max vertraging " + p.maxLagMs + " ms).\n\nMeest gevraagd: " + JSON.stringify(p.paths || []) + "\n\nGeheugenverloop: " + JSON.stringify(p.mem || []) + "\n\nAchtergrondtaken: " + JSON.stringify(p.stages || []) + "\n\n Lopende verzoeken toen: " + (p.inflight && p.inflight.length ? p.inflight.join("; ") : "geen") + "Vertragingen toen: " + JSON.stringify((p.lags || []).slice(-5)) + "\n\nFouten toen: " + JSON.stringify((p.errors || []).slice(-5)) : "Geen eerdere momentopname.";
+    var extra = p ? "Vorige keer (laatste momentopname " + p.at + ", " + p.uptimeMin + " min na start, rss " + p.rss + " MB, heap " + p.heap + " MB, extern " + p.ext + " MB, buffers " + p.ab + " MB, fotocache " + p.imgCache + ", verzoeken " + p.reqs + ", max vertraging " + p.maxLagMs + " ms).\n\nMeest gevraagd: " + JSON.stringify(p.paths || []) + "\n\nGeheugenverloop: " + JSON.stringify(p.mem || []) + "\n\nAchtergrondtaken: " + JSON.stringify(p.stages || []) + "\n\nDatabase: " + JSON.stringify(p.db || []) + "\n\nProductkopie: " + JSON.stringify(p.offnl || null) + "\n\n Lopende verzoeken toen: " + (p.inflight && p.inflight.length ? p.inflight.join("; ") : "geen") + "Vertragingen toen: " + JSON.stringify((p.lags || []).slice(-5)) + "\n\nFouten toen: " + JSON.stringify((p.errors || []).slice(-5)) : "Geen eerdere momentopname.";
     DIAG.lastPost = 0;
     return diagReport("Server gestart (" + (DIAG.commit || "?") + ")", diagScrub(extra).slice(0, 4000));
   }).catch(function () {});
