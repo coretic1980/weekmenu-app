@@ -5276,7 +5276,12 @@ function offImgPath(u) {
   var p = m[1].replace(/\.(400|full)\.(jpg|png)$/i, ".200.$2");
   return OFF_IMG_RE.test(p) ? p : "";
 }
-var offImgCache = new Map();   // klein geheugen-cachetje voor veelgebruikte foto's
+var offImgCache = new Map(), offImgBytes = 0;   // hooguit ± 15 MB in het geheugen   // klein geheugen-cachetje voor veelgebruikte foto's
+function offImgPut(p, r) {
+  if (!r || !r.buf || offImgCache.has(p)) return;
+  offImgCache.set(p, r); offImgBytes += r.buf.length;
+  while ((offImgBytes > 15 * 1048576 || offImgCache.size > 400) && offImgCache.size) { var k = offImgCache.keys().next().value; offImgBytes -= offImgCache.get(k).buf.length; offImgCache.delete(k); }
+}
 function handleFoodImg(req, res, p, debug) {
   if (!OFF_IMG_RE.test(p)) { res.writeHead(404); return res.end(); }
   var hit = offImgCache.get(p);
@@ -5284,7 +5289,7 @@ function handleFoodImg(req, res, p, debug) {
   if (hit && !debug) return send(hit.buf, hit.type);
   // Al eens opgehaald? Dan staat hij blijvend in de database (collectie offimg)
   return offImgStored(p).then(function (st) {
-    if (st && !debug) { offImgCache.set(p, st); if (offImgCache.size > 400) offImgCache.delete(offImgCache.keys().next().value); return send(st.buf, st.type); }
+    if (st && !debug) { offImgPut(p, st); return send(st.buf, st.type); }
     return offImgFetch(req, res, p, debug, send);
   });
 }
@@ -5329,7 +5334,7 @@ function offImgFetch(req, res, p, debug, send) {
     }, function (e) { clearTimeout(t); tries.push({ host: hosts[i], error: String(e && e.message || e).slice(0, 60) }); return attempt(i + 1); });
   };
   attempt(0).then(function (r) {
-    offImgCache.set(p, r); if (offImgCache.size > 400) offImgCache.delete(offImgCache.keys().next().value);
+    offImgPut(p, r);
     offImgStore(p, r);
     if (debug) return sendJSON(res, 200, { ok: true, bytes: r.buf.length, tries: tries, stored: offImgCount });
     send(r.buf, r.type);
@@ -8498,6 +8503,7 @@ function diagClean(t) { return String(t || "").replace(/[\w.+-]+@[\w-]+\.[\w.]+/
 function diagPush(arr, x, max) { arr.push(x); if (arr.length > max) arr.splice(0, arr.length - max); }
 function diagStart(req, res) {
   var id = ++DIAG.seq, t = Date.now(), p = diagPath(req.url); DIAG.reqs++;
+  var pk = req.method + " " + p.replace(/^(\/api\/[a-z]+\/[a-z]+).*/, "$1"); DIAG.paths = DIAG.paths || {}; DIAG.paths[pk] = (DIAG.paths[pk] || 0) + 1;
   DIAG.inflight.set(id, { p: req.method + " " + p, t: t });
   var done = function () { if (!DIAG.inflight.has(id)) return; DIAG.inflight.delete(id); var d = Date.now() - t; if (d > 5000) diagPush(DIAG.slow, { at: new Date().toISOString(), p: req.method + " " + p, ms: d, st: res.statusCode }, 30); };
   res.on("finish", done); res.on("close", done);
@@ -8511,13 +8517,15 @@ function diagInflight() { var now = Date.now(), out = []; DIAG.inflight.forEach(
     if (lag > 1500) diagPush(DIAG.lags, { at: new Date().toISOString(), ms: lag, inflight: diagInflight() }, 30);
   }, 1000).unref();
   setInterval(function () {
-    var m = process.memoryUsage(); diagPush(DIAG.mem, { at: new Date().toISOString().slice(11, 16), rss: Math.round(m.rss / 1048576), heap: Math.round(m.heapUsed / 1048576) }, 60);
-  }, 60000).unref();
+    var m = process.memoryUsage(); diagPush(DIAG.mem, { at: new Date().toISOString().slice(11, 19), rss: Math.round(m.rss / 1048576), heap: Math.round(m.heapUsed / 1048576), ext: Math.round(m.external / 1048576), ab: Math.round((m.arrayBuffers || 0) / 1048576), reqs: DIAG.reqs }, 60);
+  }, 15000).unref();
 })();
 function diagSnapshot() {
   var m = process.memoryUsage();
   return { at: new Date().toISOString(), commit: DIAG.commit, startedAt: new Date(DIAG.started).toISOString(), uptimeMin: Math.round((Date.now() - DIAG.started) / 60000),
-    rss: Math.round(m.rss / 1048576), heap: Math.round(m.heapUsed / 1048576), reqs: DIAG.reqs, maxLagMs: DIAG.maxLag, inflight: diagInflight(),
+    rss: Math.round(m.rss / 1048576), heap: Math.round(m.heapUsed / 1048576), heapTotal: Math.round(m.heapTotal / 1048576), ext: Math.round(m.external / 1048576), ab: Math.round((m.arrayBuffers || 0) / 1048576),
+    imgCache: offImgCache.size, reqs: DIAG.reqs, paths: Object.keys(DIAG.paths || {}).sort(function (a, b) { return DIAG.paths[b] - DIAG.paths[a]; }).slice(0, 15).map(function (k) { return k + " \u00d7" + DIAG.paths[k]; }),
+    maxLagMs: DIAG.maxLag, inflight: diagInflight(),
     lags: DIAG.lags.slice(-8), errors: DIAG.errors.slice(-8), slow: DIAG.slow.slice(-8), mem: DIAG.mem.slice(-15) };
 }
 function diagReport(title, extra) {
@@ -8537,11 +8545,11 @@ setTimeout(function () {
   dbGetDoc("diag/last").then(function (r) {
     DIAG.prev = r.exists ? r.value : null;
     var p = DIAG.prev;
-    var extra = p ? "Vorige keer (laatste momentopname " + p.at + ", " + p.uptimeMin + " min na start, rss " + p.rss + " MB, max vertraging " + p.maxLagMs + " ms). Lopende verzoeken toen: " + (p.inflight && p.inflight.length ? p.inflight.join("; ") : "geen") + "\n\nVertragingen toen: " + JSON.stringify((p.lags || []).slice(-5)) + "\n\nFouten toen: " + JSON.stringify((p.errors || []).slice(-5)) : "Geen eerdere momentopname.";
+    var extra = p ? "Vorige keer (laatste momentopname " + p.at + ", " + p.uptimeMin + " min na start, rss " + p.rss + " MB, heap " + p.heap + " MB, extern " + p.ext + " MB, buffers " + p.ab + " MB, fotocache " + p.imgCache + ", verzoeken " + p.reqs + ", max vertraging " + p.maxLagMs + " ms).\n\nMeest gevraagd: " + JSON.stringify(p.paths || []) + "\n\nGeheugenverloop: " + JSON.stringify(p.mem || []) + "\n\n Lopende verzoeken toen: " + (p.inflight && p.inflight.length ? p.inflight.join("; ") : "geen") + "Vertragingen toen: " + JSON.stringify((p.lags || []).slice(-5)) + "\n\nFouten toen: " + JSON.stringify((p.errors || []).slice(-5)) : "Geen eerdere momentopname.";
     DIAG.lastPost = 0;
     return diagReport("Server gestart (" + (DIAG.commit || "?") + ")", diagScrub(extra).slice(0, 4000));
   }).catch(function () {});
-  setInterval(function () { dbSetDoc("diag/last", diagSnapshot()).catch(function () {}); }, 30000).unref();
+  setInterval(function () { dbSetDoc("diag/last", diagSnapshot()).catch(function () {}); }, 10000).unref();
   var lastSeen = { lags: 0, errors: 0 };
   setInterval(function () {
     var newLags = DIAG.lags.length !== lastSeen.lags, newErr = DIAG.errors.length !== lastSeen.errors, m = process.memoryUsage().rss / 1048576;
