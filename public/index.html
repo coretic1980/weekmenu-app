@@ -1880,6 +1880,40 @@
   .hello-edit { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--muted); font: inherit; font-size: 12px; cursor: pointer; position: relative; }
   .hello-edit:hover { color: var(--accent); border-color: var(--accent); }
   .hello-edit.new::after { content: ""; position: absolute; top: -2px; right: -2px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px var(--bg); }
+  .hz-card { padding: 14px 16px; }
+  .hz-h { display: flex; justify-content: space-between; align-items: center; font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; font-weight: 700; color: var(--accent); margin: 0 0 6px; }
+  .hz-ontdek > .hz-h, .hz-snel > .hz-h { padding: 0 4px; }
+  .hz-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 0; border: 0; border-top: 1px solid var(--line); background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+  .hz-h + .hz-row { border-top: 0; }
+  .hz-row.accent .hz-ic { background: rgba(217,148,30,.15); }
+  .hz-ic { flex: none; width: 34px; height: 34px; border-radius: 11px; background: color-mix(in srgb, var(--accent) 10%, transparent); display: inline-flex; align-items: center; justify-content: center; font-size: 17px; }
+  .hz-tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; } .hz-tx b { font-size: 14.5px; } .hz-tx small { font-size: 12.5px; color: var(--muted); }
+  .hz-go { color: var(--muted); font-size: 18px; }
+  .hz-tabs { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin: 2px 0 10px; } .hz-tabs::-webkit-scrollbar { display: none; }
+  .hz-tab { flex: none; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: none; color: var(--muted); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .hz-tab.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .hz-pane .home-sec { margin: 0; } .hz-pane .home-h { display: none; }
+  .hz-pane .card, .hz-pane .wk-card { box-shadow: none !important; border: 0 !important; background: none !important; padding: 0 !important; margin: 0 !important; }
+  .hz-shop { margin: 4px 0 10px; font-size: 14px; color: var(--ink); }
+  .hz-ontdek { margin: 6px 0 14px; }
+  .hz-track { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; padding: 2px 2px 4px; margin: 0 -2px; }
+  .hz-track::-webkit-scrollbar { display: none; }
+  .hz-slide { flex: 0 0 88%; scroll-snap-align: start; min-width: 0; display: flex; }
+  .hz-slide > * { flex: 1; margin: 0 !important; min-width: 0; }
+  .hz-slide:only-child { flex-basis: 100%; }
+  .hz-dots { display: flex; justify-content: center; gap: 5px; margin-top: 8px; } .hz-dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--line); } .hz-dots i.on { background: var(--accent); }
+  .hz-snel { margin: 6px 0 14px; }
+  .hz-acts { display: grid; gap: 8px; }
+  .hz-act { position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px 4px; border-radius: 16px; border: 1px solid var(--line); background: var(--surface, #fff); color: var(--ink); font: inherit; cursor: pointer; }
+  .hz-act span { font-size: 20px; line-height: 1; } .hz-act b { font-size: 12px; font-weight: 600; }
+  .hz-badge { position: absolute; top: 6px; right: 10px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--accent); color: #fff; font-size: 11px; font-style: normal; display: inline-flex; align-items: center; justify-content: center; }
+  .hz-ed-head h2 { font-family: Fraunces, serif; margin: 4px 0; } .hz-ed-head p { margin: 0 0 12px; color: var(--muted); font-size: 14px; line-height: 1.5; }
+  .hz-ed { display: flex; flex-direction: column; gap: 10px; }
+  .hz-ed-zone { padding: 14px; }
+  .hz-ed-top { display: flex; align-items: flex-start; gap: 10px; } .hz-ed-t { flex: 1; min-width: 0; } .hz-ed-t b { display: block; font-size: 15.5px; } .hz-ed-t small { font-size: 12.5px; color: var(--muted); }
+  .hz-ed-mv { display: flex; gap: 6px; } .hz-ed-btn { width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface, #fff); color: var(--ink); font-size: 16px; cursor: pointer; } .hz-ed-btn:disabled { opacity: .35; }
+  .hz-ed-items { margin-top: 10px; } .hz-ed-empty { display: block; margin-top: 8px; font-size: 12px; color: var(--muted); }
+  .hz-ed-acts { margin-top: 16px; }
   .mac-mini { display: flex; align-items: center; gap: 4px 12px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-top: 3px; font-variant-numeric: tabular-nums; }
   .mac-mini > span { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
   .mac-mini b, .hh-meal-txt .mac-mini b { color: var(--ink); font-weight: 600; font-size: inherit; line-height: inherit; display: inline; } .mac-mini i { width: 7px; height: 7px; border-radius: 50%; display: inline-block; } .mac-mini i.e { background: #3A7BD5; } .mac-mini i.k { background: #D9941E; } .mac-mini i.v { background: #1E9C8A; }
@@ -6501,9 +6535,8 @@
       renderPushAskCard(pool);
       renderRecapHomeCard(pool);
       renderNewsCard(pool);
-      var lay = homeLayout().visible;
-      if (lay.indexOf("reis") === -1 && HOME_TILES.reis.available()) renderJourneyTile(pool);
-      if (lay.indexOf("seizoen") === -1 && HOME_TILES.seizoen.available()) renderSeasonCard(pool);
+      if (!hzHas("doel", "reis") && HOME_TILES.reis.available()) renderJourneyTile(pool);
+      if (!hzHas("ontdek", "seizoen") && HOME_TILES.seizoen.available()) renderSeasonCard(pool);
     } catch (e) {}
     var items = Array.prototype.slice.call(pool.childNodes);
     if (!items.length) return;
@@ -6533,6 +6566,233 @@
     main.appendChild(wrap);
   }
 
+  // ---------- Start in vaste zones: elke functie heeft een ontworpen plek, je kiest per zone wat erin staat ----------
+  // prefs.homeZones = { v, order: [vandaag, doel, week, ontdek, snel], items: { doel: [...], week: [...], ontdek: [...], snel: [...] } }
+  var HZ_V = 1;
+  var HZ_ZONES = {
+    vandaag: { label: "Vandaag", desc: "Je dag: wat je nog over hebt, je maaltijden en macro's", fixed: true, items: [] },
+    doel: { label: "Jouw doel", desc: "Voortgang, training, je reis en cyclus in één kaart",
+      items: [["doel", "Doel en voortgang"], ["training", "Training van vandaag"], ["reis", "Jouw reis en focus"], ["cyclus", "Cyclus"]] },
+    week: { label: "Je week", desc: "Deze week, volgende week en je boodschappen, als tabbladen",
+      items: [["deze", "Deze week"], ["volgende", "Volgende week"], ["boodschappen", "Boodschappen"]] },
+    ontdek: { label: "Ontdekken", desc: "Eén kaart tegelijk: veeg door weetjes, seizoen en ideeën",
+      items: [["weetje", "Weetje van de dag"], ["voorjou", "Voor jou"], ["seizoen", "Seizoen en momenten"], ["recent", "Laatst gemaakt"], ["community", "Community"], ["tip", "Tip"]] },
+    snel: { label: "Snel", desc: "Kleine knoppen voor wat je vaak doet",
+      items: [["toevoegen", "Toevoegen"], ["genereren", "Genereren"], ["foto", "Gerecht van foto"], ["lijst", "Boodschappenlijst"], ["training", "Training"], ["community", "Community"]] }
+  };
+  var HZ_ORDER = ["vandaag", "doel", "week", "ontdek", "snel"];
+  function hzDefaults() {
+    var i = typeof intent === "function" ? intent() : null, u = i ? i.uses : ["inspire", "plan", "track"];
+    var has = function (k) { return u.indexOf(k) > -1; }, dishes = i ? dishesWanted(i) : true;
+    var items = {
+      doel: ["doel"].concat(has("train") ? ["training"] : []).concat(has("coach") ? ["reis"] : []).concat(["cyclus"]),
+      week: has("plan") ? ["deze", "volgende", "boodschappen"] : [],
+      ontdek: ["weetje"].concat(dishes ? ["voorjou", "seizoen", "recent"] : []),
+      snel: ["toevoegen"].concat(dishes ? ["genereren"] : []).concat(has("inspire") ? ["foto"] : []).concat(has("plan") ? ["lijst"] : []).concat(has("train") ? ["training"] : [])
+    };
+    if (!i || (i.goal === "gezond" && !has("coach") && !has("train"))) items.doel = items.doel.filter(function (x) { return x !== "training"; });
+    return { v: HZ_V, order: HZ_ORDER.slice(), items: items };
+  }
+  // Wie al een eigen tegelindeling had: die zo goed mogelijk overnemen
+  function hzFromTiles() {
+    var vis = homeLayout().visible, d = hzDefaults(), on = function (id) { return vis.indexOf(id) > -1; };
+    d.items.doel = (on("doel") ? ["doel", "cyclus"] : []).concat(on("training") ? ["training"] : []).concat(on("reis") ? ["reis"] : []);
+    d.items.week = (on("week") ? ["deze"] : []).concat(on("volgendeweek") ? ["volgende"] : []).concat(on("boodschappen") || on("week") ? ["boodschappen"] : []);
+    d.items.ontdek = ["weetje", "voorjou", "seizoen", "recent", "community", "tip"].filter(on);
+    d.items.snel = ["toevoegen"].concat(on("genereren") ? ["genereren"] : []).concat(on("foto") ? ["foto"] : []).concat(on("boodschappen") ? ["lijst"] : []).concat(on("community") ? ["community"] : []);
+    return d;
+  }
+  function homeZones() {
+    var z = prefs.homeZones;
+    if (z && z.v === HZ_V && Array.isArray(z.order) && z.items) return z;
+    prefs.homeZones = prefs.homeLayout && prefs.homeLayout.order ? hzFromTiles() : hzDefaults();
+    return prefs.homeZones;
+  }
+  function hzHas(zone, item) { var z = homeZones(); return (z.items[zone] || []).indexOf(item) > -1; }
+  function hzHead(box, label, action) {
+    var h = document.createElement("div"); h.className = "hz-h";
+    var t = document.createElement("span"); t.textContent = label; h.appendChild(t);
+    if (action) h.appendChild(action);
+    box.appendChild(h); return h;
+  }
+  function hzRow(box, id, icon, title, sub, onClick, accent) {
+    var b = document.createElement("button"); b.type = "button"; b.className = "hz-row" + (accent ? " accent" : ""); b.id = id;
+    b.innerHTML = '<span class="hz-ic" aria-hidden="true"></span><span class="hz-tx"><b></b><small></small></span><span class="hz-go" aria-hidden="true">›</span>';
+    b.querySelector(".hz-ic").textContent = icon; b.querySelector("b").textContent = title; b.querySelector("small").textContent = sub || "";
+    b.onclick = onClick; box.appendChild(b); return b;
+  }
+  // ---- Zone: Jouw doel ----
+  function renderZoneDoel(main) {
+    var box = document.createElement("div"); box.className = "card hz-card"; box.id = "zoneDoel";
+    var p = gpPlan(), n = 0;
+    var aan = document.createElement("button"); aan.type = "button"; aan.className = "hh-link"; aan.textContent = "Aanpak"; aan.onclick = function () { openGoalPlanSheet(); };
+    hzHead(box, "Jouw doel", aan);
+    if (hzHas("doel", "doel")) {
+      var m = gpMeters()[0];
+      hzRow(box, "zDoel", "🎯", p.title, m ? m[1] + ": " + m[2] + " " + m[3] : p.sub || "", function () { if (m && m[0] === "doel" && !weightGoal()) openWeightGoalSheet(); else if (m) openGoalProgress(m[5]); else openGoalPlanSheet(); });
+      var al = gpAlert(); if (al) hzRow(box, "zDoelAlert", "⚠️", al[0], al[1], function () { openGoalProgress(al[2]); }, true);
+      n++;
+    }
+    if (hzHas("doel", "training")) {
+      var t = training();
+      if (t) {
+        var s = trSessionFor(t, new Date());
+        if (s) { var kc = trKcal(t, s); hzRow(box, "zTraining", "🏋️", (trIsDone(t, isoDateKey(new Date())) ? "✓ " : "Vandaag: ") + s.name, "±" + trMinutes(t, s) + " min" + (kc ? " · ≈ " + kc.kcal + " kcal" : ""), function () { openWorkout(t, s); }); }
+        else hzRow(box, "zTraining", "🏋️", "Rustdag", "Tik voor je weekoverzicht", function () { openTrainingWeek(0); });
+      } else hzRow(box, "zTraining", "🏋️", "Trainingsschema kiezen", "Kracht en cardio die bij je doel passen", function () { openTrainingSetup(); });
+      n++;
+    }
+    if (hzHas("doel", "reis") && journeyOn() && prefs.goal) {
+      var ph = journeyPhase(); hzRow(box, "zReis", "🧭", ph.phase[0] + (ph.len ? " · week " + Math.min(ph.weekIn, ph.len) + " van " + ph.len : ""), "Focus: " + ph.phase[2], function () { goto("journey"); }); n++;
+    }
+    if (hzHas("doel", "cyclus") && typeof cycleChipText === "function") {
+      var ct = cycleChipText();
+      if (ct) { hzRow(box, "zCyclus", ct[0], ct[1], ct[2], function () { openCycleSheet(); }); n++; }
+      else if (cycleAllowed() && !prefs.cycle && !prefs.cycleDismissed && !expecting()) { hzRow(box, "zCyclus", "🌙", "Cyclus meenemen?", "Voeding en training afstemmen op je cyclus", function () { openCycleSheet(); }); n++; }
+    }
+    if (n) main.appendChild(box);
+  }
+  // ---- Zone: Je week (tabbladen) ----
+  function renderZoneWeek(main) {
+    var z = homeZones(), tabs = (z.items.week || []).slice(); if (!tabs.length) return;
+    var box = document.createElement("div"); box.className = "card hz-card hz-week"; box.id = "zoneWeek";
+    hzHead(box, "Je week");
+    var bar = document.createElement("div"); bar.className = "hz-tabs"; bar.setAttribute("role", "tablist"); box.appendChild(bar);
+    var pane = document.createElement("div"); pane.className = "hz-pane"; box.appendChild(pane);
+    var cur = state.hzWeekTab && tabs.indexOf(state.hzWeekTab) > -1 ? state.hzWeekTab : tabs[0];
+    var labels = { deze: "Deze week", volgende: "Volgende", boodschappen: "Lijst" };
+    function paint() {
+      bar.innerHTML = ""; pane.innerHTML = "";
+      tabs.forEach(function (k) {
+        var b = document.createElement("button"); b.type = "button"; b.className = "hz-tab" + (k === cur ? " on" : ""); b.id = "zWeekTab-" + k; b.setAttribute("role", "tab"); b.setAttribute("aria-selected", k === cur ? "true" : "false");
+        var n = k === "boodschappen" ? openShoppingCount() : 0;
+        b.textContent = labels[k] + (n ? " · " + n : "");
+        b.onclick = function () { cur = k; state.hzWeekTab = k; paint(); };
+        bar.appendChild(b);
+      });
+      if (cur === "deze") renderWeekStrip(pane, 0);
+      else if (cur === "volgende") renderWeekStrip(pane, 1);
+      else {
+        var n2 = openShoppingCount(), pwk = currentWeekPlan();
+        var p = document.createElement("p"); p.className = "hz-shop";
+        p.textContent = pwk && Object.keys(pwk.slots || {}).length ? (n2 ? n2 + (n2 === 1 ? " boodschap staat" : " boodschappen staan") + " nog open deze week." : "Alles afgevinkt voor deze week.") : "Plan eerst je week, dan maakt Balanza je lijst.";
+        pane.appendChild(p);
+        var go = document.createElement("button"); go.type = "button"; go.className = "ghost-btn small"; go.id = "zShopGo"; go.textContent = "Naar je lijst";
+        go.onclick = function () { onTab("lijst"); }; pane.appendChild(go);
+      }
+    }
+    paint();
+    main.appendChild(box);
+  }
+  // ---- Zone: Ontdekken (één kaart tegelijk, vegen) ----
+  function renderZoneOntdek(main) {
+    var z = homeZones(), ids = (z.items.ontdek || []).filter(function (id) { return HOME_TILES[id] && HOME_TILES[id].available(); });
+    if (!ids.length) return;
+    var wrap = document.createElement("section"); wrap.className = "hz-ontdek"; wrap.id = "zoneOntdek";
+    hzHead(wrap, "Ontdekken");
+    var track = document.createElement("div"); track.className = "hz-track"; wrap.appendChild(track);
+    ids.forEach(function (id) {
+      var slide = document.createElement("div"); slide.className = "hz-slide"; slide.id = "zOntdek-" + id;
+      try { HOME_TILES[id].render(slide); } catch (e) { console.warn("Ontdekken", id, e); }
+      if (slide.childNodes.length) track.appendChild(slide);
+    });
+    if (!track.childNodes.length) return;
+    if (track.childNodes.length > 1) {
+      var dots = document.createElement("div"); dots.className = "hz-dots"; wrap.appendChild(dots);
+      for (var i = 0; i < track.childNodes.length; i++) { var d = document.createElement("i"); if (!i) d.className = "on"; dots.appendChild(d); }
+      track.addEventListener("scroll", function () {
+        var w = track.firstChild.getBoundingClientRect().width + 10, k = Math.round(track.scrollLeft / w);
+        Array.prototype.forEach.call(dots.childNodes, function (d, j) { d.className = j === k ? "on" : ""; });
+      }, { passive: true });
+    }
+    main.appendChild(wrap);
+  }
+  // ---- Zone: Snel (kleine knoppen) ----
+  function renderZoneSnel(main) {
+    var z = homeZones(), acts = {
+      toevoegen: ["＋", "Toevoegen", function () { openQuickAdd({}); }, function () { return true; }],
+      genereren: ["⟳", "Genereren", function () { startGenerateFlow(); }, function () { return moduleOn("generate"); }],
+      foto: ["📷", "Foto", function () { pickDishPhoto(); }, function () { return moduleOn("generate") && moduleOn("photo"); }],
+      lijst: ["🛒", "Lijst", function () { onTab("lijst"); }, function () { return true; }],
+      training: ["🏋️", "Training", function () { if (training()) openTrainingWeek(0); else openTrainingSetup(); }, function () { return true; }],
+      community: ["❤️", "Community", function () { goto("community"); }, function () { return communityOn(); }]
+    };
+    var list = (z.items.snel || []).filter(function (k) { return acts[k] && acts[k][3](); });
+    if (!list.length) return;
+    var wrap = document.createElement("section"); wrap.className = "hz-snel"; wrap.id = "zoneSnel";
+    var grid = document.createElement("div"); grid.className = "hz-acts"; grid.style.gridTemplateColumns = "repeat(" + Math.min(4, list.length) + ", 1fr)";
+    list.forEach(function (k) {
+      var a = acts[k], b = document.createElement("button"); b.type = "button"; b.className = "hz-act"; b.id = "zSnel-" + k;
+      b.innerHTML = '<span aria-hidden="true"></span><b></b>'; b.firstChild.textContent = a[0]; b.querySelector("b").textContent = a[1];
+      if (k === "lijst") { var n = openShoppingCount(); if (n) { var bd = document.createElement("i"); bd.className = "hz-badge"; bd.textContent = n > 99 ? "99+" : n; b.appendChild(bd); } }
+      if (k === "genereren" && (state.generating || quotaBlocked())) b.disabled = true;
+      b.onclick = a[2]; grid.appendChild(b);
+    });
+    wrap.appendChild(grid);
+    main.appendChild(wrap);
+  }
+  function renderHomeZones(main) {
+    homeZones().order.forEach(function (zid) {
+      try {
+        if (zid === "vandaag") renderHomeHero(main);
+        else if (zid === "doel") renderZoneDoel(main);
+        else if (zid === "week") renderZoneWeek(main);
+        else if (zid === "ontdek") renderZoneOntdek(main);
+        else if (zid === "snel") renderZoneSnel(main);
+      } catch (e) { console.error("Zone " + zid, e); }
+    });
+  }
+  // ---- Indeling aanpassen: zones verplaatsen en per zone kiezen wat erin staat ----
+  function renderZoneEditor(main) {
+    var z = JSON.parse(JSON.stringify(homeZones()));
+    var head = document.createElement("div"); head.className = "hz-ed-head";
+    head.innerHTML = "<h2>Je startscherm</h2><p>Start is opgebouwd uit vaste blokken. Zet ze in de volgorde die je wilt en kies per blok wat erin staat. Een leeg blok verdwijnt vanzelf.</p>";
+    main.appendChild(head);
+    var list = document.createElement("div"); list.className = "hz-ed"; list.id = "zoneEditor"; main.appendChild(list);
+    function save() { prefs.homeZones = JSON.parse(JSON.stringify(z)); savePrefs(); }
+    function paint() {
+      list.innerHTML = "";
+      z.order.forEach(function (zid, idx) {
+        var def = HZ_ZONES[zid]; if (!def) return;
+        var c = document.createElement("div"); c.className = "card hz-ed-zone"; c.id = "zEd-" + zid;
+        var top = document.createElement("div"); top.className = "hz-ed-top";
+        top.innerHTML = '<div class="hz-ed-t"><b></b><small></small></div>';
+        top.querySelector("b").textContent = def.label; top.querySelector("small").textContent = def.desc;
+        var mv = document.createElement("div"); mv.className = "hz-ed-mv";
+        [["↑", -1, "Omhoog"], ["↓", 1, "Omlaag"]].forEach(function (x) {
+          var b = document.createElement("button"); b.type = "button"; b.className = "hz-ed-btn"; b.textContent = x[0]; b.setAttribute("aria-label", def.label + " " + x[2].toLowerCase()); b.id = "zEdMv-" + zid + (x[1] < 0 ? "-up" : "-down");
+          var to = idx + x[1]; b.disabled = to < 0 || to >= z.order.length;
+          b.onclick = function () { var t0 = z.order[to]; z.order[to] = zid; z.order[idx] = t0; save(); paint(); };
+          mv.appendChild(b);
+        });
+        top.appendChild(mv); c.appendChild(top);
+        if (def.items.length) {
+          var chips = document.createElement("div"); chips.className = "chiprow hz-ed-items";
+          def.items.forEach(function (it) {
+            var on = (z.items[zid] || []).indexOf(it[0]) > -1;
+            var ch = document.createElement("button"); ch.type = "button"; ch.className = "chip" + (on ? " selected" : ""); ch.textContent = it[1]; ch.id = "zEdIt-" + zid + "-" + it[0];
+            ch.setAttribute("aria-pressed", on ? "true" : "false");
+            ch.onclick = function () {
+              var arr = z.items[zid] = (z.items[zid] || []).slice(), k = arr.indexOf(it[0]);
+              if (k > -1) arr.splice(k, 1); else { var ord = def.items.map(function (x) { return x[0]; }); arr.push(it[0]); arr.sort(function (a, b) { return ord.indexOf(a) - ord.indexOf(b); }); }
+              save(); paint();
+            };
+            chips.appendChild(ch);
+          });
+          c.appendChild(chips);
+          if (!(z.items[zid] || []).length) { var em = document.createElement("small"); em.className = "hz-ed-empty"; em.textContent = "Leeg: dit blok staat niet op je startscherm."; c.appendChild(em); }
+        } else { var al = document.createElement("small"); al.className = "hz-ed-empty"; al.textContent = "Staat er altijd."; c.appendChild(al); }
+        list.appendChild(c);
+      });
+    }
+    paint();
+    var acts = document.createElement("div"); acts.className = "nudge-actions hz-ed-acts";
+    var done = document.createElement("button"); done.type = "button"; done.className = "primary-btn"; done.id = "homeEditDone"; done.textContent = "Klaar";
+    done.onclick = function () { state.homeEdit = false; render(); };
+    var reset = document.createElement("button"); reset.type = "button"; reset.className = "ghost-btn"; reset.id = "homeEditReset"; reset.textContent = "Voorstel op basis van je gebruik";
+    reset.onclick = function () { z = hzDefaults(); save(); paint(); showToast("Indeling teruggezet op basis van waar je Balanza voor gebruikt."); };
+    acts.appendChild(done); acts.appendChild(reset); main.appendChild(acts);
+  }
   function renderWeeks() {
     var app = document.getElementById("app");
     app.innerHTML = "";
@@ -6610,15 +6870,12 @@
     setTimeout(scheduleOpener, 0);
 
     if (state.homeEdit) {
-      renderHomeEditor(main);
+      renderZoneEditor(main);
       app.appendChild(main);
       return;
     }
 
-    homeLayout().visible.forEach(function (id) {
-      var def = HOME_TILES[id];
-      if (def && def.available()) def.render(main);
-    });
+    renderHomeZones(main);
 
     // Navigatietegels voor brede schermen zonder tabbalk (blijven vast staan).
     var tiles = document.createElement("div");
@@ -7060,6 +7317,7 @@
     if (!has("train")) prefs.trainingDismissed = true; else delete prefs.trainingDismissed;
     if (has("coach")) delete prefs.weightGoalDismissed;
     prefs.homeLayout = { v: HOME_LAYOUT_V, order: hl.order.slice(), hidden: hidden };
+    prefs.homeZones = null; prefs.homeZones = hzDefaults();   // Start in zones: voorstel op basis van je gebruik
   }
   // Na het doorlopen: alles vastleggen
   function commitIntent(st) {
@@ -19461,6 +19719,7 @@
         cycle: prefs.cycle && typeof prefs.cycle === "object" && healthOk() ? prefs.cycle : null,
         cycleDismissed: !!prefs.cycleDismissed,
         intent: prefs.intent && typeof prefs.intent === "object" ? prefs.intent : null,
+        homeZones: prefs.homeZones && typeof prefs.homeZones === "object" ? prefs.homeZones : null,
         proteinOut: Array.isArray(prefs.proteinOut) ? prefs.proteinOut.slice(0, 20) : [],
         journey: prefs.journey && typeof prefs.journey === "object" ? prefs.journey : {},
         ageGroup: AGE_GROUPS.some(function (g) { return g[0] === prefs.ageGroup; }) ? prefs.ageGroup : "",
@@ -19989,7 +20248,7 @@
               return;
             }
             var pdata = psnap.data() || {};
-            ["name", "bringListLink", "cuisines", "flavors", "level", "dietStyle", "health", "leftovers", "coach", "water", "places", "proteinOut", "journey", "ageGroup", "student", "sugarMode", "cheeseMode", "familyMode", "equipment", "exclude", "count", "mealTypes", "gender", "heightCm", "weightKg", "age", "activityLevel", "goal", "homeLayout", "mealCounts", "withImages", "pantry", "communityName", "myFoods", "weightGoal", "weightGoalDismissed", "training", "trainingDismissed", "moveLog", "weetjes", "cycle", "cycleDismissed", "intent"].forEach(function (k) {
+            ["name", "bringListLink", "cuisines", "flavors", "level", "dietStyle", "health", "leftovers", "coach", "water", "places", "proteinOut", "journey", "ageGroup", "student", "sugarMode", "cheeseMode", "familyMode", "equipment", "exclude", "count", "mealTypes", "gender", "heightCm", "weightKg", "age", "activityLevel", "goal", "homeLayout", "mealCounts", "withImages", "pantry", "communityName", "myFoods", "weightGoal", "weightGoalDismissed", "training", "trainingDismissed", "moveLog", "weetjes", "cycle", "cycleDismissed", "intent", "homeZones"].forEach(function (k) {
               if (pdata[k] !== undefined) prefs[k] = deepClone(pdata[k]);
             });
             var mig = migrateExcludeTerms();
