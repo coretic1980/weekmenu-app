@@ -5749,7 +5749,8 @@
       var tx = document.createElement("span"); tx.className = "hh-meal-txt";
       var b = document.createElement("b"); b.textContent = r.dish.name;
       var sm = document.createElement("small"); sm.textContent = r.replacedBy ? r.slot + ": anders gegeten" : skipped ? r.slot + ": niet gegeten" : r.slot.replace(/^Snack na .*/, "Snack") + (r === feat && r.a.cooked === undefined ? " \u00b7 " + when.toLowerCase() : "") + " \u00b7 " + Math.round(r.dish.kcal * mealPortion(r.a)) + " kcal" + portionNote(r.a) + (r.a.cooked === true ? " \u00b7 gegeten" : "") + (r.a.place ? " \u00b7 bij " + r.a.place : "");
-      if (!r.replacedBy && !skipped) appendBal(sm, dishBal(r.dish), " ");
+      var qaProd = r.a.qa || r.dish.qaHidden || r.dish.quick || r.dish.label === "Zelf samengesteld";   // zelf toegevoegd: geen Balans per regel
+      if (!r.replacedBy && !skipped && !qaProd) appendBal(sm, dishBal(r.dish), " ");
       tx.appendChild(b); tx.appendChild(sm);
       if (!r.replacedBy && !skipped) { var rk = r.dish.kcal * mealPortion(r.a); tx.appendChild(macroMini(r.dish.eiwit / 100 * rk / 4, r.dish.kh / 100 * rk / 4, r.dish.vet / 100 * rk / 9)); }
       openB.appendChild(tx);
@@ -6034,7 +6035,7 @@
     var tx = document.createElement("span"); tx.className = "hh-meal-txt";
     var b = document.createElement("b"); b.textContent = x.name;
     var sm = document.createElement("small"); sm.textContent = (x.place ? "Bij " + x.place : x.replaces ? x.replaces.split("|")[1] + ": anders gegeten" : x.moment ? x.moment + " \u00b7 erbij" : "Erbij") + " \u00b7 " + Math.round(x.kcal * mealPortion(x)) + " kcal" + portionNote(x);
-    appendBal(sm, gramsBal(x.kcal, x.khG || 0, x.eiwitG || 0, x.vetG || 0), " ");
+    // Geen Balans per los product (zegt weinig); het telt wel mee in de Balans van je dag
     var pfx = mealPortion(x);
     tx.appendChild(b); tx.appendChild(sm); tx.appendChild(macroMini((x.eiwitG || 0) * pfx, (x.khG || 0) * pfx, (x.vetG || 0) * pfx)); openB.appendChild(tx);
     openB.onclick = function () { openExtraSheet(pw, dayName, x); };
