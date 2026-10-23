@@ -707,7 +707,12 @@
   .qa-days::-webkit-scrollbar { display: none; }
   .qa-days .chip { flex: none; }
   .qa-items { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
-  .qa-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px; background: var(--bg); border: 1px solid var(--line); }
+  .qa-item { display: flex; flex-direction: column; align-items: stretch; gap: 8px; padding: 12px; border-radius: 14px; background: var(--bg); border: 1px solid var(--line); }
+  .qa-item-head { display: flex; align-items: flex-start; gap: 12px; min-width: 0; }
+  .qa-item-head .qa-item-txt b { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: normal; line-height: 1.3; }
+  .qa-item-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
+  .qa-item-foot .qa-swap { margin: 0; padding: 0; align-self: center; }
+  .qa-thumb-lg { width: 56px; height: 56px; border-radius: 12px; }
   .qa-item-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
   .qa-item-txt b { font-size: 14.5px; font-weight: 600; overflow-wrap: anywhere; }
   .qa-item-txt small { font-size: 12.5px; color: var(--muted); }
@@ -14431,14 +14436,15 @@
         var b = document.createElement("b"); b.textContent = it.name;
         var sm = document.createElement("small"); sm.textContent = qaAmountText(it) + " · " + Math.round(m.kcal) + " kcal" + (it.photo ? " · schatting van je foto" : it.src === "ai" ? " · schatting" : it.src === "off" ? " · Open Food Facts" : "");
         if (m.kcal > 0) appendBal(sm, gramsBal(m.kcal, m.kh, m.e, m.v), " ");
-        if (it.img) { var th = qaThumb(it.img); th.classList.add("qa-thumb-float"); tx.appendChild(th); }
+        var head = document.createElement("div"); head.className = "qa-item-head";
+        if (it.img) { var th = qaThumb(it.img); th.classList.add("qa-thumb-lg"); head.appendChild(th); }
         else if (it.ean) fillFoodImgs([it.ean], function (found) { if (found[it.ean]) { it.img = found[it.ean]; paintItems(); } });
         tx.appendChild(b); tx.appendChild(sm);
         if (!it.fixed) {
           // Klopt het product niet? Tik voor andere producten met dezelfde zoekterm (de hoeveelheid blijft staan).
           var sw = document.createElement("button"); sw.type = "button"; sw.className = "qa-swap"; sw.id = "qaSwap" + idx; sw.textContent = st.swapIdx === idx ? "Sluiten" : "Ander product?";
           sw.onclick = function () { st.swapIdx = st.swapIdx === idx ? null : idx; paintItems(); };
-          tx.appendChild(sw);
+          var swLater = sw;
         }
         var minus = document.createElement("button"); minus.type = "button"; minus.className = "qa-step"; minus.textContent = "−"; minus.setAttribute("aria-label", "Minder " + it.name);
         var plus = document.createElement("button"); plus.type = "button"; plus.className = "qa-step"; plus.textContent = "+"; plus.setAttribute("aria-label", "Meer " + it.name);
@@ -14466,7 +14472,10 @@
             var uw = document.createElement("label"); uw.className = "qa-unit-w"; var ut = document.createElement("span"); ut.textContent = un.short; uw.appendChild(ut); uw.appendChild(sel); ctr.appendChild(uw);
           } else { var gl = document.createElement("span"); gl.className = "qa-gl"; gl.textContent = "g"; ctr.appendChild(gl); }
         } ctr.appendChild(plus);
-        row.appendChild(tx); row.appendChild(ctr);
+        head.appendChild(tx); row.appendChild(head);
+        var foot = document.createElement("div"); foot.className = "qa-item-foot";
+        if (typeof swLater !== "undefined" && swLater && !it.fixed) foot.appendChild(swLater); else foot.appendChild(document.createElement("span"));
+        foot.appendChild(ctr); row.appendChild(foot);
         list.appendChild(row);
         if (st.swapIdx === idx) {
           var box = document.createElement("div"); box.className = "qa-alts"; box.id = "qaAlts";
