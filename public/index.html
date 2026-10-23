@@ -14185,7 +14185,7 @@
           offSearch(qNow).then(function (items) {
             if (st.q.trim() !== qNow || !offBox.isConnected) return;
             offBox.innerHTML = "";
-            if (!items.length) return;
+            if (!items.length) { offBox.innerHTML = '<div class="qa-h qa-off-h">In de winkel <small>niets gevonden; probeer een merk of een ander woord</small></div>'; return; }
             var hh = document.createElement("div"); hh.className = "qa-h qa-off-h"; hh.innerHTML = "In de winkel <small>merk en supermarkt via Open Food Facts</small>"; offBox.appendChild(hh);
             items.slice(0, 6).forEach(function (fd, j) {
               var b = document.createElement("button"); b.type = "button"; b.className = "qa-res qa-res-off"; b.id = "qaOff" + j;

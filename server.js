@@ -5158,6 +5158,8 @@ function handleFoods(req, res) {
 }
 // Een product uit Open Food Facts omzetten naar Balanza: naam (met merk), merk, winkels, macro's per 100 g en portie
 function offStores(raw) {
+  if (Array.isArray(raw)) raw = raw.join(",");
+  raw = String(raw || "").split(",").map(function (x) { return x.trim().replace(/^[a-z]{2}:/, "").replace(/-/g, " "); }).join(",");
   var known = { "albert heijn": "Albert Heijn", "ah": "Albert Heijn", "jumbo": "Jumbo", "lidl": "Lidl", "aldi": "Aldi", "plus": "Plus", "dirk": "Dirk", "dirk van den broek": "Dirk",
     "coop": "Coop", "spar": "Spar", "dekamarkt": "DekaMarkt", "hoogvliet": "Hoogvliet", "vomar": "Vomar", "poiesz": "Poiesz", "ekoplaza": "Ekoplaza", "picnic": "Picnic", "kruidvat": "Kruidvat", "action": "Action", "etos": "Etos", "jan linders": "Jan Linders", "boni": "Boni", "nettorama": "Nettorama", "crisp": "Crisp" };
   var out = [];
@@ -5167,7 +5169,10 @@ function offStores(raw) {
 function offFood(pr, ean, kcal) {
   var n = pr.nutriments || {};
   var num = function (k) { var x = Number(n[k]); return isFinite(x) && x >= 0 ? Math.round(x * 10) / 10 : 0; };
-  var brand = pr.brands ? cleanText(String(pr.brands).split(",")[0], 40) : "";
+  var b0 = Array.isArray(pr.brands) ? pr.brands[0] : pr.brands ? String(pr.brands).split(",")[0] : "";
+  b0 = String(b0 || "").trim().replace(/^[a-z]{2}:/, "");
+  if (Array.isArray(pr.brands) && /^[a-z0-9-]+$/.test(b0)) b0 = b0 === "ah" ? "AH" : b0.split("-").map(function (w) { return w.charAt(0).toUpperCase() + w.slice(1); }).join(" ");   // tag ("albert-heijn") leesbaar maken
+  var brand = b0 ? cleanText(b0, 40) : "";
   var pname = pr.product_name_nl || pr.product_name || "";
   var name = brand && pname.toLowerCase().indexOf(brand.toLowerCase()) === 0 ? pname : [brand, pname].filter(Boolean).join(" ");
   return { ean: ean, name: cleanText(name, 80), brand: brand, stores: offStores(pr.stores), quantity: cleanText(pr.quantity || "", 20),
@@ -5184,22 +5189,31 @@ function handleFoodSearch(req, res, url) {
   return dbGetDoc(key).then(function (r) {
     var v = r.exists ? r.value : null;
     if (v && Date.now() - v.at < 7 * 86400000) return v;
+    var mapItems = function (list) {
+      return (Array.isArray(list) ? list : []).map(function (pr) {
+        var n = pr.nutriments || {}, kcal = Number(n["energy-kcal_100g"]); if (!isFinite(kcal) && isFinite(Number(n["energy_100g"]))) kcal = Number(n["energy_100g"]) / 4.184;
+        if (!isFinite(kcal) || kcal < 0 || !(pr.product_name_nl || pr.product_name) || !/^\d{8,14}$/.test(String(pr.code || ""))) return null;
+        return offFood(pr, String(pr.code), kcal);
+      }).filter(Boolean).slice(0, 10);
+    };
+    var save = function (items) { var doc = { at: Date.now(), items: items }; return dbSetDoc(key, doc).then(function () { return doc; }); };
+    // 1) De zoekdienst van Open Food Facts (search-a-licious); de oude zoekpagina zit achter een botbeveiliging
+    var sBase = process.env.OFF_SEARCH_URL || "https://search.openfoodfacts.org";
+    var ctl1 = new AbortController(), t1 = setTimeout(function () { ctl1.abort(); }, 8000);
+    var sq = "q=" + encodeURIComponent(q + ' countries:"en:netherlands"') + "&langs=nl,en&page_size=20&fields=code,product_name,product_name_nl,brands,stores,nutriments,serving_quantity,serving_size,quantity";
+    return fetch(sBase + "/search?" + sq, { signal: ctl1.signal, headers: { "User-Agent": "Balanza/1.0 (balanza voedingsapp)", Accept: "application/json" } })
+      .then(function (x) { clearTimeout(t1); return x.ok ? x.json() : Promise.reject(new Error("HTTP " + x.status)); })
+      .then(function (d) { var items = mapItems(d && d.hits); if (!items.length) throw new Error("leeg"); return save(items); })
+      .catch(function () { return legacy(); });
+    function legacy() {
     var base = process.env.OFF_BASE_URL || "https://world.openfoodfacts.org";
     var ctl = new AbortController(), t = setTimeout(function () { ctl.abort(); }, 9000);
     var qs = "search_terms=" + encodeURIComponent(q) + "&search_simple=1&action=process&json=1&page_size=20&sort_by=unique_scans_n" +
       "&tagtype_0=countries&tag_contains_0=contains&tag_0=netherlands&fields=code,product_name,product_name_nl,brands,stores,nutriments,serving_quantity,serving_size,quantity";
     return fetch(base + "/cgi/search.pl?" + qs, { signal: ctl.signal, headers: { "User-Agent": "Balanza/1.0 (balanza voedingsapp)" } })
       .then(function (x) { return x.ok ? x.json() : Promise.reject(new Error("HTTP " + x.status)); })
-      .then(function (d) {
-        clearTimeout(t);
-        var items = (d && Array.isArray(d.products) ? d.products : []).map(function (pr) {
-          var n = pr.nutriments || {}, kcal = Number(n["energy-kcal_100g"]); if (!isFinite(kcal) && isFinite(Number(n["energy_100g"]))) kcal = Number(n["energy_100g"]) / 4.184;
-          if (!isFinite(kcal) || kcal < 0 || !(pr.product_name_nl || pr.product_name) || !/^\d{8,14}$/.test(String(pr.code || ""))) return null;
-          return offFood(pr, String(pr.code), kcal);
-        }).filter(Boolean).slice(0, 10);
-        var doc = { at: Date.now(), items: items };
-        return dbSetDoc(key, doc).then(function () { return doc; });
-      }, function (e) { clearTimeout(t); throw e; });
+      .then(function (d) { clearTimeout(t); return save(mapItems(d && d.products)); }, function (e) { clearTimeout(t); throw e; });
+    }
   }).then(function (doc) { sendJSON(res, 200, { items: doc.items || [], source: "Open Food Facts" }); })
     .catch(function () { sendJSON(res, 200, { items: [], error: true }); });
 }
