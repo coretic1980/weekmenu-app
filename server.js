@@ -5201,19 +5201,10 @@ function nlWordForms(w) {
 // Losse woorden die samen één woord vormen: "havermout reep" -> "havermoutreep" (en "havermoutrepen")
 function offWordVariants(q) {
   var w = q.split(" ").filter(Boolean), out = [w];
-  for (var i = 0; i + 1 < w.length && out.length < 4; i++) {
+  for (var i = w.length - 2; i >= 0 && out.length < 4; i--) {   // van achteren: het laatste woordpaar is meestal het product
     if (w[i].length >= 3 && w[i + 1].length >= 3) out.push(w.slice(0, i).concat([w[i] + w[i + 1]], w.slice(i + 2)));
   }
   return out;
-}
-function offLuceneQuery(q) {
-  var groups = offWordVariants(q).map(function (words) {
-    return words.map(function (w) {
-      var f = nlWordForms(w).map(function (x) { return x.replace(/[^a-z0-9à-ÿ]/g, ""); }).filter(Boolean);
-      return f.length > 1 ? "(" + f.join(" OR ") + ")" : (f[0] || "");
-    }).filter(Boolean).join(" AND ");
-  });
-  return groups.length > 1 ? groups.map(function (g) { return "(" + g + ")"; }).join(" OR ") : groups[0];
 }
 function handleFoodSearch(req, res, url) {
   // Hoeveelheden ("pindakaas 100", "2 eieren") horen niet in de zoekterm
@@ -5222,7 +5213,7 @@ function handleFoodSearch(req, res, url) {
   var debug = url.searchParams.get("debug") === "1", tries = [];
   if (q.length < 3) return sendJSON(res, 200, { items: [] });
   if (!offSearchLimiter("s:" + clientIp(req))) return sendJSON(res, 429, { code: "rate_limited", message: "Even te veel gezocht. Probeer het zo opnieuw." });
-  var key = "foods/search5/" + crypto.createHash("sha1").update(q).digest("hex").slice(0, 20);
+  var key = "foods/search6/" + crypto.createHash("sha1").update(q).digest("hex").slice(0, 20);
   var mapItems = function (list) {
     return (Array.isArray(list) ? list : []).map(function (pr) {
       var n = pr.nutriments || {}, kcal = Number(n["energy-kcal_100g"]); if (!isFinite(kcal) && isFinite(Number(n["energy_100g"]))) kcal = Number(n["energy_100g"]) / 4.184;
@@ -5236,7 +5227,7 @@ function handleFoodSearch(req, res, url) {
       .then(function (x) {
         clearTimeout(t);
         var ct = String(x.headers.get("content-type") || "");
-        if (!x.ok || ct.indexOf("json") === -1) { tries.push({ src: label, status: x.status, type: ct.slice(0, 30) }); throw new Error("HTTP " + x.status); }
+        if (!x.ok || ct.indexOf("json") === -1) { return x.text().catch(function () { return ""; }).then(function (txt) { tries.push({ src: label, status: x.status, type: ct.slice(0, 30), body: String(txt).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 160) }); throw new Error("HTTP " + x.status); }); }
         return x.json();
       })
       .then(function (d) { var raw = d && d[listKey], items = mapItems(raw); tries.push({ src: label, status: 200, raw: Array.isArray(raw) ? raw.length : -1, items: items.length }); return items; })
@@ -5245,16 +5236,25 @@ function handleFoodSearch(req, res, url) {
   var sBase = process.env.OFF_SEARCH_URL || "https://search.openfoodfacts.org";
   var oBase = process.env.OFF_BASE_URL || "https://world.openfoodfacts.org";
   var FIELDS = "code,product_name,product_name_nl,brands,stores,nutriments,serving_quantity,serving_size,quantity";
-  var attempts = [
-    function () { return getJson("search-nl", sBase + "/search?q=" + encodeURIComponent("(" + offLuceneQuery(q) + ') AND countries:"en:netherlands"') + "&langs=nl,en&page_size=20&fields=" + FIELDS, "hits"); },
-    function () { return getJson("search", sBase + "/search?q=" + encodeURIComponent(offLuceneQuery(q)) + "&langs=nl,en&page_size=20&fields=" + FIELDS, "hits"); },
-    function () { return getJson("legacy", oBase + "/cgi/search.pl?search_terms=" + encodeURIComponent(q) + "&search_simple=1&action=process&json=1&page_size=20&sort_by=unique_scans_n&tagtype_0=countries&tag_contains_0=contains&tag_0=netherlands&fields=" + FIELDS, "products"); }
+  // Zoekvarianten als gewone tekst (de zoekdienst geeft een fout op OR-constructies):
+  // de zoekterm zelf, aaneengeschreven (havermout reep -> havermoutreep) en het laatste woord in de andere vorm (-> havermoutrepen)
+  var variants = [];
+  offWordVariants(q).forEach(function (words) {
+    var last = words[words.length - 1], f = nlWordForms(last);
+    [words.join(" "), f[1] ? words.slice(0, -1).concat([f[1]]).join(" ") : null].forEach(function (v) { if (v && variants.indexOf(v) === -1) variants.push(v); });
+  });
+  variants = variants.slice(0, 4);
+  var sUrl = function (v, nl) { return sBase + "/search?q=" + encodeURIComponent(v + (nl ? ' countries_tags:"en:netherlands"' : "")) + "&langs=nl,en&page_size=20&fields=" + FIELDS; };
+  var lUrl = function (v) { return oBase + "/cgi/search.pl?search_terms=" + encodeURIComponent(v) + "&search_simple=1&action=process&json=1&page_size=20&sort_by=unique_scans_n&tagtype_0=countries&tag_contains_0=contains&tag_0=netherlands&fields=" + FIELDS; };
+  // Per groep tegelijk zoeken (snel), de eerste groep met resultaten wint
+  var merge = function (lists) { var seen = {}, out = []; lists.forEach(function (l) { l.forEach(function (it) { if (!seen[it.ean]) { seen[it.ean] = 1; out.push(it); } }); }); return out.slice(0, 10); };
+  var groups = [
+    function () { return Promise.all(variants.map(function (v) { return getJson("search-nl:" + v, sUrl(v, true), "hits"); })).then(merge); },
+    function () { return Promise.all(variants.map(function (v) { return getJson("search:" + v, sUrl(v, false), "hits"); })).then(merge); },
+    function () { return getJson("legacy:" + variants[0], lUrl(variants[0]), "products"); },
+    function () { return variants[1] ? getJson("legacy:" + variants[1], lUrl(variants[1]), "products") : Promise.resolve([]); }
   ];
-  // Voor de oude zoekfunctie: aaneengeschreven en in de andere vorm (havermout reep -> havermoutrepen)
-  var alts = [];
-  offWordVariants(q).forEach(function (words) { [0, 1].forEach(function (k) { var a = words.map(function (w) { return nlWordForms(w)[k] || w; }).join(" "); if (a !== q && alts.indexOf(a) === -1) alts.push(a); }); });
-  alts.slice(0, 3).forEach(function (qAlt) { attempts.push(function () { return getJson("legacy-vorm", oBase + "/cgi/search.pl?search_terms=" + encodeURIComponent(qAlt) + "&search_simple=1&action=process&json=1&page_size=20&sort_by=unique_scans_n&tagtype_0=countries&tag_contains_0=contains&tag_0=netherlands&fields=" + FIELDS, "products"); }); });
-  function run(i) { if (i >= attempts.length) return Promise.resolve([]); return attempts[i]().then(function (items) { return items.length ? items : run(i + 1); }); }
+  function run(i) { if (i >= groups.length) return Promise.resolve([]); return groups[i]().then(function (items) { return items.length ? items : run(i + 1); }); }
   return dbGetDoc(key).then(function (r) {
     var v = r.exists ? r.value : null;
     if (!debug && v && Date.now() - v.at < (v.items && v.items.length ? 7 * 86400000 : 30 * 60000)) return v;   // niets gevonden: na een half uur opnieuw proberen
