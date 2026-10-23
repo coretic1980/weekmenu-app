@@ -1541,6 +1541,27 @@
   .gp-move-sub { font-size: 12.5px; color: var(--muted); line-height: 1.35; }
   .gp-move-add { display: flex; gap: 6px; flex-wrap: wrap; }
   .gp-move-fix { border-style: dashed; }
+  .mp-quick { margin-bottom: 8px; }
+  .mp-days { display: flex; flex-direction: column; gap: 4px; }
+  .mp-wk { font-size: 11.5px; color: var(--muted); font-weight: 600; margin-top: 4px; }
+  .mp-row { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
+  .mp-day { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 7px 0 6px; border-radius: 12px; border: 1px solid var(--line, rgba(0,0,0,.1)); background: var(--card, #fff); color: inherit; font: inherit; cursor: pointer; min-width: 0; }
+  .mp-day small { font-size: 11px; color: var(--muted); } .mp-day b { font-size: 16px; font-family: "Fraunces", serif; }
+  .mp-day.today { border-color: var(--accent); }
+  .mp-day.sel { background: var(--accent); border-color: var(--accent); color: #fff; } .mp-day.sel small { color: rgba(255,255,255,.8); }
+  .mp-dots { display: flex; gap: 2px; height: 6px; }
+  .mp-dots i, .mp-legend i { display: inline-block; width: 6px; height: 6px; border-radius: 50%; }
+  .mp-dots i.free, .mp-legend i.free { background: #2E9A5C; } .mp-dots i.full, .mp-legend i.full { background: #B9B9B9; } .mp-dots i.same, .mp-legend i.same { background: #D98C2B; }
+  .mp-day.sel .mp-dots i.free { background: #BFF0D2; } .mp-day.sel .mp-dots i.full { background: rgba(255,255,255,.55); }
+  .mp-legend { font-size: 11.5px; color: var(--muted); margin: 6px 0 0; display: flex; align-items: center; gap: 5px; flex-wrap: wrap; } .mp-legend i { margin-left: 6px; } .mp-legend i:first-child { margin-left: 0; }
+  .mp-toggle { display: flex; align-items: center; gap: 10px; margin-top: 12px; padding: 0; border: 0; background: none; color: inherit; font: inherit; font-size: 14px; cursor: pointer; text-align: left; }
+  .mp-box { width: 20px; height: 20px; border-radius: 6px; border: 2px solid var(--line, rgba(0,0,0,.25)); flex: none; display: inline-flex; align-items: center; justify-content: center; }
+  .mp-toggle.on .mp-box { background: var(--accent); border-color: var(--accent); }
+  .mp-toggle.on .mp-box::after { content: "\2713"; color: #fff; font-size: 13px; font-weight: 700; }
+  .mp-sum { font-size: 13px; color: var(--muted); margin: 12px 0 10px; line-height: 1.4; min-height: 18px; }
+  #mpGo { width: 100%; }
+  .mp-recipe-btn { display: flex; align-items: center; gap: 8px; width: 100%; margin-top: 10px; justify-content: center; }
+  .mp-recipe-btn small { color: var(--muted); font-weight: 500; }
   .to-top { position: fixed; right: 16px; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); z-index: 35; width: 48px; height: 48px; border-radius: 50%; border: 1px solid var(--line, rgba(0,0,0,.08)); background: var(--surface, #fff); color: var(--accent); box-shadow: 0 6px 20px rgba(20, 30, 20, .18); display: flex; align-items: center; justify-content: center; cursor: pointer; opacity: 0; transform: translateY(16px) scale(.9); pointer-events: none; transition: opacity .2s ease, transform .2s ease; }
   .to-top.on { opacity: 1; transform: none; pointer-events: auto; }
   .to-top:active { transform: scale(.92); }
@@ -5545,7 +5566,9 @@
       delete pw.slots[key]; savePlannedWeeks(); render();
       showUndoToast(r.dish.name + " uit je planning gehaald", function () { if (prev) pw.slots[key] = prev; savePlannedWeeks(); render(); });
     };
-    foot.appendChild(rec); foot.appendChild(del); body.appendChild(foot);
+    var again = document.createElement("button"); again.type = "button"; again.className = "hh-link"; again.id = "msRepeat"; again.textContent = "Ook op andere dagen";
+    again.onclick = function () { var res = resolveAssignedDish(r.a); if (!res) return; closeSheet(sh.ov); openMultiPlan(res, { skipKey: isoDateKey(planDayDate(pw, dayName)) + "|" + r.slot }); };
+    foot.appendChild(rec); foot.appendChild(again); foot.appendChild(del); body.appendChild(foot);
   }
   function eatButtons(pw, dayName, r, big) {
     var wrap = document.createElement("span"); wrap.className = "hh-eat" + (big ? " big" : "");
@@ -7808,6 +7831,7 @@
 { title: "Stel je voorkeuren in", body: "Bij het eerste gebruik loop je een korte wizard door die alles in stapjes uitvraagt, elk met uitleg over wat die keuze precies doet. Later kun je alles terugvinden en aanpassen bij \u201cGerechten ontwerpen\u201d: doel (Onderhoud, Vetverlies, Cutting, Spieropbouw of Atleet), voedingsstijl, keukenstijl, smaakprofiel, culinair niveau, kindvriendelijk (gezinsmodus), beschikbare apparatuur, wat je niet wilt eten, en optioneel je lichaamsprofiel (geslacht, lengte, gewicht, leeftijd, activiteitsniveau)." },
     { title: "Navigeren op je telefoon", body: "Onderin staat een vaste balk met Start, Ontwerpen, Plannen, Gerechten en Lijst. Tik nogmaals op het actieve onderdeel om terug te gaan naar het begin ervan. Het getal bij Lijst laat zien hoeveel boodschappen voor deze week nog open staan. Rechtsboven vind je de assistent (het tekstwolkje) en je accountmenu (je avatar) met Instellingen, Hoe werkt Balanza en je abonnement." },
     { title: "Je dag op Start", body: "Op Start zie je alles wat vandaag gepland staat, plus wat je er los bij at. De gekleurde balk is je dag in calorie\u00ebn tegenover je dagdoel: elk blokje is een maaltijd in de kleur van het moment (de legenda staat eronder), een lichter blokje heb je nog niet gegeten. Daaronder zie je eiwit, koolhydraten en vet tegenover je doel. Vink een maaltijd af met het vinkje als je hem gegeten hebt. Tik op de maaltijd zelf om iets te wijzigen: iets anders gegeten, niet gegeten, of meer of minder (\u00bd tot 2 porties); wat je niet at, telt niet mee. Alles kun je ongedaan maken. \u201cWat past nog?\u201d laat zien wat er nog in je dag past. Met \u201cStartscherm aanpassen\u201d onderaan Start zet je de tegels in jouw volgorde of verberg je wat je niet nodig hebt." },
+    { title: "Op meerdere dagen tegelijk inplannen", body: "Een gerecht zet je in \u00e9\u00e9n keer op meerdere dagen en momenten. Tik op Inplannen bij een gerecht (de drie puntjes bij je gerechten), in het recept zelf, of kies in de planner of bij je dag op Start \u201cOok op andere dagen\u201d. Tik de dagen aan in de komende twee weken, of kies snel Werkdagen, Weekend, 7 dagen of 2 weken, en kies een of meer momenten (ontbijt, lunch, diner, snack). Een groene stip betekent vrij, grijs dat er al iets staat. Standaard komt het alleen op lege plekken; vink \u201cVervang wat er al staat\u201d aan als je dat wilt. Je ziet vooraf wat er gebeurt, en met \u00e9\u00e9n tik maak je alles weer ongedaan." },
     { title: "Weetjes en je avondsnack", body: "Onderaan je doel staat elke dag een weetje: een stelling als \u201cLaat eten maakt dikker\u201d. Tik op Waar of Niet waar en lees waarom. Via \u201cX van 17 ontdekt\u201d (of Aanpak \u2192 Weetjes) veeg je door alle weetjes over eten, slapen, trainen en bewegen; Balanza onthoudt wat je al ontdekte en laat eerst zien wat bij jouw doel en je week past. Geef je in de wekelijkse check-in aan dat je \u2019s avonds honger of trek had, dan stelt Balanza een eiwitrijke avondsnack voor die in je dagdoel past (kwark, skyr, h\u00fcttenk\u00e4se, eieren; plantaardig: sojayoghurt of edamame) en zet die met \u00e9\u00e9n tik de rest van de week in je planning, na het diner." },
     { title: "Jouw doel en je aanpak", body: "Je doel (Onderhoud, Vetverlies, Cutting, Spieropbouw of Atleet) bepaalt je hele aanpak. De tegel \u201cJouw doel\u201d op Start laat in \u00e9\u00e9n oogopslag zien hoe je ervoor staat: je aanpak in een regel (dagdoel, macro's, sport, beweging; tik voor uitleg), drie meters die bij je doel passen en alleen wat nu te doen is, zoals wegen, je check-in of een half uur bewegen. Tik op een meter of op \u201cJouw voortgang\u201d voor alles in detail. Ook je voortgang past bij je doel: bij afvallen je gewicht, middel en of je kracht blijft; bij spieropbouw hoe sterk je wordt per oefening; bij presteren je trainingen; bij onderhoud je Balans en een stabiel gewicht. Beweging telt voor elk doel: afgevinkte trainingen tellen vanzelf mee, de rest tik je erbij (+15 min, +30 min, +1 uur). Pas je je doel aan, dan gaat alles mee: dagdoel, macro's, Balans-scores, trainingsschema, beweegdoel en voortgang. Je ziet meteen wat er veranderd is. Een doelgewicht dat niet meer past (bijvoorbeeld afvallen terwijl je nu spieren opbouwt) stopt; je wegingen blijven bewaard." },
     { title: "Jouw doelgewicht", body: "Werk je naar een gewicht toe? Stel op Start (tegel \u201cJouw doel\u201d), in Mijn voorkeuren of in de startwizard een doelgewicht in, met een tempo: rustig, normaal of stevig. Balanza stemt je dagdoel daarop af, binnen veilige grenzen, en laat zien hoe ver je bent: van start naar doel, je weekgemiddelden in een grafiekje en, na drie wegingen, of je op schema ligt en wanneer je je doel verwacht. Weeg je \u00e9\u00e9n keer per week op je vaste weegmoment (zelf te kiezen, standaard maandag 7:30): nuchter, na het plassen en zonder kleren. Elke dag wegen helpt niet; je ziet vooral schommelingen door vocht. Meet eens per maand je omtrekken (middel, nek, heup en eventueel borst, arm en bovenbeen): dan zie je ook vooruitgang als de weegschaal stilstaat, en schat Balanza met de Navy-methode je vetpercentage. Dat gebruikt Balanza ook om te checken of je doelgewicht gezond is: zo telt je bouw mee en niet alleen je BMI. Na je weging vraagt Balanza kort hoe je week ging: je motivatie, op welke dag je veel honger had, wat goed ging en wat lastig was. Balanza kijkt dan naar wat je op die dagen at (kcal, eiwit, overgeslagen maaltijden, verdeling) en geeft je tips voor komende week; met \u201cBespreek met Balanza\u201d ga je er in de chat over door. Staat je gewicht een paar weken stil, dan geeft Balanza een tip over eten of bewegen, gebaseerd op wat je de afgelopen weken at, en kun je de assistent om een persoonlijke tip vragen. Wil je geen kilo\u2019s zien, zet dan \u201cCijfers verbergen\u201d aan. Een doel onder een gezond gewicht kan niet, en voor wie jonger is dan 18 is deze functie er niet." },
@@ -8480,6 +8504,139 @@
     showToast(placed ? placed + (placed === 1 ? " gerecht staat" : " gerechten staan") + " in je planning" + (left.length ? "; " + left.length + " paste" + (left.length === 1 ? "" : "n") + " niet meer in de komende 7 dagen." : ".") : "De komende 7 dagen zijn al vol voor deze momenten.");
     render();
   }
+  // ---------- Eén gerecht op meerdere dagen en momenten tegelijk inplannen ----------
+  // Te openen vanuit je gerechten, het recept, de planner ("Ook op andere dagen") en je dag op Start.
+  // Standaard alleen lege plekken; wat er al staat vervang je alleen als je dat aanzet. Alles in één keer ongedaan te maken.
+  var MP_DAYS = 14;
+  function openMultiPlan(item, opts) {
+    opts = opts || {};
+    if (requirePlus("Gerechten inplannen")) return;
+    var day = item.day, today = new Date(); today.setHours(0, 0, 0, 0);
+    var days = []; for (var i = 0; i < MP_DAYS; i++) { var dt = new Date(today); dt.setDate(today.getDate() + i); days.push(dt); }
+    var defMoment = PLAN_MEALS.indexOf(day.mealType) > -1 ? day.mealType : "Diner";
+    var st = { days: {}, moments: {}, replace: false };
+    st.moments[defMoment] = true;
+    (opts.preDays || []).forEach(function (k) { st.days[k] = true; });
+    var skipKey = opts.skipKey || null;   // het moment waar je vandaan komt (planner): staat er al
+    var sh = openSimpleSheet("mpSheet", "Inplannen", day.name + " · " + day.kcal + " kcal"), body = sh.body;
+    function dk(d) { return isoDateKey(d); }
+    function existingAt(d, m) {   // wat staat er nu op die dag en dat moment? (zonder weken aan te maken)
+      var pw = weekByStart(isoDateKey(getMonday(d))), dn = PLAN_DAYS[(d.getDay() + 6) % 7];
+      if (!pw) return { free: m === "Snack" ? SNACK_SLOTS[1] : m, cur: null };
+      if (m === "Snack") {
+        var same = SNACK_SLOTS.filter(function (s) { var a = pw.slots[dn + "|" + s]; return a && a.dayId === day.id; })[0];
+        if (same) return { free: null, cur: pw.slots[dn + "|" + same], same: true, slot: same };
+        var fr = SNACK_SLOTS.filter(function (s) { return !pw.slots[dn + "|" + s]; })[0];
+        return fr ? { free: fr, cur: null } : { free: null, cur: pw.slots[dn + "|Snack na lunch"], slot: "Snack na lunch" };
+      }
+      var a = pw.slots[dn + "|" + m];
+      return a ? { free: null, cur: a, same: a.dayId === day.id, slot: m } : { free: m, cur: null };
+    }
+    // Wat gaat er gebeuren? [{ d, m, slot, kind: "nieuw" | "vervang" | "al" | "vol" }]
+    function plan() {
+      var out = [];
+      days.forEach(function (d) {
+        if (!st.days[dk(d)]) return;
+        PLAN_MEALS.forEach(function (m) {
+          if (!st.moments[m]) return;
+          var dn = PLAN_DAYS[(d.getDay() + 6) % 7], ex = existingAt(d, m);
+          if (skipKey && ex.slot && dk(d) + "|" + ex.slot === skipKey) { out.push({ d: d, m: m, slot: ex.slot, kind: "al" }); return; }
+          if (ex.same) out.push({ d: d, m: m, slot: ex.slot, kind: "al" });
+          else if (ex.free) out.push({ d: d, m: m, slot: ex.free, kind: "nieuw" });
+          else out.push({ d: d, m: m, slot: ex.slot, kind: st.replace ? "vervang" : "vol", was: ex.cur && ex.cur.name });
+        });
+      });
+      return out;
+    }
+    var h1 = document.createElement("div"); h1.className = "qa-h"; h1.textContent = "Welke dagen?"; body.appendChild(h1);
+    var quick = document.createElement("div"); quick.className = "chiprow mp-quick"; body.appendChild(quick);
+    var grid = document.createElement("div"); grid.className = "mp-days"; grid.id = "mpDays"; body.appendChild(grid);
+    var h2 = document.createElement("div"); h2.className = "qa-h"; h2.textContent = "Welk moment?"; body.appendChild(h2);
+    var moms = document.createElement("div"); moms.className = "chiprow"; moms.id = "mpMoments"; body.appendChild(moms);
+    var rep = document.createElement("button"); rep.type = "button"; rep.className = "mp-toggle"; rep.id = "mpReplace"; body.appendChild(rep);
+    var sum = document.createElement("div"); sum.className = "mp-sum"; sum.id = "mpSum"; body.appendChild(sum);
+    var go = document.createElement("button"); go.type = "button"; go.className = "primary-btn"; go.id = "mpGo"; body.appendChild(go);
+    var QUICK = [
+      ["vandaag", "Vandaag", function (d, i) { return i === 0; }],
+      ["werk", "Werkdagen", function (d, i) { return i < 7 && d.getDay() >= 1 && d.getDay() <= 5; }],
+      ["weekend", "Weekend", function (d, i) { return i < 7 && (d.getDay() === 0 || d.getDay() === 6); }],
+      ["week", "7 dagen", function (d, i) { return i < 7; }],
+      ["twee", "2 weken", function () { return true; }]
+    ];
+    function paint() {
+      quick.innerHTML = "";
+      QUICK.forEach(function (q) {
+        var sel = days.filter(function (d, i) { return q[2](d, i); }), on = sel.length && sel.every(function (d) { return st.days[dk(d)]; }) && Object.keys(st.days).filter(function (k) { return st.days[k]; }).length === sel.length;
+        var c = document.createElement("button"); c.type = "button"; c.className = "chip" + (on ? " selected" : ""); c.id = "mpQ-" + q[0]; c.textContent = q[1];
+        c.setAttribute("aria-pressed", on ? "true" : "false");
+        c.onclick = function () { st.days = {}; if (!on) sel.forEach(function (d) { st.days[dk(d)] = true; }); paint(); };
+        quick.appendChild(c);
+      });
+      grid.innerHTML = "";
+      [0, 7].forEach(function (start) {
+        var row = document.createElement("div"); row.className = "mp-row";
+        var lab = document.createElement("small"); lab.className = "mp-wk"; lab.textContent = start ? "Volgende 7 dagen" : "Komende 7 dagen"; grid.appendChild(lab);
+        days.slice(start, start + 7).forEach(function (d, j) {
+          var i = start + j, k = dk(d), on = !!st.days[k];
+          var b = document.createElement("button"); b.type = "button"; b.className = "mp-day" + (on ? " sel" : "") + (i === 0 ? " today" : ""); b.id = "mpD-" + k;
+          b.setAttribute("aria-pressed", on ? "true" : "false");
+          b.setAttribute("aria-label", (i === 0 ? "Vandaag, " : "") + PLAN_DAYS[(d.getDay() + 6) % 7] + " " + d.getDate() + " " + MONTHS_SHORT[d.getMonth()]);
+          b.innerHTML = "<small></small><b></b><span class=\"mp-dots\"></span>";
+          b.querySelector("small").textContent = i === 0 ? "vndg" : DOW_SHORT[d.getDay()];
+          b.querySelector("b").textContent = d.getDate();
+          var dots = b.querySelector(".mp-dots");
+          PLAN_MEALS.forEach(function (m) { if (!st.moments[m]) return; var ex = existingAt(d, m), dot = document.createElement("i"); dot.className = ex.same ? "same" : ex.free ? "free" : "full"; dots.appendChild(dot); });
+          b.onclick = function () { if (st.days[k]) delete st.days[k]; else st.days[k] = true; paint(); };
+          row.appendChild(b);
+        });
+        grid.appendChild(row);
+      });
+      moms.innerHTML = "";
+      PLAN_MEALS.forEach(function (m) {
+        var on = !!st.moments[m], c = document.createElement("button"); c.type = "button"; c.className = "chip" + (on ? " selected" : ""); c.id = "mpM-" + m; c.textContent = m;
+        c.setAttribute("aria-pressed", on ? "true" : "false");
+        c.onclick = function () { if (on) delete st.moments[m]; else st.moments[m] = true; paint(); };
+        moms.appendChild(c);
+      });
+      var p = plan(), nNew = p.filter(function (x) { return x.kind === "nieuw"; }).length, nRep = p.filter(function (x) { return x.kind === "vervang"; }).length;
+      var nFull = p.filter(function (x) { return x.kind === "vol"; }).length, nSame = p.filter(function (x) { return x.kind === "al"; }).length;
+      rep.innerHTML = "<span class=\"mp-box\" aria-hidden=\"true\"></span><span></span>";
+      rep.classList.toggle("on", st.replace); rep.setAttribute("aria-pressed", st.replace ? "true" : "false");
+      rep.querySelector("span:last-child").textContent = "Vervang wat er al staat" + (nFull + nRep ? " (" + (nFull + nRep) + ")" : "");
+      rep.style.display = nFull + nRep ? "" : "none";
+      rep.onclick = function () { st.replace = !st.replace; paint(); };
+      var parts = [];
+      if (nNew) parts.push(nNew + "× op een lege plek");
+      if (nRep) parts.push(nRep + "× in de plaats van wat er stond");
+      if (nFull) parts.push(nFull + "× overgeslagen, daar staat al iets");
+      if (nSame) parts.push(nSame + "× staat er al");
+      sum.textContent = !Object.keys(st.days).length ? "Tik de dagen aan, of kies hierboven snel een reeks." : !Object.keys(st.moments).length ? "Kies minstens één moment." : parts.join(" · ");
+      var n = nNew + nRep;
+      go.disabled = !n;
+      go.textContent = n ? "Inplannen (" + n + "×)" : "Inplannen";
+      // groene stip = vrij, grijs = er staat al iets, accent = dit gerecht
+    }
+    go.onclick = function () {
+      var p = plan().filter(function (x) { return x.kind === "nieuw" || x.kind === "vervang"; }); if (!p.length) return;
+      var undo = [];
+      p.forEach(function (x) {
+        var pw = openOrCreateWeek(getMonday(x.d)), dn = PLAN_DAYS[(x.d.getDay() + 6) % 7], key = dn + "|" + x.slot;
+        undo.push({ pw: pw, key: key, prev: pw.slots[key] ? JSON.parse(JSON.stringify(pw.slots[key])) : null });
+        var prev = pw.slots[key];
+        pw.slots[key] = { name: day.name, weekId: item.week.id, dayId: day.id, balans: day.balans };
+        if (prev && prev.servings) pw.slots[key].servings = prev.servings;
+      });
+      savePlannedWeeks(); closeSheet(sh.ov); render();
+      var dset = {}; p.forEach(function (x) { dset[dk(x.d)] = 1; });
+      showUndoToast("“" + day.name + "” staat " + p.length + "× in je planning (" + Object.keys(dset).length + (Object.keys(dset).length === 1 ? " dag" : " dagen") + ").", function () {
+        undo.forEach(function (u) { if (u.prev) u.pw.slots[u.key] = u.prev; else delete u.pw.slots[u.key]; }); savePlannedWeeks(); render();
+      });
+    };
+    var legend = document.createElement("p"); legend.className = "mp-legend";
+    legend.innerHTML = '<i class="free"></i> vrij <i class="full"></i> er staat al iets <i class="same"></i> dit gerecht';
+    body.insertBefore(legend, h2);
+    paint();
+  }
   // Onderblad met acties voor één gerecht (en de stap "inplannen").
   function openDishSheet(item, dupes) {
     var ov = document.getElementById("dishSheet");
@@ -8507,7 +8664,7 @@
         if (lockWhat) lockEl(b, lockWhat);
         list.appendChild(b);
       }
-      act("plan", "calendar", "Inplannen", "Kies een dag en moment", function () { if (!requirePlus("Gerechten inplannen")) planView(); }, false, "Gerechten inplannen");
+      act("plan", "calendar", "Inplannen", "Op één of meer dagen en momenten tegelijk", function () { if (requirePlus("Gerechten inplannen")) return; closeSheet(ov); openMultiPlan(item); }, false, "Gerechten inplannen");
       if (day.steps && day.steps.length) act("cook", "pot", "Nu koken", "Start meteen de kookmodus", function () { closeSheet(ov); goto("cook", { weekId: item.week.id, dayId: day.id, stepIndex: 0, dayBackView: "library" }); });
       var fav = day.rating === 1;
       act("fav", "heart", fav ? "Geen favoriet meer" : "Favoriet", fav ? "Haalt het uit je favorieten" : "Bovenaan bij je favorieten, en Balanza leert je smaak", function () {
@@ -8837,7 +8994,7 @@
       bar.appendChild(info);
       function bb(label, fn, cls, dis, id) { var b = document.createElement("button"); b.type = "button"; b.className = cls; b.textContent = label; b.disabled = !!dis; b.onclick = fn; if (id) b.id = id; bar.appendChild(b); return b; }
       bb(allOn ? "Niets" : "Alles", toggleAll, "ghost-btn");
-      var pb = bb("Inplannen", function () { bulkPlan(picked); }, "primary-btn", !picked.length, "libBulkPlan");
+      var pb = bb("Inplannen", function () { if (picked.length === 1) { var one = picked[0]; librarySelect.on = false; librarySelect.ids = {}; render(); openMultiPlan(one); } else bulkPlan(picked); }, "primary-btn", !picked.length, "libBulkPlan");
       if (picked.length) lockEl(pb, "Gerechten inplannen");
       if (moduleOn("pdf")) bb("Kookboek (PDF)", doPdf, "ghost-btn", !picked.length, "libBulkPdf");
       bb("Verwijderen", doDel, "ghost-btn danger", !picked.length, "libBulkDel");
@@ -9259,6 +9416,8 @@
       item("smLeftover", "Kook extra voor morgen", "Eén portie meer, morgen (" + nx.toLowerCase() + ") als lunch", function () { planLeftover(pw, d, slot); });
     }
     item("smChange", "Ander gerecht kiezen", "", function () { goto("planpick", { pickFilter: null, planWeekId: pw.id, planSlotKey: key }); });
+    var resA = resolveAssignedDish(a);
+    if (resA) item("smRepeat", "Ook op andere dagen", "Zet dit gerecht in één keer op meer dagen of momenten", function () { openMultiPlan(resA, { skipKey: isoDateKey(planDayDate(pw, d)) + "|" + slot }); });
     var moveRow = document.createElement("div"); moveRow.className = "slotmenu-move";
     var ml = document.createElement("span"); ml.textContent = "Verplaats naar"; moveRow.appendChild(ml);
     var chips = document.createElement("div"); chips.className = "slotmenu-days";
@@ -12308,6 +12467,13 @@
       main.appendChild(cookTop);
     }
 
+    if (!day.prep && week.id !== "community") {
+      var planBtn = document.createElement("button"); planBtn.type = "button"; planBtn.className = "ghost-btn mp-recipe-btn"; planBtn.id = "recipePlanBtn";
+      planBtn.innerHTML = iconSvg("calendar", 18) + "<span>Inplannen</span><small>op één of meer dagen</small>";
+      planBtn.onclick = function () { openMultiPlan({ week: week, day: day }); };
+      if (readOnlyMode && readOnlyMode()) lockEl(planBtn, "Gerechten inplannen");
+      main.appendChild(planBtn);
+    }
     var commBlock = communityRecipeBlock(week, day);
     if (commBlock) main.appendChild(commBlock);
 
