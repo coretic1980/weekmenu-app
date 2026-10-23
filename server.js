@@ -5213,13 +5213,13 @@ function handleFoodSearch(req, res, url) {
   var debug = url.searchParams.get("debug") === "1", tries = [];
   if (q.length < 3) return sendJSON(res, 200, { items: [] });
   if (!offSearchLimiter("s:" + clientIp(req))) return sendJSON(res, 429, { code: "rate_limited", message: "Even te veel gezocht. Probeer het zo opnieuw." });
-  var key = "foods/search6/" + crypto.createHash("sha1").update(q).digest("hex").slice(0, 20);
+  var key = "foods/search7/" + crypto.createHash("sha1").update(q).digest("hex").slice(0, 20);
   var mapItems = function (list) {
     return (Array.isArray(list) ? list : []).map(function (pr) {
       var n = pr.nutriments || {}, kcal = Number(n["energy-kcal_100g"]); if (!isFinite(kcal) && isFinite(Number(n["energy_100g"]))) kcal = Number(n["energy_100g"]) / 4.184;
       if (!isFinite(kcal) || kcal < 0 || !(pr.product_name_nl || pr.product_name) || !/^\d{8,14}$/.test(String(pr.code || ""))) return null;
       return offFood(pr, String(pr.code), kcal);
-    }).filter(Boolean).slice(0, 10);
+    }).filter(Boolean).slice(0, 20);
   };
   var getJson = function (label, u, listKey) {
     var ctl = new AbortController(), t = setTimeout(function () { ctl.abort(); }, 8000);
@@ -5247,14 +5247,46 @@ function handleFoodSearch(req, res, url) {
   var sUrl = function (v, nl) { return sBase + "/search?q=" + encodeURIComponent(v + (nl ? ' countries_tags:"en:netherlands"' : "")) + "&langs=nl,en&page_size=20&fields=" + FIELDS; };
   var lUrl = function (v) { return oBase + "/cgi/search.pl?search_terms=" + encodeURIComponent(v) + "&search_simple=1&action=process&json=1&page_size=20&sort_by=unique_scans_n&tagtype_0=countries&tag_contains_0=contains&tag_0=netherlands&fields=" + FIELDS; };
   // Per groep tegelijk zoeken (snel), de eerste groep met resultaten wint
-  var merge = function (lists) { var seen = {}, out = []; lists.forEach(function (l) { l.forEach(function (it) { if (!seen[it.ean]) { seen[it.ean] = 1; out.push(it); } }); }); return out.slice(0, 10); };
+  // De zoekdienst geeft ook producten met maar één van je woorden. Daarom zelf rangschikken:
+  // hoeveel van je woorden (of een vorm ervan, ook binnen een samenstelling) staan in naam + merk?
+  var qWords = q.split(" ").filter(function (w) { return w.length >= 2; });
+  var norm = function (x) { return String(x || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " "); };
+  var scoreOf = function (it) {
+    var txt = " " + norm(it.name + " " + it.brand) + " ", glued = txt.replace(/ /g, ""), sc = 0;
+    qWords.forEach(function (w) {
+      var forms = nlWordForms(w);
+      if (forms.some(function (f) { return txt.indexOf(" " + f + " ") > -1; })) sc += 1;
+      else if (forms.some(function (f) { return f.length >= 4 && glued.indexOf(f) > -1; })) sc += 0.9;   // in een samenstelling: havermout(repen)
+    });
+    return sc;
+  };
+  var merge = function (lists) {
+    var seen = {}, out = [];
+    lists.forEach(function (l) { l.forEach(function (it) { if (!seen[it.ean]) { seen[it.ean] = 1; it._s = scoreOf(it); out.push(it); } }); });
+    var need = qWords.length <= 2 ? qWords.length : Math.max(2, qWords.length - 1);   // bij 3+ woorden mag er één ontbreken
+    var best = out.reduce(function (m, it) { return Math.max(m, it._s); }, 0);
+    out = out.filter(function (it) { return it._s >= Math.min(need, best) - 0.01 && it._s > 0; });
+    out.sort(function (a, b) { return b._s - a._s || (b.stores.length ? 1 : 0) - (a.stores.length ? 1 : 0); });
+    var res = out.slice(0, 10).map(function (it) { delete it._s; return it; });
+    res.full = best >= need - 0.01;   // alle (op één na) woorden gevonden?
+    return res;
+  };
   var groups = [
     function () { return Promise.all(variants.map(function (v) { return getJson("search-nl:" + v, sUrl(v, true), "hits"); })).then(merge); },
     function () { return Promise.all(variants.map(function (v) { return getJson("search:" + v, sUrl(v, false), "hits"); })).then(merge); },
-    function () { return getJson("legacy:" + variants[0], lUrl(variants[0]), "products"); },
-    function () { return variants[1] ? getJson("legacy:" + variants[1], lUrl(variants[1]), "products") : Promise.resolve([]); }
+    function () { return getJson("legacy:" + variants[0], lUrl(variants[0]), "products").then(function (l) { return merge([l]); }); },
+    function () { return variants[1] ? getJson("legacy:" + variants[1], lUrl(variants[1]), "products").then(function (l) { return merge([l]); }) : Promise.resolve([]); }
   ];
-  function run(i) { if (i >= groups.length) return Promise.resolve([]); return groups[i]().then(function (items) { return items.length ? items : run(i + 1); }); }
+  // Een groep die niet alle woorden vindt, bewaren we als reserve en we zoeken verder
+  var fallback = [];
+  function run(i) {
+    if (i >= groups.length) return Promise.resolve(fallback);
+    return groups[i]().then(function (items) {
+      if (items.length && items.full) return items;
+      if (items.length > fallback.length && !fallback.length) fallback = items;
+      return run(i + 1);
+    });
+  }
   return dbGetDoc(key).then(function (r) {
     var v = r.exists ? r.value : null;
     if (!debug && v && Date.now() - v.at < (v.items && v.items.length ? 7 * 86400000 : 30 * 60000)) return v;   // niets gevonden: na een half uur opnieuw proberen
