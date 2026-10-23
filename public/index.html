@@ -1856,6 +1856,8 @@
   .tr-daycard small { color: var(--muted); font-size: 13px; }
   .tr-daycard.done b { color: #2E9A5C; }
   .wg-prefrow { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; font-size: 14px; }
+  .dt-setup { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; margin: 4px 0 6px; padding: 14px; border-radius: 14px; background: var(--bg); border: 1px dashed var(--line); }
+  .dt-setup b { display: block; font-size: 15px; color: var(--ink); } .dt-setup span { display: block; font-size: 13px; color: var(--muted); margin-top: 3px; line-height: 1.4; }
   .dt-hero { display: flex; align-items: center; gap: 16px; margin-bottom: 14px; }
   .dt-ring { position: relative; width: 116px; height: 116px; flex: none; }
   .dt-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); display: block; }
@@ -5476,6 +5478,22 @@
   // Grote kaart bovenaan: de eerstvolgende maaltijd van vandaag als foto, de rest klein eronder.
   // De dagteller op Start: kcal tegenover je dagdoel, de balk per moment met legenda en eiwit/koolhydraten/vet.
   // Staat er altijd, ook als er vandaag nog niets gepland of gegeten is (dan alles op nul).
+  // Geen dagdoel? Dan uitleggen waarom, met één knop om het op te lossen (toestemming of lengte/gewicht/leeftijd).
+  function dayTargetInvite() {
+    var box = document.createElement("div"); box.className = "dt-setup"; box.id = "dtSetup";
+    var t = document.createElement("div"), b = document.createElement("button"); b.type = "button"; b.className = "primary-btn small"; b.id = "dtSetupGo";
+    if (!healthOk()) {
+      t.innerHTML = "<b>Zie hoeveel je vandaag nog mag eten</b><span>Daarvoor rekent Balanza met je lengte, gewicht en leeftijd. Je gaf (nog) geen toestemming om die te gebruiken.</span>";
+      b.textContent = "Toestemming geven"; b.onclick = function () { showConsent(true); };
+    } else {
+      var miss = [["heightCm", "lengte"], ["weightKg", "gewicht"], ["age", "leeftijd"]].filter(function (k) { return !Number(prefs[k[0]]); }).map(function (k) { return k[1]; });
+      t.innerHTML = "<b>Stel je dagdoel in</b><span></span>";
+      t.querySelector("span").textContent = "Vul je " + (miss.length ? miss.join(miss.length > 2 ? ", " : " en ").replace(/, ([^,]*)$/, " en $1") : "gegevens") + " in, dan zie je hier hoeveel kcal je vandaag nog over hebt.";
+      b.textContent = "Dagdoel instellen"; b.onclick = function () { goto("myprefs", { prefsBack: null }); };
+    }
+    box.appendChild(t); box.appendChild(b);
+    return box;
+  }
   function renderDayTracker(body, agg, target, t, live, extras) {
     // Wat is er gegeten, wat staat er nog gepland, en hoeveel heb je nog over tot je dagdoel?
     var eaten = 0, planned = 0, perMt = {}, anyTodo = false;
@@ -5621,7 +5639,7 @@
         card.appendChild(qa);
       }
 
-      if (target) { var tb = document.createElement("div"); tb.className = "hh-body hh-body-empty"; renderDayTracker(tb, agg, target, t, [], extras); card.appendChild(tb); }
+      if (target) { var tb = document.createElement("div"); tb.className = "hh-body hh-body-empty"; renderDayTracker(tb, agg, target, t, [], extras); card.appendChild(tb); } else { var tb2 = document.createElement("div"); tb2.className = "hh-body hh-body-empty"; tb2.appendChild(dayTargetInvite()); card.appendChild(tb2); }
       renderWaterRow(card);
       main.appendChild(card);
       return;
@@ -5664,6 +5682,7 @@
       body.appendChild(nl);
     }
     if (target) renderDayTracker(body, agg, target, t, live, extras);
+    else body.appendChild(dayTargetInvite());
     var list = document.createElement("div"); list.className = "hh-meals";
     // Alles wat vandaag gepland staat, op volgorde van de dag (ook de uitgelichte maaltijd); wat je erbij zette staat bij zijn moment.
     var MOMENT_POS = { Ontbijt: 0.5, Lunch: 2.5, Snack: 3.5, Diner: 4.5 };
