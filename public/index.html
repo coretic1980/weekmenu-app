@@ -14100,7 +14100,17 @@
     input.onkeydown = function (e) { if (e.key === "Enter") { e.preventDefault(); if (st.results.length === 1 || (st.results.length && !/\d|,/.test(st.q))) addFood(st.results[0]); else addSentence(); } };
     bar.appendChild(input);
     if (typeof SpeechRec !== "undefined" && SpeechRec && typeof voiceOn === "function" && voiceOn()) {
-      var mic = micButton(input, function () { input.oninput(); }, function () { addSentence(); });
+      // Na het inspreken niet zelf kiezen: laat de lijst zien. Alleen bij precies één resultaat dat exact klopt voegen we het toe, en zeggen dat erbij.
+      var mic = micButton(input, function () { input.oninput(); }, function () {
+        input.oninput();
+        var parts = qaParse(st.q);
+        if (parts.length > 1) { showToast("Ik hoorde " + parts.length + " producten. Kijk ze na en tik op toevoegen."); return; }
+        var p0 = parts[0]; if (!p0) return;
+        var hits = qaSearch(p0.food, 2), want = qaNorm(p0.food);
+        var exact = hits.length === 1 && (qaNorm(hits[0].name) === want || qaNorm(hits[0].name) === qaRewrite(want));
+        if (exact) { var nm = hits[0].name; addSentence(); showToast("1 product gevonden: \u201c" + nm + "\u201d. Toegevoegd; pas de hoeveelheid aan als het nodig is."); }
+        else if (hits.length) showToast(hits.length === 1 ? "1 product gevonden. Tik erop als het klopt." : "Kies hieronder het juiste product.");
+      });
       mic.classList.add("qa-icon"); bar.appendChild(mic);
     }
     body.appendChild(bar);
