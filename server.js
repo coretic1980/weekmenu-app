@@ -5241,6 +5241,7 @@ function offWordVariants(q) {
 // Bron en licentie: Open Food Facts, Open Database License (ODbL); de inhoud valt onder de Database Contents License.
 var OFFNL_DUMP_URL = process.env.OFF_DUMP_URL || "https://static.openfoodfacts.org/data/en.openfoodfacts.org.products.csv.gz";
 var OFFNL_MAX_AGE_MS = 7 * 86400000;
+var OFFNL_VER = 2;   // ophogen als het formaat verandert (2: met productfoto): dan meteen opnieuw ophalen
 var OFFNL_CHUNK = 6 * 1024 * 1024;   // ruim onder de 16 MB per MongoDB-document
 var OFFNL_FILE = path.join(__dirname, "data", "offnl.json.gz");
 var offnl = { items: null, byEan: null, at: 0, count: 0, status: { state: "leeg" } };
@@ -5301,10 +5302,10 @@ function offnlSearch(q, limit) {
 function offnlSave(rows, at) {
   var gz = zlib.gzipSync(Buffer.from(JSON.stringify(rows)), { level: 6 });
   return mongoReady.then(function (db) {
-    if (!db) { try { fs.mkdirSync(path.dirname(OFFNL_FILE), { recursive: true }); fs.writeFileSync(OFFNL_FILE, gz); } catch (e) {} return dbSetDoc("offnl/meta", { at: at, count: rows.length, file: true }); }
+    if (!db) { try { fs.mkdirSync(path.dirname(OFFNL_FILE), { recursive: true }); fs.writeFileSync(OFFNL_FILE, gz); } catch (e) {} return dbSetDoc("offnl/meta", { at: at, count: rows.length, file: true, ver: OFFNL_VER }); }
     var gen = "g" + at, col = db.collection("offnl"), parts = [];
     for (var i = 0; i * OFFNL_CHUNK < gz.length; i++) parts.push({ _id: gen + "-" + i, gen: gen, i: i, data: gz.subarray(i * OFFNL_CHUNK, (i + 1) * OFFNL_CHUNK) });
-    return col.insertMany(parts).then(function () { return dbSetDoc("offnl/meta", { at: at, count: rows.length, gen: gen, chunks: parts.length, bytes: gz.length }); })
+    return col.insertMany(parts).then(function () { return dbSetDoc("offnl/meta", { at: at, count: rows.length, gen: gen, chunks: parts.length, bytes: gz.length, ver: OFFNL_VER }); })
       .then(function () { return col.deleteMany({ gen: { $ne: gen } }); });
   });
 }
@@ -5321,7 +5322,7 @@ function offnlLoad() {
   }).then(function (x) {
     if (!x) return false;
     var rows = JSON.parse(zlib.gunzipSync(x.gz).toString("utf8"));
-    offnlIndex(rows, x.m.at); offnl.status = { state: "klaar", at: x.m.at, count: rows.length };
+    offnlIndex(rows, x.m.at); offnl.ver = x.m.ver || 1; offnl.status = { state: "klaar", at: x.m.at, count: rows.length, ver: offnl.ver };
     console.log("[offnl] " + rows.length + " Nederlandse producten geladen (van " + new Date(x.m.at).toISOString().slice(0, 10) + ").");
     return true;
   }).catch(function (e) { console.warn("[offnl] laden mislukt: " + (e && e.message)); return false; });
@@ -5368,7 +5369,7 @@ function offnlImport() {
     if (rows.length < 100) throw new Error("te weinig producten (" + rows.length + ")");
     var at = Date.now();
     return offnlSave(rows, at).then(function () {
-      offnlIndex(rows, at);
+      offnlIndex(rows, at); offnl.ver = OFFNL_VER;
       offnl.status = { state: "klaar", at: at, count: rows.length, took: Math.round((at - st.startedAt) / 1000), mb: st.mb, lines: st.lines };
       console.log("[offnl] export verwerkt: " + rows.length + " producten in " + offnl.status.took + " s.");
       return true;
@@ -5388,7 +5389,8 @@ function offnlEnsure() {
     var stale = !offnl.items || Date.now() - offnl.at > OFFNL_MAX_AGE_MS;
     var failedRecently = offnl.status.failedAt && Date.now() - offnl.status.failedAt < 6 * 3600000;
     var h = new Date().getUTCHours();
-    var veryStale = offnl.items && Date.now() - offnl.at > OFFNL_MAX_AGE_MS + 2 * 86400000;
+    var veryStale = offnl.items && (Date.now() - offnl.at > OFFNL_MAX_AGE_MS + 2 * 86400000 || offnl.ver !== OFFNL_VER);
+    if (offnl.items && offnl.ver !== OFFNL_VER) stale = true;
     if (stale && !failedRecently && (!offnl.items || veryStale || h >= 1 && h <= 4)) offnlImport();
   });
 }
