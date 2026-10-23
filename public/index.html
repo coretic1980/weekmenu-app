@@ -752,7 +752,7 @@
   .qa-res-txt small, .qa-item-txt small { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
   .qa-shortcuts { display: flex; gap: 8px; margin: 2px 0 6px; }
   .qa-short { flex: 1 1 0; min-width: 0; display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 42px; padding: 6px 8px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; font-size: 13px; cursor: pointer; white-space: nowrap; }
-  .qa-short b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+  .qa-short b { font-weight: 600; }
   .qa-short.on { border-color: var(--accent2); color: var(--accent2); background: var(--mint, var(--bg)); }
   .qa-outbox:empty { display: none; }
   .qa-outbox { display: flex; flex-direction: column; gap: 6px; margin-bottom: 6px; }
@@ -13975,6 +13975,13 @@
     document.body.appendChild(ov);
     try { ov.querySelector(".img-view-x").focus(); } catch (e) {}
   }
+  // Korte naam voor knoppen: zonder bekende merknaam vooraan, en afgekapt op een heel woord (nooit midden in een woord)
+  function qaShortName(n) {
+    n = String(n || "").replace(/^(albert heijn|ah|jumbo|lidl|aldi|plus|bolletje|calv[eé]|campina|unox|verkade|g'woon|1 de beste)\s+/i, "").replace(/^goed bezig!?\s+/i, "");
+    if (n.length <= 28) return n;
+    var cut = n.slice(0, 28), sp = cut.lastIndexOf(" ");
+    return (sp > 12 ? cut.slice(0, sp) : cut).replace(/[\s,.-]+$/, "") + "\u2026";
+  }
   function qaThumb(p) {
     var ok = offImgOk(p), el = document.createElement("span"); el.className = "qa-thumb" + (ok ? "" : " none"); el.setAttribute("aria-hidden", "true");
     if (ok) { var im = document.createElement("img"); im.loading = "lazy"; im.decoding = "async"; im.alt = ""; im.src = "/api/foods/img" + ok; im.referrerPolicy = "no-referrer";
@@ -14190,7 +14197,7 @@
     // Bovenaan: zoekveld met scan- en zinknop
     var bar = document.createElement("div"); bar.className = "qa-bar";
     input = document.createElement("input"); input.type = "search"; input.className = "textinput qa-input"; input.id = "qaInput"; input.autocomplete = "off"; input.enterKeyHint = "done";
-    input.placeholder = "Zoek, of typ: 2 eieren, 1 snee brood met kaas";
+    input.placeholder = "Zoek of typ wat je at";   // kort: past op elk scherm (het voorbeeld staat in de tip eronder)
     input.oninput = function () {
       var hp = peekMomentHint(input.value); st.q = hp.text; st.pendingHint = hp.moment;
       st.results = /[,;]|\d|\b(en|met)\b/.test(st.q) && qaParse(st.q).length > 1 ? [] : qaSearch(st.q);
@@ -14220,7 +14227,7 @@
     // Snelkoppelingen: foto van je bord, uit eten, streepjescode
     var shortcuts = document.createElement("div"); shortcuts.className = "qa-shortcuts";
     var mkS = function (id, icon, label, fn) { var b = document.createElement("button"); b.type = "button"; b.className = "qa-short"; b.id = id; b.innerHTML = '<span aria-hidden="true"></span><b></b>'; b.querySelector("span").textContent = icon; b.querySelector("b").textContent = label; b.onclick = fn; shortcuts.appendChild(b); return b; };
-    if (moduleOn("generate") && window.authToken) mkS("qaPhoto", "\uD83D\uDCF7", "Foto van je bord", function () { pickPhoto(); });
+    if (moduleOn("generate") && window.authToken) mkS("qaPhoto", "\uD83D\uDCF7", "Foto bord", function () { pickPhoto(); }).setAttribute("aria-label", "Foto van je bord");
     var outB = mkS("qaOut", "\uD83C\uDF7D\uFE0F", "Uit eten", function () { st.out = !st.out; paintOut(); paintSum(); });
     mkS("qaScan", "\u2B1B", "Scannen", function () { openScanner(); });
     shortcuts.querySelector("#qaScan span").innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 8v8M10 8v8M13 8v8M16 8v8"/></svg>';
@@ -14415,7 +14422,7 @@
         var l2 = document.createElement("div"); l2.className = "qa-h"; l2.textContent = "Vaak en laatst"; startBox.appendChild(l2);
         var r2 = document.createElement("div"); r2.className = "chiprow qa-chips";
         foods.forEach(function (x, i) {
-          var c = document.createElement("button"); c.type = "button"; c.className = "chip"; c.id = "qaRecent" + i; c.textContent = x.item.name.length > 26 ? x.item.name.slice(0, 25) + "…" : x.item.name;
+          var c = document.createElement("button"); c.type = "button"; c.className = "chip"; c.id = "qaRecent" + i; c.textContent = qaShortName(x.item.name); c.title = x.item.name;
           c.onclick = function () { var cp = JSON.parse(JSON.stringify(x.item)); var ex = st.items.filter(function (y) { return y.key === cp.key; })[0]; if (ex) { if (ex.fixed) ex.count += 1; else ex.g += cp.g; } else st.items.push(cp); paintItems(); paintSum(); };
           r2.appendChild(c);
         });
