@@ -1856,6 +1856,25 @@
   .tr-daycard small { color: var(--muted); font-size: 13px; }
   .tr-daycard.done b { color: #2E9A5C; }
   .wg-prefrow { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; font-size: 14px; }
+  .wiz-main { gap: 12px; }
+  .wiz-h { font-family: Fraunces, serif; font-weight: 600; font-size: 24px; margin: 0; }
+  .wiz-sub { margin: 0; font-size: 14.5px; color: var(--muted); line-height: 1.55; }
+  .wz-opts { display: flex; flex-direction: column; gap: 8px; }
+  .wz-opt { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 14px; border-radius: 14px; border: 1.5px solid var(--line); background: var(--surface, #fff); color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+  .wz-opt.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--surface, #fff)); }
+  .wz-opt.dis { opacity: .5; cursor: not-allowed; }
+  .wz-ic { font-size: 22px; flex: none; width: 30px; text-align: center; }
+  .wz-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; } .wz-t b { font-size: 15px; } .wz-t small { font-size: 12.5px; color: var(--muted); line-height: 1.35; }
+  .wz-check { flex: none; width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid var(--line); }
+  .wz-opt.on .wz-check { border-color: var(--accent); background: var(--accent); box-shadow: inset 0 0 0 4px var(--surface, #fff); }
+  .wz-why b { display: block; margin-bottom: 4px; } .wz-why span { display: block; line-height: 1.5; } .wz-why button { margin-top: 10px; }
+  .wz-note { font-size: 13px; line-height: 1.5; }
+  .wz-bio { flex-wrap: wrap; } .wz-bio .num-field { flex: 1; min-width: 96px; }
+  .wz-sum { margin: 4px 0 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; font-size: 14.5px; line-height: 1.45; }
+  .wz-cur { display: flex; align-items: center; gap: 10px; width: 100%; padding: 14px; margin: 4px 0 12px; border-radius: 16px; border: 1px solid var(--line); background: var(--surface, #fff); color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+  .wz-cur-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; } .wz-cur-t small { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+  .wz-cur-t b { font-size: 15.5px; } .wz-cur-t > span { font-size: 12.5px; color: var(--muted); }
+  .wz-cur-go { color: var(--accent); font-weight: 600; font-size: 13.5px; white-space: nowrap; }
   .dt-setup { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; margin: 4px 0 6px; padding: 14px; border-radius: 14px; background: var(--bg); border: 1px dashed var(--line); }
   .dt-setup b { display: block; font-size: 15px; color: var(--ink); } .dt-setup span { display: block; font-size: 13px; color: var(--muted); margin-top: 3px; line-height: 1.4; }
   .dt-hero { display: flex; align-items: center; gap: 16px; margin-bottom: 14px; }
@@ -5289,6 +5308,7 @@
   }
   function dailyKcalTarget() {
     var tdee = wgTdee(); if (!tdee) return null;
+    if (typeof expecting === "function" && expecting()) return Math.round((tdee + situationKcalExtra()) / 10) * 10;   // zwanger/borstvoeding: geen tekort, wat extra
     var adj = wgKcalAdjust(tdee);
     var extra = typeof cycleKcalExtra === "function" ? cycleKcalExtra() : 0;   // voor de menstruatie iets meer (alleen als je dat aanzet)
     return Math.round(((adj !== null ? adj : tdee * (GOAL_KCAL_MULTIPLIER[prefs.goal] || 1)) + extra) / 10) * 10;
@@ -6671,6 +6691,7 @@
       prefs.homeLayout = null;
       prefs.mealCounts = null;
       prefs.withImages = true;
+      delete prefs.intent; delete prefs.weightGoal; delete prefs.training; delete prefs.trainingDismissed;
       savePrefs();
 
       plannedWeeks.length = 0;
@@ -6684,7 +6705,7 @@
       libraryGoalFilter = "Alle";
 
       showToast("Alles is gewist — je begint weer helemaal opnieuw.");
-      goto("wizard", { wizardStep: 0 });
+      state.wiz = null; startWizard("new");
     });
   }
 
@@ -6693,261 +6714,360 @@
     if (i === -1) arr.push(val); else arr.splice(i, 1);
   }
 
-  var WIZARD_STEP_COUNT = 9;
 
   function finishWizard(goHome) {
     savePrefs();
     goto(goHome ? "weeks" : "prefs");
   }
 
+  // ---------- Waarvoor gebruik je Balanza? (doel en gebruik bepalen de rest van de onboarding en je startscherm) ----------
+  // prefs.intent = { v, goal, uses: [inspire|plan|track|coach|train], auto: true|false|null, situation: [zwanger|borstvoeding|gezin], strength, at }
+  var INTENT_V = 1;
+  var INTENT_GOALS = [
+    ["gezond", "Gezonder en gebalanceerder eten", "Gevarieerd en in balans eten, zonder per se af te vallen.", "Onderhoud"],
+    ["afvallen", "Afvallen", "Rustig en gezond kilo's kwijt, met genoeg eiwit zodat je je fit blijft voelen.", "Vetverlies (spierbehoud)"],
+    ["spierbehoud", "Afvallen met behoud van spieren", "Vet kwijt, spieren houden: veel eiwit en krachttraining.", "Vetverlies (spierbehoud)"],
+    ["spier", "Spieren opbouwen", "Aankomen in spiermassa met een klein overschot en veel eiwit.", "Spieropbouw (lean bulk)"],
+    ["fit", "Fitter worden en beter presteren", "Brandstof voor trainen en sporten, en goed herstel.", "Atleet (prestatiegericht)"],
+    ["onderhoud", "Op gewicht blijven", "Je gewicht houden en gezond blijven eten.", "Onderhoud"]
+  ];
+  var INTENT_USES = [
+    ["inspire", "💡", "Inspiratie", "Gebalanceerde gerechten laten bedenken"],
+    ["plan", "📅", "Mijn week plannen", "Weekmenu met boodschappenlijst"],
+    ["track", "📊", "Bijhouden wat ik eet", "Calorieën en macro's per dag"],
+    ["coach", "🎯", "Begeleiding naar mijn doel", "Doelgewicht, tempo, wegen en check-ins"],
+    ["train", "🏋️", "Een trainingsschema", "Kracht en cardio die bij je doel passen"]
+  ];
+  var INTENT_SITUATIONS = [["zwanger", "Ik ben zwanger"], ["borstvoeding", "Ik geef borstvoeding"], ["gezin", "Ik kook voor het hele gezin"]];
+  // Extra energie (ongeveer, Voedingscentrum): zwanger vooral vanaf het tweede trimester, borstvoeding ± 400 kcal
+  var SITUATION_KCAL = { zwanger: 300, borstvoeding: 400 };
+  function intent() { var i = prefs.intent; return i && typeof i === "object" && i.v ? i : null; }
+  function intentUses() { var i = intent(); return i && Array.isArray(i.uses) ? i.uses : null; }
+  function usesOn(k) { var u = intentUses(); return !u || u.indexOf(k) > -1; }   // zonder keuze: alles aan (zoals vroeger)
+  function situationOn(k) { var i = intent(); return !!(i && Array.isArray(i.situation) && i.situation.indexOf(k) > -1); }
+  function expecting() { return situationOn("zwanger") || situationOn("borstvoeding"); }
+  function situationKcalExtra() { return situationOn("borstvoeding") ? SITUATION_KCAL.borstvoeding : situationOn("zwanger") ? SITUATION_KCAL.zwanger : 0; }
+  function intentGoalDef(k) { return INTENT_GOALS.filter(function (g) { return g[0] === k; })[0] || INTENT_GOALS[0]; }
+  // Huidig doel terugvertalen naar een keuze (voor wie de vragen nog niet heeft gezien, of het doel elders wijzigde)
+  function intentGoalFromPrefs() {
+    var i = intent(), k = goalKey();
+    if (k === "afvallen" || k === "cutting") return i && (i.goal === "afvallen" || i.goal === "spierbehoud") ? i.goal : k === "cutting" ? "spierbehoud" : "afvallen";
+    if (k === "spier") return "spier";
+    if (k === "atleet") return "fit";
+    return i && (i.goal === "gezond" || i.goal === "onderhoud") ? i.goal : "gezond";
+  }
+  function dishesWanted(i) { i = i || intent(); return !i || i.uses.indexOf("inspire") > -1 || i.uses.indexOf("plan") > -1 || i.auto === true; }
+  function bodyWanted(i) { i = i || intent(); return !!i && (i.uses.indexOf("track") > -1 || i.uses.indexOf("coach") > -1 || ["afvallen", "spierbehoud", "spier", "fit"].indexOf(i.goal) > -1 || expectingIn(i)); }
+  function expectingIn(i) { return Array.isArray(i.situation) && (i.situation.indexOf("zwanger") > -1 || i.situation.indexOf("borstvoeding") > -1); }
+  // Voorstel voor de gebruikers die er al waren: wat gebruik je nu al?
+  function guessUses() {
+    var u = [];
+    if (hasAnyDishes()) u.push("inspire");
+    if (plannedWeeks.some(function (w) { return Object.keys(w.slots || {}).length; })) u.push("plan");
+    if (dailyKcalTarget()) u.push("track");
+    if (weightGoal()) u.push("coach");
+    if (training()) u.push("train");
+    return u.length ? u : ["inspire", "plan"];
+  }
+  // Startscherm afstemmen op wat je gebruikt (je eigen volgorde blijft; tegels die niet bij je gebruik passen gaan uit)
+  function applyIntentToHome(i) {
+    var hl = homeLayout(), hidden = hl.hidden.slice();
+    var show = function (id) { var x = hidden.indexOf(id); if (x > -1) hidden.splice(x, 1); };
+    var hide = function (id) { if (hidden.indexOf(id) === -1) hidden.push(id); };
+    var has = function (k) { return i.uses.indexOf(k) > -1; };
+    show("vandaag");
+    if (has("plan")) { show("week"); show("boodschappen"); } else { hide("week"); hide("volgendeweek"); hide("boodschappen"); }
+    if (has("inspire") || i.auto) { show("genereren"); show("recent"); } else { hide("genereren"); hide("recent"); hide("foto"); hide("seizoen"); }
+    if (has("coach") || i.goal !== "gezond") show("doel"); else hide("doel");
+    if (has("train")) show("training"); else hide("training");
+    if (!has("train")) prefs.trainingDismissed = true; else delete prefs.trainingDismissed;
+    if (has("coach")) delete prefs.weightGoalDismissed;
+    prefs.homeLayout = { v: HOME_LAYOUT_V, order: hl.order.slice(), hidden: hidden };
+  }
+  // Na het doorlopen: alles vastleggen
+  function commitIntent(st) {
+    var i = { v: INTENT_V, goal: st.goal, uses: st.uses.slice(), auto: st.auto, situation: st.situation.slice(), strength: st.strength || null, at: new Date().toISOString() };
+    var old = prefs.goal, g = intentGoalDef(i.goal)[3];
+    if (expectingIn(i)) g = "Onderhoud";   // zwanger of borstvoeding: niet afvallen
+    if (isMinor() && MINOR_BLOCKED_GOALS.indexOf(g) > -1) g = "Onderhoud";
+    prefs.goal = g;
+    if (i.situation.indexOf("gezin") > -1) prefs.familyMode = true;
+    if (expectingIn(i) && prefs.weightGoal) prefs.weightGoal = null;
+    prefs.intent = i;
+    applyIntentToHome(i);
+    return old;
+  }
+
+  // ---- De vragen zelf: één lijst stappen, afhankelijk van je antwoorden ----
+  // Modi: "new" (eerste keer), "update" (bestaande gebruiker, één keer), "change" (doel of gebruik wijzigen)
+  function wizSteps() {
+    var w = state.wiz, st = w.st, out = [];
+    if (w.mode === "update") out.push("intro");
+    out.push("goal", "use");
+    if (st.uses.indexOf("inspire") === -1 && st.uses.indexOf("plan") === -1) out.push("auto");
+    var fresh = w.mode === "new", tmpI = { goal: st.goal, uses: st.uses, auto: st.auto, situation: st.situation };
+    var dishesNow = dishesWanted(tmpI), dishesBefore = w.before && dishesWanted(w.before);
+    if (dishesNow && (fresh || !dishesBefore)) out.push("dishes", "avoid", "more");
+    if (bodyWanted(tmpI) && (fresh || !healthOk() || !Number(prefs.weightKg) || !Number(prefs.heightCm) || !Number(prefs.age) || !(w.before && bodyWanted(w.before)))) out.push("body");
+    if (st.uses.indexOf("coach") > -1 && !expectingIn(tmpI) && wgAllowed()) out.push("coach");
+    if ((st.goal === "spierbehoud" || st.goal === "spier") && !expectingIn(tmpI)) out.push("strength");
+    out.push("done");
+    return out;
+  }
+  function startWizard(mode) {
+    var i = intent();
+    var st = i ? { goal: i.goal || intentGoalFromPrefs(), uses: (i.uses || []).slice(), auto: i.auto === undefined ? null : i.auto, situation: (i.situation || []).slice(), strength: i.strength || null }
+      : { goal: intentGoalFromPrefs(), uses: mode === "new" ? [] : guessUses(), auto: null, situation: prefs.familyMode ? ["gezin"] : [], strength: null };
+    state.wiz = { mode: mode, st: st, before: i ? JSON.parse(JSON.stringify(i)) : (mode === "new" ? null : { goal: st.goal, uses: st.uses.slice(), auto: null, situation: [] }) };
+    goto("wizard", { wizardStep: 0 });
+  }
   function renderWizard() {
+    if (!state.wiz) state.wiz = { mode: "new", st: { goal: intentGoalFromPrefs(), uses: [], auto: null, situation: [], strength: null }, before: null };
+    var w = state.wiz, st = w.st, steps = wizSteps();
+    if (state.wizardStep >= steps.length) state.wizardStep = steps.length - 1;
+    if (state.wizardStep < 0) state.wizardStep = 0;
+    var step = steps[state.wizardStep];
     var app = document.getElementById("app");
     app.innerHTML = "";
-    app.appendChild(renderTopbar("Welkom", state.wizardStep > 0, function () { state.wizardStep -= 1; render(); }));
-    var main = document.createElement("main");
-
-    var progress = document.createElement("div");
-    progress.className = "wizard-progress";
-    for (var i = 0; i < WIZARD_STEP_COUNT; i++) {
-      var dot = document.createElement("div");
-      dot.className = "wizard-dot" + (i === state.wizardStep ? " active" : i < state.wizardStep ? " done" : "");
-      progress.appendChild(dot);
-    }
+    app.appendChild(renderTopbar(w.mode === "change" ? "Doel en gebruik" : "Welkom", state.wizardStep > 0 || w.mode === "change", function () {
+      if (state.wizardStep > 0) { state.wizardStep -= 1; render(); } else goto("myprefs", { prefsBack: null });
+    }));
+    var main = document.createElement("main"); main.className = "wiz-main"; main.setAttribute("data-step", step);
+    var progress = document.createElement("div"); progress.className = "wizard-progress";
+    steps.forEach(function (s, i) { var dot = document.createElement("div"); dot.className = "wizard-dot" + (i === state.wizardStep ? " active" : i < state.wizardStep ? " done" : ""); progress.appendChild(dot); });
     main.appendChild(progress);
-
     function heading(title, sub) {
-      var h = document.createElement("h2");
-      h.style.fontFamily = "Fraunces, serif";
-      h.style.fontWeight = "600";
-      h.style.fontSize = "24px";
-      h.style.margin = "0";
-      h.textContent = title;
-      main.appendChild(h);
-      if (sub) {
-        var p = document.createElement("p");
-        p.style.margin = "0";
-        p.style.fontSize = "14.5px";
-        p.style.color = "var(--muted)";
-        p.style.lineHeight = "1.6";
-        p.textContent = sub;
-        main.appendChild(p);
-      }
+      var h = document.createElement("h2"); h.className = "wiz-h"; h.textContent = title; main.appendChild(h);
+      if (sub) { var p = document.createElement("p"); p.className = "wiz-sub"; p.textContent = sub; main.appendChild(p); }
     }
     function labelEl(text, hint) {
-      var l = document.createElement("div");
-      l.className = "field-label";
-      l.textContent = text;
-      main.appendChild(l);
-      if (hint) {
-        var h = document.createElement("div");
-        h.className = "field-hint";
-        h.textContent = hint;
-        main.appendChild(h);
-      }
+      var l = document.createElement("div"); l.className = "field-label"; l.textContent = text; main.appendChild(l);
+      if (hint) { var h = document.createElement("div"); h.className = "field-hint"; h.textContent = hint; main.appendChild(h); }
     }
     function chipGroupMulti(options, selectedArr) {
-      var row = document.createElement("div");
-      row.className = "chiprow";
-      options.forEach(function (opt) {
-        var chip = document.createElement("button");
-        chip.className = "chip" + (selectedArr.indexOf(opt) > -1 ? " selected" : "");
-        chip.textContent = opt;
-        chip.onclick = function () { toggleInArray(selectedArr, opt); render(); };
-        row.appendChild(chip);
-      });
+      var row = document.createElement("div"); row.className = "chiprow";
+      options.forEach(function (opt) { var chip = document.createElement("button"); chip.type = "button"; chip.className = "chip" + (selectedArr.indexOf(opt) > -1 ? " selected" : ""); chip.textContent = opt; chip.onclick = function () { toggleInArray(selectedArr, opt); render(); }; row.appendChild(chip); });
       main.appendChild(row);
     }
     function chipGroupSingle(pairs, current, onPick) {
-      var row = document.createElement("div");
-      row.className = "chiprow";
-      pairs.forEach(function (pair) {
-        var chip = document.createElement("button");
-        chip.className = "chip" + (current === pair[0] ? " selected" : "");
-        chip.textContent = pair[1];
-        chip.onclick = function () { onPick(pair[0]); render(); };
-        row.appendChild(chip);
-      });
+      var row = document.createElement("div"); row.className = "chiprow";
+      pairs.forEach(function (pair) { var chip = document.createElement("button"); chip.type = "button"; chip.className = "chip" + (current === pair[0] ? " selected" : ""); chip.textContent = pair[1]; chip.onclick = function () { onPick(pair[0]); render(); }; row.appendChild(chip); });
       main.appendChild(row);
     }
+    // Grote keuzekaarten (één of meerdere)
+    function optCards(list, isOn, onTap, id, disabledFn) {
+      var box = document.createElement("div"); box.className = "wz-opts"; box.id = id;
+      list.forEach(function (o) {
+        var b = document.createElement("button"); b.type = "button"; b.className = "wz-opt" + (isOn(o[0]) ? " on" : ""); b.id = id + "-" + o[0];
+        var dis = disabledFn && disabledFn(o[0]); if (dis) { b.disabled = true; b.classList.add("dis"); }
+        b.setAttribute("aria-pressed", isOn(o[0]) ? "true" : "false");
+        b.innerHTML = (o.icon ? '<span class="wz-ic" aria-hidden="true"></span>' : "") + '<span class="wz-t"><b></b><small></small></span><span class="wz-check" aria-hidden="true"></span>';
+        if (o.icon) b.querySelector(".wz-ic").textContent = o.icon;
+        b.querySelector("b").textContent = o.title; b.querySelector("small").textContent = dis || o.desc;
+        b.onclick = function () { onTap(o[0]); render(); };
+        box.appendChild(b);
+      });
+      main.appendChild(box);
+    }
+    var canNext = true, nextLabel = "Volgende", optional = false;
+    var tmpI = { goal: st.goal, uses: st.uses, auto: st.auto, situation: st.situation };
 
-    if (state.wizardStep === 0) {
-      heading("Welkom bij Balanza", "Laten we in een paar korte stapjes je voorkeuren instellen, zodat de gerechten die we voor je maken meteen goed passen. Dit duurt minder dan een minuut, en je kunt alles later nog aanpassen bij \u201cMijn voorkeuren\u201d.");
-      labelEl("Hoe mogen we je noemen?", "Optioneel — je naam verschijnt op het startscherm");
-      var wNameInp = document.createElement("input");
-      wNameInp.className = "textinput";
-      wNameInp.type = "text";
-      wNameInp.maxLength = 40;
-      wNameInp.value = prefs.name || "";
-      wNameInp.placeholder = "Bijv. Dave";
-      wNameInp.oninput = function (e) { prefs.name = e.target.value; };
-      main.appendChild(wNameInp);
-      labelEl("Hoe oud ben je?", "Optioneel. Zo stemmen we doelen en tips op je af.");
-      ageGroupChips(main, render);
-      labelEl("Voor welke maaltijdmomenten wil je gerechten?", "Bepaalt voor welke maaltijden we straks gerechten voorstellen. Meerdere mogelijk.");
+    if (step === "intro") {
+      heading("Balanza is gegroeid", "Balanza begon als hulp om gebalanceerde gerechten te bedenken en in te plannen. Inmiddels kan het veel meer: je dag bijhouden, je begeleiden naar een doel en een trainingsschema maken.");
+      var why = document.createElement("div"); why.className = "plainbox wz-why";
+      why.innerHTML = "<b>Waarom vragen we dit nu?</b><span>Met twee korte vragen weet Balanza waar jíj het voor gebruikt. Dan zie je op je startscherm alleen wat voor jou nuttig is, en vragen we je niets wat je niet nodig hebt. Je gerechten, planning en instellingen blijven gewoon staan.</span>";
+      main.appendChild(why);
+      nextLabel = "Beginnen";
+    } else if (step === "goal") {
+      heading("Wat wil je bereiken?", "Dit bepaalt je dagdoel, de verdeling van koolhydraten, eiwit en vet, en welke tips je krijgt.");
+      if (w.mode === "new") {
+        labelEl("Hoe mogen we je noemen?", "Optioneel");
+        var nIn = document.createElement("input"); nIn.className = "textinput"; nIn.type = "text"; nIn.maxLength = 40; nIn.value = prefs.name || ""; nIn.placeholder = "Je voornaam"; nIn.id = "wzName";
+        nIn.oninput = function (e) { prefs.name = e.target.value; }; main.appendChild(nIn);
+        labelEl("Hoe oud ben je?", "Zo stemmen we doelen en tips op je af.");
+        ageGroupChips(main, render);
+      }
+      var exp = expectingIn(tmpI);
+      optCards(INTENT_GOALS.map(function (g) { var o = [g[0]]; o.title = g[1]; o.desc = g[2]; return o; }), function (k) { return st.goal === k; }, function (k) { st.goal = k; }, "wzGoal",
+        function (k) {
+          if (exp && k !== "gezond" && k !== "onderhoud") return "Niet tijdens zwangerschap of borstvoeding";
+          if (isMinor() && (k === "afvallen" || k === "spierbehoud")) return "Niet onder de 18";
+          return "";
+        });
+      if (prefs.gender !== "Man") {
+        labelEl("Past een van deze bij je?", "Optioneel. Zo houden we er rekening mee.");
+        var sit = INTENT_SITUATIONS.filter(function (s) { return prefs.gender !== "Man" || s[0] === "gezin"; });
+        var row = document.createElement("div"); row.className = "chiprow"; row.id = "wzSituation";
+        sit.forEach(function (s) {
+          var c = document.createElement("button"); c.type = "button"; c.className = "chip" + (st.situation.indexOf(s[0]) > -1 ? " selected" : ""); c.textContent = s[1]; c.id = "wzSit-" + s[0];
+          c.onclick = function () {
+            toggleInArray(st.situation, s[0]);
+            if (expectingIn(st) && st.goal !== "gezond" && st.goal !== "onderhoud") st.goal = "gezond";
+            render();
+          };
+          row.appendChild(c);
+        });
+        main.appendChild(row);
+      } else {
+        labelEl("Kook je voor het hele gezin?", "Optioneel. Dan kiezen we mildere smaken en herkenbare ingrediënten.");
+        chipGroupSingle([[false, "Nee"], [true, "Ja"]], st.situation.indexOf("gezin") > -1, function (v) { var x = st.situation.indexOf("gezin"); if (v && x === -1) st.situation.push("gezin"); if (!v && x > -1) st.situation.splice(x, 1); });
+      }
+      if (exp) {
+        var en = document.createElement("div"); en.className = "plainbox wz-note"; en.id = "wzExpecting";
+        en.textContent = "Tijdens je zwangerschap of als je borstvoeding geeft, is afvallen niet verstandig. Balanza richt zich dan op gezond en gevarieerd eten, met ongeveer " + (st.situation.indexOf("borstvoeding") > -1 ? SITUATION_KCAL.borstvoeding : SITUATION_KCAL.zwanger) + " kcal extra per dag. Twijfel je over wat je nodig hebt? Overleg met je verloskundige of huisarts.";
+        main.appendChild(en);
+      }
+      canNext = !!st.goal;
+    } else if (step === "use") {
+      heading("Waar wil je Balanza voor gebruiken?", "Kies wat je wilt, meerdere mag. Je startscherm laat daarna alleen zien wat je gekozen hebt.");
+      optCards(INTENT_USES.map(function (u) { var o = [u[0]]; o.icon = u[1]; o.title = u[2]; o.desc = u[3]; return o; }), function (k) { return st.uses.indexOf(k) > -1; },
+        function (k) { toggleInArray(st.uses, k); if (st.uses.indexOf("inspire") > -1 || st.uses.indexOf("plan") > -1) st.auto = null; }, "wzUse",
+        function (k) { return k === "coach" && (expectingIn(tmpI) || isMinor()) ? (isMinor() ? "Niet onder de 18" : "Niet tijdens zwangerschap of borstvoeding") : ""; });
+      if (!st.uses.length) { var h0 = document.createElement("div"); h0.className = "field-hint"; h0.textContent = "Kies minstens één."; main.appendChild(h0); }
+      canNext = st.uses.length > 0;
+    } else if (step === "auto") {
+      heading("Moet Balanza gerechten voor je samenstellen?", "Je koos niet voor inspiratie of een weekplanning. Wil je toch dat Balanza automatisch gerechten voorstelt die je doel ondersteunen?");
+      var yes = ["ja"]; yes.title = "Ja, stel gerechten voor me samen"; yes.desc = "Dan vragen we kort wat je wel en niet eet.";
+      var no = ["nee"]; no.title = "Nee, dat hoeft niet"; no.desc = "Je slaat alle vragen over gerechten over. Later aanzetten kan altijd.";
+      optCards([yes, no], function (k) { return st.auto === (k === "ja"); }, function (k) { st.auto = k === "ja"; }, "wzAuto");
+      canNext = st.auto !== null;
+    } else if (step === "dishes") {
+      heading("Je gerechten", "Voor welke momenten wil je gerechten, en wat is je voedingsstijl? Gerechten die hier niet aan voldoen, stellen we nooit voor.");
+      labelEl("Maaltijdmomenten", "Meerdere mogelijk.");
       chipGroupMulti(PLAN_MEALS, prefs.mealTypes);
-      labelEl("Hoeveel gerechten per maaltijdmoment?", "Zoveel verschillende gerechten maken we per gekozen moment als je op Genereren tikt.");
+      labelEl("Hoeveel gerechten per moment?", "Zoveel verschillende gerechten maken we per moment als je op Genereren tikt.");
       chipGroupSingle([1, 2, 3, 4, 5, 6, 7].map(function (n) { return [n, String(n)]; }), prefs.count, function (n) { prefs.count = n; });
-    } else if (state.wizardStep === 1) {
-      heading("Wat is je doel?", "Dit bepaalt de macroverdeling (koolhydraten/eiwit/vet) waar elk gerecht naar streeft \u2014 de basis van de Balans-score. De winst: gerechten die echt bij je doel passen, niet alleen lekker maar ook macrotechnisch kloppend.");
-      enforceAgeRules();
-      var goalPairs = allowedGoals(Object.keys(GOAL_DESCRIPTIONS)).map(function (g) { return [g, g]; });
-      chipGroupSingle(goalPairs, prefs.goal, function (g) { prefs.goal = g; });
-      var descBox = document.createElement("div");
-      descBox.className = "plainbox";
-      descBox.textContent = GOAL_DESCRIPTIONS[prefs.goal];
-      main.appendChild(descBox);
-      if (isMinor()) main.appendChild(minorNoteEl());
-      if (goalTargetAdjusted(prefs.goal, prefs.dietStyle)) main.appendChild(goalNoteEl(prefs.goal, prefs.dietStyle));
-      var wWarn1 = dietGoalWarningEl(prefs.goal, prefs.dietStyle);
-      if (wWarn1) main.appendChild(wWarn1);
-      prefs.journey = prefs.journey && typeof prefs.journey === "object" ? prefs.journey : {};
-      labelEl("Waarom wil je dit?", "Optioneel. Balanza herinnert je er af en toe aan, in je eigen woorden.");
-      chipGroupSingle(JOURNEY_WHY.map(function (w) { return [w[0], w[1]]; }), prefs.journey.why || null, function (w) { prefs.journey.why = w; prefs.journey.whyText = ""; });
-      labelEl("Welk tempo past bij je?", "Rustig geeft je langer de tijd per stap; stevig gaat sneller door de fases.");
-      chipGroupSingle(JOURNEY_PACE, prefs.journey.pace || "normaal", function (v) { prefs.journey.pace = v; });
-    } else if (state.wizardStep === 2) {
-      heading("Voedingsstijl & gezond eten", "Dit is een harde regel, geen suggestie: gerechten die hier niet aan voldoen worden nooit voorgesteld. Kies \u201cGeen voorkeur\u201d als dit niet van toepassing is.");
-      var dietPairs = [["", "Geen voorkeur"]].concat(DIET_STYLES.map(function (d) { return [d, d]; }));
-      chipGroupSingle(dietPairs, prefs.dietStyle, function (d) { prefs.dietStyle = d; });
-      var wWarn2 = dietGoalWarningEl(prefs.goal, prefs.dietStyle);
-      if (wWarn2) { main.appendChild(wWarn2); main.appendChild(goalNoteEl(prefs.goal, prefs.dietStyle)); }
-      if (!meatFree()) {
-        labelEl("Vlees, gevogelte en vis", "Standaard eet je alles. Tik weg wat je niet eet; dat komt nooit in je gerechten.");
-        renderProteinEditor(main, render);
-      }
-      labelEl("Gezond eten", "Optioneel en te combineren met je voedingsstijl. Ook dit zijn harde regels: elk gerecht wordt hierop gecontroleerd.");
+      labelEl("Voedingsstijl");
+      chipGroupSingle([["", "Geen voorkeur"]].concat(DIET_STYLES.map(function (d) { return [d, d]; })), prefs.dietStyle, function (d) { prefs.dietStyle = d; });
+      if (!meatFree()) { labelEl("Vlees, gevogelte en vis", "Standaard eet je alles. Tik weg wat je niet eet."); renderProteinEditor(main, render); }
+      labelEl("Gezond eten", "Optioneel. Ook dit zijn harde regels.");
       if (healthOk()) renderHealthEditor(main, render); else healthOffNote(main, "health");
-    } else if (state.wizardStep === 3) {
-      heading("Welke keuken en smaak spreken je aan?", "Mag je overslaan als je geen voorkeur hebt \u2014 dan houden we alle keukens en smaken open.");
-      labelEl("Keukenstijl", "Bepaalt de stijl van de gerechten. Meerdere kiezen geeft meer afwisseling.");
-      chipGroupMulti(CUISINES, prefs.cuisines);
-      labelEl("Smaakprofiel", "Stuurt de smaakrichting los van de keuken \u2014 ook hier kun je er meerdere combineren.");
-      chipGroupMulti(FLAVORS, prefs.flavors);
-    } else if (state.wizardStep === 4) {
-      heading("Hoeveel moeite wil je erin steken?", "Bepaalt hoe uitdagend de technieken en stappen in een recept zijn.");
-      labelEl("Culinair niveau", "Basic houdt het simpel met alledaagse technieken; Gastronomisch geeft uitdagender recepten met meer stappen.");
-      chipGroupSingle(LEVELS.map(function (l) { return [l, l]; }), prefs.level, function (l) { prefs.level = l; });
-      labelEl("Kindvriendelijk", "Mildere smaken en herkenbare ingrediënten, zodat het hele gezin hetzelfde bord kan eten — mag je overslaan.");
-      var wFamilySeg = document.createElement("div");
-      wFamilySeg.className = "segrow";
-      [[false, "Uit"], [true, "Aan"]].forEach(function (pair) {
-        var chip = document.createElement("button");
-        chip.className = "chip" + (!!prefs.familyMode === pair[0] ? " selected" : "");
-        chip.textContent = pair[1];
-        chip.onclick = function () { prefs.familyMode = pair[0]; render(); };
-        wFamilySeg.appendChild(chip);
-      });
-      main.appendChild(wFamilySeg);
-      labelEl("Op budget koken?", "Voor studenten en starters: goedkope ingrediënten binnen een weekbudget. Mag je overslaan.");
-      renderStudentEditor(main, render);
-    } else if (state.wizardStep === 5) {
-      heading("Welke apparatuur heb je?", "Alleen gerechten die hiermee te maken zijn worden voorgesteld \u2014 zo krijg je nooit een recept dat om iets vraagt wat je niet hebt staan. Mag je overslaan; dan gaan we uit van een standaard fornuis en oven.");
-      chipGroupMulti(EQUIPMENT, prefs.equipment);
-    } else if (state.wizardStep === 6) {
-      heading("Wat wil je niet eten?", (healthOk() ? "Allergieën of dingen" : "Dingen") + " die je gewoon niet lust. Deze ingrediënten worden nooit voorgesteld \u2014 dat scheelt tijd bij het aanpassen achteraf. Mag je overslaan.");
+    } else if (step === "avoid") {
+      heading("Wat wil je niet eten?", (healthOk() ? "Allergieën of dingen" : "Dingen") + " die je niet lust. Die komen nooit in je gerechten.");
       renderExcludeEditor(main, render);
-    } else if (state.wizardStep === 7) {
-      heading("Lichaamsprofiel", "Optioneel, maar wel de winst: hoe vollediger dit is ingevuld, hoe nauwkeuriger we de portiegrootte en calorieën op jou afstemmen in plaats van op een gemiddelde persoon.");
-      var bioRow = document.createElement("div");
-      bioRow.className = "segrow";
-      bioRow.style.flexWrap = "wrap";
-      [["heightCm", "Lengte (cm)"], ["weightKg", "Gewicht (kg)"], ["age", "Leeftijd"]].filter(function () { return healthOk(); }).forEach(function (pair) {
-        var inp = document.createElement("input");
-        inp.className = "textinput";
-        inp.type = "number";
-        inp.placeholder = pair[1];
-        inp.value = prefs[pair[0]];
-        inp.style.flex = "1";
-        inp.style.minWidth = "104px";
-        inp.oninput = function (e) { prefs[pair[0]] = e.target.value; if (pair[0] === "age") { var ag = ageGroupFromAge(e.target.value); if (ag !== null) prefs.ageGroup = ag; } };
-        if (pair[0] === "age") { inp.placeholder = "Leeftijd" + (prefs.ageGroup && !prefs.age ? " (" + prefs.ageGroup.replace("-", "\u2013") + ")" : ""); inp.onchange = function () { enforceAgeRules(); }; }
-        bioRow.appendChild(inp);
-      });
-      main.appendChild(bioRow);
-      if (!healthOk()) healthOffNote(main, "body");
-      if (wgAllowed()) {
-        labelEl("Doelgewicht (optioneel)");
-        var wgRow = document.createElement("div"); wgRow.className = "segrow";
-        var wgIn = document.createElement("input"); wgIn.className = "textinput"; wgIn.type = "text"; wgIn.inputMode = "decimal"; wgIn.id = "wizTargetWeight"; wgIn.placeholder = "Doel (kg)";
-        wgIn.value = state.wizTarget || (weightGoal() ? weightGoal().target : ""); wgIn.style.flex = "1";
-        wgIn.oninput = function (e) { state.wizTarget = e.target.value; };
-        wgRow.appendChild(wgIn); main.appendChild(wgRow);
-        var wgNote = document.createElement("div"); wgNote.className = "acc-sub"; wgNote.textContent = "Werk je naar een gewicht toe? Dan stemt Balanza je dagdoel erop af en zie je op Start hoe ver je bent. Gezond afvallen gaat met zo'n halve kilo per week: geef het de tijd, het gaat om de trend. Later aan te passen.";
-        main.appendChild(wgNote);
+      optional = true;
+    } else if (step === "more") {
+      heading("Meer voorkeuren", "Helemaal optioneel. Sla over als je geen voorkeur hebt: dan houden we alles open.");
+      labelEl("Keukenstijl"); chipGroupMulti(CUISINES, prefs.cuisines);
+      labelEl("Smaakprofiel"); chipGroupMulti(FLAVORS, prefs.flavors);
+      labelEl("Culinair niveau"); chipGroupSingle(LEVELS.map(function (l) { return [l, l]; }), prefs.level, function (l) { prefs.level = l; });
+      if (st.situation.indexOf("gezin") === -1) { labelEl("Kindvriendelijk"); chipGroupSingle([[false, "Uit"], [true, "Aan"]], !!prefs.familyMode, function (v) { prefs.familyMode = v; }); }
+      labelEl("Op budget koken?"); renderStudentEditor(main, render);
+      labelEl("Welke apparatuur heb je?", "Dan krijg je nooit een recept met iets wat je niet hebt."); chipGroupMulti(EQUIPMENT, prefs.equipment);
+      optional = true;
+    } else if (step === "body") {
+      var whyBody = st.uses.indexOf("track") > -1 || st.uses.indexOf("coach") > -1 ? "Om je dagdoel uit te rekenen: hoeveel kcal en eiwit jij per dag nodig hebt." : "Zodat je dagdoel en porties bij jou passen in plaats van bij een gemiddeld persoon.";
+      heading("Over jou", whyBody);
+      if (!healthOk()) {
+        var hb = document.createElement("div"); hb.className = "plainbox wz-why"; hb.id = "wzConsent";
+        hb.innerHTML = "<b>Toestemming nodig</b><span>Lengte, gewicht en leeftijd zijn gezondheidsgegevens. Balanza gebruikt ze alleen voor jouw dagdoel en porties, en deelt ze met niemand.</span>";
+        var cb = document.createElement("button"); cb.type = "button"; cb.className = "primary-btn small"; cb.textContent = "Toestemming geven"; cb.onclick = function () { showConsent(true); };
+        hb.appendChild(cb); main.appendChild(hb);
+        optional = true;
+      } else {
+        var bioRow = document.createElement("div"); bioRow.className = "segrow wz-bio";
+        [["heightCm", "Lengte (cm)"], ["weightKg", "Gewicht (kg)"], ["age", "Leeftijd"]].forEach(function (pair) {
+          var lab = document.createElement("label"); lab.className = "num-field"; lab.innerHTML = "<span></span>"; lab.querySelector("span").textContent = pair[1];
+          var inp = document.createElement("input"); inp.className = "textinput"; inp.type = "number"; inp.inputMode = "decimal"; inp.id = "wz-" + pair[0]; inp.value = prefs[pair[0]] || "";
+          inp.oninput = function (e) { prefs[pair[0]] = e.target.value; if (pair[0] === "age") { var ag = ageGroupFromAge(e.target.value); if (ag !== null) prefs.ageGroup = ag; } };
+          if (pair[0] === "age") inp.onchange = function () { enforceAgeRules(); };
+          lab.appendChild(inp); bioRow.appendChild(lab);
+        });
+        main.appendChild(bioRow);
+        labelEl("Geslacht");
+        chipGroupSingle([["", "Zeg ik liever niet"]].concat(GENDERS.map(function (g) { return [g, g]; })), prefs.gender, function (g) { prefs.gender = g; });
+        labelEl("Hoe actief ben je?", "Buiten je trainingen om: werk, wandelen, fietsen.");
+        chipGroupSingle(ACTIVITY_LEVELS.map(function (a) { return [a, a]; }), prefs.activityLevel, function (a) { prefs.activityLevel = a; });
       }
-      labelEl("Geslacht");
-      chipGroupSingle([["", "Geen voorkeur"]].concat(GENDERS.map(function (g) { return [g, g]; })), prefs.gender, function (g) { prefs.gender = g; });
-      labelEl("Activiteitsniveau");
-      chipGroupSingle(ACTIVITY_LEVELS.map(function (a) { return [a, a]; }), prefs.activityLevel, function (a) { prefs.activityLevel = a; });
-    } else if (state.wizardStep === 8) {
-      heading("Alvast aan de slag?", "Wil je nu meteen gerechten laten genereren op basis van je voorkeuren?");
-
-      var plannedCount = plannedGenerationCount();
-
-      var timeHint = document.createElement("div");
-      timeHint.className = "field-hint";
-      timeHint.textContent = "Verwachte wachttijd: " + formatEstimateRange(estimateGenerationSeconds(plannedCount, false)) +
-        ". Afbeeldingen ophalen kost " + formatImageExtra() + ".";
-      main.appendChild(timeHint);
-
-      var withImgBtn = document.createElement("button");
-      withImgBtn.className = "primary-btn";
-      withImgBtn.textContent = "Ja, met afbeeldingen";
-      withImgBtn.onclick = function () { savePrefs(); goto("weeks"); generateMeals(true); };
-      main.appendChild(withImgBtn);
-
-      var noImgBtn = document.createElement("button");
-      noImgBtn.className = "ghost-btn";
-      noImgBtn.textContent = "Ja, zonder afbeeldingen";
-      noImgBtn.onclick = function () { savePrefs(); goto("weeks"); generateMeals(false); };
-      main.appendChild(noImgBtn);
-
-      var laterSpacer = document.createElement("div");
-      laterSpacer.style.flex = "1";
-      main.appendChild(laterSpacer);
-
-      var laterBtn = document.createElement("button");
-      laterBtn.className = "wizard-skip";
-      laterBtn.textContent = "Nee, ik doe dit later zelf";
-      laterBtn.onclick = function () { finishWizard(false); };
-      main.appendChild(laterBtn);
-
-      app.appendChild(main);
-      return;
+    } else if (step === "coach") {
+      heading("Je doel concreet", "Werk je naar een gewicht toe? Dan stemt Balanza je dagdoel erop af en zie je hoe ver je bent.");
+      labelEl("Doelgewicht", "Optioneel. Gezond afvallen gaat met zo'n halve kilo per week.");
+      var wgIn = document.createElement("input"); wgIn.className = "textinput"; wgIn.type = "text"; wgIn.inputMode = "decimal"; wgIn.id = "wizTargetWeight"; wgIn.placeholder = "Doel (kg)";
+      wgIn.value = state.wizTarget || (weightGoal() ? weightGoal().target : ""); wgIn.oninput = function (e) { state.wizTarget = e.target.value; };
+      main.appendChild(wgIn);
+      prefs.journey = prefs.journey && typeof prefs.journey === "object" ? prefs.journey : {};
+      labelEl("Welk tempo past bij je?");
+      chipGroupSingle(JOURNEY_PACE, prefs.journey.pace || "normaal", function (v) { prefs.journey.pace = v; });
+      labelEl("Waarom wil je dit?", "Optioneel. Balanza herinnert je er af en toe aan, in je eigen woorden.");
+      chipGroupSingle(JOURNEY_WHY.map(function (x) { return [x[0], x[1]]; }), prefs.journey.why || null, function (x) { prefs.journey.why = x; prefs.journey.whyText = ""; });
+      optional = true;
+    } else if (step === "strength") {
+      heading("Doe je aan krachttraining?", st.goal === "spier" ? "Spieren groeien van zwaar tillen plus genoeg eiwit. Zo stemmen we je eiwitdoel en tips af." : "Spieren houd je vast door ze te blijven gebruiken. Met krachttraining verlies je vooral vet in plaats van spieren.");
+      chipGroupSingle([["nee", "Nog niet"], ["1-2", "1 à 2 keer per week"], ["3+", "3 keer of vaker"]], st.strength, function (v) { st.strength = v; });
+      var tq = document.createElement("div"); tq.className = "wz-train";
+      var tOn = st.uses.indexOf("train") > -1;
+      tq.innerHTML = '<button type="button" class="sheet-toggle" id="wzTrain" role="switch"><span class="st-txt"><b>Trainingsschema van Balanza</b><small>Kracht en cardio die passen bij je doel; elke 8 weken nieuwe oefeningen</small></span><span class="st-track' + (tOn ? " on" : "") + '"><i></i></span></button>';
+      tq.querySelector("button").setAttribute("aria-checked", tOn ? "true" : "false");
+      tq.querySelector("button").onclick = function () { toggleInArray(st.uses, "train"); render(); };
+      main.appendChild(tq);
+      canNext = !!st.strength;
+    } else if (step === "done") {
+      heading(w.mode === "change" ? "Zo pas je Balanza aan" : "Zo gaat Balanza je helpen", "Je kunt dit altijd wijzigen via Mijn voorkeuren → Doel en gebruik.");
+      var sum = document.createElement("ul"); sum.className = "wz-sum"; sum.id = "wzSummary";
+      var add = function (t) { var li = document.createElement("li"); li.textContent = t; sum.appendChild(li); };
+      var gdef = intentGoalDef(st.goal);
+      add("Doel: " + gdef[1].toLowerCase() + (expectingIn(tmpI) ? " (met extra energie voor " + (st.situation.indexOf("borstvoeding") > -1 ? "borstvoeding" : "je zwangerschap") + ")" : ""));
+      if (st.uses.indexOf("track") > -1) add("Op Start zie je wat je vandaag nog over hebt, en voeg je snel toe wat je at");
+      if (st.uses.indexOf("coach") > -1) add("Begeleiding: je doel op Start, wekelijks wegen en een korte check-in");
+      if (st.uses.indexOf("plan") > -1) add("Je weekmenu en boodschappenlijst staan op Start");
+      if (dishesWanted(tmpI)) add("Balanza stelt gerechten voor die bij je doel passen");
+      else add("Geen gerechtvragen: die heb je niet nodig. Aanzetten kan later");
+      if (st.uses.indexOf("train") > -1) add(training() ? "Je trainingsschema loopt door" : "Na deze stap kies je je trainingsschema (plek, dagen, niveau)");
+      main.appendChild(sum);
+      var showGen = w.mode === "new" && dishesWanted(tmpI) && !hasAnyDishes() && moduleOn("generate");
+      if (showGen) {
+        var gl = document.createElement("div"); gl.className = "field-hint"; gl.textContent = "Wil je meteen een paar gerechten laten maken? Verwachte wachttijd: " + formatEstimateRange(estimateGenerationSeconds(plannedGenerationCount(), false)) + ".";
+        main.appendChild(gl);
+        var g1 = document.createElement("button"); g1.type = "button"; g1.className = "primary-btn"; g1.id = "wzGen"; g1.textContent = "Ja, maak gerechten";
+        g1.onclick = function () { finishIntent(function () { generateMeals(true); }); };
+        main.appendChild(g1);
+        nextLabel = "Later, naar mijn startscherm";
+      } else nextLabel = w.mode === "change" ? "Opslaan" : "Naar mijn startscherm";
     }
 
-    var spacer = document.createElement("div");
-    spacer.style.flex = "1";
-    main.appendChild(spacer);
-
-    var skipBtn = document.createElement("button");
-    skipBtn.className = "wizard-skip";
-    skipBtn.textContent = "Overslaan, gebruik standaardinstellingen";
-    skipBtn.onclick = function () { finishWizard(false); };
-    main.appendChild(skipBtn);
-
-    var nav = document.createElement("div");
-    nav.className = "wizard-nav";
-    var nextBtn = document.createElement("button");
-    nextBtn.className = "primary-btn";
-    var isLast = state.wizardStep === WIZARD_STEP_COUNT - 1;
-    nextBtn.textContent = isLast ? "Aan de slag!" : "Volgende";
+    var spacer = document.createElement("div"); spacer.style.flex = "1"; main.appendChild(spacer);
+    if (optional && step !== "done") {
+      var skip = document.createElement("button"); skip.type = "button"; skip.className = "wizard-skip"; skip.textContent = "Overslaan";
+      skip.onclick = function () { state.wizTarget = step === "coach" ? "" : state.wizTarget; state.wizardStep += 1; render(); };
+      main.appendChild(skip);
+    }
+    if (w.mode === "update" && step === "intro") {
+      var later = document.createElement("button"); later.type = "button"; later.className = "wizard-skip"; later.id = "wzLater"; later.textContent = "Later";
+      later.onclick = function () { try { sessionStorage.setItem("balanza_intent_later", "1"); } catch (e) {} goto("weeks"); };
+      main.appendChild(later);
+    }
+    var nav = document.createElement("div"); nav.className = "wizard-nav";
+    var nextBtn = document.createElement("button"); nextBtn.type = "button"; nextBtn.className = step === "done" && main.querySelector("#wzGen") ? "ghost-btn" : "primary-btn"; nextBtn.id = "wzNext";
+    nextBtn.textContent = nextLabel; nextBtn.disabled = !canNext;
     nextBtn.onclick = function () {
-      if (state.wizardStep === 7 && wgAllowed() && state.wizTarget) {
+      if (step === "coach" && state.wizTarget) {
         var tw = Math.round(Number(String(state.wizTarget).replace(",", ".")) * 10) / 10, cw = Number(prefs.weightKg);
-        if (!cw) { showToast("Vul ook je huidige gewicht in, dan kan Balanza je doel uitrekenen."); return; }
+        if (!cw) { showToast("Vul ook je huidige gewicht in (vorige stap), dan kan Balanza je doel uitrekenen."); return; }
         var wmsg = wgCheck(tw, cw); if (wmsg) { showToast(wmsg); return; }
-        prefs.weightGoal = { target: tw, start: cw, startWeek: mondayKeyOffset(0), startedAt: new Date().toISOString(), pace: "normaal", hide: false, ms: [], weighDay: 1, weighTime: "07:30" };
+        prefs.weightGoal = { target: tw, start: cw, startWeek: mondayKeyOffset(0), startedAt: new Date().toISOString(), pace: prefs.journey && prefs.journey.pace || "normaal", hide: false, ms: [], weighDay: 1, weighTime: "07:30" };
         var wj = journey(); wj.log = (Array.isArray(wj.log) ? wj.log : []).filter(function (x) { return !(x && x.w === mondayKeyOffset(0) && x.m === "gewicht"); }); wj.log.push({ w: mondayKeyOffset(0), m: "gewicht", v: cw, n: 1 });
-        var wzGoal = goalForWeightGoal(prefs.weightGoal); if (wzGoal) prefs.goal = wzGoal;   // doel en doelgewicht wijzen dezelfde kant op
       }
-      if (isLast) { finishWizard(false); }
-      else { state.wizardStep += 1; render(); }
+      if (step === "done") { finishIntent(); return; }
+      state.wizardStep += 1; render();
+      try { window.scrollTo(0, 0); } catch (e) {}
     };
-    nav.appendChild(nextBtn);
-    main.appendChild(nav);
-
+    nav.appendChild(nextBtn); main.appendChild(nav);
     app.appendChild(main);
+  }
+  function finishIntent(after) {
+    var w = state.wiz, oldGoal = commitIntent(w.st), mode = w.mode;
+    if (prefs.weightGoal) { var wzGoal = goalForWeightGoal(prefs.weightGoal); if (wzGoal && wzGoal !== prefs.goal && !expecting()) prefs.goal = wzGoal; }
+    enforceAgeRules();
+    savePrefs();
+    state.wiz = null; state.wizTarget = "";
+    goto("weeks");
+    if (after) after();
+    var wantTrain = intentUses().indexOf("train") > -1 && !training();
+    setTimeout(function () {
+      if (wantTrain) { openTrainingSetup(); return; }
+      if (mode !== "new" && oldGoal && oldGoal !== prefs.goal) goalChanged(oldGoal, "doel");
+      else showToast(mode === "new" ? "Klaar! Je startscherm staat voor je klaar." : "Opgeslagen. Je startscherm is aangepast.", "ok");
+    }, 350);
   }
 
   // ---------- Nieuwe gerechten (genereren) ----------
@@ -7172,6 +7292,13 @@
     it.textContent = "Stel dit één keer in. Wijzigingen worden meteen bewaard en gelden voor al je volgende gerechten.";
     intro.appendChild(it); intro.appendChild(savedPill);
     main.appendChild(intro);
+    // Bovenaan: waar je Balanza voor gebruikt, met één knop om dat (en alles wat ervan afhangt) opnieuw te doorlopen
+    var iu = intent(), ib = document.createElement("button"); ib.type = "button"; ib.className = "wz-cur"; ib.id = "prefsIntent";
+    ib.innerHTML = '<span class="wz-cur-t"><small>Doel en gebruik</small><b></b><span></span></span><span class="wz-cur-go">Wijzigen \u203a</span>';
+    ib.querySelector("b").textContent = iu ? intentGoalDef(iu.goal)[1] : "Nog niet ingesteld";
+    ib.querySelector(".wz-cur-t > span").textContent = iu ? INTENT_USES.filter(function (u) { return iu.uses.indexOf(u[0]) > -1; }).map(function (u) { return u[2].toLowerCase(); }).join(", ") : "Vertel waar je Balanza voor gebruikt";
+    ib.onclick = function () { savePrefs(); startWizard("change"); };
+    main.appendChild(ib);
     function changed(rerender) {
       savePrefsSoon(function () { var p = document.getElementById("prefsSaved"); if (p) { p.classList.remove("flash"); void p.offsetWidth; p.classList.add("flash"); } });
       if (rerender) render();
@@ -8095,7 +8222,8 @@
   }
 
   var GUIDE_STEPS = [
-{ title: "Stel je voorkeuren in", body: "Bij het eerste gebruik loop je een korte wizard door die alles in stapjes uitvraagt, elk met uitleg over wat die keuze precies doet. Later kun je alles terugvinden en aanpassen bij \u201cGerechten ontwerpen\u201d: doel (Onderhoud, Vetverlies, Cutting, Spieropbouw of Atleet), voedingsstijl, keukenstijl, smaakprofiel, culinair niveau, kindvriendelijk (gezinsmodus), beschikbare apparatuur, wat je niet wilt eten, en optioneel je lichaamsprofiel (geslacht, lengte, gewicht, leeftijd, activiteitsniveau)." },
+{ title: "Doel en gebruik", body: "Bij het eerste gebruik vraagt Balanza twee dingen: wat wil je bereiken (gezonder eten, afvallen, afvallen met behoud van spieren, spieren opbouwen, fitter worden of op gewicht blijven) en waar wil je Balanza voor gebruiken (inspiratie, je week plannen, bijhouden wat je eet, begeleiding naar je doel, een trainingsschema). Ben je zwanger, geef je borstvoeding of kook je voor het gezin, dan houdt Balanza daar rekening mee: niet afvallen, maar gezond eten met wat extra energie. Daarna krijg je alleen de vragen die bij jouw keuzes horen, en toont je startscherm alleen wat je gebruikt. Wijzigen kan altijd via Mijn voorkeuren \u2192 Doel en gebruik: je doorloopt dan hetzelfde, met je antwoorden al ingevuld." },
+    { title: "Stel je voorkeuren in", body: "Kies je voor gerechten, dan loop je een paar korte stappen door, elk met uitleg over wat die keuze precies doet. Later kun je alles terugvinden en aanpassen bij \u201cGerechten ontwerpen\u201d: doel (Onderhoud, Vetverlies, Cutting, Spieropbouw of Atleet), voedingsstijl, keukenstijl, smaakprofiel, culinair niveau, kindvriendelijk (gezinsmodus), beschikbare apparatuur, wat je niet wilt eten, en optioneel je lichaamsprofiel (geslacht, lengte, gewicht, leeftijd, activiteitsniveau)." },
     { title: "Navigeren op je telefoon", body: "Onderin staat een vaste balk met Start, Ontwerpen, Plannen, Gerechten en Lijst. Tik nogmaals op het actieve onderdeel om terug te gaan naar het begin ervan. Het getal bij Lijst laat zien hoeveel boodschappen voor deze week nog open staan. Rechtsboven vind je de assistent (het tekstwolkje) en je accountmenu (je avatar) met Instellingen, Hoe werkt Balanza en je abonnement." },
     { title: "Je dag op Start", body: "Op Start zie je alles wat vandaag gepland staat, plus wat je er los bij at. De gekleurde balk is je dag in calorie\u00ebn tegenover je dagdoel: elk blokje is een maaltijd in de kleur van het moment (de legenda staat eronder), een lichter blokje heb je nog niet gegeten. Daaronder zie je eiwit, koolhydraten en vet tegenover je doel. Vink een maaltijd af met het vinkje als je hem gegeten hebt. Tik op de maaltijd zelf om iets te wijzigen: iets anders gegeten, niet gegeten, of meer of minder (\u00bd tot 2 porties); wat je niet at, telt niet mee. Alles kun je ongedaan maken. \u201cWat past nog?\u201d laat zien wat er nog in je dag past. Met \u201cStartscherm aanpassen\u201d onderaan Start zet je de tegels in jouw volgorde of verberg je wat je niet nodig hebt." },
     { title: "Ingredi\u00ebnten van een gerecht aanpassen", body: "De ingredi\u00ebnten van een gerecht pas je aan op een eigen scherm: via de drie puntjes bij je gerechten, de knop Ingredi\u00ebnten in het recept, of in de planner en bij je dag op Start. Per ingredi\u00ebnt wijzig je los de hoeveelheid, de eenheid (gram, ml, stuks, eetlepel, theelepel, snee, teentje, snufje of naar smaak) en het product; tik een paar letters en kies het product uit de lijst. Terwijl je wijzigt rekent Balanza de kcal, eiwit, koolhydraten, vet en de Balans opnieuw uit met NEVO, het voedingsstoffenbestand van het RIVM. De bereiding blijft zoals hij is. Staat het gerecht in je planning, dan gelden de nieuwe waarden daar ook; met \u201cOpslaan als kopie\u201d laat je het origineel staan." },
@@ -15820,7 +15948,7 @@
   // Veilig: geen doel onder een gezond gewicht (BMI 18,5), tempo hooguit ~1% van je gewicht per week, niet voor minderjarigen.
   var WG_PACE = { rustig: { lose: 0.25, gain: 0.15, label: "Rustig" }, normaal: { lose: 0.5, gain: 0.25, label: "Normaal" }, stevig: { lose: 0.75, gain: 0.4, label: "Stevig" } };
   var WG_MS = [25, 50, 75, 100];
-  function wgAllowed() { return healthOk() && !isMinor(); }
+  function wgAllowed() { return healthOk() && !isMinor() && !(typeof expecting === "function" && expecting()); }
   function weightGoal() {
     var g = prefs.weightGoal;
     return wgAllowed() && g && typeof g === "object" && Number(g.target) > 0 && Number(g.start) > 0 ? g : null;
@@ -16318,7 +16446,7 @@
     return { day: day, len: len, dur: dur, phase: phase, pre: day > len - 7, luteal: day > ov + 1, next: len - day + 1, late: late, since: since };
   }
   // Dagdoel: in de luteale fase (na de eisprong tot de menstruatie) verbruik je iets meer en heb je meer trek
-  function cycleKcalExtra(date) { var p = cyclePhase(date); return p && p.luteal && !p.late ? CY_EXTRA_KCAL : 0; }
+  function cycleKcalExtra(date) { if (expecting()) return 0; var p = cyclePhase(date); return p && p.luteal && !p.late ? CY_EXTRA_KCAL : 0; }
   var CY_PHASE = {
     menstruatie: ["Menstruatie", "🩸", "Let op ijzer: vlees, peulvruchten, volkoren, groene groente of noten, met iets met vitamine C erbij. Thee of koffie liever niet bij de maaltijd. Moe? Rustiger trainen mag."],
     folliculair: ["Na je menstruatie", "🌱", "Vaak de dagen met de meeste energie: een mooi moment voor je zwaardere trainingen."],
@@ -16438,7 +16566,7 @@
     var t = cycleChipText();
     if (!t) {
       // Vrouw zonder cyclus ingesteld: een rustige uitnodiging, weg te tikken
-      if (!cycleAllowed() || prefs.cycle || prefs.cycleDismissed) return;
+      if (!cycleAllowed() || prefs.cycle || prefs.cycleDismissed || expecting()) return;
       var inv = document.createElement("div"); inv.className = "cy-chip cy-invite"; inv.id = "cyInvite";
       var go = document.createElement("button"); go.type = "button"; go.className = "cy-inv-go"; go.id = "cyInviteGo";
       go.innerHTML = '<span aria-hidden="true">\uD83C\uDF19</span><b>Je cyclus meenemen?</b><small>of de overgang \u00b7 optioneel</small><em aria-hidden="true">+</em>';
@@ -16598,6 +16726,7 @@
   // Wat niet vanzelf kan (een doelgewicht dat de andere kant op gaat, te weinig trainingsdagen) leggen we voor.
   function goalChanged(oldGoal, reason) {
     var newGoal = prefs.goal; if (!oldGoal || oldGoal === newGoal) return;
+    if (intent()) { prefs.intent.goal = intentGoalFromPrefs(); }   // je keuze bij "Wat wil je bereiken?" loopt mee
     var cur = prefs.goal, kNew = dailyKcalTarget(), tNew = goalTarget(), fNew = trFocus(), pNew = gpPlan();
     prefs.goal = oldGoal; var kOld = dailyKcalTarget(), tOld = goalTarget(), fOld = trFocus(), pOld = gpPlan(); prefs.goal = cur;
     var gk = goalKey(), g = weightGoal(), t = training(), stoppedWg = null;
@@ -19008,6 +19137,7 @@
         weetjes: prefs.weetjes && typeof prefs.weetjes === "object" ? prefs.weetjes : {},
         cycle: prefs.cycle && typeof prefs.cycle === "object" && healthOk() ? prefs.cycle : null,
         cycleDismissed: !!prefs.cycleDismissed,
+        intent: prefs.intent && typeof prefs.intent === "object" ? prefs.intent : null,
         proteinOut: Array.isArray(prefs.proteinOut) ? prefs.proteinOut.slice(0, 20) : [],
         journey: prefs.journey && typeof prefs.journey === "object" ? prefs.journey : {},
         ageGroup: AGE_GROUPS.some(function (g) { return g[0] === prefs.ageGroup; }) ? prefs.ageGroup : "",
@@ -19531,11 +19661,11 @@
           var prefsRef = db.doc("data/users/" + uid + "/prefs");
           prefsRef.get().then(function (psnap) {
             if (!psnap.exists) {
-              if (state.view === "weeks") { state.wizardStep = 0; state.view = "wizard"; render(); }
+              if (state.view === "weeks") { state.wiz = null; state.wizardStep = 0; state.view = "wizard"; render(); }
               return;
             }
             var pdata = psnap.data() || {};
-            ["name", "bringListLink", "cuisines", "flavors", "level", "dietStyle", "health", "leftovers", "coach", "water", "places", "proteinOut", "journey", "ageGroup", "student", "sugarMode", "cheeseMode", "familyMode", "equipment", "exclude", "count", "mealTypes", "gender", "heightCm", "weightKg", "age", "activityLevel", "goal", "homeLayout", "mealCounts", "withImages", "pantry", "communityName", "myFoods", "weightGoal", "weightGoalDismissed", "training", "trainingDismissed", "moveLog", "weetjes", "cycle", "cycleDismissed"].forEach(function (k) {
+            ["name", "bringListLink", "cuisines", "flavors", "level", "dietStyle", "health", "leftovers", "coach", "water", "places", "proteinOut", "journey", "ageGroup", "student", "sugarMode", "cheeseMode", "familyMode", "equipment", "exclude", "count", "mealTypes", "gender", "heightCm", "weightKg", "age", "activityLevel", "goal", "homeLayout", "mealCounts", "withImages", "pantry", "communityName", "myFoods", "weightGoal", "weightGoalDismissed", "training", "trainingDismissed", "moveLog", "weetjes", "cycle", "cycleDismissed", "intent"].forEach(function (k) {
               if (pdata[k] !== undefined) prefs[k] = deepClone(pdata[k]);
             });
             var mig = migrateExcludeTerms();
@@ -19545,6 +19675,11 @@
             if (wgM && !wgM.goalSync) { var gm = goalForWeightGoal(wgM); if (gm) prefs.goal = gm; wgM.goalSync = 1; mig = true; }
             if (enforceAgeRules() || mig) savePrefs();
             render();
+            // Bestaande gebruikers: één keer de twee nieuwe vragen (doel en gebruik), met uitleg waarom
+            if (!prefs.intent) {
+              var later0 = false; try { later0 = sessionStorage.getItem("balanza_intent_later") === "1"; } catch (e) {}
+              if (!later0) Promise.race([plansReady, new Promise(function (r) { setTimeout(r, 4000); })]).then(function () { if (state.view === "weeks" && !prefs.intent) startWizard("update"); });
+            }
           }).catch(function () {});
 
           var planRef = db.doc("data/users/" + uid + "/plannedWeeks");
