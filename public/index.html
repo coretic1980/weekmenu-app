@@ -688,6 +688,7 @@
   .qa-sentence-btn b { color: var(--accent2); font-size: 14px; }
   .qa-sentence-btn span { font-size: 13px; color: var(--muted); }
   .qa-results { display: flex; flex-direction: column; }
+  .qa-typing .qa-shortcuts { display: none; }
   .qa-res { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 10px 4px; border: 0; border-bottom: 1px solid var(--line); background: none; color: var(--ink); font: inherit; cursor: pointer; min-height: 52px; }
   .qa-res-txt { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
   .qa-res-txt b { font-size: 15px; font-weight: 600; }
@@ -850,6 +851,10 @@
     opacity: 0; pointer-events: none; transition: opacity 0.15s ease; z-index: 110;
   }
   .sheet-overlay.active { opacity: 1; pointer-events: auto; }
+  /* Toetsenbord open (iPhone/Android): het venster past zich aan het zichtbare deel aan, zodat het invoerveld in beeld blijft */
+  html.kb-open .sheet-overlay { top: var(--vv-top, 0px); bottom: auto; height: var(--vv-h, 100%); }
+  html.kb-open .sheet { max-height: calc(var(--vv-h, 100vh) - 8px); padding-bottom: 12px; }
+  html.kb-open .qa-overlay .sheet { max-height: calc(var(--vv-h, 100vh) - 8px); }
   .sheet {
     background: var(--surface); width: 100%; max-width: 520px; border-radius: 18px 18px 0 0;
     padding: 10px 16px calc(16px + env(safe-area-inset-bottom, 0px)); max-height: 88vh; overflow-y: auto;
@@ -5813,6 +5818,28 @@
       shown = want; ensure().classList.toggle("on", want);
     }
     window.addEventListener("scroll", function () { if (!ticking) { ticking = true; requestAnimationFrame(check); } }, { passive: true });
+  })();
+  // Toetsenbord open? Dan krijgen vensters de hoogte van het zichtbare deel van het scherm (visualViewport),
+  // en blijft het veld waarin je typt bovenin zichtbaar terwijl de suggesties eronder verschijnen.
+  (function () {
+    var vv = window.visualViewport; if (!vv) return;
+    var root = document.documentElement, raf = null;
+    function upd() {
+      raf = null;
+      var kb = window.innerHeight - vv.height > 120;
+      root.classList.toggle("kb-open", kb);
+      root.style.setProperty("--vv-h", vv.height + "px");
+      root.style.setProperty("--vv-top", vv.offsetTop + "px");
+      if (kb) {
+        var a = document.activeElement;
+        if (a && /^(INPUT|TEXTAREA)$/.test(a.tagName) && a.closest && a.closest(".sheet")) {
+          var sh = a.closest(".sheet"), r = a.getBoundingClientRect(), sr = sh.getBoundingClientRect();
+          if (r.top < sr.top + 8 || r.bottom > sr.bottom - 8) a.scrollIntoView({ block: "nearest" });
+        }
+      }
+    }
+    function sched() { if (!raf) raf = requestAnimationFrame(upd); }
+    vv.addEventListener("resize", sched); vv.addEventListener("scroll", sched);
   })();
   // Escape sluit het bovenste open venster (ook zonder dat er iets in het venster de focus heeft)
   document.addEventListener("keydown", function (e) {
@@ -13981,6 +14008,10 @@
       var hp = peekMomentHint(input.value); st.q = hp.text; st.pendingHint = hp.moment;
       st.results = /[,;]|\d|\b(en|met)\b/.test(st.q) && qaParse(st.q).length > 1 ? [] : qaSearch(st.q);
       paintResults(); paintStart();
+      // Tijdens het zoeken: snelkoppelingen even weg en bovenaan blijven, zodat je ziet wat je typt met de suggesties er direct onder
+      var typing = !!st.q.trim();
+      body.classList.toggle("qa-typing", typing);
+      if (typing) { var shEl = input.closest(".sheet"); if (shEl && shEl.scrollTop > 0) shEl.scrollTop = 0; }
     };
     input.onkeydown = function (e) { if (e.key === "Enter") { e.preventDefault(); if (st.results.length === 1 || (st.results.length && !/\d|,/.test(st.q))) addFood(st.results[0]); else addSentence(); } };
     bar.appendChild(input);
