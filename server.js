@@ -5196,6 +5196,39 @@ function handleFoodImg(req, res, p, debug) {
   var hit = offImgCache.get(p);
   var send = function (buf, type) { res.writeHead(200, { "Content-Type": type, "Cache-Control": "public, max-age=2592000, immutable", "Content-Length": buf.length }); res.end(buf); };
   if (hit && !debug) return send(hit.buf, hit.type);
+  // Al eens opgehaald? Dan staat hij blijvend in de database (collectie offimg)
+  return offImgStored(p).then(function (st) {
+    if (st && !debug) { offImgCache.set(p, st); if (offImgCache.size > 400) offImgCache.delete(offImgCache.keys().next().value); return send(st.buf, st.type); }
+    return offImgFetch(req, res, p, debug, send);
+  });
+}
+var OFFIMG_MAX = 20000, offImgCount = null;   // ± 12 kB per foto: hooguit ± 250 MB
+// MongoDB geeft een Binary terug (bij een gewone Buffer is .buffer het gedeelde geheugenblok: niet gebruiken)
+function binToBuf(d) {
+  if (!d) return Buffer.alloc(0);
+  if (Buffer.isBuffer(d)) return d;
+  if (typeof d.read === "function" && typeof d.length === "function") return Buffer.from(d.read(0, d.length()));
+  if (d.buffer && d.buffer instanceof Uint8Array) return Buffer.from(d.buffer.buffer, d.buffer.byteOffset, typeof d.position === "number" ? d.position : d.buffer.byteLength);
+  return Buffer.from(d);
+}
+function offImgStored(p) {
+  return mongoReady.then(function (db) {
+    if (!db) return null;
+    return db.collection("offimg").findOne({ _id: p }).then(function (d) { return d ? { buf: binToBuf(d.data), type: d.type } : null; });
+  }).catch(function () { return null; });
+}
+function offImgStore(p, r) {
+  return mongoReady.then(function (db) {
+    if (!db) return;
+    var col = db.collection("offimg");
+    var count = offImgCount !== null ? Promise.resolve(offImgCount) : col.estimatedDocumentCount();
+    return count.then(function (n) {
+      offImgCount = n; if (n >= OFFIMG_MAX) return;
+      return col.updateOne({ _id: p }, { $setOnInsert: { data: r.buf, type: r.type, at: Date.now() } }, { upsert: true }).then(function (u) { if (u && u.upsertedCount) offImgCount++; });
+    });
+  }).catch(function () {});
+}
+function offImgFetch(req, res, p, debug, send) {
   // Eerst de gewone fotoserver, dan de oude; geeft die een HTML-pagina (botbescherming), dan proberen we de volgende
   var hosts = ["https://images.openfoodfacts.org", "https://static.openfoodfacts.org", "https://world.openfoodfacts.org"], tries = [];
   var attempt = function (i) {
@@ -5211,7 +5244,8 @@ function handleFoodImg(req, res, p, debug) {
   };
   attempt(0).then(function (r) {
     offImgCache.set(p, r); if (offImgCache.size > 400) offImgCache.delete(offImgCache.keys().next().value);
-    if (debug) return sendJSON(res, 200, { ok: true, bytes: r.buf.length, tries: tries });
+    offImgStore(p, r);
+    if (debug) return sendJSON(res, 200, { ok: true, bytes: r.buf.length, tries: tries, stored: offImgCount });
     send(r.buf, r.type);
   }).catch(function () {
     console.warn("[foods/img] niet gelukt voor " + p + ": " + JSON.stringify(tries));
@@ -5327,7 +5361,7 @@ function offnlLoad() {
       if (!db || m.file) { try { return { m: m, gz: fs.readFileSync(OFFNL_FILE) }; } catch (e) { return null; } }
       return db.collection("offnl").find({ gen: m.gen }).sort({ i: 1 }).toArray().then(function (docs) {
         if (docs.length !== m.chunks) return null;
-        return { m: m, gz: Buffer.concat(docs.map(function (d) { return Buffer.from(d.data.buffer || d.data); })) };
+        return { m: m, gz: Buffer.concat(docs.map(function (d) { return binToBuf(d.data); })) };
       });
     });
   }).then(function (x) {
