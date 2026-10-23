@@ -749,7 +749,8 @@
   .qa-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; }
   .qa-scan { display: flex; flex-direction: column; gap: 10px; margin-top: 6px; }
   .qa-video { width: 100%; max-height: 260px; min-height: 180px; object-fit: cover; border-radius: 16px; background: #000; transform: translateZ(0); -webkit-transform: translateZ(0); }
-  .qa-scan-status { font-size: 13px; color: var(--muted); text-align: center; }
+  .qa-scan-status { font-size: 13px; color: var(--muted); text-align: center; line-height: 1.4; }
+  .qa-photo-btn { align-self: center; }
   .hh-acts .qa-main { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
   .wk-meal.qa-add { justify-content: center; color: var(--accent2); font-weight: 600; font-size: 13px; }
   .ap-chips { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -14397,52 +14398,111 @@
         });
     }
     function closeScanner() { st.scan = false; if (stopCam) { try { stopCam(); } catch (e) {} stopCam = null; } scanBox.innerHTML = ""; paintStart(); }
+    // ZXing (open source) voor telefoons zonder ingebouwde herkenning (iPhone). Eén keer laden.
+    var ZX_URL = "https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js";
+    var zxLoad = null;
+    function zxReader() {
+      zxLoad = zxLoad || (window.ZXing ? Promise.resolve() : loadScript(ZX_URL).catch(function (e) { zxLoad = null; throw e; }));
+      return zxLoad.then(function () {
+        if (!window.ZXing) throw new Error("zxing");
+        var Z = window.ZXing, hints = new Map();
+        hints.set(Z.DecodeHintType.POSSIBLE_FORMATS, [Z.BarcodeFormat.EAN_13, Z.BarcodeFormat.EAN_8, Z.BarcodeFormat.UPC_A, Z.BarcodeFormat.UPC_E]);
+        hints.set(Z.DecodeHintType.TRY_HARDER, true);
+        return new Z.BrowserMultiFormatReader(hints);
+      });
+    }
+    // Streepjescode uit een foto halen (werkt altijd: de gewone camera van je telefoon)
+    function decodePhoto(file, status) {
+      status.textContent = "Foto bekijken\u2026";
+      var url = URL.createObjectURL(file), img = new Image();
+      img.onload = function () {
+        var max = 1600, sc = Math.min(1, max / Math.max(img.width, img.height)), cv = document.createElement("canvas");
+        cv.width = Math.round(img.width * sc); cv.height = Math.round(img.height * sc); cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height);
+        var fail = function () { URL.revokeObjectURL(url); status.textContent = "Geen streepjescode gevonden op de foto. Probeer het van dichterbij en scherp, of tik het nummer in."; };
+        var viaZx = function () {
+          zxReader().then(function (reader) {
+            var p = typeof reader.decodeFromImageUrl === "function" ? reader.decodeFromImageUrl(cv.toDataURL("image/jpeg", 0.92)) : reader.decodeFromImageElement(img);
+            return p.then(function (res) { URL.revokeObjectURL(url); lookupEan(res.getText()); });
+          }).catch(fail);
+        };
+        if ("BarcodeDetector" in window) {
+          try { new window.BarcodeDetector({ formats: ["ean_13", "ean_8", "upc_a", "upc_e"] }).detect(cv).then(function (r) { if (r && r[0]) { URL.revokeObjectURL(url); lookupEan(r[0].rawValue); } else viaZx(); }, viaZx); } catch (e) { viaZx(); }
+        } else viaZx();
+      };
+      img.onerror = function () { status.textContent = "Deze foto kan ik niet openen. Probeer het opnieuw."; };
+      img.src = url;
+    }
+    function camErrorText(e) {
+      var n = e && e.name || "";
+      var ios = /iPhone|iPad|iPod/.test(navigator.userAgent);
+      if (n === "NotAllowedError" || n === "SecurityError") return "Balanza mag de camera niet gebruiken. " + (ios ? "Zet het aan via Instellingen \u2192 Safari \u2192 Camera (of, als je de app vanaf je beginscherm opent, sluit hem en probeer opnieuw; je krijgt dan de vraag)." : "Sta de camera toe via het slotje naast het adres, of in de instellingen van je browser.") + " Of maak hieronder een foto.";
+      if (n === "NotFoundError" || n === "OverconstrainedError") return "Er is geen camera gevonden. Maak hieronder een foto of tik het nummer in.";
+      if (n === "NotReadableError" || n === "AbortError") return "De camera wordt al door een andere app gebruikt. Sluit die app, of maak hieronder een foto.";
+      return "De camera starten lukte niet. Maak hieronder een foto van de streepjescode, of tik het nummer in.";
+    }
     function openScanner() {
       if (st.scan) return closeScanner();
       st.scan = true; startBox.innerHTML = ""; scanBox.innerHTML = "";
       var wrap = document.createElement("div"); wrap.className = "qa-scan";
       // iPhone: zonder autoplay- en muted-attribuut blijft het beeld zwart (play() buiten de tik wordt dan geweigerd)
       var video = document.createElement("video"); video.setAttribute("playsinline", ""); video.setAttribute("autoplay", ""); video.setAttribute("muted", ""); video.muted = true; video.playsInline = true; video.autoplay = true; video.className = "qa-video"; video.id = "qaVideo";
-      var status = document.createElement("div"); status.className = "qa-scan-status"; status.textContent = "Camera starten…";
+      var status = document.createElement("div"); status.className = "qa-scan-status"; status.id = "qaScanStatus"; status.textContent = "Camera starten\u2026";
+      // Altijd beschikbaar: een foto maken met de gewone camera
+      var photoIn = document.createElement("input"); photoIn.type = "file"; photoIn.accept = "image/*"; photoIn.setAttribute("capture", "environment"); photoIn.id = "qaScanPhoto"; photoIn.hidden = true;
+      photoIn.onchange = function () { var f = photoIn.files && photoIn.files[0]; if (f) decodePhoto(f, status); photoIn.value = ""; };
+      var photoBtn = document.createElement("button"); photoBtn.type = "button"; photoBtn.className = "ghost-btn small qa-photo-btn"; photoBtn.id = "qaScanPhotoBtn"; photoBtn.textContent = "\uD83D\uDCF7 Maak een foto van de streepjescode";
+      photoBtn.onclick = function () { photoIn.click(); };
       var manual = document.createElement("div"); manual.className = "op-row";
       var ei = document.createElement("input"); ei.className = "textinput"; ei.id = "qaEan"; ei.inputMode = "numeric"; ei.placeholder = "Of tik het nummer onder de streepjes in"; ei.maxLength = 14;
       var eb = document.createElement("button"); eb.type = "button"; eb.className = "ghost-btn small"; eb.id = "qaEanGo"; eb.textContent = "Zoek"; eb.onclick = function () { lookupEan(ei.value); };
       ei.onkeydown = function (e) { if (e.key === "Enter") lookupEan(ei.value); };
       manual.appendChild(ei); manual.appendChild(eb);
       var x = document.createElement("button"); x.type = "button"; x.className = "hh-link"; x.textContent = "Stoppen met scannen"; x.onclick = closeScanner;
-      wrap.appendChild(video); wrap.appendChild(status); wrap.appendChild(manual); wrap.appendChild(x);
+      wrap.appendChild(video); wrap.appendChild(status); wrap.appendChild(photoBtn); wrap.appendChild(photoIn); wrap.appendChild(manual); wrap.appendChild(x);
       scanBox.appendChild(wrap);
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { video.style.display = "none"; status.textContent = "Scannen met de camera kan op dit toestel niet. Tik het nummer in."; return; }
-      var done = false, stream = null;
-      var found = function (code) { if (done) return; done = true; try { navigator.vibrate && navigator.vibrate(30); } catch (e) {} lookupEan(code); };
-      navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false }).then(function (s) {
-        stream = s; video.srcObject = s;
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.isSecureContext) { video.style.display = "none"; status.textContent = "Live scannen kan hier niet. Maak een foto van de streepjescode, of tik het nummer in."; return; }
+      var done = false, watch = null;
+      var found = function (code) { if (done) return; done = true; try { navigator.vibrate && navigator.vibrate(30); } catch (e) {} if (stopCam) { try { stopCam(); } catch (e) {} } lookupEan(code); };
+      // Achtercamera als die er is; lukt dat niet, dan elke camera
+      var getCam = function () {
+        return navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false })
+          .catch(function (e) { if (e && (e.name === "OverconstrainedError" || e.name === "NotReadableError" || e.name === "NotFoundError")) return navigator.mediaDevices.getUserMedia({ video: true, audio: false }); throw e; });
+      };
+      var gotAnswer = false;
+      setTimeout(function () { if (!gotAnswer && !done && st.scan) status.textContent = "Geef toestemming voor de camera als je telefoon erom vraagt. Komt er niets? Maak dan een foto van de streepjescode."; }, 4000);
+      getCam().then(function (s) {
+        gotAnswer = true;
+        if (!st.scan) { s.getTracks().forEach(function (t) { t.stop(); }); return; }
+        video.srcObject = s;
         stopCam = function () { done = true; clearTimeout(watch); s.getTracks().forEach(function (t) { t.stop(); }); };
         status.textContent = "Richt de camera op de streepjescode.";
-        // Lukt automatisch afspelen niet (of blijft het beeld zwart), dan start een tik op het beeld de camera alsnog
         var tryPlay = function () { var pr = video.play(); if (pr && pr.catch) pr.catch(function () { if (!done) status.textContent = "Tik op het zwarte vlak om de camera te starten."; }); };
         video.addEventListener("loadedmetadata", tryPlay);
         video.onclick = tryPlay;
         tryPlay();
-        var watch = setTimeout(function () {
-          if (done) return;
-          if (!video.videoWidth) { status.textContent = "Zie je geen beeld? Tik op het zwarte vlak, of tik het nummer onder de streepjes in."; tryPlay(); }
-        }, 2500);
+        watch = setTimeout(function () { if (!done && !video.videoWidth) { status.textContent = "Zie je geen beeld? Tik op het zwarte vlak, of maak een foto van de streepjescode."; tryPlay(); } }, 2500);
         if ("BarcodeDetector" in window) {
           var det = new window.BarcodeDetector({ formats: ["ean_13", "ean_8", "upc_a", "upc_e"] });
-          var loop = function () { if (done) return; det.detect(video).then(function (r) { if (r && r[0]) found(r[0].rawValue); else setTimeout(loop, 250); }, function () { setTimeout(loop, 400); }); };
-          video.onloadeddata = loop;
+          var loop = function () { if (done) return; if (video.readyState < 2) { setTimeout(loop, 250); return; } det.detect(video).then(function (r) { if (r && r[0]) found(r[0].rawValue); else setTimeout(loop, 250); }, function () { setTimeout(loop, 400); }); };
+          loop();
         } else {
-          // iPhone: geen ingebouwde herkenning in de browser, dan de open-source ZXing-lezer
-          loadScript("https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js").then(function () {
-            if (done || !window.ZXing) return;
-            var hints = new Map(); hints.set(window.ZXing.DecodeHintType.POSSIBLE_FORMATS, [window.ZXing.BarcodeFormat.EAN_13, window.ZXing.BarcodeFormat.EAN_8, window.ZXing.BarcodeFormat.UPC_A, window.ZXing.BarcodeFormat.UPC_E]);
-            var reader = new window.ZXing.BrowserMultiFormatReader(hints);
-            reader.decodeFromVideoElementContinuously(video, function (res) { if (res && !done) { try { reader.reset(); } catch (e) {} found(res.getText()); } });
-            var prevStop = stopCam; stopCam = function () { try { reader.reset(); } catch (e) {} prevStop(); };
-          }).catch(function () { status.textContent = "Scannen lukt hier niet. Tik het nummer in."; });
+          // iPhone: ZXing leest zelf frame voor frame uit het beeld (los van de afspeel-events, die op iOS al voorbij kunnen zijn)
+          zxReader().then(function (reader) {
+            if (done) return;
+            if (typeof reader.createBinaryBitmap === "function" && typeof reader.decodeBitmap === "function") {
+              var tick = function () {
+                if (done) return;
+                if (video.readyState >= 2 && video.videoWidth) { try { var res = reader.decodeBitmap(reader.createBinaryBitmap(video)); if (res) { found(res.getText()); return; } } catch (e) {} }
+                setTimeout(tick, 200);
+              };
+              tick();
+            } else {
+              reader.decodeFromVideoElementContinuously(video, function (res) { if (res && !done) found(res.getText()); });
+              var prevStop = stopCam; stopCam = function () { try { reader.reset(); } catch (e) {} prevStop(); };
+            }
+          }).catch(function () { if (!done) status.textContent = "Live herkennen lukt hier niet. Maak een foto van de streepjescode, of tik het nummer in."; });
         }
-      }).catch(function () { video.style.display = "none"; status.textContent = "Geen toegang tot de camera. Tik het nummer onder de streepjes in."; });
+      }).catch(function (e) { gotAnswer = true; video.style.display = "none"; status.textContent = camErrorText(e); });
     }
     // Camera altijd uit als het scherm sluit (kruisje, ernaast tikken of Escape).
     sh.ov.querySelector(".sheet-x").onclick = function () { closeScanner(); closeSheet(sh.ov); };
