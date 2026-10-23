@@ -1769,6 +1769,8 @@
   button.tr-dot { border: 0; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
   .tr-weeklink { display: block; margin-top: 10px; }
   .tr-back { display: inline-block; margin-bottom: 8px; }
+  .tr-kcal { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 12px; background: rgba(217, 140, 43, .12); margin-bottom: 10px; }
+  .tr-kcal b { font-size: 15px; } .tr-kcal small { font-size: 12px; color: var(--muted); line-height: 1.35; }
   .tr-wnav { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
   .tr-wnav-c { font-size: 13px; color: var(--muted); font-weight: 600; text-align: center; }
   .tr-wnav button:disabled { opacity: .4; }
@@ -17159,6 +17161,36 @@
   }
   // Elke training duurt minstens een uur: warming-up, het schema, aangevuld met conditie, en afkoelen
   var TR_MIN_MINUTES = 60;
+  // Geschat verbruik van een training, op basis van jouw profiel:
+  //  - rustverbruik (BMR): met je vetpercentage uit je omtrekken Katch-McArdle (370 + 21,6 × vetvrije massa), anders Mifflin-St Jeor (lengte, gewicht, leeftijd, geslacht)
+  //  - kracht, warming-up en afkoelen: MET-waarden (Compendium of Physical Activities) × jouw rustverbruik per minuut
+  //  - cardio: uit je hartslagzone, gewicht, leeftijd en geslacht (Keytel e.a. 2005)
+  function trBmr() {
+    var w = Number(currentWeight && currentWeight()) || Number(prefs.weightKg), h = Number(prefs.heightCm), a = Number(prefs.age);
+    if (!healthOk() || !w) return null;
+    var bf = typeof currentBodyFat === "function" ? currentBodyFat() : null;
+    if (bf && bf.pct) return { bmr: 370 + 21.6 * w * (1 - bf.pct / 100), w: w, a: a, how: "vetpercentage" };
+    if (!h || !a) return { bmr: 24 * w * (prefs.gender === "Vrouw" ? 0.9 : 1), w: w, a: a, how: "gewicht" };
+    return { bmr: 10 * w + 6.25 * h - 5 * a + (prefs.gender === "Man" ? 5 : prefs.gender === "Vrouw" ? -161 : -78), w: w, a: a, how: "profiel" };
+  }
+  var TR_MET = { warmup: 3.5, cooldown: 2.5, intervals: 8, strength: 5 };
+  function trKcal(t, s) {
+    var b = trBmr(); if (!b) return null;
+    var perMinMet = b.bmr / 1440, hz = trHeartZone(), hr = (hz[0] + hz[1]) / 2, a = b.a || 40, w = b.w;
+    var cardioMin = function () {
+      var m = (-55.0969 + 0.6309 * hr + 0.1988 * w + 0.2017 * a) / 4.184, f = (-20.4022 + 0.4472 * hr - 0.1263 * w + 0.074 * a) / 4.184;
+      var v = prefs.gender === "Man" ? m : prefs.gender === "Vrouw" ? f : (m + f) / 2;
+      return Math.max(3, v);
+    };
+    var total = 0;
+    s.items.forEach(function (it) {
+      var min = trItemMinutes(t, it, s.week);
+      if (/^(walk|finisher)$/.test(it[0])) total += min * cardioMin();
+      else if (TR_MET[it[0]]) total += min * TR_MET[it[0]] * perMinMet;
+      else total += min * TR_MET.strength * perMinMet;
+    });
+    return { kcal: Math.round(total / 10) * 10, how: b.how };
+  }
   // Hartslag bij cardio: 130–140 slagen per minuut. Vanaf zo'n 55 jaar ligt je maximale hartslag lager (± 220 min je leeftijd); dan schuift de zone mee naar ± 70–75% daarvan.
   function trHeartZone() {
     var a = Number(prefs.age);
@@ -17284,7 +17316,7 @@
         row.type = "button"; row.id = "trW-" + k;
         info.innerHTML = "<b></b><small></small>";
         info.querySelector("b").textContent = ses.name + (k === todayKey ? " \u00b7 vandaag" : "");
-        info.querySelector("small").textContent = ses.items.filter(function (it) { return !/^(warmup|cooldown|finisher)$/.test(it[0]); }).map(function (it) { return (EX[it[0]] || [it[0]])[0]; }).join(", ") + " \u00b7 \u00b1" + trMinutes(t, ses) + " min";
+        info.querySelector("small").textContent = ses.items.filter(function (it) { return !/^(warmup|cooldown|finisher)$/.test(it[0]); }).map(function (it) { return (EX[it[0]] || [it[0]])[0]; }).join(", ") + " \u00b7 \u00b1" + trMinutes(t, ses) + " min" + (trKcal(t, ses) ? " \u00b7 \u2248 " + trKcal(t, ses).kcal + " kcal" : "");
         var st = document.createElement("span"); st.className = "tr-wstate" + (isDone ? " done" : ""); st.textContent = isDone ? "\u2713" : "\u203a";
         row.appendChild(info); row.appendChild(st);
         (function (x) { row.onclick = function () { closeSheet(sh.ov); openWorkout(t, x, offset); }; })(ses);
@@ -17340,11 +17372,20 @@
   }
   function openWorkout(t, s, fromWeek) {
     var dd = new Date(s.key + "T12:00:00");
-    var sh = openSimpleSheet("trSheet", s.name, ["zondag", "maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag"][dd.getDay()] + " " + dd.getDate() + " · ±" + trMinutes(t, s) + " min · week " + (s.week + 1) + (s.block ? " · blok " + (s.block + 1) : ""));
+    var sh = openSimpleSheet("trSheet", s.name, ["zondag", "maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag"][dd.getDay()] + " " + dd.getDate() + " · ±" + trMinutes(t, s) + " min" + (trKcal(t, s) ? " · \u2248 " + trKcal(t, s).kcal + " kcal" : "") + " · week " + (s.week + 1) + (s.block ? " · blok " + (s.block + 1) : ""));
     var body = sh.body;
     var back = document.createElement("button"); back.type = "button"; back.className = "hh-link tr-back"; back.id = "trBackWeek";
     back.textContent = "\u2039 Weekoverzicht"; back.onclick = function () { closeSheet(sh.ov); openTrainingWeek(typeof fromWeek === "number" ? fromWeek : Math.round((getMonday(dd) - getMonday(new Date())) / (7 * 86400000))); };
     body.appendChild(back);
+    var kc = trKcal(t, s);
+    if (kc) {
+      var kb = document.createElement("div"); kb.className = "tr-kcal"; kb.id = "trKcal";
+      var hz0 = trHeartZone();
+      kb.innerHTML = '<b></b><small></small>';
+      kb.querySelector("b").textContent = "\uD83D\uDD25 \u2248 " + kc.kcal + " kcal verbrand";
+      kb.querySelector("small").textContent = "Geschat met je " + (kc.how === "vetpercentage" ? "gewicht en vetpercentage (uit je omtrekken)" : kc.how === "profiel" ? "gewicht, lengte, leeftijd en geslacht" : "gewicht") + "; cardio op " + hz0[0] + "\u2013" + hz0[1] + " slagen per minuut. Een sporthorloge meet het preciezer.";
+      body.appendChild(kb);
+    }
     var anyDeload = false, logInputs = [];
     if (s.items.some(function (it) { return !/^(walk|intervals|warmup|finisher|cooldown)$/.test(it[0]); })) {
       var wu = document.createElement("p"); wu.className = "tr-warm"; wu.textContent = "Rust 1,5 tot 3 minuten tussen de sets, zodat je elke set weer tot falen kunt gaan. Met warming-up, cardio en afkoelen duurt je training zo'n " + trMinutes(t, s) + " minuten." + (s.block && s.wkInBlock === 0 ? " Nieuw blok: deze week andere oefeningen voor dezelfde spieren. Leer eerst de techniek." : "");
