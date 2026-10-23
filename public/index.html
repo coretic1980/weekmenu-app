@@ -13896,6 +13896,8 @@
     var p = qaFoods ? qaFoods.portions.filter(function (x) { return x.re.test(n); })[0] : null;
     return p ? { label: p.label, g: p.g } : { label: "100 gram", g: 100 };
   }
+  // Stam voor enkelvoud/meervoud: reep en repen, boon en bonen, koekje en koekjes
+  function qaStem(w) { return w.length < 4 ? w : w.replace(/(je)s$/, "$1").replace(/([^aeiou])(en|s)$/, "$1").replace(/(aa|ee|oo|uu)([^aeiouyj])$/, function (m, v, c) { return v[0] + c; }); }
   function qaScore(f, qTokens, q) {
     var s = 0;
     if (f.norm === q) s += 3;
@@ -13906,6 +13908,7 @@
       f.tokens.forEach(function (t, i) {
         var qs = qt.length > 4 ? qt.replace(/(en|s)$/, "") : qt;   // meervoud: crackers ~ cracker
         var v = t === qt || (qs !== qt && t === qs) ? 1 : t.indexOf(qt) === 0 ? (t.length - qt.length > 3 ? 0.6 : 0.85) : (qs !== qt && t.indexOf(qs) === 0) ? 0.75 : (qt.length >= 4 && t.indexOf(qt) > -1) ? 0.55 : (t.length >= 4 && qt.indexOf(t) === 0) ? 0.5 : 0;
+        if (!v && qt.length >= 4 && qaStem(t) === qaStem(qt)) v = 0.95;
         if (v && i === 0) v += 0.25;   // eerste woord van de productnaam weegt zwaarder
         if (v > best) best = v;
       });
