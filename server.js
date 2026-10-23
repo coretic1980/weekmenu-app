@@ -5033,7 +5033,9 @@ function nevoPieceToGram(it) {
   var m = String(it.tekst).toLowerCase().match(/^(\d+(?:[.,]\d+)?|½|1\/2|een|één|half|halve)\s*(?:stuks?\s+|x\s+)?(.*)$/);
   if (!m) return it;
   var q = /^(½|1\/2|half|halve)$/.test(m[1]) ? 0.5 : /^(een|één)$/.test(m[1]) ? 1 : Number(m[1].replace(",", "."));
-  var name = m[2].replace(/\(.*?\)/g, "").replace(/[,;].*$/, "").trim(), g = NEVO_PIECE_G[name];
+  var name = m[2].replace(/\(.*?\)/g, "").replace(/[,;].*$/, "").trim(), clove = /^(teentjes?|tenen|teen)\s+/.test(name);
+  if (clove) name = name.replace(/^(teentjes?|tenen|teen)\s+/, "");
+  var g = clove ? 5 : NEVO_PIECE_G[name];
   if (!g) { var w = name.split(" "); g = NEVO_PIECE_G[w[w.length - 1]] || NEVO_PIECE_G[w[0]]; }
   if (!g || !(q > 0) || q > 50) return it;
   var base = /knoflook/.test(name) ? "knoflook" : name;
