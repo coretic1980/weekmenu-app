@@ -4663,9 +4663,12 @@ function prefsLooksDefault(p) {
   return !p.name && !p.gender && !p.heightCm && !p.weightKg && !p.age && !p.intent && !p.weightGoal && !p.training && !(Array.isArray(p.myFoods) && p.myFoods.length) && !(p.journey && Array.isArray(p.journey.log) && p.journey.log.length);
 }
 // Eén reservekopie per dag van je voorkeuren (de stand van vóór de eerste wijziging die dag), de laatste 14 dagen
+var prefsBackupDone = {};   // uid -> dag: per dag maar één keer de reservekopie lezen en schrijven (voorkeuren worden vaak opgeslagen)
 function backupPrefs(uid, old) {
   if (!old || !prefsLooksPopulated(old)) return Promise.resolve();
   var key = "backups/prefs/" + uid, day = new Date().toISOString().slice(0, 10);
+  if (prefsBackupDone[uid] === day) return Promise.resolve();
+  prefsBackupDone[uid] = day;
   return dbGetDoc(key).then(function (r) {
     var b = r.exists && r.value && typeof r.value === "object" ? r.value : { days: {} };
     b.days = b.days || {};
