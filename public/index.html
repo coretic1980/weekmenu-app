@@ -1768,6 +1768,16 @@
   .tr-dot.today { outline: 2px solid var(--accent); outline-offset: 1px; }
   button.tr-dot { border: 0; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
   .tr-weeklink { display: block; margin-top: 10px; }
+  .tr-links { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
+  .gc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .gc-opt { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 9px 10px; border-radius: 12px; border: 1px solid var(--line, rgba(0,0,0,.1)); background: var(--card, #fff); color: inherit; font: inherit; text-align: left; cursor: pointer; min-width: 0; }
+  .gc-opt b { font-size: 13px; letter-spacing: .02em; } .gc-opt small { font-size: 11px; color: var(--muted); }
+  .gc-opt.on { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent); }
+  .gc-info { font-size: 13px; line-height: 1.45; color: var(--muted); margin: 10px 0 2px; }
+  .gc-pump { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .gc-row { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; padding: 10px 12px; margin-bottom: 10px; border-radius: 12px; border: 1px dashed var(--line, rgba(0,0,0,.2)); background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+  .gc-row.on { border-style: solid; border-color: #2E9A5C; background: rgba(46,154,92,.08); }
+  .gc-row b { font-size: 14px; } .gc-row small { font-size: 12px; color: var(--muted); }
   .tr-back { display: inline-block; margin-bottom: 8px; }
   .tr-kcal { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 12px; background: rgba(217, 140, 43, .12); margin-bottom: 10px; }
   .tr-kcal b { font-size: 15px; } .tr-kcal small { font-size: 12px; color: var(--muted); line-height: 1.35; }
@@ -15745,7 +15755,9 @@
     var l = moveLog(), t = training(), own = 0, tr = 0, days = [];
     for (var i = 0; i < 7; i++) {
       var d = new Date(mon); d.setDate(d.getDate() + i); var k = isoDateKey(d), m = Number(l[k]) || 0, tm = 0;
-      if (t && trIsDone(t, k)) { var s = trSessionFor(t, d); if (s) tm = trMinutes(t, s); }
+      var cl = t ? trClassOn(t, k) : null;
+      if (cl) tm = Number(cl.min) || 0;   // groepsles telt met zijn eigen minuten
+      if (t && trIsDone(t, k) && !(cl && cl.autoDone)) { var s = trSessionFor(t, d); if (s) tm += trMinutes(t, s); }
       own += m; tr += tm; days.push(m + tm);
     }
     return { own: own, training: tr, total: own + tr, days: days };
@@ -17285,12 +17297,125 @@
       }
       card.appendChild(acts);
     }
-    var wkb = document.createElement("button"); wkb.type = "button"; wkb.className = "hh-link tr-weeklink"; wkb.id = "trWeek"; wkb.textContent = "Weekoverzicht \u203a";
+    var lrow = document.createElement("div"); lrow.className = "tr-links";
+    var gcb = document.createElement("button"); gcb.type = "button"; gcb.className = "hh-link"; gcb.id = "trClass";
+    var clT = trClassOn(t, isoDateKey(new Date()));
+    gcb.textContent = clT ? "\u2713 " + gcById(clT.id).name : "+ Groepsles";
+    gcb.onclick = function () { openClassSheet(isoDateKey(new Date())); };
+    var wkb = document.createElement("button"); wkb.type = "button"; wkb.className = "hh-link"; wkb.id = "trWeek"; wkb.textContent = "Weekoverzicht \u203a";
     wkb.onclick = function () { openTrainingWeek(0); };
-    card.appendChild(wkb);
+    lrow.appendChild(gcb); lrow.appendChild(wkb); card.appendChild(lrow);
     main.appendChild(card);
   }
   var TR_MON = ["jan", "feb", "mrt", "apr", "mei", "jun", "jul", "aug", "sep", "okt", "nov", "dec"];
+  // ---------- Groepslessen (Les Mills en dergelijke): als training laten tellen ----------
+  // training.classes = { "2026-10-23": { id: "pump", min: 55, w: { squat: 15, ... } } }
+  // Soort: kracht (telt als krachtdag), cardio/hiit (telt als cardiodag), core (aanvulling), herstel (rustdag).
+  var GROUP_CLASSES = [
+    { id: "pump", name: "BODYPUMP", kind: "kracht", min: 55, met: 5.5, tip: "Kracht-uithouding voor je hele lichaam met een halter. Kies je gewichten zo dat de laatste herhalingen van elk nummer echt zwaar zijn." },
+    { id: "tone", name: "LES MILLS TONE", kind: "kracht", min: 45, met: 5, tip: "Mix van kracht, cardio en core." },
+    { id: "core", name: "LES MILLS CORE", kind: "core", min: 30, met: 4, tip: "Buik en romp. Een mooie aanvulling op je krachtdagen." },
+    { id: "rpm", name: "RPM", kind: "cardio", min: 45, met: 8.5, tip: "Indoor fietsen met pieken boven je zone." },
+    { id: "step", name: "BODYSTEP", kind: "cardio", min: 55, met: 7, tip: "Cardio op een step." },
+    { id: "combat", name: "BODYCOMBAT", kind: "cardio", min: 55, met: 8, tip: "Stevige cardio met vechtsporttechnieken; deels boven je zone." },
+    { id: "attack", name: "BODYATTACK", kind: "cardio", min: 55, met: 8, tip: "Sportieve cardio met sprongen en intervallen." },
+    { id: "shbam", name: "SH'BAM", kind: "cardio", min: 45, met: 6, tip: "Dansen; lichte tot matige cardio." },
+    { id: "jam", name: "BODYJAM", kind: "cardio", min: 55, met: 6.5, tip: "Dansen; matige cardio." },
+    { id: "grit", name: "LES MILLS GRIT", kind: "hiit", min: 30, met: 8.5, tip: "Kort en heel intensief. Hooguit 1 à 2 keer per week, niet direct na een zware krachtdag." },
+    { id: "sprint", name: "LES MILLS SPRINT", kind: "hiit", min: 30, met: 9, tip: "Korte, harde intervallen op de fiets." },
+    { id: "ceremony", name: "LES MILLS CEREMONY", kind: "hiit", min: 45, met: 7.5, tip: "Kracht en cardio in intervallen." },
+    { id: "reformer", name: "Pilates reformer", kind: "core", min: 50, met: 3.5, tip: "Kracht en controle met veren als weerstand: sterk voor je romp, houding en soepelheid. Een goede aanvulling, maar geen vervanger van zware krachttraining: je spieren groeien vooral van zwaar tillen." },
+    { id: "pilates", name: "Pilates (mat)", kind: "core", min: 45, met: 3, tip: "Romp, houding en controle met je eigen gewicht. Mooi op een rustdag of na je kracht." },
+    { id: "yoga", name: "Yoga", kind: "herstel", min: 60, met: 2.5, tip: "Soepelheid, ademhaling en herstel. Past goed op een rustdag." },
+    { id: "balance", name: "BODYBALANCE", kind: "herstel", min: 55, met: 3, tip: "Yoga, tai chi en pilates: goed voor herstel en soepelheid op een rustdag." },
+    { id: "other", name: "Andere groepsles", kind: "cardio", min: 45, met: 6.5, tip: "Bijvoorbeeld spinning, zumba of circuittraining." }
+  ];
+  var GC_KIND = { kracht: "telt als krachttraining", core: "aanvulling op je kracht", cardio: "telt als cardio", hiit: "telt als intervaltraining", herstel: "herstel op een rustdag" };
+  // De nummers van BODYPUMP, om je gewichten per nummer bij te houden
+  var PUMP_TRACKS = [["squat", "Squats"], ["chest", "Borst"], ["back", "Rug"], ["triceps", "Triceps"], ["biceps", "Biceps"], ["lunge", "Lunges"], ["shoulders", "Schouders"]];
+  function gcById(id) { return GROUP_CLASSES.filter(function (c) { return c.id === id; })[0] || null; }
+  function trClasses(t) { t.classes = t.classes && typeof t.classes === "object" ? t.classes : {}; return t.classes; }
+  function trClassOn(t, key) { var c = t && t.classes ? t.classes[key] : null; return c && gcById(c.id) ? c : null; }
+  function gcKcal(c) { var b = trBmr(), g = gcById(c.id); return b && g ? Math.round(g.met * b.bmr / 1440 * (Number(c.min) || g.min) / 10) * 10 : null; }
+  // Telt de les als de training van die dag? Kracht en core bij een krachtdag, cardio en hiit bij een cardiodag.
+  function gcMatches(c, s) {
+    if (!s) return false; var g = gcById(c.id); if (!g) return false;
+    var strength = s.items.some(function (it) { return !/^(walk|intervals|warmup|finisher|cooldown)$/.test(it[0]); });
+    return strength ? (g.kind === "kracht") : (g.kind === "cardio" || g.kind === "hiit");
+  }
+  function lastPumpWeights(t, beforeKey) {
+    var keys = Object.keys(trClasses(t)).filter(function (k) { return k < beforeKey && t.classes[k].id === "pump" && t.classes[k].w; }).sort();
+    return keys.length ? t.classes[keys[keys.length - 1]].w : null;
+  }
+  function openClassSheet(dateKey) {
+    var t = training(); if (!t) return;
+    var cur = trClassOn(t, dateKey), st = { id: cur ? cur.id : "pump", min: cur ? cur.min : 55, w: cur && cur.w ? JSON.parse(JSON.stringify(cur.w)) : {} };
+    var d = new Date(dateKey + "T12:00:00"), s = trSessionFor(t, d);
+    var sh = openSimpleSheet("gcSheet", "Groepsles", TR_DAYNAMES[d.getDay()] + " " + d.getDate() + (s ? " · gepland: " + s.name : " · rustdag")), body = sh.body;
+    var h1 = document.createElement("div"); h1.className = "qa-h"; h1.textContent = "Welke les deed je?"; body.appendChild(h1);
+    var grid = document.createElement("div"); grid.className = "gc-grid"; grid.id = "gcGrid"; body.appendChild(grid);
+    var info = document.createElement("div"); info.className = "gc-info"; info.id = "gcInfo"; body.appendChild(info);
+    var h2 = document.createElement("div"); h2.className = "qa-h"; h2.textContent = "Hoe lang?"; body.appendChild(h2);
+    var mins = document.createElement("div"); mins.className = "chiprow"; mins.id = "gcMin"; body.appendChild(mins);
+    var pump = document.createElement("div"); pump.id = "gcPump"; body.appendChild(pump);
+    var acts = document.createElement("div"); acts.className = "nudge-actions"; acts.style.marginTop = "14px"; body.appendChild(acts);
+    var save = document.createElement("button"); save.type = "button"; save.className = "primary-btn small"; save.id = "gcSave"; save.textContent = cur ? "Opslaan" : "Les toevoegen"; acts.appendChild(save);
+    if (cur) {
+      var del = document.createElement("button"); del.type = "button"; del.className = "ghost-btn small"; del.id = "gcDel"; del.textContent = "Weghalen"; acts.appendChild(del);
+      del.onclick = function () {
+        var prev = trClasses(t)[dateKey]; delete trClasses(t)[dateKey];
+        if (s && gcMatches(prev, s) && trIsDone(t, dateKey) && prev.autoDone) { var dn = trDoneSet(t), i = dn.indexOf(dateKey); if (i > -1) dn.splice(i, 1); }
+        savePrefs(); closeSheet(sh.ov); render(); showToast("Les weggehaald.");
+      };
+    }
+    function paint() {
+      grid.innerHTML = "";
+      GROUP_CLASSES.forEach(function (g) {
+        var b = document.createElement("button"); b.type = "button"; b.className = "gc-opt" + (st.id === g.id ? " on" : ""); b.id = "gc-" + g.id;
+        b.innerHTML = "<b></b><small></small>"; b.querySelector("b").textContent = g.name; b.querySelector("small").textContent = GC_KIND[g.kind];
+        b.onclick = function () { var changed = st.id !== g.id; st.id = g.id; if (changed && !cur) st.min = g.min; paint(); };
+        grid.appendChild(b);
+      });
+      var g0 = gcById(st.id), kc = gcKcal(st);
+      var match = s && gcMatches(st, s);
+      info.textContent = g0.tip + (kc ? " Geschat verbruik: ≈ " + kc + " kcal." : "") + (s ? (match ? " Telt als je training van vandaag (" + s.name + ")." : g0.kind === "herstel" ? " Je geplande training (" + s.name + ") staat nog open." : " Telt als beweging; je geplande training (" + s.name + ") staat nog open.") : " Telt mee bij je beweegminuten.");
+      mins.innerHTML = "";
+      [30, 45, 55, 60].forEach(function (m) {
+        var c = document.createElement("button"); c.type = "button"; c.className = "chip" + (Number(st.min) === m ? " selected" : ""); c.textContent = m + " min"; c.id = "gcMin-" + m;
+        c.onclick = function () { st.min = m; paint(); }; mins.appendChild(c);
+      });
+      pump.innerHTML = "";
+      if (st.id === "pump") {
+        var last = lastPumpWeights(t, dateKey);
+        var ph = document.createElement("div"); ph.className = "qa-h"; ph.textContent = "Je gewichten per nummer (kg, schijven samen)"; pump.appendChild(ph);
+        var pg = document.createElement("div"); pg.className = "gc-pump";
+        PUMP_TRACKS.forEach(function (tr) {
+          var l = document.createElement("label"); l.className = "num-field"; l.innerHTML = "<span></span>"; l.querySelector("span").textContent = tr[1];
+          var i = document.createElement("input"); i.className = "textinput"; i.type = "text"; i.inputMode = "decimal"; i.id = "gcW-" + tr[0];
+          i.placeholder = last && last[tr[0]] ? wgFmt(last[tr[0]]) : "kg"; if (st.w[tr[0]]) i.value = wgFmt(st.w[tr[0]]);
+          i.oninput = function () { var v = Number(String(i.value).replace(",", ".")); if (v > 0 && v < 200) st.w[tr[0]] = Math.round(v * 4) / 4; else delete st.w[tr[0]]; };
+          l.appendChild(i); pg.appendChild(l);
+        });
+        pump.appendChild(pg);
+        var tp = document.createElement("p"); tp.className = "acc-sub";
+        tp.textContent = last ? "Grijs is wat je de vorige keer gebruikte. Ging een nummer makkelijk? Leg er deze keer een schijf bij (1,25 of 2,5 kg)." : "Noteer per nummer het gewicht op je halter. De volgende keer zie je het hier terug.";
+        pump.appendChild(tp);
+      }
+    }
+    save.onclick = function () {
+      var rec = { id: st.id, min: Number(st.min) || gcById(st.id).min };
+      if (st.id === "pump" && Object.keys(st.w).length) rec.w = st.w;
+      // Telt als de geplande training? Dan vinken we die af (en bij weghalen weer aan).
+      if (s && gcMatches(rec, s) && !trIsDone(t, dateKey)) { t.done = trDoneSet(t).concat([dateKey]).slice(-150); rec.autoDone = true; }
+      else if (cur && cur.autoDone) rec.autoDone = true;
+      trClasses(t)[dateKey] = rec;
+      var keys = Object.keys(t.classes).sort(); while (keys.length > 120) delete t.classes[keys.shift()];
+      savePrefs(); closeSheet(sh.ov); render();
+      var kc = gcKcal(rec);
+      showToast(gcById(rec.id).name + " opgeslagen" + (kc ? " · ≈ " + kc + " kcal" : "") + (rec.autoDone ? " · je training van vandaag staat op gedaan" : "") + ".");
+    };
+    paint();
+  }
   var TR_DAYNAMES = ["zondag", "maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag"];
   // Weekoverzicht: alle trainingen van een week, met de oefeningen; tik op een dag om die training te openen. Blader met ‹ › door de weken.
   function openTrainingWeek(offset) {
@@ -17321,10 +17446,15 @@
         info.innerHTML = "<b></b><small></small>";
         info.querySelector("b").textContent = ses.name + (k === todayKey ? " \u00b7 vandaag" : "");
         info.querySelector("small").textContent = ses.items.filter(function (it) { return !/^(warmup|cooldown|finisher)$/.test(it[0]); }).map(function (it) { return (EX[it[0]] || [it[0]])[0]; }).join(", ") + " \u00b7 \u00b1" + trMinutes(t, ses) + " min" + (trKcal(t, ses) ? " \u00b7 \u2248 " + trKcal(t, ses).kcal + " kcal" : "");
+        var clS = trClassOn(t, k); if (clS) info.querySelector("small").textContent = (clS.autoDone ? "Gedaan met " : "Plus ") + gcById(clS.id).name + " (" + clS.min + " min)";
         var st = document.createElement("span"); st.className = "tr-wstate" + (isDone ? " done" : ""); st.textContent = isDone ? "\u2713" : "\u203a";
         row.appendChild(info); row.appendChild(st);
         (function (x) { row.onclick = function () { closeSheet(sh.ov); openWorkout(t, x, offset); }; })(ses);
-      } else { info.textContent = (t.days || []).indexOf(d.getDay()) > -1 && k < (t.startWeek || "") ? "Je schema was nog niet gestart" : "Rustdag"; row.appendChild(info); }
+      } else {
+        var clR = trClassOn(t, k);
+        if (clR) { var rb = document.createElement("button"); rb.type = "button"; rb.className = "tr-wrow" + (k === todayKey ? " today" : ""); rb.id = "trW-" + k; rb.appendChild(dayEl); info.innerHTML = "<b></b><small></small>"; info.querySelector("b").textContent = gcById(clR.id).name; info.querySelector("small").textContent = "Groepsles \u00b7 " + clR.min + " min"; rb.appendChild(info); var stc = document.createElement("span"); stc.className = "tr-wstate done"; stc.textContent = "\u2713"; rb.appendChild(stc); (function (kk) { rb.onclick = function () { closeSheet(sh.ov); openClassSheet(kk); }; })(k); row = rb; }
+        else { info.textContent = (t.days || []).indexOf(d.getDay()) > -1 && k < (t.startWeek || "") ? "Je schema was nog niet gestart" : "Rustdag"; row.appendChild(info); }
+      }
       list.appendChild(row);
     }
     mid.textContent = planned ? doneN + " van " + planned + " gedaan" : "Geen trainingen";
@@ -17390,6 +17520,13 @@
       kb.querySelector("small").textContent = "Geschat met je " + (kc.how === "vetpercentage" ? "gewicht en vetpercentage (uit je omtrekken)" : kc.how === "profiel" ? "gewicht, lengte, leeftijd en geslacht" : "gewicht") + "; cardio op " + hz0[0] + "\u2013" + hz0[1] + " slagen per minuut. Een sporthorloge meet het preciezer.";
       body.appendChild(kb);
     }
+    var clW = trClassOn(t, s.key);
+    var gcRow = document.createElement("button"); gcRow.type = "button"; gcRow.className = "gc-row" + (clW ? " on" : ""); gcRow.id = "trClassRow";
+    gcRow.innerHTML = "<b></b><small></small>";
+    if (clW) { var kcW = gcKcal(clW); gcRow.querySelector("b").textContent = "\u2713 " + gcById(clW.id).name + " \u00b7 " + clW.min + " min" + (kcW ? " \u00b7 \u2248 " + kcW + " kcal" : ""); gcRow.querySelector("small").textContent = (clW.autoDone ? "Telt als deze training. " : "") + "Tik om aan te passen."; }
+    else { gcRow.querySelector("b").textContent = "Ik deed een groepsles"; gcRow.querySelector("small").textContent = "Zoals BODYPUMP, RPM of BODYCOMBAT: telt als je training van vandaag als het past."; }
+    gcRow.onclick = function () { closeSheet(sh.ov); openClassSheet(s.key); };
+    body.appendChild(gcRow);
     var anyDeload = false, logInputs = [];
     if (s.items.some(function (it) { return !/^(walk|intervals|warmup|finisher|cooldown)$/.test(it[0]); })) {
       var wu = document.createElement("p"); wu.className = "tr-warm"; wu.textContent = "Rust 1,5 tot 3 minuten tussen de sets, zodat je elke set weer tot falen kunt gaan. Met warming-up, 10 minuten cardio en afkoelen duurt je training zo'n " + trMinutes(t, s) + " minuten." + (s.block && s.wkInBlock === 0 ? " Nieuw blok: deze week andere oefeningen voor dezelfde spieren. Leer eerst de techniek." : "");
