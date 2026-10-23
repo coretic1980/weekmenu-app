@@ -7064,7 +7064,7 @@
           if (isMinor()) c.appendChild(minorNoteEl());
           c.appendChild(goalNoteEl(prefs.goal, prefs.dietStyle));
           label(c, "Lichaamsprofiel", "Optioneel — stemt porties en calorieën af op jouw behoefte");
-          chips(c, GENDERS, function (g) { return prefs.gender === g; }, function (g, on) { prefs.gender = on ? "" : g; });
+          chips(c, GENDERS, function (g) { return prefs.gender === g; }, function (g, on) { var oldG = prefs.gender; prefs.gender = on ? "" : g; if (oldG !== prefs.gender) setTimeout(function () { genderChanged(oldG); }, 150); });
           var bio = document.createElement("div"); bio.className = "segrow"; bio.style.flexWrap = "wrap";
           if (healthOk()) { numInput(bio, "heightCm", "Lengte (cm)"); numInput(bio, "weightKg", "Gewicht (kg)"); numInput(bio, "age", "Leeftijd"); c.appendChild(bio); }
           if (wgAllowed()) {
@@ -16444,6 +16444,46 @@
     prev.onclick = function () { deck.scrollBy({ left: -deck.clientWidth, behavior: "smooth" }); };
     next.onclick = function () { deck.scrollBy({ left: deck.clientWidth, behavior: "smooth" }); };
     nav.appendChild(prev); nav.appendChild(next); body.appendChild(nav);
+  }
+  // Geslacht gewijzigd: alles wat ervan afhangt rekent mee (dagdoel, vetpercentage en gezonde marges, je doelgewicht, cyclus).
+  function genderChanged(oldG) {
+    var newG = prefs.gender; if (oldG === newG) return;
+    var lab = function (g) { return g === "Man" ? "man" : g === "Vrouw" ? "vrouw" : g === "Anders" ? "anders" : "niet ingevuld"; };
+    var cur = prefs.gender;
+    prefs.gender = oldG; var kOld = dailyKcalTarget(), bfOld = currentBodyFat(), rOld = healthyFatRange(); prefs.gender = cur;
+    var stoppedCycle = false;
+    if (newG !== "Vrouw" && prefs.cycle) { delete prefs.cycle; stoppedCycle = true; }   // cyclusgegevens horen alleen bij vrouwen: wissen
+    savePrefs(); render();
+    var kNew = dailyKcalTarget(), bfNew = currentBodyFat(), rNew = healthyFatRange(), g = weightGoal();
+    var sh = openSimpleSheet("gcSheet", "Je profiel is aangepast", "Geslacht: " + lab(oldG) + " \u2192 " + lab(newG)), body = sh.body;
+    function line(l, from, to) { var r = document.createElement("div"); r.className = "gc-row"; r.innerHTML = "<span></span><b></b>"; r.children[0].textContent = l; r.children[1].textContent = from && from !== to ? from + " \u2192 " + to : to; body.appendChild(r); }
+    var h = document.createElement("div"); h.className = "qa-h"; h.textContent = "Dit is meteen mee veranderd"; body.appendChild(h);
+    if (kNew || kOld) line("Dagdoel", kOld ? kOld + " kcal" : "", kNew ? kNew + " kcal" : "vul je lengte, gewicht en leeftijd in");
+    if (rOld || rNew) line("Gezond vetpercentage", rOld ? rOld[0] + "\u2013" + rOld[1] + "%" : "", rNew ? rNew[0] + "\u2013" + rNew[1] + "%" : "geen (formule kent alleen man en vrouw)");
+    if (bfOld || bfNew) line("Geschat vetpercentage", bfOld ? wgFmt(bfOld.pct) + "%" : "", bfNew ? wgFmt(bfNew.pct) + "%" : newG === "Vrouw" ? "meet ook je heup" : "\u2013");
+    line("Macro's en trainingsschema", "", "blijven gelijk (die volgen je doel)");
+    var todo = [];
+    if (g) {
+      var msg = wgCheck(Number(g.target), currentWeight() || Number(g.start));
+      if (msg) todo.push([msg, "Doelgewicht aanpassen", function () { openWeightGoalSheet(); }]);
+    }
+    if (newG === "Vrouw" && !measLast("heup") && (measLast("middel") || measLast("nek"))) todo.push(["Voor het vetpercentage bij vrouwen telt ook je heupomtrek. Meet die de volgende keer mee.", "Nu meten", function () { openMeasureSheet(); }]);
+    if (stoppedCycle) todo.push(["Je cyclusgegevens zijn gewist; die horen bij een vrouwelijk profiel.", null, null]);
+    if (newG === "Vrouw" && cycleAllowed() && !prefs.cycle) todo.push(["Wil je dat Balanza rekening houdt met je cyclus of de overgang? Dat is optioneel.", "Bekijken", function () { openCycleSheet(); }]);
+    if (newG !== "Man" && newG !== "Vrouw") todo.push(["Zonder man of vrouw rekent Balanza je dagdoel met een gemiddelde, en schat het geen vetpercentage (de formules verschillen per geslacht).", null, null]);
+    if (todo.length) {
+      var h2 = document.createElement("div"); h2.className = "qa-h"; h2.textContent = "Even checken"; body.appendChild(h2);
+      todo.forEach(function (x, i) {
+        var b = document.createElement("div"); b.className = "gc-todo"; b.id = "gnTodo-" + i;
+        var pp = document.createElement("p"); pp.textContent = x[0]; b.appendChild(pp);
+        if (x[1]) { var a = document.createElement("div"); a.className = "nudge-actions"; var y = document.createElement("button"); y.type = "button"; y.className = "primary-btn small"; y.textContent = x[1]; y.onclick = function () { closeSheet(sh.ov); x[2](); }; a.appendChild(y); b.appendChild(a); }
+        body.appendChild(b);
+      });
+    }
+    var ok = document.createElement("div"); ok.className = "nudge-actions"; ok.style.marginTop = "14px";
+    var done = document.createElement("button"); done.type = "button"; done.className = "primary-btn small"; done.id = "gnDone"; done.textContent = "Klaar";
+    done.onclick = function () { closeSheet(sh.ov); };
+    ok.appendChild(done); body.appendChild(ok);
   }
   // Het gewichtsdeel van "Jouw doel" (ingebed in de doelkaart)
   function renderWeightGoalCard(main, opts) {
