@@ -1857,6 +1857,8 @@
   .tr-daycard.done b { color: #2E9A5C; }
   .wg-prefrow { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; font-size: 14px; }
   .wiz-main { gap: 12px; }
+  .reset-acts { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+  .ghost-btn.danger { color: #C24A33; border-color: rgba(194,74,51,.4); }
   .wiz-h { font-family: Fraunces, serif; font-weight: 600; font-size: 24px; margin: 0; }
   .wiz-sub { margin: 0; font-size: 14.5px; color: var(--muted); line-height: 1.55; }
   .wz-opts { display: flex; flex-direction: column; gap: 8px; }
@@ -6670,8 +6672,26 @@
     main.appendChild(actions);
   }
 
+  // Opnieuw beginnen: eerst kiezen of je persoonlijke gegevens (lichaam, gewicht en voortgang, doel, training, cyclus) mogen blijven
   function resetEverything() {
-    askConfirm("Alles wissen en opnieuw beginnen? Dit verwijdert al je opgeslagen gerechten, voorkeuren en planning, en kan niet ongedaan worden gemaakt.", function () {
+    var sh = openSimpleSheet("resetSheet", "Opnieuw beginnen", "Dit kan niet ongedaan worden gemaakt"), body = sh.body;
+    var p = document.createElement("p"); p.className = "acc-sub"; p.textContent = "Je gerechten, planning, boodschappen en voorkeuren voor gerechten worden gewist. Wil je ook je persoonlijke gegevens wissen?";
+    body.appendChild(p);
+    var keep = document.createElement("div"); keep.className = "plainbox"; keep.id = "resetKeepInfo";
+    keep.textContent = "Persoonlijke gegevens: je naam, geslacht, lengte, gewicht, leeftijd en activiteit, je doelgewicht en weeggeschiedenis met omtrekken, je trainingsschema en logboek, je cyclus en je eigen producten.";
+    body.appendChild(keep);
+    var b1 = document.createElement("button"); b1.type = "button"; b1.className = "primary-btn"; b1.id = "resetKeep"; b1.textContent = "Wissen, persoonlijke gegevens bewaren";
+    b1.onclick = function () { closeSheet(sh.ov); doResetEverything(true); };
+    var b2 = document.createElement("button"); b2.type = "button"; b2.className = "ghost-btn danger"; b2.id = "resetAll"; b2.textContent = "Alles wissen, ook mijn persoonlijke gegevens";
+    b2.onclick = function () { closeSheet(sh.ov); askConfirm("Echt alles wissen, ook je gewicht, voortgang en training? Dit kan niet ongedaan worden gemaakt.", function () { doResetEverything(false); }, "Alles wissen", "Annuleren"); };
+    var b3 = document.createElement("button"); b3.type = "button"; b3.className = "wizard-skip"; b3.id = "resetCancel"; b3.textContent = "Annuleren";
+    b3.onclick = function () { closeSheet(sh.ov); };
+    var acts = document.createElement("div"); acts.className = "reset-acts"; acts.appendChild(b1); acts.appendChild(b2); acts.appendChild(b3); body.appendChild(acts);
+  }
+  function doResetEverything(keepPersonal) {
+    var PERSONAL = ["name", "gender", "heightCm", "weightKg", "age", "ageGroup", "activityLevel", "weightGoal", "journey", "training", "moveLog", "cycle", "cycleDismissed", "myFoods", "communityName"];
+    var saved = {}; if (keepPersonal) PERSONAL.forEach(function (k) { if (prefs[k] !== undefined) saved[k] = deepClone(prefs[k]); });
+    (function () {
       WEEKS.length = 0;
       clearAllDishesFromDb();
 
@@ -6700,6 +6720,7 @@
       prefs.mealCounts = null;
       prefs.withImages = true;
       delete prefs.intent; delete prefs.weightGoal; delete prefs.training; delete prefs.trainingDismissed;
+      if (keepPersonal) Object.keys(saved).forEach(function (k) { prefs[k] = saved[k]; });
       window.__prefsReset = true; savePrefs(); setTimeout(function () { window.__prefsReset = false; }, 3000);
 
       plannedWeeks.length = 0;
@@ -6712,9 +6733,9 @@
       libraryFilter = "Alle";
       libraryGoalFilter = "Alle";
 
-      showToast("Alles is gewist — je begint weer helemaal opnieuw.");
+      showToast(keepPersonal ? "Gewist. Je persoonlijke gegevens zijn bewaard." : "Alles is gewist. Je begint weer helemaal opnieuw.");
       state.wiz = null; startWizard("new");
-    });
+    })();
   }
 
   function toggleInArray(arr, val) {
