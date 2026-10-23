@@ -730,7 +730,9 @@
   .qa-thumb.none { display: none; }
   .qa-thumb-float { float: left; width: 36px; height: 36px; margin: 2px 8px 2px 0; }
   .qa-dock-info { flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-start; min-width: 0; background: none; border: 0; padding: 2px 0; color: inherit; font: inherit; text-align: left; cursor: pointer; }
-  .qa-dock-info b { font-size: 17px; } .qa-dock-info small { font-size: 12px; color: var(--accent); white-space: nowrap; }
+  .qa-dock-when { display: inline-flex; align-items: center; gap: 5px; padding: 6px 10px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); white-space: nowrap; }
+  .qa-dock-when i { font-style: normal; font-size: 14px; } .qa-dock-when b { font-size: 15px; font-weight: 700; } .qa-dock-when em { font-style: normal; font-size: 11px; }
+  .qa-dock-info small { font-size: 12px; color: var(--muted); margin: 3px 0 0 10px; white-space: nowrap; }
   .qa-dock-go { flex: 1 1 0; margin: 0 !important; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .qa-gl { font-size: 12px; color: var(--muted); margin-right: 2px; }
   .qa-sum { margin-top: 12px; }
@@ -3286,8 +3288,20 @@
     try { goto(snap.view, extra); } finally { navGoingBack = false; }
     var y = snap.scrollY || 0; if (y) setTimeout(function () { try { window.scrollTo(0, y); } catch (e) {} }, 30);
   }
+  // ---- Scrollpositie onthouden, overal: terug naar een scherm = terug op dezelfde plek ----
+  // Per scherm (weergave + welke week/dag/tab) bewaren we waar je stond. Ga je naar het scherm waar je net vandaan kwam,
+  // dan is dat "terug" en komen we op die plek uit; een nieuw scherm begint bovenaan.
+  var scrollMem = {}, screenHist = [];
+  function screenKey() { return [state.view, state.weekId, state.dayId, state.planWeekId, state.planDayName, state.tab, state.settingsPage].map(function (x) { return x == null ? "" : String(x); }).join("|"); }
+  function restoreY(y) {
+    if (!y) return;
+    var go = function () { try { window.scrollTo(0, y); } catch (e) {} };
+    go(); requestAnimationFrame(go); setTimeout(go, 60); setTimeout(go, 250);   // na het opbouwen van lijsten en foto's
+  }
   function goto(view, extra) {
     if (typeof stopVoice === "function") stopVoice(true);
+    var fromKey = screenKey(); scrollMem[fromKey] = window.scrollY || 0;
+    if (screenHist[screenHist.length - 1] !== fromKey) screenHist.push(fromKey);
     if (NAV_PAGES[view] && state.view !== view && !navGoingBack) { navStack.push(navSnapshot()); if (navStack.length > 12) navStack.shift(); }
     // Rechtstreeks een onderdeel van Instellingen geopend (bijv. vanuit een tip)? Dan brengt Terug je meteen terug.
     if (view === "settings" && state.view !== "settings") state.settingsEntry = extra && extra.settingsPage ? extra.settingsPage : null;
@@ -3298,8 +3312,12 @@
     if (view !== "weeks") stopFactCarousel();
     state.view = view;
     if (extra) { for (var k in extra) { state[k] = extra[k]; } }
+    var toKey = screenKey(), isBack = toKey !== fromKey && screenHist.length >= 2 && screenHist[screenHist.length - 2] === toKey;
+    if (isBack) screenHist.pop(); else if (toKey !== fromKey) { screenHist.push(toKey); if (screenHist.length > 30) screenHist.shift(); }
+    lastRenderKey = toKey;
     render();
     window.scrollTo(0, 0);
+    if (isBack) restoreY(scrollMem[toKey]);
   }
 
   function renderTopbar(title, showBack, onBack) {
@@ -9084,7 +9102,25 @@
     ov.classList.add("active");
     setTimeout(function () { var f = ov.querySelector(".sheet button"); if (f) f.focus(); }, 0);
   }
-  function closeSheet(ov) { if (ov) { ov.classList.remove("active"); stopVideos(ov); } }
+  function closeSheet(ov) {
+    if (!ov) return;
+    ov.classList.remove("active"); stopVideos(ov);
+    if (sheetMem.y != null && !document.querySelector(".sheet-overlay.active, .sheet.active")) sheetMem.pending = { y: sheetMem.y, key: sheetMem.key, t: Date.now() };
+  }
+  var sheetMem = { y: null, key: null, pending: null };
+  // Vensters (sheets): bij openen de plek onthouden; als het laatste venster dicht gaat en je nog op hetzelfde scherm bent,
+  // terug naar precies die plek (ook als het toetsenbord de pagina had verschoven).
+  (function () {
+    var anyOpen = false;
+    var check = function () {
+      var open = !!document.querySelector(".sheet-overlay.active, .sheet.active");
+      if (open === anyOpen) return;
+      if (open) { sheetMem.y = window.scrollY || 0; sheetMem.key = screenKey(); sheetMem.pending = null; }
+      else if (sheetMem.y != null && sheetMem.key === screenKey()) { var y = sheetMem.y; restoreY(y); setTimeout(function () { try { window.scrollTo(0, y); } catch (e) {} }, 450); }
+      anyOpen = open;
+    };
+    try { new MutationObserver(check).observe(document.body, { subtree: true, attributes: true, attributeFilter: ["class"], childList: true }); } catch (e) {}
+  })();
   // Een filmpje mag niet doorspelen als je het scherm sluit of de oefening inklapt: haal de speler weg en zet de afspeelknop terug.
   function stopVideos(root) {
     if (!root || !root.querySelectorAll) return;
@@ -14498,12 +14534,12 @@
     function paintDock(t, dlab, go) {
       if (!dock) {
         dock = document.createElement("div"); dock.className = "qa-dock"; dock.id = "qaDock";
-        dock.innerHTML = '<button type="button" class="qa-dock-info" id="qaDockInfo"><b></b><small></small></button><button type="button" class="primary-btn qa-dock-go" id="qaDockGo"></button>';
+        dock.innerHTML = '<button type="button" class="qa-dock-info" id="qaDockInfo" aria-label="Dag en moment wijzigen"><span class="qa-dock-when"><i aria-hidden="true">\uD83D\uDCC5</i><b></b><em aria-hidden="true">\u25BE</em></span><small></small></button><button type="button" class="primary-btn qa-dock-go" id="qaDockGo"></button>';
         body.appendChild(dock);
       }
       if (!t) { dock.classList.remove("show"); return; }
-      dock.querySelector("b").textContent = t.kcal + " kcal";
-      dock.querySelector("small").textContent = dlab + " \u00b7 " + st.moment.toLowerCase() + " \u203a";
+      dock.querySelector(".qa-dock-when b").textContent = dlab.charAt(0).toUpperCase() + dlab.slice(1) + " \u00b7 " + st.moment;
+      dock.querySelector("small").textContent = t.kcal + " kcal";
       var dg = dock.querySelector("#qaDockGo"); dg.textContent = go.textContent.replace(/\s*\(.*\)$/, ""); dg.disabled = go.disabled;
       dg.onclick = function () { go.click(); };
       // Tik op het totaal: naar de keuzes (dag, moment, hoe)
@@ -19644,7 +19680,14 @@
     if (sbMq.addEventListener) sbMq.addEventListener("change", onSb); else if (sbMq.addListener) sbMq.addListener(onSb);
   } catch (e) {}
 
+  var lastRenderKey = null;
   function render() {
+    // Zelfde scherm opnieuw opgebouwd (bijv. na het sluiten van een venster)? Dan blijf je op dezelfde plek staan.
+    var rk = screenKey(), keepY = rk === lastRenderKey ? window.scrollY || 0 : 0; lastRenderKey = rk;
+    var sp = sheetMem.pending; if (sp && sp.key === rk && Date.now() - sp.t < 1500) keepY = sp.y;   // net een venster gesloten: de plek van vóór het venster
+    try { renderInner(); } finally { if (keepY) restoreY(keepY); }
+  }
+  function renderInner() {
     state.tabActions = null;
     try { document.body.setAttribute("data-view", state.view || "weeks"); } catch (e) {}
     try {
