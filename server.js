@@ -5178,7 +5178,35 @@ function offFood(pr, ean, kcal) {
   var name = brand && pname.toLowerCase().indexOf(brand.toLowerCase()) === 0 ? pname : [brand, pname].filter(Boolean).join(" ");
   return { ean: ean, name: cleanText(name, 80), brand: brand, stores: offStores(pr.stores), quantity: cleanText(pr.quantity || "", 20),
     kcal: Math.round(kcal), eiwit: num("proteins_100g"), kh: num("carbohydrates_100g"), vet: num("fat_100g"),
-    portion: Number(pr.serving_quantity) > 0 && Number(pr.serving_quantity) < 2000 ? { label: cleanText(pr.serving_size || "1 portie", 30), g: Math.round(Number(pr.serving_quantity)) } : null };
+    portion: Number(pr.serving_quantity) > 0 && Number(pr.serving_quantity) < 2000 ? { label: cleanText(pr.serving_size || "1 portie", 30), g: Math.round(Number(pr.serving_quantity)) } : null,
+    img: offImgPath(pr.image_front_small_url || pr.image_small_url || pr.image_front_url || pr.image_url) };
+}
+// Productfoto van Open Food Facts (CC BY-SA): we bewaren alleen het pad en serveren hem via onze eigen server,
+// zodat je telefoon niet rechtstreeks met Open Food Facts praat. Kleine variant (200 px) is genoeg.
+var OFF_IMG_RE = /^\/images\/products\/[0-9\/]{3,40}\/[a-z0-9_.-]{3,60}\.(jpg|png|webp)$/i;
+function offImgPath(u) {
+  var m = String(u || "").match(/^https?:\/\/(?:images|static)\.openfoodfacts\.org(\/images\/products\/.+)$/);
+  if (!m) return "";
+  var p = m[1].replace(/\.(400|full)\.(jpg|png)$/i, ".200.$2");
+  return OFF_IMG_RE.test(p) ? p : "";
+}
+var offImgCache = new Map();   // klein geheugen-cachetje voor veelgebruikte foto's
+function handleFoodImg(req, res, p) {
+  if (!OFF_IMG_RE.test(p)) { res.writeHead(404); return res.end(); }
+  var hit = offImgCache.get(p);
+  var send = function (buf, type) { res.writeHead(200, { "Content-Type": type, "Cache-Control": "public, max-age=2592000, immutable", "Content-Length": buf.length }); res.end(buf); };
+  if (hit) return send(hit.buf, hit.type);
+  var ctl = new AbortController(), t = setTimeout(function () { ctl.abort(); }, 8000);
+  fetch("https://images.openfoodfacts.org" + p, { signal: ctl.signal, headers: { "User-Agent": "Balanza/1.0 (balanza voedingsapp)" } }).then(function (x) {
+    clearTimeout(t);
+    var type = String(x.headers.get("content-type") || "");
+    if (!x.ok || type.indexOf("image/") !== 0) throw new Error("HTTP " + x.status);
+    return x.arrayBuffer().then(function (ab) {
+      var buf = Buffer.from(ab); if (buf.length > 400000) throw new Error("te groot");
+      offImgCache.set(p, { buf: buf, type: type }); if (offImgCache.size > 400) offImgCache.delete(offImgCache.keys().next().value);
+      send(buf, type);
+    });
+  }).catch(function () { clearTimeout(t); res.writeHead(404, { "Cache-Control": "public, max-age=3600" }); res.end(); });
 }
 // GET /api/foods/search?q=… — producten uit Nederlandse winkels zoeken in Open Food Facts (met merk en winkel), 7 dagen bewaard.
 var offSearchLimiter = makeHourlyLimiter(120);
@@ -5217,7 +5245,7 @@ var OFFNL_CHUNK = 6 * 1024 * 1024;   // ruim onder de 16 MB per MongoDB-document
 var OFFNL_FILE = path.join(__dirname, "data", "offnl.json.gz");
 var offnl = { items: null, byEan: null, at: 0, count: 0, status: { state: "leeg" } };
 function offnlNorm(x) { return String(x || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, " ").trim(); }
-// Compact record: [ean, naam, merk, winkels ("A|B"), inhoud, kcal, eiwit, kh, vet, portie-g, portie-label, scans]
+// Compact record: [ean, naam, merk, winkels ("A|B"), inhoud, kcal, eiwit, kh, vet, portie-g, portie-label, scans, foto-pad]
 function offnlIndex(rows, at) {
   // Alle teksten (naam + merk, genormaliseerd) achter elkaar in één lange string: kandidaten zoeken met één native
   // indexOf is veel sneller dan per product, en kost weinig geheugen. Woordgrenzen blijven als spatie bewaard.
@@ -5229,7 +5257,7 @@ function offnlIndex(rows, at) {
 }
 function offnlToFood(r) {
   return { ean: r[0], name: r[1], brand: r[2], stores: r[3] ? r[3].split("|") : [], quantity: r[4], kcal: r[5], eiwit: r[6], kh: r[7], vet: r[8],
-    portion: r[9] ? { label: r[10] || "1 portie", g: r[9] } : null };
+    portion: r[9] ? { label: r[10] || "1 portie", g: r[9] } : null, img: r[12] || "" };
 }
 function offnlByEan(ean) { if (!offnl.byEan) return null; var i = offnl.byEan.get(ean); return i === undefined ? null : offnlToFood(offnl.items[i]); }
 function offnlSearch(q, limit) {
@@ -5325,12 +5353,12 @@ function offnlImport() {
         var kcal = Number(g("energy-kcal_100g")); if (!(kcal >= 0) || g("energy-kcal_100g") === "") { var kj = Number(g("energy_100g")); kcal = g("energy_100g") !== "" && kj >= 0 ? kj / 4.184 : NaN; }
         if (!(kcal >= 0 && kcal <= 950)) return;
         var pname = g("product_name_nl") || g("product_name"); if (!pname.trim()) return;
-        var pr = { product_name: pname, brands: g("brands"), stores: g("stores"), quantity: g("quantity"), serving_size: g("serving_size"), serving_quantity: g("serving_quantity"),
+        var pr = { product_name: pname, brands: g("brands"), stores: g("stores"), quantity: g("quantity"), serving_size: g("serving_size"), serving_quantity: g("serving_quantity"), image_small_url: g("image_small_url") || g("image_url"),
           nutriments: { proteins_100g: g("proteins_100g"), carbohydrates_100g: g("carbohydrates_100g"), fat_100g: g("fat_100g") } };
         var fd = offFood(pr, code, kcal);
         if (!fd.name) return;
         seen.add(code);
-        rows.push([fd.ean, fd.name, fd.brand, fd.stores.join("|"), fd.quantity, fd.kcal, fd.eiwit, fd.kh, fd.vet, fd.portion ? fd.portion.g : 0, fd.portion ? fd.portion.label : "", Number(g("unique_scans_n")) || 0]);
+        rows.push([fd.ean, fd.name, fd.brand, fd.stores.join("|"), fd.quantity, fd.kcal, fd.eiwit, fd.kh, fd.vet, fd.portion ? fd.portion.g : 0, fd.portion ? fd.portion.label : "", Number(g("unique_scans_n")) || 0, fd.img || ""]);
         st.kept = rows.length;
       });
       rl.on("close", function () { resolve(rows); });
@@ -5374,7 +5402,7 @@ function handleFoodSearch(req, res, url) {
   // Eerst in onze eigen kopie; vindt die iets met al je woorden, dan hoeven we de zoekdienst niet te vragen
   var local = offnlSearch(q, 10);
   if (local && local.length && !debug) return sendJSON(res, 200, { items: local, source: "Open Food Facts" });
-  var key = "foods/search7/" + crypto.createHash("sha1").update(q).digest("hex").slice(0, 20);
+  var key = "foods/search8/" + crypto.createHash("sha1").update(q).digest("hex").slice(0, 20);
   var mapItems = function (list) {
     return (Array.isArray(list) ? list : []).map(function (pr) {
       var n = pr.nutriments || {}, kcal = Number(n["energy-kcal_100g"]); if (!isFinite(kcal) && isFinite(Number(n["energy_100g"]))) kcal = Number(n["energy_100g"]) / 4.184;
@@ -5396,7 +5424,7 @@ function handleFoodSearch(req, res, url) {
   };
   var sBase = process.env.OFF_SEARCH_URL || "https://search.openfoodfacts.org";
   var oBase = process.env.OFF_BASE_URL || "https://world.openfoodfacts.org";
-  var FIELDS = "code,product_name,product_name_nl,brands,stores,nutriments,serving_quantity,serving_size,quantity";
+  var FIELDS = "code,product_name,product_name_nl,brands,stores,nutriments,serving_quantity,serving_size,quantity,image_front_small_url,image_small_url";
   // Zoekvarianten als gewone tekst (de zoekdienst geeft een fout op OR-constructies):
   // de zoekterm zelf, aaneengeschreven (havermout reep -> havermoutreep) en het laatste woord in de andere vorm (-> havermoutrepen)
   var variants = [];
@@ -5472,10 +5500,10 @@ function handleFoodBarcode(req, res, ean) {
   var key = "foods/ean/" + ean;
   return dbGetDoc(key).then(function (r) {
     var v = r.exists ? r.value : null;
-    if (v && (!v.found || v.v === 2) && Date.now() - v.at < (v.found ? FOOD_BARCODE_TTL_MS : FOOD_BARCODE_MISS_MS)) return v;
+    if (v && (!v.found || v.v === 3) && Date.now() - v.at < (v.found ? FOOD_BARCODE_TTL_MS : FOOD_BARCODE_MISS_MS)) return v;
     var base = process.env.OFF_BASE_URL || "https://world.openfoodfacts.org";
     var ctl = new AbortController(), t = setTimeout(function () { ctl.abort(); }, 8000);
-    return fetch(base + "/api/v2/product/" + ean + ".json?fields=product_name,product_name_nl,generic_name_nl,brands,stores,nutriments,serving_quantity,serving_size,quantity",
+    return fetch(base + "/api/v2/product/" + ean + ".json?fields=product_name,product_name_nl,generic_name_nl,brands,stores,nutriments,serving_quantity,serving_size,quantity,image_front_small_url,image_small_url",
       { signal: ctl.signal, headers: { "User-Agent": "Balanza/1.0 (balanza voedingsapp)" } })
       .then(function (x) { return x.ok || x.status === 404 ? x.json().catch(function () { return {}; }) : Promise.reject(new Error("HTTP " + x.status)); })
       .then(function (d) {
@@ -5483,7 +5511,7 @@ function handleFoodBarcode(req, res, ean) {
         var pr = d && d.product, n = pr && pr.nutriments || {};
         var kcal = Number(n["energy-kcal_100g"]); if (!isFinite(kcal) && isFinite(Number(n["energy_100g"]))) kcal = Number(n["energy_100g"]) / 4.184;
         var found = !!(pr && isFinite(kcal) && kcal >= 0 && (pr.product_name_nl || pr.product_name));
-        var doc = { at: Date.now(), found: found, v: 2 };
+        var doc = { at: Date.now(), found: found, v: 3 };
         if (found) doc.food = offFood(pr, ean, kcal);
         return dbSetDoc(key, doc).then(function () { return doc; });
       }, function (e) { clearTimeout(t); throw e; });
@@ -8263,6 +8291,7 @@ var server = http.createServer(function (req, res) {
   if (req.method === "GET" && url.pathname === "/api/news") return handleNews(req, res);
   if (req.method === "GET" && url.pathname === "/api/foods") return handleFoods(req, res);
   if (req.method === "GET" && url.pathname === "/api/foods/search") return handleFoodSearch(req, res, url);
+  if (req.method === "GET" && url.pathname.indexOf("/api/foods/img/") === 0) return handleFoodImg(req, res, url.pathname.slice("/api/foods/img".length));
   var eanM = url.pathname.match(/^\/api\/foods\/barcode\/([0-9]{1,20})$/);
   if (req.method === "GET" && eanM) return handleFoodBarcode(req, res, eanM[1]);
   if ((req.method === "GET" || req.method === "POST") && url.pathname === "/api/autoplan") return handleAutoPlan(req, res);

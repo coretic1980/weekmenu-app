@@ -720,6 +720,18 @@
   .qa-unit-w::after { content: "\25BE"; font-size: 10px; }
   .qa-unit { position: absolute; inset: 0; opacity: 0; width: 100%; font-size: 16px; cursor: pointer; }
   .qa-scan-diag { font-size: 11px; color: var(--muted); text-align: center; margin: -2px 0 6px; }
+  .qa-dock { position: sticky; bottom: 0; z-index: 3; display: none; align-items: center; gap: 10px; margin: 8px -4px 0; padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); border-radius: 16px 16px 0 0;
+    background: var(--surface, #fff); box-shadow: 0 -6px 20px rgba(0,0,0,.10); }
+  .qa-dock.show { display: flex; animation: qaDockIn .18s ease-out; }
+  html.kb-open .qa-dock { display: none; }
+  @keyframes qaDockIn { from { transform: translateY(12px); opacity: 0; } to { transform: none; opacity: 1; } }
+  .qa-thumb { flex: 0 0 auto; width: 40px; height: 40px; border-radius: 10px; background: #fff; border: 1px solid var(--line); overflow: hidden; display: inline-flex; align-items: center; justify-content: center; }
+  .qa-thumb img { width: 100%; height: 100%; object-fit: contain; }
+  .qa-thumb.none { display: none; }
+  .qa-thumb-float { float: left; width: 36px; height: 36px; margin: 2px 8px 2px 0; }
+  .qa-dock-info { flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-start; min-width: 0; background: none; border: 0; padding: 2px 0; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+  .qa-dock-info b { font-size: 17px; } .qa-dock-info small { font-size: 12px; color: var(--accent); white-space: nowrap; }
+  .qa-dock-go { flex: 1 1 0; margin: 0 !important; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .qa-gl { font-size: 12px; color: var(--muted); margin-right: 2px; }
   .qa-sum { margin-top: 12px; }
   .bal-why { margin: 10px 0 14px; padding: 10px 12px; border-radius: 12px; background: var(--surface-2, rgba(0,0,0,0.04)); font-size: 13.5px; line-height: 1.45; color: var(--ink); }
@@ -13878,11 +13890,18 @@
   }
   function myFoods() { return Array.isArray(prefs.myFoods) ? prefs.myFoods : []; }
   function qaMyAsFood(m) {
-    return { key: "m" + m.id, my: m.id, name: m.name, kcal: m.kcal, e: m.e, kh: m.kh, v: m.v, per: m.per || 100, portion: m.portion || null, src: m.src || "eigen", ean: m.ean || null, brand: m.brand || "", stores: Array.isArray(m.stores) ? m.stores : [], norm: qaNorm(m.name), tokens: qaNorm(m.name).split(" ") };
+    return { key: "m" + m.id, my: m.id, name: m.name, kcal: m.kcal, e: m.e, kh: m.kh, v: m.v, per: m.per || 100, portion: m.portion || null, src: m.src || "eigen", ean: m.ean || null, brand: m.brand || "", stores: Array.isArray(m.stores) ? m.stores : [], img: m.img || "", norm: qaNorm(m.name), tokens: qaNorm(m.name).split(" ") };
   }
   // Een product uit Open Food Facts (gescand of gezocht) als eigen product bewaren, met merk en winkel
   function offAsMyFood(fd) {
-    return { id: "my" + Date.now(), name: fd.name, kcal: fd.kcal, e: fd.eiwit, kh: fd.kh, v: fd.vet, src: "off", ean: fd.ean, portion: fd.portion, brand: fd.brand || "", stores: Array.isArray(fd.stores) ? fd.stores.slice(0, 3) : [] };
+    return { id: "my" + Date.now(), name: fd.name, kcal: fd.kcal, e: fd.eiwit, kh: fd.kh, v: fd.vet, src: "off", ean: fd.ean, portion: fd.portion, brand: fd.brand || "", stores: Array.isArray(fd.stores) ? fd.stores.slice(0, 3) : [], img: offImgOk(fd.img) };
+  }
+  // Productfoto (Open Food Facts, CC BY-SA) via onze eigen server
+  function offImgOk(p) { return typeof p === "string" && /^\/images\/products\/[0-9\/]+\/[a-z0-9_.-]+\.(jpg|png|webp)$/i.test(p) ? p : ""; }
+  function qaThumb(p) {
+    var ok = offImgOk(p), el = document.createElement("span"); el.className = "qa-thumb" + (ok ? "" : " none"); el.setAttribute("aria-hidden", "true");
+    if (ok) { var im = document.createElement("img"); im.loading = "lazy"; im.decoding = "async"; im.alt = ""; im.src = "/api/foods/img" + ok; im.onerror = function () { el.classList.add("none"); im.remove(); }; el.appendChild(im); }
+    return el;
   }
   function offWhere(f) { var st0 = Array.isArray(f.stores) ? f.stores : []; return st0.length ? st0.slice(0, 2).join(", ") : ""; }
   var offSearchCache = {};
@@ -13984,7 +14003,7 @@
   // Eén regel in de lijst: een product met een hoeveelheid.
   function qaItem(f, grams, count) {
     var p = qaPortion(f);
-    var it = { key: f.key, name: f.name, src: f.src, code: f.code || null, my: f.my || null, ean: f.ean || null, per100: f.fixed ? null : { kcal: f.kcal, e: f.e, kh: f.kh, v: f.v }, fixed: f.fixed || null, portion: p };
+    var it = { key: f.key, name: f.name, src: f.src, code: f.code || null, my: f.my || null, ean: f.ean || null, img: f.img || "", per100: f.fixed ? null : { kcal: f.kcal, e: f.e, kh: f.kh, v: f.v }, fixed: f.fixed || null, portion: p };
     if (f.fixed) { it.count = count || 1; it.g = 0; }
     else { it.g = Math.max(1, Math.round(grams || p.g || 100)); it.unit = p.g && p.label !== "100 gram" && it.g % p.g === 0 ? "p" : "g"; }
     return it;
@@ -14239,6 +14258,7 @@
         var b = document.createElement("button"); b.type = "button"; b.className = "qa-res"; b.id = "qaRes" + i;
         var p = qaPortion(f);
         b.innerHTML = '<span class="qa-res-txt"><b></b><small></small></span><span class="qa-plus" aria-hidden="true">+</span>';
+        if (f.img) b.insertBefore(qaThumb(f.img), b.firstChild);
         b.querySelector("b").textContent = f.name;
         b.querySelector("small").textContent = (f.fixed ? f.fixed.kcal + " kcal per portie" : Math.round(f.kcal * (p.g || 100) / 100) + " kcal per " + p.label + (p.g && p.label !== "100 gram" && !/\bg\)?$/.test(p.label) ? " (" + p.g + " g)" : "")) + (f.my ? (offWhere(f) ? " · " + offWhere(f) : f.src === "off" ? " · gescand" : " · eigen product") : f.src === "balanza" ? " · Balanza-aanvulling" : "");
         if (!f.fixed && f.kcal > 0) appendBal(b.querySelector("small"), gramsBal(f.kcal, f.kh, f.e, f.v), " ");
@@ -14260,6 +14280,7 @@
             items.slice(0, 6).forEach(function (fd, j) {
               var b = document.createElement("button"); b.type = "button"; b.className = "qa-res qa-res-off"; b.id = "qaOff" + j;
               b.innerHTML = '<span class="qa-res-txt"><b></b><small></small></span><span class="qa-plus" aria-hidden="true">+</span>';
+              b.insertBefore(qaThumb(fd.img), b.firstChild);
               b.querySelector("b").textContent = fd.name;
               var por = fd.portion && fd.portion.g ? fd.portion : null, where = offWhere(fd);
               b.querySelector("small").textContent = (por ? Math.round(fd.kcal * por.g / 100) + " kcal per " + por.label : fd.kcal + " kcal per 100 g") + (where ? " \u00b7 " + where : fd.quantity ? " \u00b7 " + fd.quantity : "");
@@ -14329,6 +14350,7 @@
         var b = document.createElement("b"); b.textContent = it.name;
         var sm = document.createElement("small"); sm.textContent = qaAmountText(it) + " · " + Math.round(m.kcal) + " kcal" + (it.photo ? " · schatting van je foto" : it.src === "ai" ? " · schatting" : it.src === "off" ? " · Open Food Facts" : "");
         if (m.kcal > 0) appendBal(sm, gramsBal(m.kcal, m.kh, m.e, m.v), " ");
+        if (it.img) { var th = qaThumb(it.img); th.classList.add("qa-thumb-float"); tx.appendChild(th); }
         tx.appendChild(b); tx.appendChild(sm);
         if (!it.fixed) {
           // Klopt het product niet? Tik voor andere producten met dezelfde zoekterm (de hoeveelheid blijft staan).
@@ -14389,8 +14411,8 @@
     }
     function paintSum() {
       sumBox.innerHTML = "";
-      note.textContent = qaFoods ? qaFoods.reference + (st.items.some(function (x) { return x.src === "off"; }) ? "; productgegevens van Open Food Facts (ODbL)" : "") + "." : "";
-      if (!st.items.length) return;
+      note.textContent = qaFoods ? qaFoods.reference + (st.items.some(function (x) { return x.src === "off"; }) ? "; productgegevens van Open Food Facts (ODbL)" + (st.items.some(function (x) { return x.img; }) ? ", foto's CC BY-SA" : "") : "") + "." : "";
+      if (!st.items.length) { if (dock) dock.classList.remove("show"); return; }
       var t = qaTotals(st.items), bal = gramsBal(t.kcal, t.khG, t.eiwitG, t.vetG);
       var kind = classify(t);
       var top = document.createElement("div"); top.className = "qa-total";
@@ -14468,6 +14490,30 @@
       go.onclick = commit;
       if (st.mode === "plan" && readOnlyMode()) lockEl(go, "Je planning aanpassen");
       sumBox.appendChild(go);
+      paintDock(t, dlab, go);
+    }
+    // Vaste balk onderin: totaal, wanneer, en dezelfde knop als onderaan. Zo hoef je niet te scrollen.
+    // Verdwijnt zodra de echte knop in beeld is, als het toetsenbord open is, of als er nog niets in de lijst staat.
+    var dock = null, dockObs = null;
+    function paintDock(t, dlab, go) {
+      if (!dock) {
+        dock = document.createElement("div"); dock.className = "qa-dock"; dock.id = "qaDock";
+        dock.innerHTML = '<button type="button" class="qa-dock-info" id="qaDockInfo"><b></b><small></small></button><button type="button" class="primary-btn qa-dock-go" id="qaDockGo"></button>';
+        body.appendChild(dock);
+      }
+      if (!t) { dock.classList.remove("show"); return; }
+      dock.querySelector("b").textContent = t.kcal + " kcal";
+      dock.querySelector("small").textContent = dlab + " \u00b7 " + st.moment.toLowerCase() + " \u203a";
+      var dg = dock.querySelector("#qaDockGo"); dg.textContent = go.textContent.replace(/\s*\(.*\)$/, ""); dg.disabled = go.disabled;
+      dg.onclick = function () { go.click(); };
+      // Tik op het totaal: naar de keuzes (dag, moment, hoe)
+      dock.querySelector("#qaDockInfo").onclick = function () { var w = sumBox.querySelector(".qa-days"); (w || go).scrollIntoView({ behavior: "smooth", block: "center" }); };
+      if (dockObs) dockObs.disconnect();
+      var scroller = body.closest(".sheet");
+      if ("IntersectionObserver" in window) {
+        dockObs = new IntersectionObserver(function (en) { dock.classList.toggle("show", !en[0].isIntersecting); }, { root: scroller || null, threshold: 0.6 });
+        dockObs.observe(go);
+      } else dock.classList.add("show");
     }
     function remember(name) {
       var h = qaHist(), now = new Date().toISOString();
