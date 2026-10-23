@@ -2992,7 +2992,7 @@ function stripHealthData(subpath, value) {
     if (v.coach && typeof v.coach === "object") { v.coach.water = false; v.coach.daytools = false; }
     if (v.journey && Array.isArray(v.journey.log)) v.journey.log = v.journey.log.filter(function (x) { return x && ["gewicht", "middel", "nek", "heup", "borst", "arm", "been"].indexOf(x.m) === -1; });
     if (v.journey && v.journey.metric === "gewicht") v.journey.metric = "";
-    delete v.weightGoal;
+    delete v.weightGoal; delete v.cycle;
     if (v.journey) delete v.journey.checkins;
   } else if (subpath === "plannedWeeks") {
     var list = Array.isArray(v.list) ? v.list : Array.isArray(v) ? v : [];

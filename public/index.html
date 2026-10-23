@@ -1549,6 +1549,16 @@
   .gp-move-sub { font-size: 12.5px; color: var(--muted); line-height: 1.35; }
   .gp-move-add { display: flex; gap: 6px; flex-wrap: wrap; }
   .gp-move-fix { border-style: dashed; }
+  .cy-chip { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 12px; border-radius: 12px; border: 0; background: rgba(155, 107, 214, .1); color: inherit; font: inherit; text-align: left; cursor: pointer; }
+  .cy-chip span { font-size: 18px; } .cy-chip b { font-size: 13.5px; } .cy-chip small { font-size: 12.5px; color: var(--muted); flex: 1; } .cy-chip em { font-style: normal; color: var(--muted); }
+  .cy-now { display: flex; gap: 12px; padding: 12px 14px; border-radius: 14px; background: rgba(155, 107, 214, .1); margin-bottom: 10px; }
+  .cy-emo { font-size: 26px; line-height: 1; } .cy-now b { display: block; font-size: 15px; } .cy-now small { display: block; color: var(--muted); font-size: 12.5px; margin-top: 2px; } .cy-now p { margin: 6px 0 0; font-size: 13.5px; line-height: 1.45; }
+  .cy-bar { display: flex; gap: 2px; margin: 4px 0 6px; } .cy-bar i { flex: 1; height: 10px; border-radius: 3px; }
+  .cy-bar i.m, .cy-legend i.m { background: #D9576B; } .cy-bar i.f, .cy-legend i.f { background: #B9DDC6; } .cy-bar i.o, .cy-legend i.o { background: #F2C14E; } .cy-bar i.l, .cy-legend i.l { background: #B79BE0; }
+  .cy-bar i.now { outline: 2px solid var(--ink, #222); outline-offset: 1px; transform: scaleY(1.4); }
+  .cy-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 11.5px; color: var(--muted); margin-bottom: 10px; } .cy-legend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+  .cy-nums { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .cy-weigh { font-size: 12.5px; color: #6B4FA0; background: rgba(155, 107, 214, .1); padding: 8px 10px; border-radius: 10px; line-height: 1.4; }
   .mp-quick { margin-bottom: 8px; }
   .mp-days { display: flex; flex-direction: column; gap: 4px; }
   .mp-wk { font-size: 11.5px; color: var(--muted); font-weight: 600; margin-top: 4px; }
@@ -5184,7 +5194,8 @@
   function dailyKcalTarget() {
     var tdee = wgTdee(); if (!tdee) return null;
     var adj = wgKcalAdjust(tdee);
-    return Math.round((adj !== null ? adj : tdee * (GOAL_KCAL_MULTIPLIER[prefs.goal] || 1)) / 10) * 10;
+    var extra = typeof cycleKcalExtra === "function" ? cycleKcalExtra() : 0;   // voor de menstruatie iets meer (alleen als je dat aanzet)
+    return Math.round(((adj !== null ? adj : tdee * (GOAL_KCAL_MULTIPLIER[prefs.goal] || 1)) + extra) / 10) * 10;
   }
 
   var MEAL_THUMBS = {
@@ -7929,6 +7940,7 @@
     { title: "Je dag op Start", body: "Op Start zie je alles wat vandaag gepland staat, plus wat je er los bij at. De gekleurde balk is je dag in calorie\u00ebn tegenover je dagdoel: elk blokje is een maaltijd in de kleur van het moment (de legenda staat eronder), een lichter blokje heb je nog niet gegeten. Daaronder zie je eiwit, koolhydraten en vet tegenover je doel. Vink een maaltijd af met het vinkje als je hem gegeten hebt. Tik op de maaltijd zelf om iets te wijzigen: iets anders gegeten, niet gegeten, of meer of minder (\u00bd tot 2 porties); wat je niet at, telt niet mee. Alles kun je ongedaan maken. \u201cWat past nog?\u201d laat zien wat er nog in je dag past. Met \u201cStartscherm aanpassen\u201d onderaan Start zet je de tegels in jouw volgorde of verberg je wat je niet nodig hebt." },
     { title: "Ingredi\u00ebnten van een gerecht aanpassen", body: "De ingredi\u00ebnten van een gerecht pas je aan op een eigen scherm: via de drie puntjes bij je gerechten, de knop Ingredi\u00ebnten in het recept, of in de planner en bij je dag op Start. Per ingredi\u00ebnt wijzig je los de hoeveelheid, de eenheid (gram, ml, stuks, eetlepel, theelepel, snee, teentje, snufje of naar smaak) en het product; tik een paar letters en kies het product uit de lijst. Terwijl je wijzigt rekent Balanza de kcal, eiwit, koolhydraten, vet en de Balans opnieuw uit met NEVO, het voedingsstoffenbestand van het RIVM. De bereiding blijft zoals hij is. Staat het gerecht in je planning, dan gelden de nieuwe waarden daar ook; met \u201cOpslaan als kopie\u201d laat je het origineel staan." },
     { title: "Op meerdere dagen tegelijk inplannen", body: "Een gerecht zet je in \u00e9\u00e9n keer op meerdere dagen en momenten. Tik op Inplannen bij een gerecht (de drie puntjes bij je gerechten), in het recept zelf, of kies in de planner of bij je dag op Start \u201cOok op andere dagen\u201d. Tik de dagen aan in de komende twee weken, of kies snel Werkdagen, Weekend, 7 dagen of 2 weken, en kies een of meer momenten (ontbijt, lunch, diner, snack). Een groene stip betekent vrij, grijs dat er al iets staat. Standaard komt het alleen op lege plekken; vink \u201cVervang wat er al staat\u201d aan als je dat wilt. Je ziet vooraf wat er gebeurt, en met \u00e9\u00e9n tik maak je alles weer ongedaan." },
+    { title: "Cyclus en overgang", body: "Voor vrouwen is er een optie om rekening te houden met je cyclus of de overgang (Jouw doel \u2192 Aanpak \u2192 Cyclus of overgang). Bij je cyclus vul je de eerste dag van je laatste menstruatie in, en hoe lang je cyclus en menstruatie meestal duren. In de dagen voor je menstruatie staat je dagdoel dan 150 kcal hoger (je verbruikt iets meer en hebt vaker trek), rond je menstruatie legt Balanza bij het wegen uit dat een hogere weging vaak vocht is, en tijdens je menstruatie krijg je tips voor ijzer. Tik op \u201cMijn menstruatie is vandaag begonnen\u201d, dan leert Balanza je eigen ritme. In de overgang let Balanza extra op eiwit, calcium, vitamine D en krachttraining. Het is optioneel, alleen voor jou zichtbaar en je zet het altijd weer uit; dan worden de gegevens gewist." },
     { title: "Producten met merk en supermarkt", body: "Zoek je in Snel toevoegen een product, dan zie je eerst de algemene producten uit NEVO (RIVM) en daaronder \u201cIn de winkel\u201d: echte producten met merk en supermarkt, zoals AH Magere kwark bij Albert Heijn, uit de open database Open Food Facts. Scan je een streepjescode, dan zie je ook het merk en waar het te koop is. Wat je kiest, bewaart Balanza bij je eigen producten, met de winkel erbij. De winkelgegevens worden door vrijwilligers bijgehouden en zijn niet altijd compleet." },
     { title: "Weetjes en je avondsnack", body: "Onderaan je doel staat elke dag een weetje: een stelling als \u201cLaat eten maakt dikker\u201d. Tik op Waar of Niet waar en lees waarom. Via \u201cX van 17 ontdekt\u201d (of Aanpak \u2192 Weetjes) veeg je door alle weetjes over eten, slapen, trainen en bewegen; Balanza onthoudt wat je al ontdekte en laat eerst zien wat bij jouw doel en je week past. Geef je in de wekelijkse check-in aan dat je \u2019s avonds honger of trek had, dan stelt Balanza een eiwitrijke avondsnack voor die in je dagdoel past (kwark, skyr, h\u00fcttenk\u00e4se, eieren; plantaardig: sojayoghurt of edamame) en zet die met \u00e9\u00e9n tik de rest van de week in je planning, na het diner." },
     { title: "Jouw doel en je aanpak", body: "Je doel (Onderhoud, Vetverlies, Cutting, Spieropbouw of Atleet) bepaalt je hele aanpak. De tegel \u201cJouw doel\u201d op Start laat in \u00e9\u00e9n oogopslag zien hoe je ervoor staat: je aanpak in een regel (dagdoel, macro's, sport, beweging; tik voor uitleg), drie meters die bij je doel passen en alleen wat nu te doen is, zoals wegen, je check-in of een half uur bewegen. Tik op een meter of op \u201cJouw voortgang\u201d voor alles in detail. Ook je voortgang past bij je doel: bij afvallen je gewicht, middel en of je kracht blijft; bij spieropbouw hoe sterk je wordt per oefening; bij presteren je trainingen; bij onderhoud je Balans en een stabiel gewicht. Beweging telt voor elk doel: afgevinkte trainingen tellen vanzelf mee, de rest tik je erbij (+15 min, +30 min, +1 uur). Pas je je doel aan, dan gaat alles mee: dagdoel, macro's, Balans-scores, trainingsschema, beweegdoel en voortgang. Je ziet meteen wat er veranderd is. Een doelgewicht dat niet meer past (bijvoorbeeld afvallen terwijl je nu spieren opbouwt) stopt; je wegingen blijven bewaard." },
@@ -15868,6 +15880,12 @@
       var tr = document.createElement("button"); tr.type = "button"; tr.className = "primary-btn small"; tr.id = "gpTrain"; tr.textContent = "Trainingsschema kiezen";
       tr.onclick = function () { closeSheet(sh.ov); openTrainingSetup(); }; acts.appendChild(tr);
     }
+    if (cycleAllowed()) {
+      var cyc = cycle();
+      if (cyc && cyc.mode === "overgang") { var ovp = document.createElement("div"); ovp.className = "gp-part"; ovp.id = "gpPart-overgang"; ovp.innerHTML = "<b>In de overgang</b><p></p>"; ovp.querySelector("p").textContent = "Je verliest nu sneller spieren en botmassa. Eet genoeg eiwit, verdeeld over de dag; train 2 tot 3 keer per week je spieren; en zorg voor calcium (zuivel of verrijkte plantaardige varianten) en vitamine D. Opvliegers? Alcohol, cafe\u00efne en pittig eten kunnen ze uitlokken."; body.appendChild(ovp); }
+      var cyb = document.createElement("button"); cyb.type = "button"; cyb.className = "ghost-btn small"; cyb.id = "gpCycle"; cyb.textContent = cyc ? (cyc.mode === "overgang" ? "Overgang" : "Mijn cyclus") : "Cyclus of overgang";
+      cyb.onclick = function () { closeSheet(sh.ov); openCycleSheet(); }; acts.appendChild(cyb);
+    }
     var wjb = document.createElement("button"); wjb.type = "button"; wjb.className = "ghost-btn small"; wjb.id = "gpWeetjes"; wjb.textContent = "Weetjes (" + weetjesFound() + "/" + WEETJES.length + ")";
     wjb.onclick = function () { closeSheet(sh.ov); openWeetjes(); }; acts.appendChild(wjb);
     var ch = document.createElement("button"); ch.type = "button"; ch.className = "ghost-btn small"; ch.id = "gpChangeGoal"; ch.textContent = "Ander doel kiezen";
@@ -15893,6 +15911,7 @@
     head.querySelector(".gp-title").textContent = p.title; head.querySelector(".wg-sub").textContent = p.sub;
     var ed = document.createElement("button"); ed.type = "button"; ed.className = "hh-link"; ed.id = "gpPlanOpen"; ed.textContent = "Aanpak"; ed.onclick = function () { openGoalPlanSheet(); };
     head.appendChild(ed); if (!opts.inSheet) card.appendChild(head);
+    renderCycleChip(card);
     var grid = document.createElement("div"); grid.className = "gp-grid";
     gpParts().forEach(function (x) {
       var b = document.createElement("button"); b.type = "button"; b.className = "gp-tile"; b.id = "gpTile-" + x[0];
@@ -15924,6 +15943,149 @@
     }
     main.appendChild(card);
     return card;
+  }
+  // ---------- Cyclus en overgang (alleen voor vrouwen, optioneel, gezondheidsgegevens: alleen met toestemming) ----------
+  // prefs.cycle = { mode: "cyclus" | "overgang", start: "2026-10-01" (eerste dag laatste menstruatie), len: 28, dur: 5, hist: ["2026-09-03", ...] }
+  // Wat het doet: in de dagen voor de menstruatie een iets ruimer dagdoel (+150 kcal) en uitleg bij de weegschaal (vocht),
+  // tijdens de menstruatie aandacht voor ijzer; in de overgang aandacht voor eiwit, calcium en vitamine D en krachttraining.
+  var CY_EXTRA_KCAL = 150;
+  function cycleAllowed() { return prefs.gender === "Vrouw" && healthOk() && !isMinor(); }
+  function cycle() { var c = prefs.cycle; return cycleAllowed() && c && typeof c === "object" && (c.mode === "overgang" || (c.mode === "cyclus" && /^\d{4}-\d{2}-\d{2}$/.test(c.start || ""))) ? c : null; }
+  function cyDays(a, b) { return Math.round((new Date(b + "T12:00:00") - new Date(a + "T12:00:00")) / 86400000); }
+  // Welke fase? { day, len, phase: "menstruatie" | "folliculair" | "eisprong" | "luteaal", pre: true in de 7 dagen ervoor, next: dagen tot de volgende, late }
+  function cyclePhase(date) {
+    var c = cycle(); if (!c || c.mode !== "cyclus") return null;
+    var len = Math.max(21, Math.min(40, Number(c.len) || 28)), dur = Math.max(2, Math.min(8, Number(c.dur) || 5));
+    var since = cyDays(c.start, isoDateKey(date || new Date())); if (since < 0) return null;
+    var late = since >= len + 3;
+    var day = (since % len) + 1, ov = len - 14;
+    var phase = day <= dur ? "menstruatie" : day < ov - 1 ? "folliculair" : day <= ov + 1 ? "eisprong" : "luteaal";
+    return { day: day, len: len, dur: dur, phase: phase, pre: day > len - 7, luteal: day > ov + 1, next: len - day + 1, late: late, since: since };
+  }
+  // Dagdoel: in de luteale fase (na de eisprong tot de menstruatie) verbruik je iets meer en heb je meer trek
+  function cycleKcalExtra(date) { var p = cyclePhase(date); return p && p.luteal && !p.late ? CY_EXTRA_KCAL : 0; }
+  var CY_PHASE = {
+    menstruatie: ["Menstruatie", "🩸", "Let op ijzer: vlees, peulvruchten, volkoren, groene groente of noten, met iets met vitamine C erbij. Thee of koffie liever niet bij de maaltijd. Moe? Rustiger trainen mag."],
+    folliculair: ["Na je menstruatie", "🌱", "Vaak de dagen met de meeste energie: een mooi moment voor je zwaardere trainingen."],
+    eisprong: ["Rond je eisprong", "✨", "Gewoon je plan volgen. Sommige vrouwen hebben nu iets minder trek."],
+    luteaal: ["Voor je menstruatie", "🌙", "Je lichaam verbruikt iets meer, en je hebt vaak meer trek. Je dagdoel staat " + CY_EXTRA_KCAL + " kcal hoger; een eiwitrijk tussendoortje (kwark, skyr, een ei) helpt tegen trek in zoet."]
+  };
+  function cycleChipText() {
+    var c = cycle(); if (!c) return null;
+    if (c.mode === "overgang") return ["🌿", "Overgang", "eiwit, calcium en kracht"];
+    var p = cyclePhase(); if (!p) return null;
+    if (p.late) return ["🗓️", "Cyclus", "menstruatie al begonnen? Tik om bij te werken"];
+    var ph = CY_PHASE[p.phase];
+    return [ph[1], ph[0], "dag " + p.day + (p.luteal ? " · +" + CY_EXTRA_KCAL + " kcal" : p.phase === "menstruatie" ? " · let op ijzer" : "")];
+  }
+  // Uitleg bij de weegschaal: rond de menstruatie hou je vaak vocht vast
+  function cycleWeighNote() {
+    var p = cyclePhase(); if (!p || p.late) return "";
+    if (p.pre || p.day <= 3) return "Rond je menstruatie hou je vaak 0,5 tot 2 kilo vocht vast. Dat is geen vet; volgende week zie je de echte trend weer.";
+    return "";
+  }
+  function logPeriodStart(dateKey) {
+    var c = prefs.cycle; if (!c) return;
+    var hist = Array.isArray(c.hist) ? c.hist.slice() : [];
+    if (c.start && c.start !== dateKey && hist.indexOf(c.start) === -1) hist.push(c.start);
+    hist = hist.filter(function (x) { return x < dateKey; }).sort().slice(-12);
+    // Gemiddelde cycluslengte uit de laatste keren (alleen redelijke waarden)
+    var all = hist.concat([dateKey]), gaps = [];
+    for (var i = 1; i < all.length; i++) { var g = cyDays(all[i - 1], all[i]); if (g >= 21 && g <= 40) gaps.push(g); }
+    if (gaps.length >= 2) c.len = Math.round(gaps.slice(-6).reduce(function (s, x) { return s + x; }, 0) / Math.min(6, gaps.length));
+    c.hist = hist; c.start = dateKey; savePrefs();
+  }
+  function openCycleSheet() {
+    if (!cycleAllowed()) { showToast(prefs.gender !== "Vrouw" ? "Dit is er voor vrouwen; vul bij je lichaamsprofiel Vrouw in." : isMinor() ? "Dit is er niet voor wie jonger is dan 18." : "Hiervoor is toestemming voor gezondheidsgegevens nodig (Instellingen, Privacy)."); return; }
+    var c = prefs.cycle && typeof prefs.cycle === "object" ? prefs.cycle : null;
+    var st = { mode: c ? c.mode : "cyclus", start: c && c.start ? c.start : "", len: c && c.len ? c.len : 28, dur: c && c.dur ? c.dur : 5 };
+    var sh = openSimpleSheet("cySheet", "Cyclus en overgang", "Optioneel · alleen voor jou zichtbaar"), body = sh.body;
+    var p0 = cyclePhase();
+    if (c && c.mode === "cyclus" && p0) {
+      var now = document.createElement("div"); now.className = "cy-now"; now.id = "cyNow";
+      var ph = CY_PHASE[p0.phase];
+      now.innerHTML = '<span class="cy-emo" aria-hidden="true"></span><div><b></b><small></small><p></p></div>';
+      now.querySelector(".cy-emo").textContent = ph[1]; now.querySelector("b").textContent = ph[0] + " · dag " + p0.day + " van " + p0.len;
+      now.querySelector("small").textContent = p0.late ? "Je menstruatie is later dan verwacht. Begonnen? Tik hieronder." : p0.phase === "menstruatie" ? "" : "Volgende menstruatie over ongeveer " + p0.next + (p0.next === 1 ? " dag" : " dagen");
+      now.querySelector("p").textContent = ph[2];
+      body.appendChild(now);
+      var bar = document.createElement("div"); bar.className = "cy-bar"; bar.setAttribute("aria-hidden", "true");
+      for (var d = 1; d <= p0.len; d++) { var seg = document.createElement("i"); var ov = p0.len - 14; seg.className = (d <= p0.dur ? "m" : d >= ov - 1 && d <= ov + 1 ? "o" : d > ov + 1 ? "l" : "f") + (d === p0.day ? " now" : ""); bar.appendChild(seg); }
+      body.appendChild(bar);
+      var lg = document.createElement("div"); lg.className = "cy-legend"; lg.innerHTML = '<span><i class="m"></i>menstruatie</span><span><i class="f"></i>erna</span><span><i class="o"></i>eisprong</span><span><i class="l"></i>ervoor (+' + CY_EXTRA_KCAL + ' kcal)</span>';
+      body.appendChild(lg);
+      var started = document.createElement("button"); started.type = "button"; started.className = "primary-btn small"; started.id = "cyStarted"; started.textContent = "Mijn menstruatie is vandaag begonnen";
+      started.onclick = function () { logPeriodStart(isoDateKey(new Date())); closeSheet(sh.ov); render(); showToast("Bijgewerkt. Balanza rekent vanaf vandaag."); };
+      var acts0 = document.createElement("div"); acts0.className = "nudge-actions"; acts0.appendChild(started); body.appendChild(acts0);
+    }
+    function lab(t) { var e = document.createElement("div"); e.className = "qa-h"; e.textContent = t; body.appendChild(e); }
+    lab("Waar wil je rekening mee houden?");
+    var mrow = document.createElement("div"); mrow.className = "chiprow"; mrow.id = "cyMode"; body.appendChild(mrow);
+    var form = document.createElement("div"); form.id = "cyForm"; body.appendChild(form);
+    var why = document.createElement("details"); why.className = "wg-why"; why.id = "cyWhy";
+    why.innerHTML = "<summary>Wat doet Balanza hiermee?</summary>" +
+      "<p><b>Voor je menstruatie</b> verbruikt je lichaam iets meer energie en heb je vaak meer trek. Balanza zet je dagdoel dan " + CY_EXTRA_KCAL + " kcal hoger; zo houd je het beter vol dan door tegen de trek te vechten.</p>" +
+      "<p><b>Rond je menstruatie</b> hou je vaak vocht vast. Weeg je in die dagen, dan legt Balanza uit dat een hogere weging geen vet is.</p>" +
+      "<p><b>Tijdens je menstruatie</b> heb je meer ijzer nodig; je krijgt tips om dat binnen te krijgen.</p>" +
+      "<p><b>In de overgang</b> verlies je sneller spieren en botmassa. Balanza let dan extra op eiwit, calcium, vitamine D en krachttraining.</p>" +
+      "<p>Een heel ander voedingsschema per fase is niet nodig; daar is weinig bewijs voor. Heb je heel zware of pijnlijke menstruaties of flinke klachten in de overgang, ga dan naar je huisarts.</p>";
+    var acts = document.createElement("div"); acts.className = "nudge-actions"; acts.style.marginTop = "12px";
+    var save = document.createElement("button"); save.type = "button"; save.className = "primary-btn small"; save.id = "cySave"; save.textContent = "Opslaan";
+    acts.appendChild(save);
+    if (c) {
+      var off = document.createElement("button"); off.type = "button"; off.className = "ghost-btn small"; off.id = "cyOff"; off.textContent = "Uitzetten";
+      off.onclick = function () { delete prefs.cycle; savePrefs(); closeSheet(sh.ov); render(); showToast("Uitgezet; je gegevens hierover zijn gewist."); };
+      acts.appendChild(off);
+    }
+    function paint() {
+      mrow.innerHTML = "";
+      [["cyclus", "Mijn cyclus"], ["overgang", "De overgang"]].forEach(function (o) {
+        var b = document.createElement("button"); b.type = "button"; b.className = "chip" + (st.mode === o[0] ? " selected" : ""); b.id = "cyM-" + o[0]; b.textContent = o[1];
+        b.onclick = function () { st.mode = o[0]; paint(); }; mrow.appendChild(b);
+      });
+      form.innerHTML = "";
+      if (st.mode === "cyclus") {
+        var f1 = document.createElement("label"); f1.className = "qa-field"; f1.innerHTML = "<span>Eerste dag van je laatste menstruatie</span>";
+        var di = document.createElement("input"); di.type = "date"; di.className = "textinput"; di.id = "cyStart"; di.value = st.start; di.max = isoDateKey(new Date());
+        var mn = new Date(); mn.setDate(mn.getDate() - 60); di.min = isoDateKey(mn);
+        di.onchange = function () { st.start = di.value; };
+        f1.appendChild(di); form.appendChild(f1);
+        var f2 = document.createElement("div"); f2.className = "cy-nums";
+        [["len", "Cyclus (dagen)", 21, 40], ["dur", "Menstruatie (dagen)", 2, 8]].forEach(function (x) {
+          var l = document.createElement("label"); l.className = "qa-field"; l.innerHTML = "<span></span>"; l.querySelector("span").textContent = x[1];
+          var i = document.createElement("input"); i.type = "number"; i.className = "textinput"; i.id = "cy-" + x[0]; i.min = x[2]; i.max = x[3]; i.value = st[x[0]];
+          i.oninput = function () { st[x[0]] = Number(i.value) || st[x[0]]; };
+          l.appendChild(i); f2.appendChild(l);
+        });
+        form.appendChild(f2);
+        var hint = document.createElement("p"); hint.className = "acc-sub"; hint.textContent = "Weet je het niet precies? 28 en 5 dagen is gemiddeld. Tik elke keer als je menstruatie begint op “begonnen”; dan leert Balanza je eigen ritme. Slik je de pil zonder stopweek of heb je geen menstruatie, dan heeft dit weinig zin.";
+        form.appendChild(hint);
+      } else {
+        var t = document.createElement("p"); t.className = "acc-sub"; t.textContent = "In de overgang let Balanza extra op eiwit (je spieren), calcium en vitamine D (je botten) en op krachttraining. Je krijgt er tips over in Jouw doel en bij je check-in.";
+        form.appendChild(t);
+      }
+    }
+    save.onclick = function () {
+      if (st.mode === "cyclus") {
+        if (!st.start) { showToast("Vul de eerste dag van je laatste menstruatie in."); return; }
+        var len = Math.max(21, Math.min(40, Math.round(st.len || 28))), dur = Math.max(2, Math.min(8, Math.round(st.dur || 5)));
+        prefs.cycle = { mode: "cyclus", start: st.start, len: len, dur: dur, hist: c && Array.isArray(c.hist) ? c.hist : [] };
+      } else prefs.cycle = { mode: "overgang" };
+      savePrefs(); closeSheet(sh.ov); render();
+      var p = cyclePhase();
+      showToast(prefs.cycle.mode === "overgang" ? "Opgeslagen. Balanza let nu extra op eiwit, calcium en kracht." : p ? "Opgeslagen: dag " + p.day + ", " + CY_PHASE[p.phase][0].toLowerCase() + "." : "Opgeslagen.");
+    };
+    paint();
+    body.appendChild(why); body.appendChild(acts);
+  }
+  // Rij in Jouw doel: waar je nu bent, met een tik naar de uitleg
+  function renderCycleChip(card) {
+    var t = cycleChipText(); if (!t) return;
+    var b = document.createElement("button"); b.type = "button"; b.className = "cy-chip"; b.id = "cyChip";
+    b.innerHTML = '<span aria-hidden="true"></span><b></b><small></small><em aria-hidden="true">›</em>';
+    b.querySelector("span").textContent = t[0]; b.querySelector("b").textContent = t[1]; b.querySelector("small").textContent = t[2];
+    b.onclick = function () { openCycleSheet(); };
+    card.appendChild(b);
   }
   // ---------- Startscherm: "Jouw doel" compact. Drie meters in één oogopslag, alleen wat nu te doen is, de rest in "Jouw voortgang". ----------
   function gpRing(pct, cls) {
@@ -15986,6 +16148,7 @@
     head.querySelector(".gp-title").textContent = p.title;
     var ed = document.createElement("button"); ed.type = "button"; ed.className = "hh-link"; ed.id = "gpPlanOpen"; ed.textContent = "Aanpak"; ed.onclick = function () { openGoalPlanSheet(); };
     head.appendChild(ed); card.appendChild(head);
+    renderCycleChip(card);
     // Aanpak in één regel: tik voor uitleg
     var chips = document.createElement("div"); chips.className = "gp-chips";
     [["voeding", gpShort("voeding").replace(/, .*$/, "")], ["macros", gpShort("macros")], ["sport", gpShort("sport")], ["beweging", gpPlan().move + " min/week"]].forEach(function (x) {
@@ -16335,6 +16498,8 @@
   // Wegen: één keer per week, op je vaste weegmoment
   function wgWeighForm(card, g) {
     var hide = !!(g && g.hide);
+    var cyn = typeof cycleWeighNote === "function" ? cycleWeighNote() : "";
+    if (cyn) { var cyEl = document.createElement("div"); cyEl.className = "cy-weigh"; cyEl.id = "cyWeighNote"; cyEl.textContent = "\uD83C\uDF19 " + cyn; card.appendChild(cyEl); }
     var mine = thisWeekWeight();
     var f = document.createElement("form"); f.className = "wg-weigh"; f.id = "wgWeigh";
     var lab = document.createElement("span"); lab.className = "wg-weigh-l";
@@ -16713,6 +16878,9 @@
     }
     block("Je motivatie", ciMotivationText(rec.mot, g), "mot");
     var gpb = ciGoalInsight(); if (gpb) block(gpb[0], gpb[1]);
+    var cyc2 = cycle();
+    if (cyc2 && cyc2.mode === "overgang") block("In de overgang", "Let deze week op eiwit bij elke maaltijd en op je krachttrainingen; zo houd je je spieren. Calcium en vitamine D zijn goed voor je botten.");
+    else if (cyc2) { var cp2 = cyclePhase(); if (cp2 && !cp2.late) { var hungry = (rec.hunger || []).length || (rec.hard || []).indexOf("avond") > -1; block("Je cyclus", cp2.luteal ? (hungry ? "Je zit in de dagen voor je menstruatie; meer trek is dan heel normaal. Je dagdoel staat " + CY_EXTRA_KCAL + " kcal hoger: gebruik dat voor een eiwitrijk tussendoortje." : "Je zit in de dagen voor je menstruatie. Je dagdoel staat " + CY_EXTRA_KCAL + " kcal hoger; een hogere weging is nu vaak vocht.") : cp2.phase === "menstruatie" ? "Tijdens je menstruatie heb je meer ijzer nodig: vlees, peulvruchten, volkoren of groene groente, met iets met vitamine C erbij." : "Na je menstruatie heb je vaak de meeste energie: een mooi moment voor je zwaardere trainingen."); } }
     (rec.hunger || []).slice(-3).forEach(function (k) { var ins = ciHungerInsight(k); block("Honger op " + ins.day, ins.text); });
     (rec.hard || []).slice(0, 2).forEach(function (k) { var lab = (CI_HARD.filter(function (x) { return x[0] === k; })[0] || [k, k])[1]; if (CI_HARD_TIPS[k]) block("Lastig: " + lab.toLowerCase(), CI_HARD_TIPS[k]); });
     if ((rec.hard || []).indexOf("avond") > -1 || (rec.hunger || []).length >= 2) renderAvondsnackPicker(body);
@@ -18183,6 +18351,7 @@
         trainingDismissed: !!prefs.trainingDismissed,
         moveLog: prefs.moveLog && typeof prefs.moveLog === "object" ? prefs.moveLog : {},
         weetjes: prefs.weetjes && typeof prefs.weetjes === "object" ? prefs.weetjes : {},
+        cycle: prefs.cycle && typeof prefs.cycle === "object" && healthOk() ? prefs.cycle : null,
         proteinOut: Array.isArray(prefs.proteinOut) ? prefs.proteinOut.slice(0, 20) : [],
         journey: prefs.journey && typeof prefs.journey === "object" ? prefs.journey : {},
         ageGroup: AGE_GROUPS.some(function (g) { return g[0] === prefs.ageGroup; }) ? prefs.ageGroup : "",
@@ -18626,7 +18795,7 @@
     prefs.coach = Object.assign({}, prefs.coach || {}, { water: false, daytools: false });
     if (prefs.journey && Array.isArray(prefs.journey.log)) prefs.journey.log = prefs.journey.log.filter(function (x) { return x && x.m !== "gewicht" && MEAS_KEYS.indexOf(x.m) === -1; });
     if (prefs.journey && prefs.journey.metric === "gewicht") prefs.journey.metric = "";
-    delete prefs.weightGoal;
+    delete prefs.weightGoal; delete prefs.cycle;
     if (prefs.journey) delete prefs.journey.checkins;
     plannedWeeks.forEach(function (w) { if (w.extra) delete w.extra; });
   }
@@ -18710,7 +18879,7 @@
               return;
             }
             var pdata = psnap.data() || {};
-            ["name", "bringListLink", "cuisines", "flavors", "level", "dietStyle", "health", "leftovers", "coach", "water", "places", "proteinOut", "journey", "ageGroup", "student", "sugarMode", "cheeseMode", "familyMode", "equipment", "exclude", "count", "mealTypes", "gender", "heightCm", "weightKg", "age", "activityLevel", "goal", "homeLayout", "mealCounts", "withImages", "pantry", "communityName", "myFoods", "weightGoal", "weightGoalDismissed", "training", "trainingDismissed", "moveLog", "weetjes"].forEach(function (k) {
+            ["name", "bringListLink", "cuisines", "flavors", "level", "dietStyle", "health", "leftovers", "coach", "water", "places", "proteinOut", "journey", "ageGroup", "student", "sugarMode", "cheeseMode", "familyMode", "equipment", "exclude", "count", "mealTypes", "gender", "heightCm", "weightKg", "age", "activityLevel", "goal", "homeLayout", "mealCounts", "withImages", "pantry", "communityName", "myFoods", "weightGoal", "weightGoalDismissed", "training", "trainingDismissed", "moveLog", "weetjes", "cycle"].forEach(function (k) {
               if (pdata[k] !== undefined) prefs[k] = deepClone(pdata[k]);
             });
             var mig = migrateExcludeTerms();
