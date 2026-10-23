@@ -14637,6 +14637,13 @@
     function closeScanner() { st.scan = false; if (stopCam) { try { stopCam(); } catch (e) {} stopCam = null; } scanBox.innerHTML = ""; paintStart(); }
     // ZXing (open source) voor telefoons zonder ingebouwde herkenning (iPhone). Eén keer laden.
     var ZX_URL = "https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js";
+    // iPhone (Safari) heeft geen ingebouwde BarcodeDetector: deze polyfill (zxing-cpp als WebAssembly) herkent streepjescodes veel beter dan ZXing in JavaScript
+    var BD_URL = "https://cdn.jsdelivr.net/npm/barcode-detector@3.1.3/dist/iife/polyfill.min.js", bdLoad = null;
+    function barcodeDetector() {
+      if ("BarcodeDetector" in window) return Promise.resolve(window.BarcodeDetector);
+      bdLoad = bdLoad || loadScript(BD_URL).then(function () { if (!("BarcodeDetector" in window)) throw new Error("bd"); return window.BarcodeDetector; }).catch(function (e) { bdLoad = null; throw e; });
+      return bdLoad;
+    }
     var zxLoad = null;
     function zxReader() {
       zxLoad = zxLoad || (window.ZXing ? Promise.resolve() : loadScript(ZX_URL).catch(function (e) { zxLoad = null; throw e; }));
@@ -14689,6 +14696,8 @@
       photoIn.onchange = function () { var f = photoIn.files && photoIn.files[0]; if (f) decodePhoto(f, status); photoIn.value = ""; };
       var photoBtn = document.createElement("button"); photoBtn.type = "button"; photoBtn.className = "ghost-btn small qa-photo-btn"; photoBtn.id = "qaScanPhotoBtn"; photoBtn.textContent = "\uD83D\uDCF7 Maak een foto van de streepjescode";
       photoBtn.onclick = function () { photoIn.click(); };
+      photoBtn.hidden = true;   // alleen als reserve: als live herkennen niet lukt
+      var showPhoto = function () { photoBtn.hidden = false; };
       var manual = document.createElement("div"); manual.className = "op-row";
       var ei = document.createElement("input"); ei.className = "textinput"; ei.id = "qaEan"; ei.inputMode = "numeric"; ei.placeholder = "Of tik het nummer onder de streepjes in"; ei.maxLength = 14;
       var eb = document.createElement("button"); eb.type = "button"; eb.className = "ghost-btn small"; eb.id = "qaEanGo"; eb.textContent = "Zoek"; eb.onclick = function () { lookupEan(ei.value); };
@@ -14697,7 +14706,7 @@
       var x = document.createElement("button"); x.type = "button"; x.className = "hh-link"; x.textContent = "Stoppen met scannen"; x.onclick = closeScanner;
       wrap.appendChild(video); wrap.appendChild(status); wrap.appendChild(photoBtn); wrap.appendChild(photoIn); wrap.appendChild(manual); wrap.appendChild(x);
       scanBox.appendChild(wrap);
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.isSecureContext) { video.style.display = "none"; status.textContent = "Live scannen kan hier niet. Maak een foto van de streepjescode, of tik het nummer in."; return; }
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.isSecureContext) { video.style.display = "none"; showPhoto(); status.textContent = "Live scannen kan hier niet. Maak een foto van de streepjescode, of tik het nummer in."; return; }
       var done = false, watch = null;
       var found = function (code) { if (done) return; done = true; try { navigator.vibrate && navigator.vibrate(30); } catch (e) {} if (stopCam) { try { stopCam(); } catch (e) {} } lookupEan(code); };
       // Achtercamera als die er is; lukt dat niet, dan elke camera
@@ -14718,12 +14727,11 @@
         video.onclick = tryPlay;
         tryPlay();
         watch = setTimeout(function () { if (!done && !video.videoWidth) { status.textContent = "Zie je geen beeld? Tik op het zwarte vlak, of maak een foto van de streepjescode."; tryPlay(); } }, 2500);
-        if ("BarcodeDetector" in window) {
-          var det = new window.BarcodeDetector({ formats: ["ean_13", "ean_8", "upc_a", "upc_e"] });
-          var loop = function () { if (done) return; if (video.readyState < 2) { setTimeout(loop, 250); return; } det.detect(video).then(function (r) { if (r && r[0]) found(r[0].rawValue); else setTimeout(loop, 250); }, function () { setTimeout(loop, 400); }); };
-          loop();
-        } else {
-          // iPhone: ZXing leest zelf frame voor frame uit het beeld (los van de afspeel-events, die op iOS al voorbij kunnen zijn)
+        // Na een tijdje zonder herkenning: tips, en pas dan de foto als reserve
+        setTimeout(function () { if (!done && st.scan) status.textContent = "Houd de streepjescode recht en stil, op zo'n 15 cm. Lukt het niet? Tik het nummer in."; }, 9000);
+        setTimeout(function () { if (!done && st.scan) showPhoto(); }, 20000);
+        var useZx = function () {
+          // Reserve: ZXing in JavaScript leest zelf frame voor frame uit het beeld
           zxReader().then(function (reader) {
             if (done) return;
             if (typeof reader.createBinaryBitmap === "function" && typeof reader.decodeBitmap === "function") {
@@ -14737,9 +14745,24 @@
               reader.decodeFromVideoElementContinuously(video, function (res) { if (res && !done) found(res.getText()); });
               var prevStop = stopCam; stopCam = function () { try { reader.reset(); } catch (e) {} prevStop(); };
             }
-          }).catch(function () { if (!done) status.textContent = "Live herkennen lukt hier niet. Maak een foto van de streepjescode, of tik het nummer in."; });
-        }
-      }).catch(function (e) { gotAnswer = true; video.style.display = "none"; status.textContent = camErrorText(e); });
+          }).catch(function () { if (!done) { showPhoto(); status.textContent = "Live herkennen lukt hier niet. Tik het nummer in, of maak een foto van de streepjescode."; } });
+        };
+        barcodeDetector().then(function (BD) {
+          var det = new BD({ formats: ["ean_13", "ean_8", "upc_a", "upc_e"] }), fails = 0;
+          // Twee keer hetzelfde nummer achter elkaar = zeker; zo voorkomen we een verkeerd gelezen code
+          var last = null;
+          var loop = function () {
+            if (done) return;
+            if (video.readyState < 2 || !video.videoWidth) { setTimeout(loop, 200); return; }
+            det.detect(video).then(function (r) {
+              var code = r && r[0] && r[0].rawValue;
+              if (code && /^\d{8,14}$/.test(code)) { if (code === last || "BarcodeDetector" in window && !bdLoad) { found(code); return; } last = code; }
+              setTimeout(loop, 120);
+            }, function () { if (++fails > 15) useZx(); else setTimeout(loop, 300); });
+          };
+          loop();
+        }).catch(useZx);
+      }).catch(function (e) { gotAnswer = true; video.style.display = "none"; showPhoto(); status.textContent = camErrorText(e); });
     }
     // Camera altijd uit als het scherm sluit (kruisje, ernaast tikken of Escape).
     sh.ov.querySelector(".sheet-x").onclick = function () { closeScanner(); closeSheet(sh.ov); };
