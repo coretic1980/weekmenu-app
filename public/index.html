@@ -1864,6 +1864,18 @@
   .hh-sum-next { display: flex; align-items: center; gap: 10px; width: 100%; margin-top: 12px; padding: 10px 12px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface, #fff); color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
   .hh-sum-next > span:first-child { font-size: 20px; } .hh-sum-nt { flex: 1; min-width: 0; display: flex; flex-direction: column; } .hh-sum-nt small { font-size: 11.5px; color: var(--muted); } .hh-sum-nt b { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .hh-sum-go { color: var(--muted); font-size: 18px; }
+  .nu-open { display: block; margin: 10px auto 0; }
+  .nu-load { padding: 24px 0; text-align: center; color: var(--muted); font-size: 14px; }
+  .nu-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 6px; }
+  .nu-row { --nu: var(--accent); }
+  .nu-row.max { --nu: #8C8C8C; } .nu-row.over { --nu: #D2563C; }
+  .nu-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 14px; }
+  .nu-l { color: var(--ink); } .nu-v b { font-variant-numeric: tabular-nums; } .nu-v small { color: var(--muted); font-size: 12px; }
+  .nu-bar { height: 6px; border-radius: 99px; background: rgba(26, 20, 12, 0.08); margin: 5px 0 3px; overflow: hidden; }
+  .nu-bar i { display: block; height: 100%; border-radius: 99px; background: var(--nu); }
+  .nu-note { display: block; font-size: 11.5px; color: var(--muted); }
+  .nu-row.over .nu-note { color: #C24A33; }
+  .nu-foot { margin-top: 14px; font-size: 12px; line-height: 1.5; }
   .mac-mini { display: flex; align-items: center; gap: 4px 12px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-top: 3px; font-variant-numeric: tabular-nums; }
   .mac-mini > span { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
   .mac-mini b, .hh-meal-txt .mac-mini b { color: var(--ink); font-weight: 600; font-size: inherit; line-height: inherit; display: inline; } .mac-mini i { width: 7px; height: 7px; border-radius: 50%; display: inline-block; } .mac-mini i.e { background: #3A7BD5; } .mac-mini i.k { background: #D9941E; } .mac-mini i.v { background: #1E9C8A; }
@@ -5535,6 +5547,160 @@
     box.appendChild(t); box.appendChild(b);
     return box;
   }
+  // ---------- Alle voedingswaarden: vezels, suikers, verzadigd vet, zout, mineralen en vitamines ----------
+  // Bronnen: NEVO (RIVM) per product of via de ingrediënten van een gerecht, en het etiket (Open Food Facts) voor winkelproducten.
+  // Aanbevelingen: Voedingscentrum (2025) en Gezondheidsraad; onbekend blijft onbekend (we tellen het niet als nul).
+  var NUTR = [
+    // [sleutel, label, eenheid, groep]
+    ["vezel", "Vezels", "g", "basis"], ["suiker", "Suikers", "g", "basis"], ["verzadigd", "Verzadigd vet", "g", "basis"], ["zout", "Zout", "g", "basis"],
+    ["kalium", "Kalium", "mg", "min"], ["calcium", "Calcium", "mg", "min"], ["magnesium", "Magnesium", "mg", "min"], ["ijzer", "IJzer", "mg", "min"],
+    ["zink", "Zink", "mg", "min"], ["selenium", "Selenium", "µg", "min"], ["jodium", "Jodium", "µg", "min"], ["fosfor", "Fosfor", "mg", "min"],
+    ["vitA", "Vitamine A", "µg", "vit"], ["vitB1", "Vitamine B1", "mg", "vit"], ["vitB2", "Vitamine B2", "mg", "vit"], ["niacine", "Niacine (B3)", "mg", "vit"],
+    ["vitB6", "Vitamine B6", "mg", "vit"], ["vitB12", "Vitamine B12", "µg", "vit"], ["folaat", "Foliumzuur/folaat", "µg", "vit"], ["vitC", "Vitamine C", "mg", "vit"],
+    ["vitD", "Vitamine D", "µg", "vit"], ["vitE", "Vitamine E", "mg", "vit"], ["vitK", "Vitamine K", "µg", "vit"]
+  ];
+  var nutrTable = null, nutrTableP = null, dishNutrCache = {};
+  function loadNutrTable() {
+    if (nutrTable) return Promise.resolve(nutrTable);
+    nutrTableP = nutrTableP || fetch("/api/foods/nutrients").then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
+      if (!d || !d.available) { nutrTableP = null; return null; }
+      var idx = {}; d.cols.forEach(function (c, i) { idx[c] = i; }); nutrTable = { idx: idx, rows: d.rows }; return nutrTable;
+    }, function () { nutrTableP = null; return null; });
+    return nutrTableP;
+  }
+  // Natrium (mg) -> zout (g); de rest blijft zoals in de bron
+  function nutrFromRow(get) {
+    var o = {};
+    NUTR.forEach(function (n) {
+      if (n[0] === "zout") { var na = get("natrium"); o.zout = na == null ? null : na * 2.5 / 1000; }
+      else o[n[0]] = get(n[0]);
+    });
+    return o;
+  }
+  // Eén product uit Snel toevoegen (NEVO-code of etiketwaarden), voor de hoeveelheid in gram
+  function itemNutr(it) {
+    if (!it || it.fixed || !(it.g > 0)) return null;
+    var f = it.g / 100;
+    if (it.code && nutrTable && nutrTable.rows[String(it.code)]) {
+      var r = nutrTable.rows[String(it.code)];
+      return nutrFromRow(function (k) { var i = nutrTable.idx[k]; return i === undefined || r[i] == null ? null : r[i] * f; });
+    }
+    if (it.n && typeof it.n === "object") return nutrFromRow(function (k) { return it.n[k] == null ? null : it.n[k] * f; });
+    return null;
+  }
+  // Een gerecht: via de ingrediënten (server rekent met NEVO), één keer per gerecht
+  function dishNutr(d) {
+    var ings = Array.isArray(d.ingredienten) ? d.ingredienten.map(function (x) { return typeof x === "string" ? x : (x && x.tekst) || ""; }).filter(Boolean) : [];
+    if (!ings.length) return Promise.resolve(null);
+    var key = d.id + "|" + ings.length + "|" + ings.join("").length;
+    if (dishNutrCache[key]) return Promise.resolve(dishNutrCache[key]);
+    return fetch("/api/nutrients/ingredients", { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, authHeaders()), body: JSON.stringify({ ingredienten: ings }) })
+      .then(function (r) { return r.ok ? r.json() : null; }).then(function (x) {
+        if (!x || !x.available) return null;
+        var get = function (k) { var i = x.cols.indexOf(k); return i < 0 || !x.known[i] ? null : x.totals[i]; };
+        // Alleen "bekend" als (bijna) alle relevante ingrediënten deze waarde hebben
+        var res = { v: nutrFromRow(get), cover: {}, total: x.total };
+        NUTR.forEach(function (n) { var i = x.cols.indexOf(n[0] === "zout" ? "natrium" : n[0]); res.cover[n[0]] = i < 0 ? 0 : x.known[i]; });
+        dishNutrCache[key] = res; return res;
+      }, function () { return null; });
+  }
+  // Aanbevolen hoeveelheden per dag (volwassenen), afhankelijk van geslacht, leeftijd en zwanger/borstvoeding
+  function nutrRefs() {
+    var man = prefs.gender === "Man", age = Number(prefs.age) || 35, preg = typeof situationOn === "function" && situationOn("zwanger"), lact = typeof situationOn === "function" && situationOn("borstvoeding");
+    var kcal = dailyKcalTarget() || (man ? 2500 : 2000), mj = kcal * 0.004184;
+    var r = {
+      vezel: { v: man ? 40 : 30, kind: "min" }, suiker: { v: null }, verzadigd: { v: Math.round(kcal * 0.10 / 9), kind: "max" }, zout: { v: 6, kind: "max" },
+      kalium: { v: 3500 }, calcium: { v: age < 25 ? 1000 : !man && age >= 50 ? 1100 : 950 }, magnesium: { v: man ? 350 : 300 }, ijzer: { v: man || age >= 51 ? 11 : 16 },
+      zink: { v: man ? 9 : 7 }, selenium: { v: 70 }, jodium: { v: 150 }, fosfor: { v: 550 },
+      vitA: { v: man ? 800 : 690 }, vitB1: { v: Math.round(mj * 0.1 * 10) / 10 }, vitB2: { v: 1.6 }, niacine: { v: Math.round(mj * 1.6) }, vitB6: { v: man && age >= 51 ? 1.8 : 1.5 },
+      vitB12: { v: 2.8 }, folaat: { v: 300 }, vitC: { v: 75 }, vitD: { v: age >= 70 ? 20 : 10 }, vitE: { v: man ? 13 : 11 }, vitK: { v: 70 }
+    };
+    if (preg) { r.vitA.v = 750; r.vitB2.v = 1.9; r.vitB6.v = 1.8; r.folaat.v = 400; r.vitB12.v = 3.3; r.vitC.v = 85; r.ijzer.v = 16; r.zink.v = 9.1; r.jodium.v = 200; r.calcium.v = 1000; }
+    if (lact) { r.vitA.v = 1100; r.vitB2.v = 2.0; r.vitB6.v = 1.7; r.folaat.v = 500; r.vitB12.v = 3.8; r.vitC.v = 135; r.ijzer.v = 16; r.zink.v = 9.9; r.selenium.v = 85; r.jodium.v = 200; }
+    return r;
+  }
+  function fmtNutr(v, unit) {
+    if (v == null) return "–";
+    var x = v >= 100 ? Math.round(v) : v >= 1 ? Math.round(v * 10) / 10 : Math.round(v * 100) / 100;
+    return String(x).replace(".", ",") + " " + unit;
+  }
+  // sources: [{ name, items } of { name, dish, factor }]
+  function openNutrientSheet(title, sub, sources) {
+    var sh = openSimpleSheet("nutrSheet", title, sub), body = sh.body;
+    body.innerHTML = '<div class="nu-load">Voedingswaarden berekenen…</div>';
+    loadNutrTable().then(function () {
+      return Promise.all(sources.map(function (s) {
+        if (s.items) {
+          var per = s.items.map(itemNutr), out = { v: {}, cover: {}, total: s.items.length, name: s.name };
+          NUTR.forEach(function (n) { var t = 0, k = 0; per.forEach(function (p) { if (p && p[n[0]] != null) { t += p[n[0]]; k++; } }); out.v[n[0]] = k ? t : null; out.cover[n[0]] = k; });
+          return Promise.resolve(out);
+        }
+        if (s.dish) return dishNutr(s.dish).then(function (x) {
+          if (!x) return { v: {}, cover: {}, total: 1, name: s.name, none: true };
+          var o = { v: {}, cover: x.cover, total: x.total, name: s.name, ingredients: true };
+          NUTR.forEach(function (n) { o.v[n[0]] = x.v[n[0]] == null ? null : x.v[n[0]] * (s.factor || 1); });
+          return o;
+        });
+        return Promise.resolve({ v: {}, cover: {}, total: 1, name: s.name, none: true });
+      }));
+    }).then(function (parts) {
+      if (!document.body.contains(sh.ov) || !sh.ov.classList.contains("active")) return;
+      body.innerHTML = "";
+      var refs = nutrRefs(), unknownSrc = parts.filter(function (p) { return p.none || NUTR.every(function (n) { return p.v[n[0]] == null; }); });
+      var totals = {}, cov = {};
+      NUTR.forEach(function (n) {
+        var t = 0, any = false, full = 0;
+        parts.forEach(function (p) { var v = p.v[n[0]]; if (v != null) { t += v; any = true; if (!p.ingredients || p.cover[n[0]] >= p.total * 0.8) full++; } });
+        totals[n[0]] = any ? t : null; cov[n[0]] = full;
+      });
+      var groups = [["basis", "Koolhydraten, vet en zout"], ["min", "Mineralen"], ["vit", "Vitamines"]];
+      groups.forEach(function (g) {
+        var h = document.createElement("div"); h.className = "qa-h"; h.textContent = g[1]; body.appendChild(h);
+        var box = document.createElement("div"); box.className = "nu-list";
+        NUTR.filter(function (n) { return n[3] === g[0]; }).forEach(function (n) {
+          var v = totals[n[0]], ref = refs[n[0]] || {}, pct = v != null && ref.v ? Math.round(v / ref.v * 100) : null;
+          var row = document.createElement("div"); row.className = "nu-row" + (ref.kind === "max" && pct > 100 ? " over" : ref.kind === "max" ? " max" : ""); row.id = "nu-" + n[0];
+          row.innerHTML = '<div class="nu-top"><span class="nu-l"></span><span class="nu-v"><b></b><small></small></span></div><div class="nu-bar"><i></i></div><small class="nu-note"></small>';
+          row.querySelector(".nu-l").textContent = n[1];
+          row.querySelector(".nu-v b").textContent = fmtNutr(v, n[2]);
+          row.querySelector(".nu-v small").textContent = ref.v ? (ref.kind === "max" ? " / max " : " / ") + fmtNutr(ref.v, n[2]) : "";
+          if (pct != null) row.querySelector(".nu-bar i").style.width = Math.min(100, pct) + "%"; else row.querySelector(".nu-bar").style.visibility = "hidden";
+          var note = [];
+          if (pct != null) note.push(pct + "%" + (ref.kind === "max" ? " van het maximum" : " van wat je per dag nodig hebt"));
+          if (v != null && cov[n[0]] < parts.length) note.push("bekend voor " + cov[n[0]] + " van " + parts.length);
+          if (v == null) note.push("onbekend voor wat je at");
+          if (n[0] === "suiker") note.push("geen dagnorm; let vooral op toegevoegde suikers");
+          row.querySelector(".nu-note").textContent = note.join(" · ");
+          box.appendChild(row);
+        });
+        body.appendChild(box);
+      });
+      var ft = document.createElement("p"); ft.className = "acc-sub nu-foot";
+      ft.textContent = "Waarden uit NEVO-online 2025/9.0 (RIVM) en het etiket (Open Food Facts); aanbevelingen van het Voedingscentrum en de Gezondheidsraad voor volwassenen" + (prefs.gender ? " (" + prefs.gender.toLowerCase() + (prefs.age ? ", " + prefs.age + " jaar" : "") + ")" : "") + ". Het gaat om het gemiddelde over meerdere dagen, niet om één dag." +
+        (unknownSrc.length ? " Niet meegeteld (geen gegevens): " + unknownSrc.map(function (p) { return p.name; }).slice(0, 4).join(", ") + (unknownSrc.length > 4 ? " en meer" : "") + "." : "");
+      body.appendChild(ft);
+    });
+  }
+  // Je dag: alles wat gepland staat of erbij kwam (niet gegeten of vervangen telt niet mee)
+  function openDayNutrients(pw, dayName) {
+    var sources = [];
+    if (pw) {
+      var repl = replacedSlots(pw, dayName);
+      PLAN_SLOTS.forEach(function (m) {
+        var a = pw.slots[dayName + "|" + m]; if (!a || repl[dayName + "|" + m] || a.cooked === false) return;
+        var res = resolveAssignedDish(a); if (!res) return;
+        if (Array.isArray(a.qa) && a.qa.length) sources.push({ name: res.day.name, items: a.qa.map(function (it) { return Object.assign({}, it); }) });
+        else sources.push({ name: res.day.name, dish: res.day, factor: mealPortion(a) });
+      });
+      dayExtras(pw, dayName).forEach(function (x) {
+        var pf = mealPortion(x);
+        if (Array.isArray(x.qa) && x.qa.length) sources.push({ name: x.name, items: x.qa.map(function (it) { var c = Object.assign({}, it); c.g = (c.g || 0) * pf; return c; }) });
+        else sources.push({ name: x.name, none: true });
+      });
+    }
+    if (!sources.length) { showToast("Er staat vandaag nog niets in je dag."); return; }
+    openNutrientSheet("Alle voedingswaarden", "Vandaag · alles wat gepland staat of erbij kwam", sources);
+  }
   function renderDayTracker(body, agg, target, t, live, extras) {
     // Wat is er gegeten, wat staat er nog gepland, en hoeveel heb je nog over tot je dagdoel?
     var eaten = 0, planned = 0, perMt = {}, anyTodo = false;
@@ -5616,6 +5782,9 @@
       mac.appendChild(tile);
     });
     body.appendChild(mac);
+    var nuB = document.createElement("button"); nuB.type = "button"; nuB.className = "hh-link nu-open"; nuB.id = "nutrOpen"; nuB.textContent = "Alle voedingswaarden \u203a";
+    nuB.onclick = function () { var nw = new Date(); openDayNutrients(plannedWeeks.filter(function (w) { return w.weekStart === isoDateKey(getMonday(nw)); })[0], PLAN_DAYS[(nw.getDay() + 6) % 7]); };
+    body.appendChild(nuB);
   }
   function renderHomeHero(main) {
     var now = new Date(), dayName = PLAN_DAYS[(now.getDay() + 6) % 7], hr = now.getHours();
@@ -5859,6 +6028,9 @@
     };
     var again = document.createElement("button"); again.type = "button"; again.className = "hh-link"; again.id = "msRepeat"; again.textContent = "Ook op andere dagen";
     again.onclick = function () { var res = resolveAssignedDish(r.a); if (!res) return; closeSheet(sh.ov); openMultiPlan(res, { skipKey: isoDateKey(planDayDate(pw, dayName)) + "|" + r.slot }); };
+    var mn = document.createElement("button"); mn.type = "button"; mn.className = "hh-link"; mn.id = "msNutr"; mn.textContent = "Alle voedingswaarden \u203a";
+    mn.onclick = function () { closeSheet(sh.ov); openNutrientSheet(r.dish.name, "Voedingswaarden" + (mealPortion(r.a) !== 1 ? " \u00b7 " + String(mealPortion(r.a)).replace(".", ",") + " portie" : ""), [Array.isArray(r.a.qa) && r.a.qa.length ? { name: r.dish.name, items: r.a.qa } : { name: r.dish.name, dish: r.dish, factor: mealPortion(r.a) }]); };
+    body.appendChild(mn);
     if (r.a.qa || r.dish.qaHidden || r.dish.quick || r.dish.label === "Zelf samengesteld") {
       var qe = document.createElement("button"); qe.type = "button"; qe.className = "ghost-btn small x-edit"; qe.id = "msQaEdit"; qe.textContent = "Producten, hoeveelheden of dag wijzigen";
       qe.onclick = function () { closeSheet(sh.ov); openSlotEdit(pw, dayName, r); };
@@ -6015,6 +6187,9 @@
       });
       body.appendChild(mr);
     }
+    var nl = document.createElement("button"); nl.type = "button"; nl.className = "hh-link"; nl.id = "extraNutr"; nl.textContent = "Alle voedingswaarden \u203a";
+    nl.onclick = function () { closeSheet(sh.ov); var pf = mealPortion(x); openNutrientSheet(x.name, "Voedingswaarden", [Array.isArray(x.qa) && x.qa.length ? { name: x.name, items: x.qa.map(function (it) { var c = Object.assign({}, it); c.g = (c.g || 0) * pf; return c; }) } : { name: x.name, none: true }]); };
+    body.appendChild(nl);
     var eb = document.createElement("button"); eb.type = "button"; eb.className = "ghost-btn small x-edit"; eb.id = "extraEdit"; eb.textContent = "Producten, hoeveelheden of dag wijzigen";
     eb.onclick = function () { closeSheet(sh.ov); openExtraEdit(pw, dayName, x); };
     body.appendChild(eb);
@@ -14264,11 +14439,11 @@
     });
   }
   function qaMyAsFood(m) {
-    return { key: "m" + m.id, my: m.id, name: m.name, kcal: m.kcal, e: m.e, kh: m.kh, v: m.v, per: m.per || 100, portion: m.portion || null, src: m.src || "eigen", ean: m.ean || null, brand: m.brand || "", stores: Array.isArray(m.stores) ? m.stores : [], img: m.img || "", norm: qaNorm(m.name), tokens: qaNorm(m.name).split(" ") };
+    return { key: "m" + m.id, my: m.id, name: m.name, kcal: m.kcal, e: m.e, kh: m.kh, v: m.v, per: m.per || 100, portion: m.portion || null, src: m.src || "eigen", ean: m.ean || null, brand: m.brand || "", stores: Array.isArray(m.stores) ? m.stores : [], img: m.img || "", n: m.n || null, norm: qaNorm(m.name), tokens: qaNorm(m.name).split(" ") };
   }
   // Een product uit Open Food Facts (gescand of gezocht) als eigen product bewaren, met merk en winkel
   function offAsMyFood(fd) {
-    return { id: "my" + Date.now(), name: fd.name, kcal: fd.kcal, e: fd.eiwit, kh: fd.kh, v: fd.vet, src: "off", ean: fd.ean, portion: fd.portion, brand: fd.brand || "", stores: Array.isArray(fd.stores) ? fd.stores.slice(0, 3) : [], img: offImgOk(fd.img) };
+    return { id: "my" + Date.now(), name: fd.name, kcal: fd.kcal, e: fd.eiwit, kh: fd.kh, v: fd.vet, src: "off", ean: fd.ean, portion: fd.portion, brand: fd.brand || "", stores: Array.isArray(fd.stores) ? fd.stores.slice(0, 3) : [], img: offImgOk(fd.img), n: fd.n && typeof fd.n === "object" ? fd.n : null };
   }
   // Productfoto (Open Food Facts, CC BY-SA) via onze eigen server
   function offImgOk(p) { return typeof p === "string" && /^\/images\/products\/[0-9\/]+\/[a-z0-9_.-]+\.(jpg|png|webp)$/i.test(p) ? p : ""; }
@@ -14405,7 +14580,7 @@
   // Eén regel in de lijst: een product met een hoeveelheid.
   function qaItem(f, grams, count) {
     var p = qaPortion(f);
-    var it = { key: f.key, name: f.name, src: f.src, code: f.code || null, my: f.my || null, ean: f.ean || null, img: f.img || "", per100: f.fixed ? null : { kcal: f.kcal, e: f.e, kh: f.kh, v: f.v }, fixed: f.fixed || null, portion: p };
+    var it = { key: f.key, name: f.name, src: f.src, code: f.code || null, my: f.my || null, ean: f.ean || null, img: f.img || "", n: f.n || null, per100: f.fixed ? null : { kcal: f.kcal, e: f.e, kh: f.kh, v: f.v }, fixed: f.fixed || null, portion: p };
     if (f.fixed) { it.count = count || 1; it.g = 0; }
     else { it.g = Math.max(1, Math.round(grams || p.g || 100)); it.unit = p.g && p.label !== "100 gram" && it.g % p.g === 0 ? "p" : "g"; }
     return it;
@@ -14991,7 +15166,7 @@
         savePlannedWeeks(); render();
       });
     }
-    function qaStore() { return st.items.map(function (it) { var o = {}; ["key", "name", "src", "code", "my", "ean", "img", "per100", "fixed", "portion", "g", "count", "unit", "q"].forEach(function (k) { if (it[k] !== undefined && it[k] !== null) o[k] = it[k]; }); return o; }); }
+    function qaStore() { return st.items.map(function (it) { var o = {}; ["key", "name", "src", "code", "my", "ean", "img", "per100", "fixed", "portion", "g", "count", "unit", "q", "n"].forEach(function (k) { if (it[k] !== undefined && it[k] !== null) o[k] = it[k]; }); return o; }); }
     function commit() {
       if (!st.items.length) return;
       var t = qaTotals(st.items);

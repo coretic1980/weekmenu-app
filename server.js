@@ -4871,6 +4871,7 @@ function assistantGuide() {
     "- Plus: na de proefperiode zijn ontwerpen en plannen voor Plus. Prijzen en abonnement staan bij Mijn profiel.\n" +
     "- Automatisch plannen: één keer instellen (maaltijden, dagen, dag en tijd, standaard zaterdag 09:00); Balanza zet dan elke week de volgende week klaar en de gebruiker keurt hem goed in een carrousel. Voedingsnieuws: één bericht per dag onder Voor jou.\n" +
     "- Trainingsschema: tegel \u201cTraining\u201d op Start (thuis of sportschool, 2 tot 5 dagen, beginner of gevorderd); vaste schema's die passen bij het doel en rustig opbouwen; trainingen staan in de planner en zijn af te vinken.\n" +
+    "- Alle voedingswaarden: onder de macro's op Start (en bij een maaltijd of product) staat \u201cAlle voedingswaarden\u201d: vezels, suikers, verzadigd vet, zout, mineralen en vitamines, met wat je per dag nodig hebt (Voedingscentrum). Gegevens uit NEVO (RIVM) en van het etiket.\n" +
     "- Doel en gebruik: bij het begin (en voor bestaande gebruikers één keer) kiest de gebruiker wat hij wil bereiken en waarvoor hij Balanza gebruikt (inspiratie, week plannen, bijhouden, begeleiding, training). Alleen de vragen die daarbij horen komen daarna; het startscherm volgt de keuze. Zwanger of borstvoeding: geen afvallen, wel extra energie. Wijzigen via Mijn voorkeuren → Doel en gebruik.\n" +
     "- Groepslessen: in de tegel Training \u201c+ Groepsles\u201d (of in een training \u201cIk deed een groepsles\u201d): Les Mills (BODYPUMP, RPM, BODYCOMBAT, GRIT en meer), pilates reformer, pilates en yoga. BODYPUMP en TONE tellen als krachtdag, cardiolessen als cardiodag, reformer en pilates als aanvulling, yoga en BODYBALANCE als herstel. Met geschat verbruik; bij BODYPUMP je gewicht per nummer met de vorige keer ernaast.\n" +
     "- Jouw doel: tegel \u201cJouw doel\u201d op Start toont per doel de aanpak (voeding, macro's, sport, beweging) en voortgang die bij het doel past (afvallen: gewicht/middel/kracht; spieropbouw: kracht per oefening; atleet: trainingen; onderhoud: Balans en stabiel gewicht), plus beweegminuten per week. Doel wijzigen (Mijn voorkeuren \u2192 Jij & je doel) past alles mee aan; een doelgewicht dat niet meer past stopt.\n" +
@@ -5082,6 +5083,40 @@ function nevoPieceToGram(it) {
   var base = /knoflook/.test(name) ? "knoflook" : name;
   return { tekst: it.tekst, gram: Math.round(q * g), nevo: it.nevo || base };
 }
+// ---- Alle voedingswaarden (vezels, suikers, verzadigd vet, zout, vitamines, mineralen) uit NEVO ----
+var NEVO_NUTR = (function () {
+  try { return JSON.parse(fs.readFileSync(path.join(__dirname, "nevo", "nevo2025_nutrients.json"), "utf8")); } catch (e) { return null; }
+})();
+var nevoNutrGz = null;
+function handleNutrientTable(req, res) {
+  if (!NEVO_NUTR) return sendJSON(res, 200, { available: false });
+  if (!nevoNutrGz) nevoNutrGz = zlib.gzipSync(Buffer.from(JSON.stringify(Object.assign({ available: true }, NEVO_NUTR))));
+  var gz = /\bgzip\b/.test(String(req.headers["accept-encoding"] || ""));
+  var h = { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "public, max-age=86400" };
+  if (gz) { h["Content-Encoding"] = "gzip"; res.writeHead(200, h); return res.end(nevoNutrGz); }
+  res.writeHead(200, h); res.end(zlib.gunzipSync(nevoNutrGz));
+}
+// Voedingsstoffen van een gerecht uit zijn ingrediëntregels (zelfde koppeling als de macro's)
+var nutrLimiter = makeHourlyLimiter(300);
+function handleNutrientsForIngredients(req, res) {
+  resolveUser(req).then(function (user) {
+    if (!user) return sendUnauthorized(res);
+    if (!nutrLimiter("nu:" + user.uid)) return sendJSON(res, 429, { code: "rate_limited", message: "Even rustig aan." });
+    return readBody(req).then(function (body) {
+      if (!NEVO_NUTR || !nevoAvailable()) return sendJSON(res, 200, { available: false });
+      var lines = Array.isArray(body && body.ingredienten) ? body.ingredienten.slice(0, 40).map(function (x) { return String(x || "").replace(/[\r\n]+/g, " ").trim().slice(0, 120); }).filter(Boolean) : [];
+      var calc = nevoCalculate(nevoNormalizeIngredients(lines).map(nevoPieceToGram));
+      var n = NEVO_NUTR.cols.length, tot = new Array(n).fill(0), known = new Array(n).fill(0), rel = 0;
+      calc.detail.forEach(function (d) {
+        if (nevoIsNegligible(d.tekst)) return;
+        rel++;
+        var r = d.code != null ? NEVO_NUTR.rows[String(d.code)] : null; if (!r || !(d.gram > 0)) return;
+        for (var i = 0; i < n; i++) if (r[i] != null) { tot[i] += r[i] * d.gram / 100; known[i]++; }
+      });
+      sendJSON(res, 200, { available: true, cols: NEVO_NUTR.cols, totals: tot.map(function (v) { return Math.round(v * 100) / 100; }), known: known, total: rel });
+    });
+  }).catch(function () { sendJSON(res, 500, { code: "error", message: "Doorrekenen lukte niet." }); });
+}
 function handleNevoCalc(req, res) {
   resolveUser(req).then(function (user) {
     if (!user) return sendUnauthorized(res);
@@ -5219,7 +5254,15 @@ function offFood(pr, ean, kcal) {
   return { ean: ean, name: cleanText(name, 80), brand: brand, stores: offStores(pr.stores), quantity: cleanText(pr.quantity || "", 20),
     kcal: Math.round(kcal), eiwit: num("proteins_100g"), kh: num("carbohydrates_100g"), vet: num("fat_100g"),
     portion: Number(pr.serving_quantity) > 0 && Number(pr.serving_quantity) < 2000 ? { label: cleanText(pr.serving_size || "1 portie", 30), g: Math.round(Number(pr.serving_quantity)) } : null,
-    img: offImgPath(pr.image_front_small_url || pr.image_small_url || pr.image_front_url || pr.image_url) };
+    img: offImgPath(pr.image_front_small_url || pr.image_small_url || pr.image_front_url || pr.image_url),
+    n: offNutr(n) };
+}
+// Overige voedingswaarden van het etiket (per 100 g): vezel, suiker, verzadigd vet (g) en natrium (mg); onbekend = null
+function offNutr(n) {
+  var g = function (k) { var x = Number(n[k]); return n[k] !== undefined && n[k] !== "" && isFinite(x) && x >= 0 ? Math.round(x * 100) / 100 : null; };
+  var na = g("sodium_100g"); na = na != null ? Math.round(na * 1000) : (g("salt_100g") != null ? Math.round(g("salt_100g") / 2.5 * 1000) : null);
+  var out = { vezel: g("fiber_100g"), suiker: g("sugars_100g"), verzadigd: g("saturated-fat_100g"), natrium: na };
+  return Object.keys(out).some(function (k) { return out[k] != null; }) ? out : null;
 }
 // Productfoto van Open Food Facts (CC BY-SA): we bewaren alleen het pad en serveren hem via onze eigen server,
 // zodat je telefoon niet rechtstreeks met Open Food Facts praat. Kleine variant (200 px) is genoeg.
@@ -5326,7 +5369,7 @@ function offWordVariants(q) {
 // Bron en licentie: Open Food Facts, Open Database License (ODbL); de inhoud valt onder de Database Contents License.
 var OFFNL_DUMP_URL = process.env.OFF_DUMP_URL || "https://static.openfoodfacts.org/data/en.openfoodfacts.org.products.csv.gz";
 var OFFNL_MAX_AGE_MS = 7 * 86400000;
-var OFFNL_VER = 2;   // ophogen als het formaat verandert (2: met productfoto): dan meteen opnieuw ophalen
+var OFFNL_VER = 3;   // ophogen als het formaat verandert (2: met productfoto): dan meteen opnieuw ophalen
 var OFFNL_CHUNK = 6 * 1024 * 1024;   // ruim onder de 16 MB per MongoDB-document
 var OFFNL_FILE = path.join(__dirname, "data", "offnl.json.gz");
 var offnl = { items: null, byEan: null, at: 0, count: 0, status: { state: "leeg" } };
@@ -5343,7 +5386,7 @@ function offnlIndex(rows, at) {
 }
 function offnlToFood(r) {
   return { ean: r[0], name: r[1], brand: r[2], stores: r[3] ? r[3].split("|") : [], quantity: r[4], kcal: r[5], eiwit: r[6], kh: r[7], vet: r[8],
-    portion: r[9] ? { label: r[10] || "1 portie", g: r[9] } : null, img: r[12] || "" };
+    portion: r[9] ? { label: r[10] || "1 portie", g: r[9] } : null, img: r[12] || "", n: r[13] || null };
 }
 function offnlByEan(ean) { if (!offnl.byEan) return null; var i = offnl.byEan.get(ean); return i === undefined ? null : offnlToFood(offnl.items[i]); }
 function offnlSearch(q, limit) {
@@ -5440,11 +5483,11 @@ function offnlImport() {
         if (!(kcal >= 0 && kcal <= 950)) return;
         var pname = g("product_name_nl") || g("product_name"); if (!pname.trim()) return;
         var pr = { product_name: pname, brands: g("brands"), stores: g("stores"), quantity: g("quantity"), serving_size: g("serving_size"), serving_quantity: g("serving_quantity"), image_small_url: g("image_small_url") || g("image_url"),
-          nutriments: { proteins_100g: g("proteins_100g"), carbohydrates_100g: g("carbohydrates_100g"), fat_100g: g("fat_100g") } };
+          nutriments: { proteins_100g: g("proteins_100g"), carbohydrates_100g: g("carbohydrates_100g"), fat_100g: g("fat_100g"), fiber_100g: g("fiber_100g"), sugars_100g: g("sugars_100g"), "saturated-fat_100g": g("saturated-fat_100g"), sodium_100g: g("sodium_100g"), salt_100g: g("salt_100g") } };
         var fd = offFood(pr, code, kcal);
         if (!fd.name) return;
         seen.add(code);
-        rows.push([fd.ean, fd.name, fd.brand, fd.stores.join("|"), fd.quantity, fd.kcal, fd.eiwit, fd.kh, fd.vet, fd.portion ? fd.portion.g : 0, fd.portion ? fd.portion.label : "", Number(g("unique_scans_n")) || 0, fd.img || ""]);
+        rows.push([fd.ean, fd.name, fd.brand, fd.stores.join("|"), fd.quantity, fd.kcal, fd.eiwit, fd.kh, fd.vet, fd.portion ? fd.portion.g : 0, fd.portion ? fd.portion.label : "", Number(g("unique_scans_n")) || 0, fd.img || "", fd.n || null]);
         st.kept = rows.length;
       });
       rl.on("close", function () { resolve(rows); });
@@ -5490,7 +5533,7 @@ function handleFoodSearch(req, res, url) {
   // Eerst in onze eigen kopie; vindt die iets met al je woorden, dan hoeven we de zoekdienst niet te vragen
   var local = offnlSearch(q, 10);
   if (local && local.length && !debug) return sendJSON(res, 200, { items: local, source: "Open Food Facts" });
-  var key = "foods/search8/" + crypto.createHash("sha1").update(q).digest("hex").slice(0, 20);
+  var key = "foods/search9/" + crypto.createHash("sha1").update(q).digest("hex").slice(0, 20);
   var mapItems = function (list) {
     return (Array.isArray(list) ? list : []).map(function (pr) {
       var n = pr.nutriments || {}, kcal = Number(n["energy-kcal_100g"]); if (!isFinite(kcal) && isFinite(Number(n["energy_100g"]))) kcal = Number(n["energy_100g"]) / 4.184;
@@ -5588,7 +5631,7 @@ function handleFoodBarcode(req, res, ean) {
   var key = "foods/ean/" + ean;
   return dbGetDoc(key).then(function (r) {
     var v = r.exists ? r.value : null;
-    if (v && (!v.found || v.v === 3) && Date.now() - v.at < (v.found ? FOOD_BARCODE_TTL_MS : FOOD_BARCODE_MISS_MS)) return v;
+    if (v && (!v.found || v.v === 4) && Date.now() - v.at < (v.found ? FOOD_BARCODE_TTL_MS : FOOD_BARCODE_MISS_MS)) return v;
     var base = process.env.OFF_BASE_URL || "https://world.openfoodfacts.org";
     var ctl = new AbortController(), t = setTimeout(function () { ctl.abort(); }, 8000);
     return fetch(base + "/api/v2/product/" + ean + ".json?fields=product_name,product_name_nl,generic_name_nl,brands,stores,nutriments,serving_quantity,serving_size,quantity,image_front_small_url,image_small_url",
@@ -5599,7 +5642,7 @@ function handleFoodBarcode(req, res, ean) {
         var pr = d && d.product, n = pr && pr.nutriments || {};
         var kcal = Number(n["energy-kcal_100g"]); if (!isFinite(kcal) && isFinite(Number(n["energy_100g"]))) kcal = Number(n["energy_100g"]) / 4.184;
         var found = !!(pr && isFinite(kcal) && kcal >= 0 && (pr.product_name_nl || pr.product_name));
-        var doc = { at: Date.now(), found: found, v: 3 };
+        var doc = { at: Date.now(), found: found, v: 4 };
         if (found) doc.food = offFood(pr, ean, kcal);
         return dbSetDoc(key, doc).then(function () { return doc; });
       }, function (e) { clearTimeout(t); throw e; });
@@ -8378,6 +8421,8 @@ var server = http.createServer(function (req, res) {
   if (req.method === "POST" && url.pathname === "/api/assistant") return handleAssistant(req, res);
   if (req.method === "POST" && url.pathname === "/api/estimate") return handleEstimate(req, res);
   if (req.method === "POST" && url.pathname === "/api/nevo/calc") return handleNevoCalc(req, res);
+  if (req.method === "GET" && url.pathname === "/api/foods/nutrients") return handleNutrientTable(req, res);
+  if (req.method === "POST" && url.pathname === "/api/nutrients/ingredients") return handleNutrientsForIngredients(req, res);
   if (req.method === "GET" && url.pathname === "/api/news") return handleNews(req, res);
   if (req.method === "GET" && url.pathname === "/api/foods") return handleFoods(req, res);
   if (req.method === "GET" && url.pathname === "/api/foods/search") return handleFoodSearch(req, res, url);
