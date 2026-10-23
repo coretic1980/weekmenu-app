@@ -14672,7 +14672,6 @@
         else if (f.my && f.ean) needImg.push(f.ean);
         b.querySelector("b").textContent = f.name;
         b.querySelector("small").textContent = (f.fixed ? f.fixed.kcal + " kcal per portie" : Math.round(f.kcal * (p.g || 100) / 100) + " kcal per " + p.label + (p.g && p.label !== "100 gram" && !/\bg\)?$/.test(p.label) ? " (" + p.g + " g)" : "")) + (f.my ? (offWhere(f) ? " · " + offWhere(f) : f.src === "off" ? " · gescand" : " · eigen product") : f.src === "balanza" ? " · Balanza-aanvulling" : "");
-        if (!f.fixed && f.kcal > 0) appendBal(b.querySelector("small"), gramsBal(f.kcal, f.kh, f.e, f.v), " ");
         b.onclick = function () { addFood(f); };
         resBox.appendChild(b);
       });
@@ -14695,7 +14694,6 @@
               b.querySelector("b").textContent = fd.name;
               var por = fd.portion && fd.portion.g ? fd.portion : null, where = offWhere(fd);
               b.querySelector("small").textContent = (por ? Math.round(fd.kcal * por.g / 100) + " kcal per " + por.label : fd.kcal + " kcal per 100 g") + (where ? " \u00b7 " + where : fd.quantity ? " \u00b7 " + fd.quantity : "");
-              if (fd.kcal > 0) appendBal(b.querySelector("small"), gramsBal(fd.kcal, fd.kh, fd.eiwit, fd.vet), " ");
               b.onclick = function () {
                 var item = offAsMyFood(fd);
                 prefs.myFoods = [item].concat(myFoods().filter(function (m) { return m.ean !== fd.ean; })).slice(0, 150); savePrefs();
@@ -14760,7 +14758,6 @@
         var tx = document.createElement("div"); tx.className = "qa-item-txt";
         var b = document.createElement("b"); b.textContent = it.name;
         var sm = document.createElement("small"); sm.textContent = qaAmountText(it) + " · " + Math.round(m.kcal) + " kcal" + (it.photo ? " · schatting van je foto" : it.src === "ai" ? " · schatting" : it.src === "off" ? " · Open Food Facts" : "");
-        if (m.kcal > 0) appendBal(sm, gramsBal(m.kcal, m.kh, m.e, m.v), " ");
         var head = document.createElement("div"); head.className = "qa-item-head";
         if (it.img) { var th = qaThumb(it.img); th.classList.add("qa-thumb-lg"); head.appendChild(th); }
         else if (it.ean) fillFoodImgs([it.ean], function (found) { if (found[it.ean]) { it.img = found[it.ean]; paintItems(); } });
@@ -14837,7 +14834,8 @@
       var mac = document.createElement("div"); mac.className = "qa-mac";
       [["Eiwit", t.eiwitG], ["Koolh.", t.khG], ["Vet", t.vetG]].forEach(function (x) { var s = document.createElement("span"); s.innerHTML = "<b></b><small></small>"; s.querySelector("b").textContent = x[1] + " g"; s.querySelector("small").textContent = x[0]; mac.appendChild(s); });
       top.appendChild(mac);
-      var seal = balPill(bal); seal.id = "qaBal"; top.appendChild(seal);
+      // Balans zegt alleen iets bij een complete maaltijd, niet bij een los product of tussendoortje
+      if (kind.meal) { var seal = balPill(bal); seal.id = "qaBal"; top.appendChild(seal); }
       sumBox.appendChild(top);
       if (st.note) { var nt = document.createElement("div"); nt.className = "qa-expl"; nt.textContent = st.note; sumBox.appendChild(nt); }
       // Hoe past het in die dag?
@@ -14852,7 +14850,7 @@
       var kd = document.createElement("div"); kd.className = "qa-kind"; kd.id = "qaKind";
       kd.textContent = kind.meal ? "Herkend als maaltijd \u00b7 " + st.moment.toLowerCase() : "Herkend als los " + (st.items.length === 1 ? "product" : "tussendoortje") + " \u00b7 " + st.moment.toLowerCase();
       sumBox.appendChild(kd);
-      if (t.kcal) { var qw = balanceWhyEl(Math.round(t.khG * 400 / t.kcal), Math.round(t.eiwitG * 400 / t.kcal), Math.round(t.vetG * 900 / t.kcal), "qaBalWhy"); if (qw) sumBox.appendChild(qw); }
+      if (t.kcal && kind.meal) { var qw = balanceWhyEl(Math.round(t.khG * 400 / t.kcal), Math.round(t.eiwitG * 400 / t.kcal), Math.round(t.vetG * 900 / t.kcal), "qaBalWhy"); if (qw) sumBox.appendChild(qw); }
       var l = document.createElement("div"); l.className = "qa-h"; l.textContent = "Wanneer"; sumBox.appendChild(l);
       var dr = document.createElement("div"); dr.className = "chiprow qa-chips qa-days";
       qaDayOptions().forEach(function (o, i) {
