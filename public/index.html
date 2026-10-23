@@ -1857,6 +1857,17 @@
   .tr-daycard.done b { color: #2E9A5C; }
   .wg-prefrow { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; font-size: 14px; }
   .wiz-main { gap: 12px; }
+  .hh-sumhead { padding: 18px 18px 14px; background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 16%, var(--surface, #fff)), color-mix(in srgb, var(--accent) 4%, var(--surface, #fff))); border-bottom: 1px solid var(--line); }
+  .hh-sum-eb { font-size: 11.5px; letter-spacing: .07em; text-transform: uppercase; font-weight: 700; color: var(--accent); }
+  .hh-sum-t { font-family: Fraunces, serif; font-weight: 600; font-size: 26px; line-height: 1.15; color: var(--ink); margin-top: 4px; }
+  .hh-sum-s { font-size: 13.5px; color: var(--muted); margin-top: 3px; }
+  .hh-sum-next { display: flex; align-items: center; gap: 10px; width: 100%; margin-top: 12px; padding: 10px 12px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface, #fff); color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+  .hh-sum-next > span:first-child { font-size: 20px; } .hh-sum-nt { flex: 1; min-width: 0; display: flex; flex-direction: column; } .hh-sum-nt small { font-size: 11.5px; color: var(--muted); } .hh-sum-nt b { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hh-sum-go { color: var(--muted); font-size: 18px; }
+  .mac-mini { display: flex; align-items: center; gap: 3px; flex-wrap: wrap; font-size: 11.5px; color: var(--muted); margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .mac-mini b { color: var(--ink); font-weight: 600; } .mac-mini i { width: 6px; height: 6px; border-radius: 50%; display: inline-block; margin-left: 5px; }
+  .mac-mini i:first-child { margin-left: 0; } .mac-mini i.e { background: #3A7BD5; } .mac-mini i.k { background: #D9941E; } .mac-mini i.v { background: #1E9C8A; }
+  .x-edit { margin-top: 12px; width: 100%; }
   .reset-acts { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
   .ghost-btn.danger { color: #C24A33; border-color: rgba(194,74,51,.4); }
   .wiz-h { font-family: Fraunces, serif; font-weight: 600; font-size: 24px; margin: 0; }
@@ -5678,27 +5689,35 @@
     var live = rows.filter(function (r) { return !r.replacedBy; });
     // De uitgelichte maaltijd: de eerstvolgende die nog moet komen, anders de laatste van vandaag.
     var feat = live.filter(function (r) { return hr < SLOT_HOURS[r.slot] && r.a.cooked === undefined; })[0] || live[live.length - 1] || null;
-    if (feat) {
-      var ph = document.createElement("button"); ph.type = "button"; ph.className = "hh-photo"; ph.id = "heroMeal";
-      ph.style.setProperty("--meal", (MEAL_THUMBS[feat.mt] || MEAL_THUMBS.Snack)[1]);
-      var emo = document.createElement("span"); emo.className = "hh-emoji"; emo.setAttribute("aria-hidden", "true"); emo.textContent = MEAL_EMOJI[feat.mt] || "🍽️"; ph.appendChild(emo);
-      if (wantsImages()) {
-        var img = document.createElement("img"); img.alt = ""; img.style.display = "none";
-        img.onload = function () { ph.classList.add("has-img"); };
-        ph.appendChild(img);
-        try { loadDishImageInto(feat.dish, img); } catch (er) {}
+    var when = feat ? (feat.a.cooked === true ? "Gekookt" : hr >= SLOT_HOURS[feat.slot] ? "Eerder vandaag" : feat.slot === "Diner" ? (hr < 16 ? "Vanavond" : "Straks") : hr < SLOT_HOURS[feat.slot] - 3 ? "Straks" : "Nu") : "";
+    // Bovenaan geen uitgelicht gerecht meer (dat staat gewoon in de lijst), maar een samenvatting van je dag
+    (function () {
+      var eatenN = live.filter(function (r) { return r.a.cooked === true; }).length + extras.length, todo = live.filter(function (r) { return r.a.cooked === undefined; });
+      var kTot = agg ? agg.kcal : 0, left = target ? target - kTot : null;
+      var eatK = 0; live.forEach(function (r) { if (r.a.cooked === true) eatK += r.dish.kcal * mealPortion(r.a); }); extras.forEach(function (x) { eatK += (x.kcal || 0) * mealPortion(x); }); eatK = Math.round(eatK);
+      var hd = document.createElement("div"); hd.className = "hh-sumhead"; hd.id = "heroSummary";
+      var eb = document.createElement("div"); eb.className = "hh-sum-eb"; eb.textContent = "Vandaag \u00b7 " + now.toLocaleDateString("nl-NL", { weekday: "long", day: "numeric", month: "long" });
+      var ttl = document.createElement("div"); ttl.className = "hh-sum-t";
+      ttl.textContent = target ? (eatK > target ? (eatK - target) + " kcal boven je doel" : left >= 0 ? "Nog " + left + " kcal te gaan" : (-left) + " kcal te veel gepland") : kTot + " kcal vandaag";
+      var sub = document.createElement("div"); sub.className = "hh-sum-s";
+      var bits = [];
+      bits.push(eatenN ? eatenN + " gegeten" : "nog niets gegeten");
+      if (todo.length) bits.push(todo.length + " nog gepland");
+      if (agg) bits.push(agg.eiwitG + " g eiwit");
+      sub.textContent = bits.join(" \u00b7 ");
+      hd.appendChild(eb); hd.appendChild(ttl); hd.appendChild(sub);
+      var nx = todo.filter(function (r) { return hr < SLOT_HOURS[r.slot]; })[0] || todo[0];
+      if (nx) {
+        var nb = document.createElement("button"); nb.type = "button"; nb.className = "hh-sum-next"; nb.id = "heroNext";
+        nb.innerHTML = '<span aria-hidden="true"></span><span class="hh-sum-nt"><small></small><b></b></span><span class="hh-sum-go" aria-hidden="true">\u203a</span>';
+        nb.firstChild.textContent = MEAL_EMOJI[nx.mt] || "\uD83C\uDF7D\uFE0F";
+        nb.querySelector("small").textContent = (hr < SLOT_HOURS[nx.slot] ? (nx.slot === "Diner" && hr < 16 ? "Vanavond" : "Straks") : "Nog open") + " \u00b7 " + nx.slot.replace(/^Snack na .*/, "Snack").toLowerCase();
+        nb.querySelector("b").textContent = nx.dish.name + " \u00b7 " + Math.round(nx.dish.kcal * mealPortion(nx.a)) + " kcal";
+        nb.onclick = function () { openMealSheet(pw, dayName, nx, function () { open(nx); }); };
+        hd.appendChild(nb);
       }
-      var when = feat.a.cooked === true ? "Gekookt" : hr >= SLOT_HOURS[feat.slot] ? "Eerder vandaag" : feat.slot === "Diner" ? (hr < 16 ? "Vanavond" : "Straks") : hr < SLOT_HOURS[feat.slot] - 3 ? "Straks" : "Nu";
-      var cap = document.createElement("span"); cap.className = "hh-cap";
-      var chip = document.createElement("span"); chip.className = "hh-chip"; chip.textContent = when + " – " + feat.slot.toLowerCase();
-      var nm = document.createElement("b"); nm.textContent = feat.dish.name;
-      var meta = document.createElement("small");
-      meta.textContent = [feat.dish.kcal + " kcal", feat.dish.eiwitG ? feat.dish.eiwitG + " g eiwit" : "", feat.dish.bereidingstijd ? feat.dish.bereidingstijd + " min" : ""].filter(Boolean).join("   ");
-      var hs = balSeal(dishBal(feat.dish), "heroBal"); hs.classList.add("on-photo"); ph.appendChild(hs);
-      cap.appendChild(chip); cap.appendChild(nm); cap.appendChild(meta); ph.appendChild(cap);
-      ph.onclick = function () { open(feat); };
-      card.appendChild(ph);
-    }
+      card.appendChild(hd);
+    })();
     var body = document.createElement("div"); body.className = "hh-body";
     // Afvinken en wijzigen gebeurt in de lijst hieronder (één vinkje per maaltijd; tik op de maaltijd voor meer).
     // Voorbereiding voor vanavond (zelfde tip als in het ochtendbericht)
@@ -5731,7 +5750,9 @@
       var b = document.createElement("b"); b.textContent = r.dish.name;
       var sm = document.createElement("small"); sm.textContent = r.replacedBy ? r.slot + ": anders gegeten" : skipped ? r.slot + ": niet gegeten" : r.slot.replace(/^Snack na .*/, "Snack") + (r === feat && r.a.cooked === undefined ? " \u00b7 " + when.toLowerCase() : "") + " \u00b7 " + Math.round(r.dish.kcal * mealPortion(r.a)) + " kcal" + portionNote(r.a) + (r.a.cooked === true ? " \u00b7 gegeten" : "") + (r.a.place ? " \u00b7 bij " + r.a.place : "");
       if (!r.replacedBy && !skipped) appendBal(sm, dishBal(r.dish), " ");
-      tx.appendChild(b); tx.appendChild(sm); openB.appendChild(tx);
+      tx.appendChild(b); tx.appendChild(sm);
+      if (!r.replacedBy && !skipped) { var rk = r.dish.kcal * mealPortion(r.a); tx.appendChild(macroMini(r.dish.eiwit / 100 * rk / 4, r.dish.kh / 100 * rk / 4, r.dish.vet / 100 * rk / 9)); }
+      openB.appendChild(tx);
       openB.onclick = function () { openMealSheet(pw, dayName, r, function () { open(r); }); };
       row.appendChild(openB);
       if (!r.replacedBy) row.appendChild(eatCheck(pw, dayName, r));
@@ -5837,6 +5858,11 @@
     };
     var again = document.createElement("button"); again.type = "button"; again.className = "hh-link"; again.id = "msRepeat"; again.textContent = "Ook op andere dagen";
     again.onclick = function () { var res = resolveAssignedDish(r.a); if (!res) return; closeSheet(sh.ov); openMultiPlan(res, { skipKey: isoDateKey(planDayDate(pw, dayName)) + "|" + r.slot }); };
+    if (r.a.qa || r.dish.qaHidden || r.dish.quick || r.dish.label === "Zelf samengesteld") {
+      var qe = document.createElement("button"); qe.type = "button"; qe.className = "ghost-btn small x-edit"; qe.id = "msQaEdit"; qe.textContent = "Producten, hoeveelheden of dag wijzigen";
+      qe.onclick = function () { closeSheet(sh.ov); openSlotEdit(pw, dayName, r); };
+      body.appendChild(qe);
+    }
     var edl = document.createElement("button"); edl.type = "button"; edl.className = "hh-link"; edl.id = "msEdit"; edl.textContent = "Ingrediënten aanpassen";
     edl.onclick = function () { var res = resolveAssignedDish(r.a); if (!res) return; closeSheet(sh.ov); openEditDish(res, "weeks"); };
     foot.appendChild(rec); foot.appendChild(edl); foot.appendChild(again); foot.appendChild(del); body.appendChild(foot);
@@ -5927,6 +5953,27 @@
     showUndoToast("“" + x.name + "” weggehaald", function () { pw.extra[dayName].splice(idx, 0, x); savePlannedWeeks(); render(); });
   }
   // Tik op iets wat je erbij at: details, en pas dan weghalen (niet meer per ongeluk met één tik).
+  // Items om te wijzigen in Snel toevoegen: de bewaarde producten, of (bij oudere invoer) één portie met de bekende waarden
+  function editItemsFor(src, kcal, e, kh, v, name, portion) {
+    if (Array.isArray(src) && src.length) return src;
+    return [{ key: "fx" + Date.now(), name: name, src: "eigen", fixed: { kcal: Math.round(kcal || 0), e: Math.round(e || 0), kh: Math.round(kh || 0), v: Math.round(v || 0) }, count: portion || 1, portion: { label: "1 portie", g: 0 }, g: 0 }];
+  }
+  function openExtraEdit(pw, dayName, x) {
+    openQuickAdd({ edit: { kind: "extra", pw: pw, day: dayName, week: pw.weekStart, id: x.id, name: x.name, moment: x.moment || "Snack", items: editItemsFor(x.qa, x.kcal, x.eiwitG, x.khG, x.vetG, x.name, mealPortion(x)) } });
+  }
+  function openSlotEdit(pw, dayName, r) {
+    var d = r.dish, pf = mealPortion(r.a), k = d.kcal;
+    openQuickAdd({ edit: { kind: "slot", pw: pw, day: dayName, week: pw.weekStart, key: dayName + "|" + r.slot, name: d.name, moment: SLOT_TO_MEALTYPE[r.slot] || "Snack",
+      items: editItemsFor(r.a.qa, k, d.eiwit / 100 * k / 4, d.kh / 100 * k / 4, d.vet / 100 * k / 9, d.name, pf) } });
+  }
+  // Kleine regel met eiwit, koolhydraten en vet (gram)
+  function macroMini(e, kh, v) {
+    var sp = document.createElement("span"); sp.className = "mac-mini";
+    sp.innerHTML = '<i class="e"></i><b></b> E <i class="k"></i><b></b> K <i class="v"></i><b></b> V';
+    var bs = sp.querySelectorAll("b"); bs[0].textContent = Math.round(e || 0); bs[1].textContent = Math.round(kh || 0); bs[2].textContent = Math.round(v || 0);
+    sp.setAttribute("aria-label", Math.round(e || 0) + " gram eiwit, " + Math.round(kh || 0) + " gram koolhydraten, " + Math.round(v || 0) + " gram vet");
+    return sp;
+  }
   function openExtraSheet(pw, dayName, x) {
     var sh = openSimpleSheet("extraSheet", x.name, (x.moment ? x.moment + " \u00b7 " : "") + dayName.toLowerCase() + (x.place ? " \u00b7 bij " + x.place : ""));
     var body = sh.body;
@@ -5957,6 +6004,19 @@
     }
     var xk = Number(x.kcal) || 0;
     if (xk) { var xw = balanceWhyEl(Math.round((x.khG || 0) * 400 / xk), Math.round((x.eiwitG || 0) * 400 / xk), Math.round((x.vetG || 0) * 900 / xk)); if (xw) body.appendChild(xw); }
+    if (!x.replaces) {
+      var mh = document.createElement("div"); mh.className = "qa-h"; mh.textContent = "Moment"; body.appendChild(mh);
+      var mr = document.createElement("div"); mr.className = "chiprow"; mr.id = "xMoment";
+      ["Ontbijt", "Lunch", "Diner", "Snack"].forEach(function (m) {
+        var c = document.createElement("button"); c.type = "button"; c.className = "chip" + ((x.moment || "Snack") === m ? " selected" : ""); c.id = "xMoment-" + m; c.textContent = m;
+        c.onclick = function () { var prev = x.moment; x.moment = m; savePlannedWeeks(); closeSheet(sh.ov); render(); showUndoToast(x.name + " staat nu bij " + m.toLowerCase(), function () { x.moment = prev; savePlannedWeeks(); render(); }); };
+        mr.appendChild(c);
+      });
+      body.appendChild(mr);
+    }
+    var eb = document.createElement("button"); eb.type = "button"; eb.className = "ghost-btn small x-edit"; eb.id = "extraEdit"; eb.textContent = "Producten, hoeveelheden of dag wijzigen";
+    eb.onclick = function () { closeSheet(sh.ov); openExtraEdit(pw, dayName, x); };
+    body.appendChild(eb);
     var note = document.createElement("div"); note.className = "qa-expl"; note.textContent = x.replaces ? "Kwam in de plaats van je geplande " + x.replaces.split("|")[1].toLowerCase() + "." : "Telt mee in je dag, naast wat er gepland staat.";
     body.appendChild(note);
     var row = document.createElement("div"); row.className = "nudge-actions"; row.style.marginTop = "14px";
@@ -5975,7 +6035,8 @@
     var b = document.createElement("b"); b.textContent = x.name;
     var sm = document.createElement("small"); sm.textContent = (x.place ? "Bij " + x.place : x.replaces ? x.replaces.split("|")[1] + ": anders gegeten" : x.moment ? x.moment + " \u00b7 erbij" : "Erbij") + " \u00b7 " + Math.round(x.kcal * mealPortion(x)) + " kcal" + portionNote(x);
     appendBal(sm, gramsBal(x.kcal, x.khG || 0, x.eiwitG || 0, x.vetG || 0), " ");
-    tx.appendChild(b); tx.appendChild(sm); openB.appendChild(tx);
+    var pfx = mealPortion(x);
+    tx.appendChild(b); tx.appendChild(sm); tx.appendChild(macroMini((x.eiwitG || 0) * pfx, (x.khG || 0) * pfx, (x.vetG || 0) * pfx)); openB.appendChild(tx);
     openB.onclick = function () { openExtraSheet(pw, dayName, x); };
     row.appendChild(openB);
     // Wat je zelf toevoegde heb je al gegeten: een vast vinkje. Wijzigen of weghalen via de maaltijd zelf (met ongedaan maken).
@@ -14430,7 +14491,13 @@
       out: !!opts.out, place: "", pos: null, lastOf: null, note: "",
       momentSet: !!opts.moment, modeSet: !!opts.replaceKey, hintMoment: null
     };
-    var sh = openSimpleSheet("quickAddSheet", "Snel toevoegen", "Macro's en Balans rekent Balanza zelf uit");
+    // Wijzigen van iets wat je eerder toevoegde: producten, hoeveelheden, eenheden, moment en dag staan klaar
+    var ed = opts.edit || null;
+    if (ed) {
+      st.items = JSON.parse(JSON.stringify(ed.items || [])); st.week = ed.week; st.day = ed.day; st.moment = ed.moment || st.moment;
+      st.momentSet = true; st.modeSet = true; st.mode = ed.kind === "slot" ? "replace" : "extra"; st.name = ed.name || ""; st.editing = ed;
+    }
+    var sh = openSimpleSheet("quickAddSheet", ed ? "Wijzigen" : "Snel toevoegen", ed ? "Pas producten, hoeveelheden, moment of dag aan" : "Macro's en Balans rekent Balanza zelf uit");
     sh.ov.classList.add("qa-overlay");
     var body = sh.body;
     var input, list, sumBox;
@@ -14811,7 +14878,7 @@
       if (healthOk() && cur && !already) modes.push(["replace", "In plaats van " + cur.day.name]);
       if (!healthOk()) modes.push(["plan", cur ? "In planning zetten" : "Inplannen"]);
       if (!modes.some(function (m) { return m[0] === st.mode; })) st.mode = modes[0][0];
-      if (modes.length > 1) {
+      if (modes.length > 1 && !st.editing) {
         modes.forEach(function (m) { var b = document.createElement("button"); b.type = "button"; b.className = "chip" + (st.mode === m[0] ? " selected" : ""); b.id = "qaMode-" + m[0]; b.textContent = m[1]; b.setAttribute("aria-pressed", st.mode === m[0] ? "true" : "false"); b.onclick = function () { st.mode = m[0]; st.modeSet = true; paintSum(); }; seg.appendChild(b); });
         sumBox.appendChild(seg);
       }
@@ -14821,12 +14888,12 @@
         st.mode === "extra" ? "Komt in je planning erbij, naast " + cur.day.name + ", en telt mee in je dag." :
         st.mode === "replace" ? "Je planning wordt aangepast: dit komt in de plaats van " + cur.day.name + "." :
         cur ? "Komt in je planning in de plaats van " + cur.day.name + " en wordt bewaard als gerecht." : "Wordt bewaard als gerecht en ingepland, net als je andere gerechten.";
-      sumBox.appendChild(expl);
+      if (!st.editing) sumBox.appendChild(expl);
       var nameIn = document.createElement("input"); nameIn.className = "textinput"; nameIn.id = "qaName"; nameIn.maxLength = 60;
       nameIn.placeholder = st.autoName || (st.items.length === 1 ? st.items[0].name : "Naam, bijv. Mijn ontbijt");
       nameIn.value = st.name; nameIn.oninput = function () { st.name = nameIn.value; };
       if (st.items.length > 1 || st.mode === "plan" || st.save) sumBox.appendChild(nameIn);
-      if (st.mode === "extra" || st.mode === "replace") {
+      if ((st.mode === "extra" || st.mode === "replace") && !st.editing) {
         var sv = document.createElement("button"); sv.type = "button"; sv.className = "sheet-toggle"; sv.id = "qaSaveToggle"; sv.setAttribute("role", "switch"); sv.setAttribute("aria-checked", st.save ? "true" : "false");
         sv.innerHTML = '<span class="st-txt"><b>Bewaar ook als gerecht</b><small>Dan kun je het later inplannen en staat het bij je gerechten</small></span><span class="st-track' + (st.save ? " on" : "") + '"><i></i></span>';
         sv.onclick = function () { st.save = !st.save; paintSum(); };
@@ -14835,6 +14902,7 @@
       var go = document.createElement("button"); go.type = "button"; go.className = "primary-btn"; go.id = "qaGo";
       var dlab = (qaDayOptions().filter(function (o) { return o.week === st.week && o.day === st.day; })[0] || { label: st.day }).label.toLowerCase();
       go.textContent = st.out && st.place && st.mode !== "plan" ? "Inchecken bij " + st.place : st.mode === "extra" ? (cur ? "Erbij zetten (" + dlab + ")" : "In planning zetten (" + dlab + ")") : st.mode === "replace" ? "Vervangen in planning" : cur ? "Vervangen in planning" : "Inplannen";
+      if (st.editing) go.textContent = "Wijzigingen opslaan";
       go.onclick = commit;
       if (st.mode === "plan" && readOnlyMode()) lockEl(go, "Je planning aanpassen");
       sumBox.appendChild(go);
@@ -14885,9 +14953,50 @@
         ingredienten: st.items.map(qaLineText), steps: [{ title: "Samenstellen", content: "Zelf samengesteld met Snel toevoegen." }],
         macroBron: allNevo ? "nevo" : "schatting", nevo: null, quick: true, profile: currentProfileSnapshot() };
     }
+    // Opslaan na wijzigen: het oude item gaat weg, het nieuwe komt op de (eventueel nieuwe) dag en het (eventueel nieuwe) moment. Met ongedaan maken.
+    function commitEdit(t) {
+      var e = st.editing, oldPw = e.pw, name = (st.name || "").trim() || (st.items.length === 1 ? st.items[0].name : st.items.slice(0, 2).map(function (x) { return x.name.split(" ")[0]; }).join(" met "));
+      var newPw = addOrOpenPlannedWeek(new Date(st.week + "T00:00:00")), mealType = st.moment;
+      var snapOld = JSON.parse(JSON.stringify({ slots: oldPw.slots, extra: oldPw.extra || null })), snapNew = newPw === oldPw ? null : JSON.parse(JSON.stringify({ slots: newPw.slots, extra: newPw.extra || null }));
+      if (e.kind === "extra") {
+        var arr = oldPw.extra && Array.isArray(oldPw.extra[e.day]) ? oldPw.extra[e.day] : [], idx = -1;
+        arr.forEach(function (x, i) { if (x.id === e.id) idx = i; });
+        var old = idx > -1 ? arr[idx] : {};
+        var entry = Object.assign({}, old, { name: name, kcal: t.kcal, eiwitG: t.eiwitG, khG: t.khG, vetG: t.vetG, moment: mealType, items: st.items.map(qaLineText), qa: qaStore(), editedAt: new Date().toISOString() });
+        delete entry.portion;   // de hoeveelheid zit nu in de producten zelf
+        if (idx > -1) arr.splice(idx, 1);
+        newPw.extra = newPw.extra && typeof newPw.extra === "object" ? newPw.extra : {};
+        newPw.extra[st.day] = Array.isArray(newPw.extra[st.day]) ? newPw.extra[st.day] : [];
+        if (newPw === oldPw && st.day === e.day && idx > -1) newPw.extra[st.day].splice(idx, 0, entry); else newPw.extra[st.day].push(entry);
+      } else {
+        var oldSlot = oldPw.slots[e.key] ? JSON.parse(JSON.stringify(oldPw.slots[e.key])) : {};
+        var dish = asDish(name, t, mealType); dish.qaHidden = true; addToCacheLibrary([dish]); persistDishesToDb([dish]);
+        var nk = st.day + "|" + (mealType === "Snack" ? (e.key.split("|")[1].indexOf("Snack") === 0 ? e.key.split("|")[1] : "Snack na lunch") : mealType);
+        delete oldPw.slots[e.key];
+        if (mealType === "Snack" && newPw.slots[nk] && nk !== e.key) { var fr = SNACK_SLOTS.filter(function (sl) { return !newPw.slots[st.day + "|" + sl]; })[0]; if (fr) nk = st.day + "|" + fr; }
+        if (newPw.slots[nk] && nk !== e.key) {
+          // Op dat moment staat al iets anders gepland: niet overschrijven, maar erbij zetten
+          newPw.extra = newPw.extra && typeof newPw.extra === "object" ? newPw.extra : {};
+          newPw.extra[st.day] = Array.isArray(newPw.extra[st.day]) ? newPw.extra[st.day] : [];
+          newPw.extra[st.day].push({ id: "x" + Date.now(), at: new Date().toISOString(), who: meId(), name: name, kcal: t.kcal, eiwitG: t.eiwitG, khG: t.khG, vetG: t.vetG, moment: mealType, quick: true, items: st.items.map(qaLineText), qa: qaStore() });
+        } else {
+          var slot = { name: dish.name, weekId: "cache", dayId: dish.id, balans: dish.balans, qa: qaStore() };
+          ["cooked", "cookedAt", "eaten", "place", "was"].forEach(function (k) { if (oldSlot[k] !== undefined) slot[k] = oldSlot[k]; });
+          newPw.slots[nk] = slot;
+        }
+      }
+      savePlannedWeeks(); closeSheet(sh.ov); render();
+      showUndoToast(name + " aangepast (" + t.kcal + " kcal)", function () {
+        oldPw.slots = snapOld.slots; if (snapOld.extra) oldPw.extra = snapOld.extra; else delete oldPw.extra;
+        if (snapNew) { newPw.slots = snapNew.slots; if (snapNew.extra) newPw.extra = snapNew.extra; else delete newPw.extra; }
+        savePlannedWeeks(); render();
+      });
+    }
+    function qaStore() { return st.items.map(function (it) { var o = {}; ["key", "name", "src", "code", "my", "ean", "img", "per100", "fixed", "portion", "g", "count", "unit", "q"].forEach(function (k) { if (it[k] !== undefined && it[k] !== null) o[k] = it[k]; }); return o; }); }
     function commit() {
       if (!st.items.length) return;
       var t = qaTotals(st.items);
+      if (st.editing) return commitEdit(t);
       var name = (st.name || "").trim() || st.autoName || (st.items.length === 1 ? st.items[0].name : st.items.slice(0, 2).map(function (x) { return x.name.split(" ")[0]; }).join(" met "));
       var monday = new Date(st.week + "T00:00:00");
       var pw = addOrOpenPlannedWeek(monday);
@@ -14912,7 +15021,7 @@
       if (st.mode === "plan" || fillSlot) {
         var prev = pw.slots[key] ? JSON.parse(JSON.stringify(pw.slots[key])) : null;
         var prevDish = prev && resolveAssignedDish(prev); if (prev && prevDish && prevDish.day) prev.name = prevDish.day.name;
-        var slot = { name: dish.name, weekId: "cache", dayId: dish.id, balans: dish.balans };
+        var slot = { name: dish.name, weekId: "cache", dayId: dish.id, balans: dish.balans, qa: qaStore() };
         if (eaten) { slot.cooked = true; slot.cookedAt = new Date().toISOString(); slot.eaten = true; }
         if (st.mode === "replace" && prev && prev.name) slot.was = prev.name;
         if (st.out && st.place.trim()) { slot.place = st.place.trim().slice(0, 60); rememberPlace(slot.place, st.pos, { name: name, kcal: t.kcal, eiwitG: t.eiwitG, khG: t.khG, vetG: t.vetG, items: st.items.map(qaLineText) }); }
@@ -14928,7 +15037,7 @@
       }
       pw.extra = pw.extra && typeof pw.extra === "object" ? pw.extra : {};
       pw.extra[st.day] = Array.isArray(pw.extra[st.day]) ? pw.extra[st.day] : [];
-      var entry = { id: "x" + Date.now(), at: new Date().toISOString(), who: meId(), name: name, kcal: t.kcal, eiwitG: t.eiwitG, khG: t.khG, vetG: t.vetG, moment: mealType, quick: true, items: st.items.map(qaLineText) };
+      var entry = { id: "x" + Date.now(), at: new Date().toISOString(), who: meId(), name: name, kcal: t.kcal, eiwitG: t.eiwitG, khG: t.khG, vetG: t.vetG, moment: mealType, quick: true, items: st.items.map(qaLineText), qa: qaStore() };
       if (st.out && st.place.trim()) { entry.place = st.place.trim().slice(0, 60); rememberPlace(entry.place, st.pos, entry); }
       pw.extra[st.day].push(entry);
       savePlannedWeeks();
@@ -15175,7 +15284,7 @@
       sh.ov.addEventListener("keydown", function (e) { if (e.key === "Escape" && sh.ov.qaStop) sh.ov.qaStop(); });
     }
     sh.ov.qaStop = closeScanner;
-    paintOut(); paintStart(); paintSum();
+    paintOut(); paintStart(); if (st.items.length) paintItems(); paintSum();
     setTimeout(function () { try { input.focus(); } catch (e) {} }, 80);
   }
   function loadScript(src) {
