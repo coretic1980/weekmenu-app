@@ -1550,6 +1550,10 @@
   .gp-move-add { display: flex; gap: 6px; flex-wrap: wrap; }
   .gp-move-fix { border-style: dashed; }
   .cy-chip { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 12px; border-radius: 12px; border: 0; background: rgba(155, 107, 214, .1); color: inherit; font: inherit; text-align: left; cursor: pointer; }
+  .cy-invite { padding: 0; gap: 0; }
+  .cy-inv-go { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; padding: 8px 4px 8px 12px; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+  .cy-inv-go em { font-style: normal; width: 22px; height: 22px; border-radius: 50%; background: #9B6BD6; color: #fff; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: 15px; flex: none; }
+  .cy-inv-x { flex: none; width: 36px; align-self: stretch; border: 0; background: none; color: var(--muted); font-size: 18px; cursor: pointer; }
   .cy-chip span { font-size: 18px; } .cy-chip b { font-size: 13.5px; } .cy-chip small { font-size: 12.5px; color: var(--muted); flex: 1; } .cy-chip em { font-style: normal; color: var(--muted); }
   .cy-now { display: flex; gap: 12px; padding: 12px 14px; border-radius: 14px; background: rgba(155, 107, 214, .1); margin-bottom: 10px; }
   .cy-emo { font-size: 26px; line-height: 1; } .cy-now b { display: block; font-size: 15px; } .cy-now small { display: block; color: var(--muted); font-size: 12.5px; margin-top: 2px; } .cy-now p { margin: 6px 0 0; font-size: 13.5px; line-height: 1.45; }
@@ -16034,7 +16038,7 @@
     acts.appendChild(save);
     if (c) {
       var off = document.createElement("button"); off.type = "button"; off.className = "ghost-btn small"; off.id = "cyOff"; off.textContent = "Uitzetten";
-      off.onclick = function () { delete prefs.cycle; savePrefs(); closeSheet(sh.ov); render(); showToast("Uitgezet; je gegevens hierover zijn gewist."); };
+      off.onclick = function () { delete prefs.cycle; prefs.cycleDismissed = true; savePrefs(); closeSheet(sh.ov); render(); showToast("Uitgezet; je gegevens hierover zijn gewist."); };
       acts.appendChild(off);
     }
     function paint() {
@@ -16080,7 +16084,19 @@
   }
   // Rij in Jouw doel: waar je nu bent, met een tik naar de uitleg
   function renderCycleChip(card) {
-    var t = cycleChipText(); if (!t) return;
+    var t = cycleChipText();
+    if (!t) {
+      // Vrouw zonder cyclus ingesteld: een rustige uitnodiging, weg te tikken
+      if (!cycleAllowed() || prefs.cycle || prefs.cycleDismissed) return;
+      var inv = document.createElement("div"); inv.className = "cy-chip cy-invite"; inv.id = "cyInvite";
+      var go = document.createElement("button"); go.type = "button"; go.className = "cy-inv-go"; go.id = "cyInviteGo";
+      go.innerHTML = '<span aria-hidden="true">\uD83C\uDF19</span><b>Je cyclus meenemen?</b><small>of de overgang \u00b7 optioneel</small><em aria-hidden="true">+</em>';
+      go.onclick = function () { openCycleSheet(); };
+      var x = document.createElement("button"); x.type = "button"; x.className = "cy-inv-x"; x.id = "cyInviteX"; x.setAttribute("aria-label", "Niet nodig"); x.textContent = "\u00d7";
+      x.onclick = function () { prefs.cycleDismissed = true; savePrefs(); render(); showToast("Je kunt het altijd nog aanzetten via Aanpak."); };
+      inv.appendChild(go); inv.appendChild(x); card.appendChild(inv);
+      return;
+    }
     var b = document.createElement("button"); b.type = "button"; b.className = "cy-chip"; b.id = "cyChip";
     b.innerHTML = '<span aria-hidden="true"></span><b></b><small></small><em aria-hidden="true">›</em>';
     b.querySelector("span").textContent = t[0]; b.querySelector("b").textContent = t[1]; b.querySelector("small").textContent = t[2];
@@ -18392,6 +18408,7 @@
         moveLog: prefs.moveLog && typeof prefs.moveLog === "object" ? prefs.moveLog : {},
         weetjes: prefs.weetjes && typeof prefs.weetjes === "object" ? prefs.weetjes : {},
         cycle: prefs.cycle && typeof prefs.cycle === "object" && healthOk() ? prefs.cycle : null,
+        cycleDismissed: !!prefs.cycleDismissed,
         proteinOut: Array.isArray(prefs.proteinOut) ? prefs.proteinOut.slice(0, 20) : [],
         journey: prefs.journey && typeof prefs.journey === "object" ? prefs.journey : {},
         ageGroup: AGE_GROUPS.some(function (g) { return g[0] === prefs.ageGroup; }) ? prefs.ageGroup : "",
@@ -18919,7 +18936,7 @@
               return;
             }
             var pdata = psnap.data() || {};
-            ["name", "bringListLink", "cuisines", "flavors", "level", "dietStyle", "health", "leftovers", "coach", "water", "places", "proteinOut", "journey", "ageGroup", "student", "sugarMode", "cheeseMode", "familyMode", "equipment", "exclude", "count", "mealTypes", "gender", "heightCm", "weightKg", "age", "activityLevel", "goal", "homeLayout", "mealCounts", "withImages", "pantry", "communityName", "myFoods", "weightGoal", "weightGoalDismissed", "training", "trainingDismissed", "moveLog", "weetjes", "cycle"].forEach(function (k) {
+            ["name", "bringListLink", "cuisines", "flavors", "level", "dietStyle", "health", "leftovers", "coach", "water", "places", "proteinOut", "journey", "ageGroup", "student", "sugarMode", "cheeseMode", "familyMode", "equipment", "exclude", "count", "mealTypes", "gender", "heightCm", "weightKg", "age", "activityLevel", "goal", "homeLayout", "mealCounts", "withImages", "pantry", "communityName", "myFoods", "weightGoal", "weightGoalDismissed", "training", "trainingDismissed", "moveLog", "weetjes", "cycle", "cycleDismissed"].forEach(function (k) {
               if (pdata[k] !== undefined) prefs[k] = deepClone(pdata[k]);
             });
             var mig = migrateExcludeTerms();
