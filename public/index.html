@@ -1885,6 +1885,7 @@
   .hz-ontdek > .hz-h, .hz-snel > .hz-h { padding: 0 4px; }
   .hz-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 0; border: 0; border-top: 1px solid var(--line); background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
   .hz-h + .hz-row { border-top: 0; }
+  .hz-h-acts { display: inline-flex; gap: 14px; text-transform: none; letter-spacing: 0; }
   .hz-row.accent .hz-ic { background: rgba(217,148,30,.15); }
   .hz-ic { flex: none; width: 34px; height: 34px; border-radius: 11px; background: color-mix(in srgb, var(--accent) 10%, transparent); display: inline-flex; align-items: center; justify-content: center; font-size: 17px; }
   .hz-tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; } .hz-tx b { font-size: 14.5px; } .hz-tx small { font-size: 12.5px; color: var(--muted); }
@@ -6568,7 +6569,7 @@
 
   // ---------- Start in vaste zones: elke functie heeft een ontworpen plek, je kiest per zone wat erin staat ----------
   // prefs.homeZones = { v, order: [vandaag, doel, week, ontdek, snel], items: { doel: [...], week: [...], ontdek: [...], snel: [...] } }
-  var HZ_V = 1;
+  var HZ_V = 2;
   var HZ_ZONES = {
     vandaag: { label: "Vandaag", desc: "Je dag: wat je nog over hebt, je maaltijden en macro's", fixed: true, items: [] },
     doel: { label: "Jouw doel", desc: "Voortgang, training, je reis en cyclus in één kaart",
@@ -6585,18 +6586,18 @@
     var i = typeof intent === "function" ? intent() : null, u = i ? i.uses : ["inspire", "plan", "track"];
     var has = function (k) { return u.indexOf(k) > -1; }, dishes = i ? dishesWanted(i) : true;
     var items = {
-      doel: ["doel"].concat(has("train") ? ["training"] : []).concat(has("coach") ? ["reis"] : []).concat(["cyclus"]),
+      doel: ["doel"].concat(has("train") || (typeof training === "function" && training()) ? ["training"] : []).concat(has("coach") ? ["reis"] : []).concat(["cyclus"]),
       week: has("plan") ? ["deze", "volgende", "boodschappen"] : [],
       ontdek: ["weetje"].concat(dishes ? ["voorjou", "seizoen", "recent"] : []),
       snel: ["toevoegen"].concat(dishes ? ["genereren"] : []).concat(has("inspire") ? ["foto"] : []).concat(has("plan") ? ["lijst"] : []).concat(has("train") ? ["training"] : [])
     };
-    if (!i || (i.goal === "gezond" && !has("coach") && !has("train"))) items.doel = items.doel.filter(function (x) { return x !== "training"; });
+    if ((!i || (i.goal === "gezond" && !has("coach") && !has("train"))) && !(typeof training === "function" && training())) items.doel = items.doel.filter(function (x) { return x !== "training"; });
     return { v: HZ_V, order: HZ_ORDER.slice(), items: items };
   }
   // Wie al een eigen tegelindeling had: die zo goed mogelijk overnemen
   function hzFromTiles() {
     var vis = homeLayout().visible, d = hzDefaults(), on = function (id) { return vis.indexOf(id) > -1; };
-    d.items.doel = (on("doel") ? ["doel", "cyclus"] : []).concat(on("training") ? ["training"] : []).concat(on("reis") ? ["reis"] : []);
+    d.items.doel = (on("doel") ? ["doel", "cyclus"] : []).concat(on("training") || training() ? ["training"] : []).concat(on("reis") ? ["reis"] : []);
     d.items.week = (on("week") ? ["deze"] : []).concat(on("volgendeweek") ? ["volgende"] : []).concat(on("boodschappen") || on("week") ? ["boodschappen"] : []);
     d.items.ontdek = ["weetje", "voorjou", "seizoen", "recent", "community", "tip"].filter(on);
     d.items.snel = ["toevoegen"].concat(on("genereren") ? ["genereren"] : []).concat(on("foto") ? ["foto"] : []).concat(on("boodschappen") ? ["lijst"] : []).concat(on("community") ? ["community"] : []);
@@ -6604,6 +6605,12 @@
   }
   function homeZones() {
     var z = prefs.homeZones;
+    if (z && z.v === 1 && Array.isArray(z.order) && z.items) {
+      // v1 liet je trainingsschema weg als dat niet bij je gebruik stond: met een schema hoort het er standaard bij
+      z.items.doel = z.items.doel || [];
+      if (training() && z.items.doel.indexOf("training") < 0) z.items.doel.push("training");
+      z.v = HZ_V;
+    }
     if (z && z.v === HZ_V && Array.isArray(z.order) && z.items) return z;
     prefs.homeZones = prefs.homeLayout && prefs.homeLayout.order ? hzFromTiles() : hzDefaults();
     return prefs.homeZones;
@@ -6626,7 +6633,9 @@
     var box = document.createElement("div"); box.className = "card hz-card"; box.id = "zoneDoel";
     var p = gpPlan(), n = 0;
     var aan = document.createElement("button"); aan.type = "button"; aan.className = "hh-link"; aan.textContent = "Aanpak"; aan.onclick = function () { openGoalPlanSheet(); };
-    hzHead(box, "Jouw doel", aan);
+    var vg = document.createElement("button"); vg.type = "button"; vg.className = "hh-link"; vg.id = "zVoortgang"; vg.textContent = "Voortgang ›"; vg.onclick = function () { openGoalProgress(); };
+    var acts = document.createElement("span"); acts.className = "hz-h-acts"; acts.appendChild(aan); acts.appendChild(vg);
+    hzHead(box, "Jouw doel", acts);
     if (hzHas("doel", "doel")) {
       var m = gpMeters()[0];
       hzRow(box, "zDoel", "🎯", p.title, m ? m[1] + ": " + m[2] + " " + m[3] : p.sub || "", function () { if (m && m[0] === "doel" && !weightGoal()) openWeightGoalSheet(); else if (m) openGoalProgress(m[5]); else openGoalPlanSheet(); });
