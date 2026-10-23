@@ -5206,6 +5206,164 @@ function offWordVariants(q) {
   }
   return out;
 }
+// ---------- Eigen kopie van de Nederlandse producten uit Open Food Facts (ODbL) ----------
+// Eén keer per week haalt de server de volledige export (CSV, ± 0,9 GB gezipt) op, houdt alleen producten die in
+// Nederland verkocht worden, en bewaart die compact in MongoDB (of lokaal in data/). Zoeken gebeurt daarna in het
+// geheugen: snel, zonder storingen of blokkades van de zoekdienst, en met onze eigen rangschikking.
+// Bron en licentie: Open Food Facts, Open Database License (ODbL); de inhoud valt onder de Database Contents License.
+var OFFNL_DUMP_URL = process.env.OFF_DUMP_URL || "https://static.openfoodfacts.org/data/en.openfoodfacts.org.products.csv.gz";
+var OFFNL_MAX_AGE_MS = 7 * 86400000;
+var OFFNL_CHUNK = 6 * 1024 * 1024;   // ruim onder de 16 MB per MongoDB-document
+var OFFNL_FILE = path.join(__dirname, "data", "offnl.json.gz");
+var offnl = { items: null, byEan: null, at: 0, count: 0, status: { state: "leeg" } };
+function offnlNorm(x) { return String(x || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, " ").trim(); }
+// Compact record: [ean, naam, merk, winkels ("A|B"), inhoud, kcal, eiwit, kh, vet, portie-g, portie-label, scans]
+function offnlIndex(rows, at) {
+  // Alle teksten (naam + merk, genormaliseerd) achter elkaar in één lange string: kandidaten zoeken met één native
+  // indexOf is veel sneller dan per product, en kost weinig geheugen. Woordgrenzen blijven als spatie bewaard.
+  var byEan = new Map(), offs = new Uint32Array(rows.length + 1), parts = new Array(rows.length), pos = 0;
+  rows.forEach(function (r, i) { var t = " " + offnlNorm(r[1] + " " + r[2]) + " "; offs[i] = pos; parts[i] = t; pos += t.length + 1; byEan.set(r[0], i); });
+  offs[rows.length] = pos;
+  offnl.blob = parts.join("\u0001"); offnl.offs = offs;
+  offnl.items = rows; offnl.byEan = byEan; offnl.at = at; offnl.count = rows.length;
+}
+function offnlToFood(r) {
+  return { ean: r[0], name: r[1], brand: r[2], stores: r[3] ? r[3].split("|") : [], quantity: r[4], kcal: r[5], eiwit: r[6], kh: r[7], vet: r[8],
+    portion: r[9] ? { label: r[10] || "1 portie", g: r[9] } : null };
+}
+function offnlByEan(ean) { if (!offnl.byEan) return null; var i = offnl.byEan.get(ean); return i === undefined ? null : offnlToFood(offnl.items[i]); }
+function offnlSearch(q, limit) {
+  if (!offnl.items) return null;
+  var words = offnlNorm(q).split(" ").filter(function (w) { return w.length >= 2; });
+  if (!words.length) return [];
+  var forms = words.map(function (w) { return nlWordForms(w); });
+  var need = words.length <= 2 ? words.length : words.length - 0.5;   // bij 3+ woorden mag er één half ontbreken
+  // Het langste woord eerst: dat filtert het snelst
+  var order = words.map(function (w, i) { return i; }).sort(function (a, b) { return words[b].length - words[a].length; });
+  // Kandidaten: producten waarin (een vorm van) het langste woord voorkomt; bij 3+ woorden ook het op één na langste
+  var cand = new Set(), offs = offnl.offs, blob = offnl.blob;
+  var idxAt = function (p) { var lo = 0, hi = offs.length - 2; while (lo < hi) { var mid = (lo + hi + 1) >> 1; if (offs[mid] <= p) lo = mid; else hi = mid - 1; } return lo; };
+  order.slice(0, words.length >= 3 ? 2 : 1).forEach(function (wi) {
+    forms[wi].forEach(function (fw) { var p = blob.indexOf(fw); while (p > -1 && cand.size < 60000) { var k0 = idxAt(p); cand.add(k0); p = blob.indexOf(fw, offs[k0 + 1]); } });
+  });
+  var hits = [];
+  cand.forEach(function (k) {
+    var txt = blob.slice(offs[k], offs[k + 1] - 1), it = { txt: txt, glued: txt.replace(/ /g, "") }, sc = 0, missed = 0;
+    for (var j = 0; j < order.length; j++) {
+      var fs = forms[order[j]], v = 0;
+      for (var f = 0; f < fs.length; f++) {
+        var fw = fs[f];
+        if (it.txt.indexOf(" " + fw + " ") > -1) { v = 1; break; }
+        if (it.txt.indexOf(" " + fw) > -1) v = Math.max(v, 0.85);                       // begin van een woord (tijdens het typen)
+        else if (fw.length >= 4 && it.glued.indexOf(fw) > -1) v = Math.max(v, 0.8);    // in een samenstelling: havermout(repen)
+      }
+      if (!v) { missed++; if (words.length < 3 || missed > 1) { sc = -1; break; } }
+      sc += v;
+    }
+    if (sc >= need - 0.5 && sc > 0) hits.push({ k: k, s: sc });
+  });
+  hits.sort(function (a, b) {
+    if (b.s !== a.s) return b.s - a.s;
+    var ra = offnl.items[a.k], rb = offnl.items[b.k];
+    return (rb[11] || 0) - (ra[11] || 0) || (rb[3] ? 1 : 0) - (ra[3] ? 1 : 0) || ra[1].length - rb[1].length;
+  });
+  return hits.slice(0, limit || 10).map(function (h) { return offnlToFood(offnl.items[h.k]); });
+}
+// ---- Opslaan en laden ----
+function offnlSave(rows, at) {
+  var gz = zlib.gzipSync(Buffer.from(JSON.stringify(rows)), { level: 6 });
+  return mongoReady.then(function (db) {
+    if (!db) { try { fs.mkdirSync(path.dirname(OFFNL_FILE), { recursive: true }); fs.writeFileSync(OFFNL_FILE, gz); } catch (e) {} return dbSetDoc("offnl/meta", { at: at, count: rows.length, file: true }); }
+    var gen = "g" + at, col = db.collection("offnl"), parts = [];
+    for (var i = 0; i * OFFNL_CHUNK < gz.length; i++) parts.push({ _id: gen + "-" + i, gen: gen, i: i, data: gz.subarray(i * OFFNL_CHUNK, (i + 1) * OFFNL_CHUNK) });
+    return col.insertMany(parts).then(function () { return dbSetDoc("offnl/meta", { at: at, count: rows.length, gen: gen, chunks: parts.length, bytes: gz.length }); })
+      .then(function () { return col.deleteMany({ gen: { $ne: gen } }); });
+  });
+}
+function offnlLoad() {
+  return dbGetDoc("offnl/meta").then(function (r) {
+    var m = r.exists ? r.value : null; if (!m) return null;
+    return mongoReady.then(function (db) {
+      if (!db || m.file) { try { return { m: m, gz: fs.readFileSync(OFFNL_FILE) }; } catch (e) { return null; } }
+      return db.collection("offnl").find({ gen: m.gen }).sort({ i: 1 }).toArray().then(function (docs) {
+        if (docs.length !== m.chunks) return null;
+        return { m: m, gz: Buffer.concat(docs.map(function (d) { return Buffer.from(d.data.buffer || d.data); })) };
+      });
+    });
+  }).then(function (x) {
+    if (!x) return false;
+    var rows = JSON.parse(zlib.gunzipSync(x.gz).toString("utf8"));
+    offnlIndex(rows, x.m.at); offnl.status = { state: "klaar", at: x.m.at, count: rows.length };
+    console.log("[offnl] " + rows.length + " Nederlandse producten geladen (van " + new Date(x.m.at).toISOString().slice(0, 10) + ").");
+    return true;
+  }).catch(function (e) { console.warn("[offnl] laden mislukt: " + (e && e.message)); return false; });
+}
+// ---- De export ophalen en filteren (stream: geheugen blijft klein) ----
+function offnlImport() {
+  if (offnl.status.state === "bezig") return Promise.resolve(false);
+  var st = offnl.status = { state: "bezig", startedAt: Date.now(), mb: 0, lines: 0, kept: 0 };
+  var Readable = require("stream").Readable, readline = require("readline");
+  var ctl = new AbortController(), idle = null, poke = function () { clearTimeout(idle); idle = setTimeout(function () { ctl.abort(); }, 120000); };
+  poke();
+  return fetch(OFFNL_DUMP_URL, { signal: ctl.signal, headers: { "User-Agent": "Balanza/1.0 (balanza voedingsapp; wekelijkse export)" } }).then(function (res) {
+    if (!res.ok || !res.body) throw new Error("HTTP " + res.status);
+    var src = Readable.fromWeb(res.body), gunzip = zlib.createGunzip(), bytes = 0;
+    src.on("data", function (c) { bytes += c.length; st.mb = Math.round(bytes / 1048576); poke(); });
+    src.on("error", function (e) { gunzip.destroy(e); });
+    var rl = readline.createInterface({ input: src.pipe(gunzip), crlfDelay: Infinity });
+    var col = null, rows = [], seen = new Set();
+    return new Promise(function (resolve, reject) {
+      gunzip.on("error", reject);
+      rl.on("line", function (line) {
+        st.lines++;
+        if (!col) { col = {}; line.split("\t").forEach(function (h, i) { col[h] = i; }); if (col.code === undefined || col.countries_tags === undefined) { rl.close(); reject(new Error("onbekend formaat")); } return; }
+        if (line.indexOf("en:netherlands") === -1) return;
+        var c = line.split("\t");
+        if (String(c[col.countries_tags] || "").split(",").indexOf("en:netherlands") === -1) return;
+        var code = String(c[col.code] || "").trim(); if (!/^\d{8,14}$/.test(code) || seen.has(code)) return;
+        var g = function (k) { return col[k] === undefined ? "" : c[col[k]] || ""; };
+        var kcal = Number(g("energy-kcal_100g")); if (!(kcal >= 0) || g("energy-kcal_100g") === "") { var kj = Number(g("energy_100g")); kcal = g("energy_100g") !== "" && kj >= 0 ? kj / 4.184 : NaN; }
+        if (!(kcal >= 0 && kcal <= 950)) return;
+        var pname = g("product_name_nl") || g("product_name"); if (!pname.trim()) return;
+        var pr = { product_name: pname, brands: g("brands"), stores: g("stores"), quantity: g("quantity"), serving_size: g("serving_size"), serving_quantity: g("serving_quantity"),
+          nutriments: { proteins_100g: g("proteins_100g"), carbohydrates_100g: g("carbohydrates_100g"), fat_100g: g("fat_100g") } };
+        var fd = offFood(pr, code, kcal);
+        if (!fd.name) return;
+        seen.add(code);
+        rows.push([fd.ean, fd.name, fd.brand, fd.stores.join("|"), fd.quantity, fd.kcal, fd.eiwit, fd.kh, fd.vet, fd.portion ? fd.portion.g : 0, fd.portion ? fd.portion.label : "", Number(g("unique_scans_n")) || 0]);
+        st.kept = rows.length;
+      });
+      rl.on("close", function () { resolve(rows); });
+    });
+  }).then(function (rows) {
+    clearTimeout(idle);
+    if (rows.length < 100) throw new Error("te weinig producten (" + rows.length + ")");
+    var at = Date.now();
+    return offnlSave(rows, at).then(function () {
+      offnlIndex(rows, at);
+      offnl.status = { state: "klaar", at: at, count: rows.length, took: Math.round((at - st.startedAt) / 1000), mb: st.mb, lines: st.lines };
+      console.log("[offnl] export verwerkt: " + rows.length + " producten in " + offnl.status.took + " s.");
+      return true;
+    });
+  }).catch(function (e) {
+    clearTimeout(idle);
+    offnl.status = { state: "fout", error: String(e && e.message || e).slice(0, 120), at: offnl.at, count: offnl.count, failedAt: Date.now() };
+    console.warn("[offnl] export mislukt: " + offnl.status.error);
+    return false;
+  });
+}
+// Bij het opstarten laden; is de kopie ouder dan een week (of er is er nog geen), dan 's nachts of meteen verversen.
+function offnlEnsure() {
+  if (process.env.OFFNL_DISABLE === "1" || offnl.status.state === "bezig") return;
+  var p = offnl.items ? Promise.resolve(true) : offnlLoad();
+  p.then(function () {
+    var stale = !offnl.items || Date.now() - offnl.at > OFFNL_MAX_AGE_MS;
+    var failedRecently = offnl.status.failedAt && Date.now() - offnl.status.failedAt < 6 * 3600000;
+    var h = new Date().getUTCHours();
+    var veryStale = offnl.items && Date.now() - offnl.at > OFFNL_MAX_AGE_MS + 2 * 86400000;
+    if (stale && !failedRecently && (!offnl.items || veryStale || h >= 1 && h <= 4)) offnlImport();
+  });
+}
 function handleFoodSearch(req, res, url) {
   // Hoeveelheden ("pindakaas 100", "2 eieren") horen niet in de zoekterm
   var q = String(url.searchParams.get("q") || "").toLowerCase().replace(/\b\d+([.,]\d+)?\s*(g|gr|gram|ml|stuks?|x|el|tl)?\b(?!%)/g, " ")
@@ -5213,6 +5371,9 @@ function handleFoodSearch(req, res, url) {
   var debug = url.searchParams.get("debug") === "1", tries = [];
   if (q.length < 3) return sendJSON(res, 200, { items: [] });
   if (!offSearchLimiter("s:" + clientIp(req))) return sendJSON(res, 429, { code: "rate_limited", message: "Even te veel gezocht. Probeer het zo opnieuw." });
+  // Eerst in onze eigen kopie; vindt die iets met al je woorden, dan hoeven we de zoekdienst niet te vragen
+  var local = offnlSearch(q, 10);
+  if (local && local.length && !debug) return sendJSON(res, 200, { items: local, source: "Open Food Facts" });
   var key = "foods/search7/" + crypto.createHash("sha1").update(q).digest("hex").slice(0, 20);
   var mapItems = function (list) {
     return (Array.isArray(list) ? list : []).map(function (pr) {
@@ -5295,13 +5456,19 @@ function handleFoodSearch(req, res, url) {
       var doc = { at: Date.now(), items: items };
       return dbSetDoc(key, doc).then(function () { return doc; });
     });
-  }).then(function (doc) { var out = { items: doc.items || [], source: "Open Food Facts" }; if (debug) { out.q = q; out.tries = tries; } sendJSON(res, 200, out); })
+  }).then(function (doc) {
+    var out = { items: local && local.length ? local : doc.items || [], source: "Open Food Facts" };
+    if (debug) { out.q = q; out.tries = tries; out.local = { loaded: !!offnl.items, count: offnl.count, at: offnl.at ? new Date(offnl.at).toISOString() : null, hits: local ? local.length : null, state: offnl.status.state }; out.remote = doc.items || []; }
+    sendJSON(res, 200, out);
+  })
     .catch(function (e) { sendJSON(res, 200, { items: [], error: true, tries: debug ? tries : undefined }); });
 }
 // GET /api/foods/barcode/<ean> — productgegevens van Open Food Facts (open data, ODbL), 30 dagen bewaard.
 function handleFoodBarcode(req, res, ean) {
   if (!/^\d{8,14}$/.test(ean)) return sendJSON(res, 400, { code: "bad_request", message: "Dit is geen geldige streepjescode." });
   if (!barcodeLimiter("b:" + clientIp(req))) return sendJSON(res, 429, { code: "rate_limited", message: "Even te veel gescand. Probeer het zo opnieuw." });
+  var loc = offnlByEan(ean);
+  if (loc) return sendJSON(res, 200, { food: loc, source: "Open Food Facts" });
   var key = "foods/ean/" + ean;
   return dbGetDoc(key).then(function (r) {
     var v = r.exists ? r.value : null;
@@ -7584,6 +7751,8 @@ function handleAdminApi(req, res, url) {
     else if (method === "POST") run = function () { return handleAdminSettingsSet(req, res); };
   }
   else if (method === "GET" && p === "/api/admin/stats") run = function () { return handleAdminStats(req, res); };
+  else if (method === "GET" && p === "/api/admin/offnl") run = function () { sendJSON(res, 200, { status: offnl.status, count: offnl.count, at: offnl.at, source: OFFNL_DUMP_URL }); };
+  else if (method === "POST" && p === "/api/admin/offnl") run = function () { var started = offnl.status.state !== "bezig"; if (started) offnlImport(); sendJSON(res, 202, { started: started, status: offnl.status }); };
   else if (method === "GET" && p === "/api/admin/system") run = function () { return handleAdminSystem(req, res); };
   else if (method === "GET" && p === "/api/admin/logs") run = function () { return handleAdminLogs(req, res, url); };
   else if (method === "GET" && p === "/api/admin/audit") run = function () { return handleAdminAudit(req, res, url); };
@@ -8152,6 +8321,7 @@ var server = http.createServer(function (req, res) {
 server.listen(PORT, function () {
   console.log("Weekmenu app draait op http://localhost:" + PORT);
   getSettings().catch(function () {});
+  setTimeout(offnlEnsure, 20000); setInterval(offnlEnsure, 3600000);   // eigen kopie van de Nederlandse winkelproducten
   if (!ANTHROPIC_API_KEY) {
     console.warn("WAARSCHUWING: ANTHROPIC_API_KEY is niet ingesteld — genereren zal niet werken.");
   }

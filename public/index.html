@@ -13957,13 +13957,16 @@
     return out.sort(function (a, b) { return b.s - a.s; }).filter(function (x) { if (seen[x.f.key]) return false; seen[x.f.key] = 1; return true; }).slice(0, limit || 8).map(function (x) { return x.f; });
   }
   // ---- Eenheden per product: gram, de portie van het product (stuk, snee, reep...), en waar het past ml, eetlepel, theelepel ----
-  var QA_PIECE = /^(stuk|stuks|broodje|bolletje|bol|snee|sneetje|plak|plakje|reep|reepje|ei|eitje|banaan|appel|peer|sinaasappel|mandarijn|kiwi|tomaat|koek|koekje|gevulde koek|cracker|beschuit|wafel|stroopwafel|rijstwafel|wrap|croissant|pizza|dadel|pruim|teen|teentje|schijf|part|doosje|zakje|blikje|flesje|pakje|stick|repen|bakje)$/;
+  var QA_PIECE = /^(stuk|reepje|stick|koekje|bolletje|stuks|broodje|bolletje|bol|snee|sneetje|plak|plakje|reep|reepje|ei|eitje|banaan|appel|peer|sinaasappel|mandarijn|kiwi|tomaat|koek|koekje|gevulde koek|cracker|beschuit|wafel|stroopwafel|rijstwafel|wrap|croissant|pizza|dadel|pruim|teen|teentje|schijf|part|doosje|zakje|blikje|flesje|pakje|stick|repen|bakje)$/;
   var QA_LIQUID = /\b(melk|karnemelk|drink|drank|sap|water|thee|koffie|limonade|frisdrank|cola|bier|wijn|smoothie|soep|bouillon|yoghurtdrank|kefir|olie|siroop)\b/;
   function qaPortionWord(it) {
     var p = it.portion; if (!p || !p.g || p.label === "100 gram") return null;
     var m = String(p.label).match(/^1 ([a-z' ]+?)(\s*\(.*\))?$/i);
-    if (m) return m[1].toLowerCase();
-    return /\b(reep|repen|koek|wafel|bol|broodje|cracker|beschuit|stick|bar|ei|croissant|wrap)\b/.test(qaNorm(it.name)) ? "stuk" : "portie";
+    if (m && !/^(portie|portion|serving)$/i.test(m[1])) return m[1].toLowerCase();
+    // Ook binnen samenstellingen: havermout"repen" -> reep, rijst"wafels" -> wafel
+    var pm = qaNorm(it.name).match(/(repen|reepjes|reepje|reep|koekjes|koekje|koeken|koek|wafels|wafel|broodjes|broodje|bolletjes|bolletje|crackers|cracker|beschuiten|beschuit|sticks|stick|bars|bar|croissants|croissant|wraps|wrap|\beieren|\bei)\b/);
+    if (pm) return { repen: "reep", reepjes: "reepje", koekjes: "koekje", koeken: "koek", wafels: "wafel", broodjes: "broodje", bolletjes: "bolletje", crackers: "cracker", beschuiten: "beschuit", sticks: "stick", bars: "reep", bar: "reep", croissants: "croissant", wraps: "wrap", eieren: "ei" }[pm[1]] || pm[1];
+    return "portie";
   }
   function qaUnits(it) {
     var out = [{ id: "g", name: "gram", short: "g", g: 1 }];
