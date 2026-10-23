@@ -8482,6 +8482,18 @@ var server = http.createServer(function (req, res) {
   res.end("Not found");
 });
 
+// Vangnet: één fout in een verzoek mag niet de hele server laten crashen (dat gaf een 502 voor iedereen).
+// De fout wordt gelogd met "[crash-vangnet]" zodat hij in de Render-logs te vinden is.
+process.on("unhandledRejection", function (reason) {
+  console.error("[crash-vangnet] onafgehandelde fout:", reason && reason.stack || reason);
+});
+process.on("uncaughtException", function (err) {
+  console.error("[crash-vangnet] onverwachte fout:", err && err.stack || err);
+});
+setInterval(function () {
+  var m = process.memoryUsage();
+  if (m.rss > 380 * 1048576) console.warn("[geheugen] rss " + Math.round(m.rss / 1048576) + " MB, heap " + Math.round(m.heapUsed / 1048576) + " MB");
+}, 60000).unref();
 server.listen(PORT, function () {
   console.log("Weekmenu app draait op http://localhost:" + PORT);
   getSettings().catch(function () {});
