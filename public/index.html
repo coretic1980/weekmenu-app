@@ -715,6 +715,10 @@
   .qa-step { width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font-size: 18px; line-height: 1; cursor: pointer; }
   .qa-g { width: 56px; height: 34px; text-align: center; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; font-size: 14px; -moz-appearance: textfield; }
   .qa-g::-webkit-outer-spin-button, .qa-g::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  .qa-unit-w { position: relative; display: inline-flex; align-items: center; gap: 2px; font-size: 12px; color: var(--accent); font-weight: 600; margin-right: 2px; padding: 0 2px; max-width: 74px; }
+  .qa-unit-w span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-bottom: 1px dashed currentColor; }
+  .qa-unit-w::after { content: "\25BE"; font-size: 10px; }
+  .qa-unit { position: absolute; inset: 0; opacity: 0; width: 100%; font-size: 16px; cursor: pointer; }
   .qa-gl { font-size: 12px; color: var(--muted); margin-right: 2px; }
   .qa-sum { margin-top: 12px; }
   .bal-why { margin: 10px 0 14px; padding: 10px 12px; border-radius: 12px; background: var(--surface-2, rgba(0,0,0,0.04)); font-size: 13.5px; line-height: 1.45; color: var(--ink); }
@@ -13893,6 +13897,7 @@
     if (f.portion && f.portion.g) return f.portion;
     if (f.fixed) return { label: "1 portie", g: 0 };
     var n = qaNorm(f.name);
+    if (f.brand) { var bn = qaNorm(f.brand); if (bn && n.indexOf(bn) === 0) n = n.slice(bn.length).trim(); }   // "Bolletje ..." is een merk, geen broodje
     var p = qaFoods ? qaFoods.portions.filter(function (x) { return x.re.test(n); })[0] : null;
     return p ? { label: p.label, g: p.g } : { label: "100 gram", g: 100 };
   }
@@ -13951,12 +13956,32 @@
     var seen = {};
     return out.sort(function (a, b) { return b.s - a.s; }).filter(function (x) { if (seen[x.f.key]) return false; seen[x.f.key] = 1; return true; }).slice(0, limit || 8).map(function (x) { return x.f; });
   }
+  // ---- Eenheden per product: gram, de portie van het product (stuk, snee, reep...), en waar het past ml, eetlepel, theelepel ----
+  var QA_PIECE = /^(stuk|stuks|broodje|bolletje|bol|snee|sneetje|plak|plakje|reep|reepje|ei|eitje|banaan|appel|peer|sinaasappel|mandarijn|kiwi|tomaat|koek|koekje|gevulde koek|cracker|beschuit|wafel|stroopwafel|rijstwafel|wrap|croissant|pizza|dadel|pruim|teen|teentje|schijf|part|doosje|zakje|blikje|flesje|pakje|stick|repen|bakje)$/;
+  var QA_LIQUID = /\b(melk|karnemelk|drink|drank|sap|water|thee|koffie|limonade|frisdrank|cola|bier|wijn|smoothie|soep|bouillon|yoghurtdrank|kefir|olie|siroop)\b/;
+  function qaPortionWord(it) {
+    var p = it.portion; if (!p || !p.g || p.label === "100 gram") return null;
+    var m = String(p.label).match(/^1 ([a-z' ]+?)(\s*\(.*\))?$/i);
+    if (m) return m[1].toLowerCase();
+    return /\b(reep|repen|koek|wafel|bol|broodje|cracker|beschuit|stick|bar|ei|croissant|wrap)\b/.test(qaNorm(it.name)) ? "stuk" : "portie";
+  }
+  function qaUnits(it) {
+    var out = [{ id: "g", name: "gram", short: "g", g: 1 }];
+    var pw = qaPortionWord(it);
+    if (pw) out.push({ id: "p", name: pw + " (" + wgFmt(it.portion.g) + " g)", short: pw, g: it.portion.g });
+    var nm = qaNorm(it.name);
+    if (QA_LIQUID.test(nm)) out.push({ id: "ml", name: "ml", short: "ml", g: 1 });
+    if (!pw || !QA_PIECE.test(pw)) { out.push({ id: "el", name: "eetlepel (15 g)", short: "el", g: 15 }); out.push({ id: "tl", name: "theelepel (5 g)", short: "tl", g: 5 }); }
+    if (!pw) out.push({ id: "100", name: "100 gram", short: "\u00d7 100 g", g: 100 });
+    return out;
+  }
+  function qaUnit(it) { var u = qaUnits(it); return u.filter(function (x) { return x.id === it.unit; })[0] || u[0]; }
   // Eén regel in de lijst: een product met een hoeveelheid.
   function qaItem(f, grams, count) {
     var p = qaPortion(f);
     var it = { key: f.key, name: f.name, src: f.src, code: f.code || null, my: f.my || null, ean: f.ean || null, per100: f.fixed ? null : { kcal: f.kcal, e: f.e, kh: f.kh, v: f.v }, fixed: f.fixed || null, portion: p };
     if (f.fixed) { it.count = count || 1; it.g = 0; }
-    else it.g = Math.max(1, Math.round(grams || p.g || 100));
+    else { it.g = Math.max(1, Math.round(grams || p.g || 100)); it.unit = p.g && p.label !== "100 gram" && it.g % p.g === 0 ? "p" : "g"; }
     return it;
   }
   function qaItemMacros(it) {
@@ -13971,6 +13996,9 @@
   }
   function qaAmountText(it) {
     if (it.fixed) return (it.count || 1) === 1 ? "1 portie" : it.count + " porties";
+    if (it.unit === "g" || it.unit === "100") return it.g + " g";
+    if (it.unit === "ml") return it.g + " ml";
+    if (it.unit === "el" || it.unit === "tl") { var nU = Math.round(it.g / (it.unit === "el" ? 15 : 5) * 10) / 10; return String(nU).replace(".", ",") + " " + (it.unit === "el" ? (nU === 1 ? "eetlepel" : "eetlepels") : (nU === 1 ? "theelepel" : "theelepels")) + " (" + it.g + " g)"; }
     var p = it.portion;
     if (p && p.g && p.g !== 100 && it.g % p.g === 0 && it.g / p.g <= 12) { var n = it.g / p.g, lb = n === 1 ? p.label : p.label.replace(/^1 ([a-z' ]+?)(\s*\(.*\))?$/i, function (m0, w, rest) { return n + " " + (QA_PLURAL[w] || w) + (rest || ""); }); return /\bg\)?$/.test(lb) && n === 1 ? lb : lb.replace(/\s*\(\d+\s*g\)$/, "") + " (" + it.g + " g)"; }
     return it.g + " g";
@@ -14012,7 +14040,7 @@
     if (p.unit && p.unit[1] === "g") g = (p.qty || 1) * p.unit[2];
     else if (p.unit && p.unit[2]) g = (p.qty || 1) * (por.g && /snee|plak|glas|kop|handje/.test(por.label) ? por.g : p.unit[2]);
     else g = (p.qty || 1) * (por.g || 100);
-    var it = qaItem(hit, g); it.q = keepQ; return it;
+    var it = qaItem(hit, g); it.q = keepQ; if (p.unit && p.unit[1] === "g") it.unit = "g"; return it;
   }
 
   // ---- Het invoerscherm ----
@@ -14293,15 +14321,30 @@
         }
         var minus = document.createElement("button"); minus.type = "button"; minus.className = "qa-step"; minus.textContent = "−"; minus.setAttribute("aria-label", "Minder " + it.name);
         var plus = document.createElement("button"); plus.type = "button"; plus.className = "qa-step"; plus.textContent = "+"; plus.setAttribute("aria-label", "Meer " + it.name);
-        var step = it.fixed ? 1 : (it.portion && it.portion.g && it.portion.g !== 100 ? it.portion.g : (it.g >= 100 ? 25 : 10));
+        var un = it.fixed ? null : qaUnit(it);
+        var step = it.fixed ? 1 : un.id !== "g" && un.id !== "ml" ? un.g : (it.g >= 100 ? 25 : 10);
         minus.onclick = function () { if (it.fixed) { it.count -= 1; if (it.count <= 0) st.items.splice(idx, 1); } else { it.g -= step; if (it.g <= 0) st.items.splice(idx, 1); } paintItems(); paintSum(); };
         plus.onclick = function () { if (it.fixed) it.count += 1; else it.g += step; paintItems(); paintSum(); };
         var gIn = null;
         if (!it.fixed) {
-          gIn = document.createElement("input"); gIn.type = "number"; gIn.inputMode = "numeric"; gIn.className = "qa-g"; gIn.value = it.g; gIn.min = "1"; gIn.max = "3000"; gIn.setAttribute("aria-label", "Gram " + it.name);
-          gIn.onchange = function () { var v = Math.round(Number(gIn.value)); if (v > 0 && v <= 3000) { it.g = v; paintItems(); paintSum(); } else gIn.value = it.g; };
+          var amt = Math.round(it.g / un.g * 100) / 100;
+          gIn = document.createElement("input"); gIn.type = "text"; gIn.inputMode = "decimal"; gIn.className = "qa-g"; gIn.id = "qaAmt" + idx; gIn.value = String(amt).replace(".", ","); gIn.setAttribute("aria-label", "Hoeveelheid " + it.name + " in " + un.name);
+          gIn.onchange = function () { var v = Number(String(gIn.value).replace(",", ".")), gg = Math.round(v * un.g); if (v > 0 && gg >= 1 && gg <= 3000) { it.g = gg; paintItems(); paintSum(); } else gIn.value = String(amt).replace(".", ","); };
         }
-        var ctr = document.createElement("div"); ctr.className = "qa-ctr"; ctr.appendChild(minus); if (gIn) { ctr.appendChild(gIn); var gl = document.createElement("span"); gl.className = "qa-gl"; gl.textContent = "g"; ctr.appendChild(gl); } ctr.appendChild(plus);
+        var ctr = document.createElement("div"); ctr.className = "qa-ctr"; ctr.appendChild(minus); if (gIn) {
+          ctr.appendChild(gIn);
+          var us = qaUnits(it);
+          if (us.length > 1) {
+            var sel = document.createElement("select"); sel.className = "qa-unit"; sel.id = "qaUnit" + idx; sel.setAttribute("aria-label", "Eenheid " + it.name);
+            us.forEach(function (u) { var o = document.createElement("option"); o.value = u.id; o.textContent = u.name; if (u.id === un.id) o.selected = true; sel.appendChild(o); });
+            sel.onchange = function () {
+              var nu = us.filter(function (u) { return u.id === sel.value; })[0]; it.unit = nu.id;
+              if (nu.g > 1) it.g = Math.max(1, Math.round(Math.max(1, Math.round(it.g / nu.g * 2) / 2) * nu.g));   // naar hele of halve eenheden
+              paintItems(); paintSum();
+            };
+            var uw = document.createElement("label"); uw.className = "qa-unit-w"; var ut = document.createElement("span"); ut.textContent = un.short; uw.appendChild(ut); uw.appendChild(sel); ctr.appendChild(uw);
+          } else { var gl = document.createElement("span"); gl.className = "qa-gl"; gl.textContent = "g"; ctr.appendChild(gl); }
+        } ctr.appendChild(plus);
         row.appendChild(tx); row.appendChild(ctr);
         list.appendChild(row);
         if (st.swapIdx === idx) {
