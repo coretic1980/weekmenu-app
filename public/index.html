@@ -2457,26 +2457,34 @@
         });
       }
       if (name === "db") {
+        window.DB_LOADED = window.DB_LOADED || {};
         return Promise.resolve({
           doc: function (path) {
             var subpath = path.split("/").pop();
             return {
+              // Lukt het ophalen niet (server start op, storing), dan is dat een fout en NIET "bestaat nog niet":
+              // anders zou de app denken dat je nieuw bent en je gegevens overschrijven met lege standaardwaarden.
               get: function () {
                 return fetch("/api/db?subpath=" + encodeURIComponent(subpath), { headers: authHeaders() }).then(function (res) {
                   if (res.status === 401) { handleAuthExpired(); }
-                  if (!res.ok) return { exists: false, data: function () { return undefined; } };
+                  if (!res.ok) { if (DB_LOADED[subpath] !== true) DB_LOADED[subpath] = false; var e = new Error("Ophalen lukte niet (" + res.status + ")"); e.status = res.status; throw e; }
                   return res.json();
                 }).then(function (body) {
+                  if (!body || typeof body !== "object" || !("exists" in body)) { if (DB_LOADED[subpath] !== true) DB_LOADED[subpath] = false; throw new Error("Onverwacht antwoord"); }
+                  DB_LOADED[subpath] = true;
                   return { exists: !!body.exists, data: function () { return body.value; } };
-                });
+                }, function (e) { if (DB_LOADED[subpath] !== true) DB_LOADED[subpath] = false; throw e; });
               },
               set: function (value) {
+                // Nooit opslaan wat we niet eerst goed hebben kunnen ophalen: dat zou je echte gegevens overschrijven
+                if (DB_LOADED[subpath] !== true) return Promise.reject(new Error("Nog niet geladen; opslaan uitgesteld"));
                 return fetch("/api/db", {
                   method: "POST",
                   headers: Object.assign({ "Content-Type": "application/json" }, authHeaders()),
                   body: JSON.stringify({ subpath: subpath, value: value })
                 }).then(function (res) {
                   if (res.status === 401) handleAuthExpired();
+                  if (res.status === 409 && subpath === "prefs") { DB_LOADED.prefs = false; if (typeof loadFailed === "function") loadFailed("prefs", new Error("409")); }
                   if (!res.ok) return parseErrorFromResponse(res).then(function (e) { throw e; });
                 });
               }
@@ -6692,7 +6700,7 @@
       prefs.mealCounts = null;
       prefs.withImages = true;
       delete prefs.intent; delete prefs.weightGoal; delete prefs.training; delete prefs.trainingDismissed;
-      savePrefs();
+      window.__prefsReset = true; savePrefs(); setTimeout(function () { window.__prefsReset = false; }, 3000);
 
       plannedWeeks.length = 0;
       savePlannedWeeks();
@@ -19157,7 +19165,8 @@
         withImages: prefs.withImages !== false,
         homeLayout: prefs.homeLayout && typeof prefs.homeLayout === "object" ? prefs.homeLayout : null,
         pantry: Array.isArray(prefs.pantry) ? prefs.pantry.slice(-300) : [],
-        communityName: String(prefs.communityName || "").trim().slice(0, 30)
+        communityName: String(prefs.communityName || "").trim().slice(0, 30),
+        _reset: window.__prefsReset === true ? true : undefined
       }).catch(function () {});
     }).catch(function () {});
   }
@@ -19680,7 +19689,7 @@
               var later0 = false; try { later0 = sessionStorage.getItem("balanza_intent_later") === "1"; } catch (e) {}
               if (!later0) Promise.race([plansReady, new Promise(function (r) { setTimeout(r, 4000); })]).then(function () { if (state.view === "weeks" && !prefs.intent) startWizard("update"); });
             }
-          }).catch(function () {});
+          }).catch(function (e) { loadFailed("prefs", e); });
 
           var planRef = db.doc("data/users/" + uid + "/plannedWeeks");
           planRef.get().then(function (plansnap) {
@@ -19703,7 +19712,7 @@
             });
             if (list.length) render();
             if (plansReadyResolve) plansReadyResolve();
-          }).catch(function () { if (plansReadyResolve) plansReadyResolve(); });
+          }).catch(function (e) { loadFailed("plannedWeeks", e); if (plansReadyResolve) plansReadyResolve(); });
 
           var ref = db.doc("data/users/" + uid + "/dishes");
           ref.get().then(function (snap) {
@@ -19722,12 +19731,24 @@
               render();
             }
             if (dishesReadyResolve) dishesReadyResolve();
-          }).catch(function () { if (dishesReadyResolve) dishesReadyResolve(); });
+          }).catch(function (e) { loadFailed("dishes", e); if (dishesReadyResolve) dishesReadyResolve(); });
         }).catch(function () {});
       }).catch(function () {});
     }).catch(function () {});
   }
 
+  // Ophalen van je gegevens mislukt (bijv. net na een update van de server): niets opslaan, en zelf opnieuw laden.
+  var loadFailShown = false;
+  function loadFailed(what, e) {
+    console.warn("[laden] " + what + " mislukt:", e && e.message);
+    var n = 0; try { n = Number(sessionStorage.getItem("balanza_reload_n") || 0); } catch (x) {}
+    if (!loadFailShown) { loadFailShown = true; showToast("Je gegevens konden even niet geladen worden. We proberen het opnieuw\u2026"); }
+    if (n < 3) {
+      try { sessionStorage.setItem("balanza_reload_n", String(n + 1)); } catch (x) {}
+      setTimeout(function () { location.reload(); }, 2500 + n * 2500);
+    } else showToast("Je gegevens laden lukt nu niet. Er wordt niets opgeslagen tot het weer werkt; probeer het zo nog eens.");
+  }
+  setTimeout(function () { try { if (window.DB_LOADED && DB_LOADED.prefs === true) sessionStorage.removeItem("balanza_reload_n"); } catch (x) {} }, 15000);
   function renderCook() {
     var week = findWeek(state.weekId);
     var day = findDay(week, state.dayId);

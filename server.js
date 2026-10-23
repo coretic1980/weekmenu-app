@@ -4652,6 +4652,29 @@ function handleDbGet(req, res, query) {
   });
 }
 
+function prefsLooksPopulated(p) {
+  if (!p || typeof p !== "object") return false;
+  var n = 0; ["name", "gender", "heightCm", "weightKg", "age"].forEach(function (k) { if (p[k]) n++; });
+  if (p.intent || p.weightGoal || p.training || (Array.isArray(p.myFoods) && p.myFoods.length) || (p.journey && Array.isArray(p.journey.log) && p.journey.log.length)) n += 2;
+  return n >= 2;
+}
+function prefsLooksDefault(p) {
+  if (!p || typeof p !== "object") return true;
+  return !p.name && !p.gender && !p.heightCm && !p.weightKg && !p.age && !p.intent && !p.weightGoal && !p.training && !(Array.isArray(p.myFoods) && p.myFoods.length) && !(p.journey && Array.isArray(p.journey.log) && p.journey.log.length);
+}
+// Eén reservekopie per dag van je voorkeuren (de stand van vóór de eerste wijziging die dag), de laatste 14 dagen
+function backupPrefs(uid, old) {
+  if (!old || !prefsLooksPopulated(old)) return Promise.resolve();
+  var key = "backups/prefs/" + uid, day = new Date().toISOString().slice(0, 10);
+  return dbGetDoc(key).then(function (r) {
+    var b = r.exists && r.value && typeof r.value === "object" ? r.value : { days: {} };
+    b.days = b.days || {};
+    if (b.days[day]) return;
+    b.days[day] = old;
+    Object.keys(b.days).sort().slice(0, -14).forEach(function (d) { delete b.days[d]; });
+    return dbSetDoc(key, b);
+  }).catch(function () {});
+}
 function handleDbSet(req, res) {
   readBody(req).then(function (body) {
     return resolveUser(req).then(function (user) {
@@ -4663,10 +4686,26 @@ function handleDbSet(req, res) {
       // Geen toestemming voor gezondheidsgegevens: die velden worden ook niet opgeslagen.
       var write = (subpath === "prefs" || subpath === "plannedWeeks" ? healthConsentOf(user.uid) : Promise.resolve(true)).then(function (ok) {
         var value = ok ? body.value : stripHealthData(subpath, body.value);
-        return dataOwnerUid(user.uid, subpath).then(function (owner) { return dbSetDoc("data/users/" + owner + "/" + subpath, value); });
+        return dataOwnerUid(user.uid, subpath).then(function (owner) {
+          var path = "data/users/" + owner + "/" + subpath;
+          if (subpath !== "prefs") return dbSetDoc(path, value);
+          // Voorkeuren: vangnet tegen per ongeluk overschrijven met lege standaardwaarden, en een dagelijkse reservekopie
+          return dbGetDoc(path).then(function (r) {
+            var old = r.exists ? r.value : null;
+            if (old && prefsLooksPopulated(old) && prefsLooksDefault(value) && !(value && value._reset)) {
+              console.warn("[db] lege voorkeuren over gevulde voorkeuren geweigerd voor " + user.uid);
+              var e = new Error("stale"); e.code = "stale_overwrite"; throw e;
+            }
+            if (value && value._reset) delete value._reset;
+            return backupPrefs(user.uid, old).then(function () { return dbSetDoc(path, value); });
+          });
+        });
       });
       return Promise.all([write, trackIp]).then(function () {
         sendJSON(res, 200, { ok: true });
+      }, function (e) {
+        if (e && e.code === "stale_overwrite") return sendJSON(res, 409, { code: "stale_overwrite", message: "Je voorkeuren zijn niet overschreven: herlaad de app." });
+        throw e;
       });
     });
   }).catch(function (err) {
