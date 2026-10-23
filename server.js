@@ -5533,7 +5533,7 @@ function handleFoodSearch(req, res, url) {
     });
   }).then(function (doc) {
     var out = { items: local && local.length ? local : doc.items || [], source: "Open Food Facts" };
-    if (debug) { out.q = q; out.tries = tries; out.local = { loaded: !!offnl.items, count: offnl.count, at: offnl.at ? new Date(offnl.at).toISOString() : null, hits: local ? local.length : null, state: offnl.status.state }; out.remote = doc.items || []; }
+    if (debug) { out.q = q; out.tries = tries; out.local = { loaded: !!offnl.items, ver: offnl.ver || null, status: offnl.status, count: offnl.count, at: offnl.at ? new Date(offnl.at).toISOString() : null, hits: local ? local.length : null, state: offnl.status.state }; out.remote = doc.items || []; }
     sendJSON(res, 200, out);
   })
     .catch(function (e) { sendJSON(res, 200, { items: [], error: true, tries: debug ? tries : undefined }); });
@@ -5543,7 +5543,7 @@ function handleFoodBarcode(req, res, ean) {
   if (!/^\d{8,14}$/.test(ean)) return sendJSON(res, 400, { code: "bad_request", message: "Dit is geen geldige streepjescode." });
   if (!barcodeLimiter("b:" + clientIp(req))) return sendJSON(res, 429, { code: "rate_limited", message: "Even te veel gescand. Probeer het zo opnieuw." });
   var loc = offnlByEan(ean);
-  if (loc) return sendJSON(res, 200, { food: loc, source: "Open Food Facts" });
+  if (loc && loc.img) return sendJSON(res, 200, { food: loc, source: "Open Food Facts" });   // zonder foto: live aanvullen hieronder
   var key = "foods/ean/" + ean;
   return dbGetDoc(key).then(function (r) {
     var v = r.exists ? r.value : null;
@@ -5564,9 +5564,11 @@ function handleFoodBarcode(req, res, ean) {
       }, function (e) { clearTimeout(t); throw e; });
   }).then(function (doc) {
     logRequest({ ts: new Date().toISOString(), type: "estimate", action: "streepjescode", ok: !!doc.found, status: doc.found ? 200 : 404, ip: clientIp(req) });
+    if (!doc.found && loc) return sendJSON(res, 200, { food: loc, source: "Open Food Facts" });
+    if (doc.found && loc && !doc.food.img) doc.food = loc;
     if (!doc.found) return sendJSON(res, 404, { code: "not_found", message: "Dit product staat (nog) niet in Open Food Facts. Zoek het op naam of voeg het zelf toe." });
     sendJSON(res, 200, { food: doc.food, source: "Open Food Facts" });
-  }).catch(function () { sendJSON(res, 502, { code: "error", message: "De productgegevens konden niet worden opgehaald. Probeer het zo opnieuw of zoek op naam." }); });
+  }).catch(function () { if (loc) return sendJSON(res, 200, { food: loc, source: "Open Food Facts" }); sendJSON(res, 502, { code: "error", message: "De productgegevens konden niet worden opgehaald. Probeer het zo opnieuw of zoek op naam." }); });
 }
 
 // ---------- Ideeën van gebruikers (uit de chat) en berichten terug ----------

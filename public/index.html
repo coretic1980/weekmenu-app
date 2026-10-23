@@ -13931,12 +13931,14 @@
     var todo = eans.filter(function (e) { return e && !imgTried[e]; }).slice(0, 6); if (!todo.length) return;
     todo.forEach(function (e) { imgTried[e] = 1; });
     Promise.all(todo.map(function (e) { return fetch("/api/foods/barcode/" + e).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; }); })).then(function (rs) {
-      var changed = false;
+      var changed = false, found = {};
       rs.forEach(function (d, i) {
-        var img = d && d.food && offImgOk(d.food.img); if (!img) return;
+        var img = d && d.food && offImgOk(d.food.img); if (!img) { delete imgTried[todo[i]]; return; }   // later nog eens proberen
+        found[todo[i]] = img;
         myFoods().forEach(function (m) { if (m.ean === todo[i] && !m.img) { m.img = img; changed = true; } });
       });
-      if (changed) { savePrefs(); if (done) done(); }
+      if (changed) savePrefs();
+      if (Object.keys(found).length && done) done(found);
     });
   }
   function qaMyAsFood(m) {
@@ -14406,7 +14408,7 @@
         var sm = document.createElement("small"); sm.textContent = qaAmountText(it) + " · " + Math.round(m.kcal) + " kcal" + (it.photo ? " · schatting van je foto" : it.src === "ai" ? " · schatting" : it.src === "off" ? " · Open Food Facts" : "");
         if (m.kcal > 0) appendBal(sm, gramsBal(m.kcal, m.kh, m.e, m.v), " ");
         if (it.img) { var th = qaThumb(it.img); th.classList.add("qa-thumb-float"); tx.appendChild(th); }
-        else if (it.ean) fillFoodImgs([it.ean], function () { var m = myFoods().filter(function (x) { return x.ean === it.ean && x.img; })[0]; if (m) { it.img = m.img; paintItems(); } });
+        else if (it.ean) fillFoodImgs([it.ean], function (found) { if (found[it.ean]) { it.img = found[it.ean]; paintItems(); } });
         tx.appendChild(b); tx.appendChild(sm);
         if (!it.fixed) {
           // Klopt het product niet? Tik voor andere producten met dezelfde zoekterm (de hoeveelheid blijft staan).
