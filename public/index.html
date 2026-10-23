@@ -719,6 +719,7 @@
   .qa-unit-w span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-bottom: 1px dashed currentColor; }
   .qa-unit-w::after { content: "\25BE"; font-size: 10px; }
   .qa-unit { position: absolute; inset: 0; opacity: 0; width: 100%; font-size: 16px; cursor: pointer; }
+  .qa-scan-diag { font-size: 11px; color: var(--muted); text-align: center; margin: -2px 0 6px; }
   .qa-gl { font-size: 12px; color: var(--muted); margin-right: 2px; }
   .qa-sum { margin-top: 12px; }
   .bal-why { margin: 10px 0 14px; padding: 10px 12px; border-radius: 12px; background: var(--surface-2, rgba(0,0,0,0.04)); font-size: 13.5px; line-height: 1.45; color: var(--ink); }
@@ -14705,7 +14706,12 @@
       ei.onkeydown = function (e) { if (e.key === "Enter") lookupEan(ei.value); };
       manual.appendChild(ei); manual.appendChild(eb);
       var x = document.createElement("button"); x.type = "button"; x.className = "hh-link"; x.textContent = "Stoppen met scannen"; x.onclick = closeScanner;
-      wrap.appendChild(video); wrap.appendChild(status); wrap.appendChild(photoBtn); wrap.appendChild(photoIn); wrap.appendChild(manual); wrap.appendChild(x);
+      // Klein regeltje voor de diagnose: welke herkenning draait er, welk beeld, hoeveel pogingen
+      var diag = document.createElement("div"); diag.className = "qa-scan-diag"; diag.id = "qaScanDiag";
+      var dg = { eng: "laden", tries: 0, err: "" };
+      var paintDiag = function () { diag.textContent = "Herkenning: " + dg.eng + " \u00b7 beeld " + (video.videoWidth ? video.videoWidth + "\u00d7" + video.videoHeight : "\u2013") + " \u00b7 " + dg.tries + " pogingen" + (dg.err ? " \u00b7 " + dg.err : ""); };
+      var diagT = setInterval(function () { if (!document.body.contains(diag)) { clearInterval(diagT); return; } paintDiag(); }, 700);
+      wrap.appendChild(video); wrap.appendChild(status); wrap.appendChild(diag); wrap.appendChild(photoBtn); wrap.appendChild(photoIn); wrap.appendChild(manual); wrap.appendChild(x);
       scanBox.appendChild(wrap);
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.isSecureContext) { video.style.display = "none"; showPhoto(); status.textContent = "Live scannen kan hier niet. Maak een foto van de streepjescode, of tik het nummer in."; return; }
       var done = false, watch = null;
@@ -14738,7 +14744,7 @@
             if (typeof reader.createBinaryBitmap === "function" && typeof reader.decodeBitmap === "function") {
               var tick = function () {
                 if (done) return;
-                if (video.readyState >= 2 && video.videoWidth) { try { var res = reader.decodeBitmap(reader.createBinaryBitmap(video)); if (res) { found(res.getText()); return; } } catch (e) {} }
+                if (video.readyState >= 2 && video.videoWidth) { dg.tries++; try { var res = reader.decodeBitmap(reader.createBinaryBitmap(video)); if (res) { found(res.getText()); return; } } catch (e) {} }
                 setTimeout(tick, 200);
               };
               tick();
@@ -14749,20 +14755,22 @@
           }).catch(function () { if (!done) { showPhoto(); status.textContent = "Live herkennen lukt hier niet. Tik het nummer in, of maak een foto van de streepjescode."; } });
         };
         barcodeDetector().then(function (BD) {
+          dg.eng = bdLoad ? "wasm" : "ingebouwd";
           var det = new BD({ formats: ["ean_13", "ean_8", "upc_a", "upc_e"] }), fails = 0;
           // Twee keer hetzelfde nummer achter elkaar = zeker; zo voorkomen we een verkeerd gelezen code
           var last = null;
           var loop = function () {
             if (done) return;
             if (video.readyState < 2 || !video.videoWidth) { setTimeout(loop, 200); return; }
+            dg.tries++;
             det.detect(video).then(function (r) {
               var code = r && r[0] && r[0].rawValue;
               if (code && /^\d{8,14}$/.test(code)) { if (code === last || "BarcodeDetector" in window && !bdLoad) { found(code); return; } last = code; }
               setTimeout(loop, 120);
-            }, function () { if (++fails > 15) useZx(); else setTimeout(loop, 300); });
+            }, function (e) { dg.err = String(e && (e.name || e.message) || e).slice(0, 40); if (++fails > 15) { dg.eng = "zxing (reserve)"; useZx(); } else setTimeout(loop, 300); });
           };
           loop();
-        }).catch(useZx);
+        }).catch(function (e) { dg.err = "wasm laden mislukt"; dg.eng = "zxing (reserve)"; useZx(); });
       }).catch(function (e) { gotAnswer = true; video.style.display = "none"; showPhoto(); status.textContent = camErrorText(e); });
     }
     // Camera altijd uit als het scherm sluit (kruisje, ernaast tikken of Escape).
