@@ -4313,7 +4313,7 @@ function runNotifyTick(source, atMs) {
     });
   }).catch(function (e) { notifyStats.running = false; console.warn("Meldingsronde mislukt: " + (e && e.message)); return { error: true }; });
 }
-setTimeout(function () { runNotifyTick("server"); }, 30000);
+setTimeout(function () { runNotifyTick("server"); }, 4 * 60000);   // tijdelijk later (diagnose: geheugen liep vanaf 30 s op)
 var notifyTimer = setInterval(function () { runNotifyTick("server"); }, NOTIFY_TICK_MS);
 if (notifyTimer.unref) notifyTimer.unref();
 
@@ -5533,9 +5533,7 @@ function offnlImport() {
 // Bij het opstarten laden; is de kopie ouder dan een week (of er is er nog geen), dan 's nachts of meteen verversen.
 function offnlEnsure() {
   // Voorlopig alleen met OFFNL_ENABLE=1: het verwerken van de volledige export kan op een kleine server te veel geheugen kosten
-  // UIT: het verwerken van de volledige export past niet in 512 MB (bleek uit de diagnose: crash na ± 800 MB download).
-  // Pas weer aanzetten na een geheugenzuinige versie (producten in de database met zoekindex), met OFFNL_ENABLE=v2.
-  if (process.env.OFFNL_ENABLE !== "v2" || process.env.OFFNL_DISABLE === "1" || offnl.status.state === "bezig") return;
+  if (process.env.OFFNL_ENABLE !== "1" || process.env.OFFNL_DISABLE === "1" || offnl.status.state === "bezig") return;
   var p = offnl.items ? Promise.resolve(true) : offnlLoad();
   p.then(function () {
     var stale = !offnl.items || Date.now() - offnl.at > OFFNL_MAX_AGE_MS;
