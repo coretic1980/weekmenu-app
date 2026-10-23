@@ -4228,8 +4228,11 @@ function runAutoPlanTick(ctx) {
       var v = d.value || {}, c = cleanAutoPlan(v.config);
       return c.on && now.weekday === c.weekday && inWindow(now.minutes, c.time) && v.lastRunOn !== now.date && !ctx.blocked[d.path.slice("autoplan/".length)];
     });
+    diagStage("automatisch plannen: " + due.length + " aan de beurt");
     return mapLimit(due, 5, function (d) {
       var uid = d.path.slice("autoplan/".length), v = d.value || {}, cfg = cleanAutoPlan(v.config);
+      // Eerst vastleggen dat hij vandaag gedraaid heeft: crasht de server halverwege, dan niet bij elke herstart opnieuw
+      dbSetDoc("autoplan/" + uid, Object.assign({}, v, { lastRunOn: now.date })).catch(function () {});
       var mon = nextMondayKey(now.date);
       return dbGetDoc("billing/" + uid).then(function (br) {
         var ps = adminPlanState(br.exists ? br.value : null, ctx.settings, !!ctx.accounts[uid], ctx.now);
@@ -4285,15 +4288,18 @@ function nextAutoPlanRun(c, lastRunOn) {
 
 function runNotifyTick(source, atMs) {
   if (notifyStats.running) return Promise.resolve({ skipped: true });
-  notifyStats.running = true;
+  if (process.memoryUsage().rss > 330 * 1048576) { console.warn("[geheugen] meldingsronde overgeslagen"); return Promise.resolve({ skipped: true }); }
+  notifyStats.running = true; diagStage("meldingen: start");
   var t0 = Date.now(), now = atMs || Date.now();
   return Promise.all([dbListDocs("push/"), dbListUserIds(), getBlocked(), getSettings(), communityAll().catch(function () { return []; })]).then(function (r) {
     var accounts = {}; r[1].forEach(function (a) { if (a && a.uid && a.email) accounts[a.uid] = true; });
     var ctx = { now: now, local: localNow(now), settings: r[3], accounts: accounts, community: r[4], communityOn: !!effectiveModules(r[3]).community, host: notifyHost(), blocked: r[2].uids || {} };
     var uids = r[0].filter(function (d) { return d.value && Array.isArray(d.value.subs) && d.value.subs.length; }).map(function (d) { return d.path.slice("push/".length); })
       .filter(function (uid) { return !r[2].uids[uid]; });
+    diagStage("meldingen: " + uids.length + " gebruikers, community " + (r[4] || []).length);
     return mapLimit(uids, 10, function (uid) { return notifyTickUser(uid, ctx); }).then(function (counts) {
-      return runAutoPlanTick(ctx).then(function (n) { return counts.concat([n]); });
+      diagStage("automatisch plannen");
+      return runAutoPlanTick(ctx).then(function (n) { diagStage("klaar"); return counts.concat([n]); });
     }).then(function (counts) {
       var sent = counts.reduce(function (a, b) { return a + b; }, 0);
       notifyStats = { lastTickAt: new Date().toISOString(), lastTickMs: Date.now() - t0, lastTickSent: sent, lastTickSource: source, running: false, users: uids.length };
@@ -4302,7 +4308,7 @@ function runNotifyTick(source, atMs) {
     });
   }).catch(function (e) { notifyStats.running = false; console.warn("Meldingsronde mislukt: " + (e && e.message)); return { error: true }; });
 }
-setTimeout(function () { runNotifyTick("server"); }, 30000);
+setTimeout(function () { runNotifyTick("server"); }, 4 * 60000);   // tijdelijk later (diagnose: geheugen liep vanaf 30 s op)
 var notifyTimer = setInterval(function () { runNotifyTick("server"); }, NOTIFY_TICK_MS);
 if (notifyTimer.unref) notifyTimer.unref();
 
@@ -8508,6 +8514,7 @@ function diagStart(req, res) {
   var done = function () { if (!DIAG.inflight.has(id)) return; DIAG.inflight.delete(id); var d = Date.now() - t; if (d > 5000) diagPush(DIAG.slow, { at: new Date().toISOString(), p: req.method + " " + p, ms: d, st: res.statusCode }, 30); };
   res.on("finish", done); res.on("close", done);
 }
+function diagStage(t) { DIAG.stage = new Date().toISOString().slice(11, 19) + " " + t; diagPush(DIAG.stages = DIAG.stages || [], DIAG.stage, 20); }
 function diagInflight() { var now = Date.now(), out = []; DIAG.inflight.forEach(function (v) { out.push(v.p + " (" + Math.round((now - v.t) / 1000) + " s)"); }); return out.slice(0, 15); }
 (function () {
   var expected = Date.now() + 1000;
@@ -8525,7 +8532,7 @@ function diagSnapshot() {
   return { at: new Date().toISOString(), commit: DIAG.commit, startedAt: new Date(DIAG.started).toISOString(), uptimeMin: Math.round((Date.now() - DIAG.started) / 60000),
     rss: Math.round(m.rss / 1048576), heap: Math.round(m.heapUsed / 1048576), heapTotal: Math.round(m.heapTotal / 1048576), ext: Math.round(m.external / 1048576), ab: Math.round((m.arrayBuffers || 0) / 1048576),
     imgCache: offImgCache.size, reqs: DIAG.reqs, paths: Object.keys(DIAG.paths || {}).sort(function (a, b) { return DIAG.paths[b] - DIAG.paths[a]; }).slice(0, 15).map(function (k) { return k + " \u00d7" + DIAG.paths[k]; }),
-    maxLagMs: DIAG.maxLag, inflight: diagInflight(),
+    maxLagMs: DIAG.maxLag, inflight: diagInflight(), stages: (DIAG.stages || []).slice(-10),
     lags: DIAG.lags.slice(-8), errors: DIAG.errors.slice(-8), slow: DIAG.slow.slice(-8), mem: DIAG.mem.slice(-15) };
 }
 function diagReport(title, extra) {
@@ -8545,7 +8552,7 @@ setTimeout(function () {
   dbGetDoc("diag/last").then(function (r) {
     DIAG.prev = r.exists ? r.value : null;
     var p = DIAG.prev;
-    var extra = p ? "Vorige keer (laatste momentopname " + p.at + ", " + p.uptimeMin + " min na start, rss " + p.rss + " MB, heap " + p.heap + " MB, extern " + p.ext + " MB, buffers " + p.ab + " MB, fotocache " + p.imgCache + ", verzoeken " + p.reqs + ", max vertraging " + p.maxLagMs + " ms).\n\nMeest gevraagd: " + JSON.stringify(p.paths || []) + "\n\nGeheugenverloop: " + JSON.stringify(p.mem || []) + "\n\n Lopende verzoeken toen: " + (p.inflight && p.inflight.length ? p.inflight.join("; ") : "geen") + "Vertragingen toen: " + JSON.stringify((p.lags || []).slice(-5)) + "\n\nFouten toen: " + JSON.stringify((p.errors || []).slice(-5)) : "Geen eerdere momentopname.";
+    var extra = p ? "Vorige keer (laatste momentopname " + p.at + ", " + p.uptimeMin + " min na start, rss " + p.rss + " MB, heap " + p.heap + " MB, extern " + p.ext + " MB, buffers " + p.ab + " MB, fotocache " + p.imgCache + ", verzoeken " + p.reqs + ", max vertraging " + p.maxLagMs + " ms).\n\nMeest gevraagd: " + JSON.stringify(p.paths || []) + "\n\nGeheugenverloop: " + JSON.stringify(p.mem || []) + "\n\nAchtergrondtaken: " + JSON.stringify(p.stages || []) + "\n\n Lopende verzoeken toen: " + (p.inflight && p.inflight.length ? p.inflight.join("; ") : "geen") + "Vertragingen toen: " + JSON.stringify((p.lags || []).slice(-5)) + "\n\nFouten toen: " + JSON.stringify((p.errors || []).slice(-5)) : "Geen eerdere momentopname.";
     DIAG.lastPost = 0;
     return diagReport("Server gestart (" + (DIAG.commit || "?") + ")", diagScrub(extra).slice(0, 4000));
   }).catch(function () {});
