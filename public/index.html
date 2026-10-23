@@ -17000,7 +17000,7 @@
     walk: ["Cardio naar keuze", "Kies zelf: stevig wandelen, fietsen, loopband, crosstrainer, roeien of traplopen. Houd je hartslag tussen de 130 en 140 slagen per minuut; je kunt dan nog praten, maar niet zingen."],
     intervals: ["Intervallen", "Fiets, loopband, roeien of buiten: na 5 minuten inlopen afwisselend 30 seconden stevig en 90 seconden rustig. Sluit af met 5 minuten uitlopen."],
     mountain: ["Mountain climbers", "In opdrukhouding, trek om en om je knieën in een rustig tempo naar je borst. Houd je heupen laag."],
-    curl: ["Biceps curl", "Dumbbells langs je lichaam, ellebogen stil. Krul ze omhoog naar je schouders en laat beheerst zakken."],
+    curl: ["Biceps curl", "Dumbbells langs je lichaam, ellebogen stil. Krul ze omhoog naar je schouders en laat beheerst zakken. Geen dumbbells? Sta op een elastiek, of gebruik twee volle flessen water."],
     dips: ["Dips op een stoel", "Handen op de rand van een stevige stoel, benen gebogen. Zak tot je ellebogen ongeveer 90 graden zijn en duw terug."],
     // Afwisselende oefeningen voor elk tweede blok van 8 weken (zelfde spieren, nieuwe prikkel)
     sumo: ["Sumo squat", "Voeten breder dan je heupen, tenen iets naar buiten. Zak recht naar beneden met je knieën in de richting van je tenen, borst omhoog. Eventueel met een dumbbell tussen je benen."],
@@ -17028,28 +17028,28 @@
   // [oefening, sets, herhalingen of "tijd"] per niveau: beginner, gevorderd. Twee of drie trainingen die om de beurt terugkomen.
   var PLANS = {
     thuis: {
-      afvallen: [["Benen, borst en rug", [["squat_bw", 3, "12"], ["pushup_knee", 3, "8"], ["row_band", 3, "12"], ["bridge", 3, "15"], ["plank", 3, "30 sec"]]],
-                 ["Benen, schouders en buik", [["lunge", 3, "10 per been"], ["stepup", 3, "10 per been"], ["shoulder", 3, "12"], ["deadbug", 3, "10"], ["mountain", 3, "30 sec"]]],
+      afvallen: [["Benen, borst en rug", [["squat_bw", 3, "12"], ["pushup_knee", 3, "8"], ["row_band", 3, "12"], ["bridge", 3, "15"], ["plank", 3, "30 sec"], ["curl", 3, "12"]]],
+                 ["Benen, schouders en buik", [["lunge", 3, "10 per been"], ["stepup", 3, "10 per been"], ["shoulder", 3, "12"], ["dips", 3, "10"], ["deadbug", 3, "10"], ["mountain", 3, "30 sec"]]],
                  ["Cardio naar keuze", [["walk", 1, "30 min"]]]],
       spier: [["Bovenlichaam: borst, rug en armen", [["pushup", 4, "8–12"], ["row_db", 4, "10"], ["shoulder", 3, "10"], ["curl", 3, "12"], ["dips", 3, "10"]]],
               ["Onderlichaam: benen, billen en buik", [["squat_goblet", 4, "10"], ["rdl", 4, "10"], ["lunge", 3, "10 per been"], ["bridge", 3, "15"], ["plank", 3, "45 sec"]]]],
-      conditie: [["Heel lichaam: kracht", [["squat_bw", 3, "15"], ["pushup_knee", 3, "10"], ["row_band", 3, "15"], ["lunge", 3, "10 per been"], ["plank", 3, "40 sec"]]],
+      conditie: [["Heel lichaam: kracht", [["squat_bw", 3, "15"], ["pushup_knee", 3, "10"], ["row_band", 3, "15"], ["lunge", 3, "10 per been"], ["curl", 3, "12"], ["plank", 3, "40 sec"]]],
                  ["Intervaltraining", [["intervals", 1, "8 × 30 sec"]]],
                  ["Cardio naar keuze", [["walk", 1, "40 min"]]]],
-      fit: [["Heel lichaam: benen, borst, rug en romp", [["squat_bw", 2, "12"], ["pushup_knee", 2, "8"], ["row_band", 2, "12"], ["bridge", 2, "15"], ["sideplank", 2, "20 sec"]]],
+      fit: [["Heel lichaam: benen, borst, rug en romp", [["squat_bw", 2, "12"], ["pushup_knee", 2, "8"], ["row_band", 2, "12"], ["bridge", 2, "15"], ["dips", 2, "10"], ["sideplank", 2, "20 sec"]]],
             ["Cardio naar keuze", [["walk", 1, "30 min"]]]]
     },
     sportschool: {
-      afvallen: [["Benen, borst en rug", [["legpress", 3, "12"], ["chestpress", 3, "10"], ["latpull", 3, "12"], ["bridge", 3, "15"], ["plank", 3, "30 sec"]]],
-                 ["Benen, billen, schouders en rug", [["squat_goblet", 3, "10"], ["rdl", 3, "10"], ["shoulder", 3, "10"], ["row_db", 3, "10"], ["deadbug", 3, "10"]]],
+      afvallen: [["Benen, borst en rug", [["legpress", 3, "12"], ["chestpress", 3, "10"], ["latpull", 3, "12"], ["bridge", 3, "15"], ["curl", 3, "12"], ["plank", 3, "30 sec"]]],
+                 ["Benen, billen, schouders en rug", [["squat_goblet", 3, "10"], ["rdl", 3, "10"], ["shoulder", 3, "10"], ["row_db", 3, "10"], ["triceps_oh", 3, "12"], ["deadbug", 3, "10"]]],
                  ["Cardio naar keuze", [["walk", 1, "40 min"]]]],
       spier: [["Borst, schouders en triceps", [["chestpress", 4, "8–10"], ["shoulder", 4, "10"], ["dips", 3, "10"], ["pushup", 3, "max"]]],
               ["Rug, biceps en buik", [["latpull", 4, "8–10"], ["row_db", 4, "10"], ["curl", 3, "12"], ["plank", 3, "45 sec"]]],
               ["Benen en billen", [["squat_goblet", 4, "8–10"], ["legpress", 4, "12"], ["rdl", 3, "10"], ["lunge", 3, "10 per been"]]]],
-      conditie: [["Heel lichaam: kracht", [["legpress", 3, "15"], ["chestpress", 3, "12"], ["latpull", 3, "12"], ["stepup", 3, "10 per been"], ["plank", 3, "40 sec"]]],
+      conditie: [["Heel lichaam: kracht", [["legpress", 3, "15"], ["chestpress", 3, "12"], ["latpull", 3, "12"], ["stepup", 3, "10 per been"], ["curl", 3, "12"], ["plank", 3, "40 sec"]]],
                  ["Intervaltraining", [["intervals", 1, "10 × 30 sec"]]],
                  ["Cardio naar keuze", [["walk", 1, "40 min"]]]],
-      fit: [["Heel lichaam: benen, borst, rug en romp", [["legpress", 2, "12"], ["chestpress", 2, "10"], ["latpull", 2, "12"], ["bridge", 2, "15"], ["plank", 2, "30 sec"]]],
+      fit: [["Heel lichaam: benen, borst, rug en romp", [["legpress", 2, "12"], ["chestpress", 2, "10"], ["latpull", 2, "12"], ["bridge", 2, "15"], ["curl", 2, "12"], ["plank", 2, "30 sec"]]],
             ["Cardio naar keuze", [["walk", 1, "30 min"]]]]
     }
   };
@@ -17097,7 +17097,7 @@
     squat_bw: ["sumo"], squat_goblet: ["bulgarian", "8 per been"], legpress: ["sumo"], lunge: ["reverse_lunge"], stepup: ["split_squat"],
     bridge: ["hip_thrust", "12"], rdl: ["sl_rdl", "10 per been"], pushup_knee: ["incline_pushup"], pushup: ["floor_press", "10"], chestpress: ["incline_press"],
     row_band: ["reverse_fly_band", "15"], row_db: ["row_bent"], latpull: ["cable_row"], shoulder: ["lateral", "12"], plank: ["plank_tap", "10 per kant"],
-    sideplank: ["birddog", "8 per kant"], deadbug: ["birddog", "8 per kant"], mountain: ["jacks"], curl: ["hammer"], dips: ["triceps_oh", "12"]
+    sideplank: ["birddog", "8 per kant"], deadbug: ["birddog", "8 per kant"], mountain: ["jacks"], curl: ["hammer"], dips: ["triceps_oh", "12"], triceps_oh: ["dips", "10"]
   };
   function trBlock(t, wk) { return Math.floor(wk / TR_BLOCK_WEEKS) + (Number(t && t.shift) || 0); }
   function trSwapItem(it, block) {
