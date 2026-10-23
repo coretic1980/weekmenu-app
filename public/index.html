@@ -14211,6 +14211,7 @@
     function pwFor() { return weekByStart(st.week) || addOrOpenPlannedWeek(new Date(st.week + "T00:00:00")); }
     function slotKeyFor() { return st.day + "|" + (st.moment === "Snack" ? "Snack na lunch" : st.moment); }
     function paintResults() {
+      body.classList.toggle("qa-typing", !!(st.q || "").trim());   // na toevoegen of wissen: snelkoppelingen (scannen) weer tonen
       resBox.innerHTML = "";
       sentenceRow.innerHTML = "";
       if (!st.q.trim()) return;
