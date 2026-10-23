@@ -5012,6 +5012,47 @@ function buildEstimatePrompt(text, hasImage) {
     "Geef ALLEEN JSON: {\"name\": korte Nederlandse naam (max 40 tekens), \"kcal\": getal, \"eiwit_g\": getal, \"kh_g\": getal, \"vet_g\": getal, " +
     "\"mealType\": \"Ontbijt\"|\"Lunch\"|\"Diner\"|\"Snack\", \"note\": één korte, vriendelijke zin zonder oordeel (bijv. wat je morgen kunt doen)}";
 }
+// POST /api/nevo/calc — rekent een (aangepast) gerecht door met NEVO (RIVM), zonder AI. Per regel: herkend product en grammen.
+var nevoCalcLimiter = makeLimiterSafe(120);
+function makeLimiterSafe(perHour) {
+  var hits = {};
+  return function (key) {
+    var now = Date.now(), arr = (hits[key] || []).filter(function (t) { return now - t < 3600000; });
+    if (arr.length >= perHour) { hits[key] = arr; return false; }
+    arr.push(now); hits[key] = arr; return true;
+  };
+}
+// Stuks omrekenen naar grammen (gemiddeld eetbaar gewicht), zodat "1 ui" of "2 teentjes knoflook" ook meetelt
+var NEVO_PIECE_G = { "ui": 100, "uien": 100, "rode ui": 100, "sjalot": 30, "sjalotten": 30, "teen knoflook": 5, "teentje knoflook": 5, "teentjes knoflook": 5, "tenen knoflook": 5, "knoflook": 5,
+  "tomaat": 120, "tomaten": 120, "paprika": 150, "paprika's": 150, "courgette": 250, "aubergine": 300, "wortel": 80, "wortels": 80, "winterpeen": 200, "prei": 200, "komkommer": 300,
+  "avocado": 150, "banaan": 120, "bananen": 120, "appel": 150, "appels": 150, "peer": 160, "sinaasappel": 150, "citroen": 100, "limoen": 70, "kiwi": 75, "mango": 300,
+  "ei": 50, "eieren": 50, "eidooier": 18, "aardappel": 150, "aardappelen": 150, "zoete aardappel": 250, "wrap": 60, "wraps": 60, "volkoren wrap": 60, "pita": 70, "pitabroodje": 70,
+  "boterham": 35, "sneetje brood": 35, "snee brood": 35, "beschuit": 10, "rijstwafel": 8, "rijstwafels": 8, "kipfilet": 150, "zalmfilet": 125, "champignon": 15, "champignons": 15, "bosui": 15, "lente-ui": 15, "rode peper": 10, "spaanse peper": 10 };
+function nevoPieceToGram(it) {
+  if (it.gram > 0) return it;
+  var m = String(it.tekst).toLowerCase().match(/^(\d+(?:[.,]\d+)?|½|1\/2|een|één|half|halve)\s*(?:stuks?\s+|x\s+)?(.*)$/);
+  if (!m) return it;
+  var q = /^(½|1\/2|half|halve)$/.test(m[1]) ? 0.5 : /^(een|één)$/.test(m[1]) ? 1 : Number(m[1].replace(",", "."));
+  var name = m[2].replace(/\(.*?\)/g, "").replace(/[,;].*$/, "").trim(), g = NEVO_PIECE_G[name];
+  if (!g) { var w = name.split(" "); g = NEVO_PIECE_G[w[w.length - 1]] || NEVO_PIECE_G[w[0]]; }
+  if (!g || !(q > 0) || q > 50) return it;
+  var base = /knoflook/.test(name) ? "knoflook" : name;
+  return { tekst: it.tekst, gram: Math.round(q * g), nevo: it.nevo || base };
+}
+function handleNevoCalc(req, res) {
+  resolveUser(req).then(function (user) {
+    if (!user) return sendUnauthorized(res);
+    if (!nevoCalcLimiter("n:" + user.uid)) return sendJSON(res, 429, { code: "rate_limited", message: "Even rustig aan; probeer het zo opnieuw." });
+    return readBody(req).then(function (body) {
+      var lines = Array.isArray(body && body.ingredienten) ? body.ingredienten.slice(0, 40).map(function (x) { return String(x || "").replace(/[\r\n]+/g, " ").trim().slice(0, 120); }).filter(Boolean) : [];
+      if (!nevoAvailable()) return sendJSON(res, 200, { available: false });
+      var items = nevoNormalizeIngredients(lines).map(nevoPieceToGram), calc = nevoCalculate(items);
+      sendJSON(res, 200, { available: true, versie: NEVO_VERSION, bron: NEVO_REFERENCE, kcal: calc.kcal, eiwitG: calc.eiwitG, khG: calc.khG, vetG: calc.vetG,
+        gedekt: calc.covered, totaal: calc.relevant, ontbreekt: calc.missing,
+        regels: calc.detail.map(function (d) { return { tekst: d.tekst, gram: d.gram, naam: d.naam, verwaarloosbaar: nevoIsNegligible(d.tekst) }; }) });
+    });
+  }).catch(function (e) { sendJSON(res, 500, { code: "error", message: "Doorrekenen lukte niet." }); });
+}
 function handleEstimate(req, res) {
   var t0 = Date.now(), ip = clientIp(req), settingsRef = null;
   getSettings().then(function (s) {
@@ -7910,6 +7951,7 @@ var server = http.createServer(function (req, res) {
   if (req.method === "POST" && url.pathname === "/api/tips") return handleTips(req, res);
   if (req.method === "POST" && url.pathname === "/api/assistant") return handleAssistant(req, res);
   if (req.method === "POST" && url.pathname === "/api/estimate") return handleEstimate(req, res);
+  if (req.method === "POST" && url.pathname === "/api/nevo/calc") return handleNevoCalc(req, res);
   if (req.method === "GET" && url.pathname === "/api/news") return handleNews(req, res);
   if (req.method === "GET" && url.pathname === "/api/foods") return handleFoods(req, res);
   var eanM = url.pathname.match(/^\/api\/foods\/barcode\/([0-9]{1,20})$/);

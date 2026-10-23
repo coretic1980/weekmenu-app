@@ -1560,7 +1560,26 @@
   .mp-toggle.on .mp-box::after { content: "\2713"; color: #fff; font-size: 13px; font-weight: 700; }
   .mp-sum { font-size: 13px; color: var(--muted); margin: 12px 0 10px; line-height: 1.4; min-height: 18px; }
   #mpGo { width: 100%; }
-  .mp-recipe-btn { display: flex; align-items: center; gap: 8px; width: 100%; margin-top: 10px; justify-content: center; }
+  .mp-recipe-btn { display: flex; align-items: center; gap: 6px; flex: 1; justify-content: center; flex-wrap: wrap; min-width: 0; }
+  .recipe-acts { display: flex; gap: 8px; margin-top: 10px; }
+  .ed-main { padding-bottom: 120px; }
+  .ed-live { position: sticky; top: 64px; z-index: 5; display: flex; flex-direction: column; gap: 8px; }
+  .ed-live-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  .ed-kcal { font-family: "Fraunces", serif; font-size: 22px; font-weight: 600; }
+  .ed-live .bal-seal-big { transform: scale(.8); transform-origin: right center; }
+  .ed-macros { display: flex; gap: 14px; font-size: 13px; color: var(--muted); } .ed-macros b { color: var(--ink, inherit); }
+  .ed-src { font-size: 12.5px; color: var(--muted); line-height: 1.4; } .ed-src.ok { color: #2E9A5C; font-weight: 600; } .ed-src.part { color: #A86A1F; }
+  .ed-note { margin: 8px 0 0; }
+  .ed-sub { margin: -2px 0 8px; font-size: 12.5px; }
+  .ed-ings, .ed-steps { display: flex; flex-direction: column; gap: 8px; }
+  .ed-ing { display: grid; grid-template-columns: 1fr 36px; gap: 2px 6px; align-items: center; }
+  .ed-ing-info { grid-column: 1 / -1; font-size: 12px; color: var(--muted); min-height: 15px; padding-left: 4px; }
+  .ed-ing-info.ok { color: #2E9A5C; } .ed-ing-info.miss { color: #A86A1F; } .ed-ing-info.neutral { color: var(--muted); }
+  .ed-del { width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line, rgba(0,0,0,.12)); background: var(--card, #fff); color: var(--muted); font-size: 18px; cursor: pointer; }
+  .ed-step { display: grid; grid-template-columns: 26px 1fr 36px; gap: 6px; align-items: start; }
+  .ed-step-nr { width: 26px; height: 26px; border-radius: 50%; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); font-weight: 700; font-size: 13px; display: flex; align-items: center; justify-content: center; margin-top: 8px; }
+  .ed-add { margin-top: 8px; align-self: flex-start; }
+  .ed-foot { display: flex; gap: 8px; margin-top: 22px; } .ed-foot .primary-btn { flex: 1.4; } .ed-foot .ghost-btn { flex: 1; }
   .mp-recipe-btn small { color: var(--muted); font-weight: 500; }
   .to-top { position: fixed; right: 16px; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); z-index: 35; width: 48px; height: 48px; border-radius: 50%; border: 1px solid var(--line, rgba(0,0,0,.08)); background: var(--surface, #fff); color: var(--accent); box-shadow: 0 6px 20px rgba(20, 30, 20, .18); display: flex; align-items: center; justify-content: center; cursor: pointer; opacity: 0; transform: translateY(16px) scale(.9); pointer-events: none; transition: opacity .2s ease, transform .2s ease; }
   .to-top.on { opacity: 1; transform: none; pointer-events: auto; }
@@ -3626,6 +3645,7 @@
   // Accountmenu (avatar rechtsboven), "Mijn profiel" en "Instellingen"
   // =====================================================================================
   var ICONS = {
+    pencil: '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
     sparkle: '<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/>',
     calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/>',
     wand: '<path d="M15 4V2M15 16v-2M8 9h2M20 9h2M17.8 11.8l1.4 1.4M17.8 6.2l1.4-1.4M12.2 6.2l-1.4-1.4"/><path d="M3 21l9-9"/>',
@@ -5568,7 +5588,9 @@
     };
     var again = document.createElement("button"); again.type = "button"; again.className = "hh-link"; again.id = "msRepeat"; again.textContent = "Ook op andere dagen";
     again.onclick = function () { var res = resolveAssignedDish(r.a); if (!res) return; closeSheet(sh.ov); openMultiPlan(res, { skipKey: isoDateKey(planDayDate(pw, dayName)) + "|" + r.slot }); };
-    foot.appendChild(rec); foot.appendChild(again); foot.appendChild(del); body.appendChild(foot);
+    var edl = document.createElement("button"); edl.type = "button"; edl.className = "hh-link"; edl.id = "msEdit"; edl.textContent = "Aanpassen";
+    edl.onclick = function () { var res = resolveAssignedDish(r.a); if (!res) return; closeSheet(sh.ov); openEditDish(res, "weeks"); };
+    foot.appendChild(rec); foot.appendChild(edl); foot.appendChild(again); foot.appendChild(del); body.appendChild(foot);
   }
   function eatButtons(pw, dayName, r, big) {
     var wrap = document.createElement("span"); wrap.className = "hh-eat" + (big ? " big" : "");
@@ -7831,6 +7853,7 @@
 { title: "Stel je voorkeuren in", body: "Bij het eerste gebruik loop je een korte wizard door die alles in stapjes uitvraagt, elk met uitleg over wat die keuze precies doet. Later kun je alles terugvinden en aanpassen bij \u201cGerechten ontwerpen\u201d: doel (Onderhoud, Vetverlies, Cutting, Spieropbouw of Atleet), voedingsstijl, keukenstijl, smaakprofiel, culinair niveau, kindvriendelijk (gezinsmodus), beschikbare apparatuur, wat je niet wilt eten, en optioneel je lichaamsprofiel (geslacht, lengte, gewicht, leeftijd, activiteitsniveau)." },
     { title: "Navigeren op je telefoon", body: "Onderin staat een vaste balk met Start, Ontwerpen, Plannen, Gerechten en Lijst. Tik nogmaals op het actieve onderdeel om terug te gaan naar het begin ervan. Het getal bij Lijst laat zien hoeveel boodschappen voor deze week nog open staan. Rechtsboven vind je de assistent (het tekstwolkje) en je accountmenu (je avatar) met Instellingen, Hoe werkt Balanza en je abonnement." },
     { title: "Je dag op Start", body: "Op Start zie je alles wat vandaag gepland staat, plus wat je er los bij at. De gekleurde balk is je dag in calorie\u00ebn tegenover je dagdoel: elk blokje is een maaltijd in de kleur van het moment (de legenda staat eronder), een lichter blokje heb je nog niet gegeten. Daaronder zie je eiwit, koolhydraten en vet tegenover je doel. Vink een maaltijd af met het vinkje als je hem gegeten hebt. Tik op de maaltijd zelf om iets te wijzigen: iets anders gegeten, niet gegeten, of meer of minder (\u00bd tot 2 porties); wat je niet at, telt niet mee. Alles kun je ongedaan maken. \u201cWat past nog?\u201d laat zien wat er nog in je dag past. Met \u201cStartscherm aanpassen\u201d onderaan Start zet je de tegels in jouw volgorde of verberg je wat je niet nodig hebt." },
+    { title: "Een gerecht aanpassen", body: "Een gerecht aanpassen doe je op een eigen scherm: via de drie puntjes bij je gerechten (Aanpassen), de knop Aanpassen in het recept, of in de planner en bij je dag op Start. Je past de naam, het moment, de ingredi\u00ebnten en de bereiding aan. Terwijl je typt rekent Balanza de kcal, eiwit, koolhydraten, vet en de Balans opnieuw uit met NEVO, het voedingsstoffenbestand van het RIVM. Per ingredi\u00ebnt zie je wat herkend is; zet er grammen bij (\u201c150 g kipfilet\u201d) of stuks (\u201c1 ui\u201d, \u201c2 eieren\u201d). Wat NEVO niet herkent, rekent Balanza bij het opslaan voor je uit. Staat het gerecht in je planning, dan gelden de nieuwe waarden daar ook; met \u201cOpslaan als kopie\u201d laat je het origineel staan." },
     { title: "Op meerdere dagen tegelijk inplannen", body: "Een gerecht zet je in \u00e9\u00e9n keer op meerdere dagen en momenten. Tik op Inplannen bij een gerecht (de drie puntjes bij je gerechten), in het recept zelf, of kies in de planner of bij je dag op Start \u201cOok op andere dagen\u201d. Tik de dagen aan in de komende twee weken, of kies snel Werkdagen, Weekend, 7 dagen of 2 weken, en kies een of meer momenten (ontbijt, lunch, diner, snack). Een groene stip betekent vrij, grijs dat er al iets staat. Standaard komt het alleen op lege plekken; vink \u201cVervang wat er al staat\u201d aan als je dat wilt. Je ziet vooraf wat er gebeurt, en met \u00e9\u00e9n tik maak je alles weer ongedaan." },
     { title: "Weetjes en je avondsnack", body: "Onderaan je doel staat elke dag een weetje: een stelling als \u201cLaat eten maakt dikker\u201d. Tik op Waar of Niet waar en lees waarom. Via \u201cX van 17 ontdekt\u201d (of Aanpak \u2192 Weetjes) veeg je door alle weetjes over eten, slapen, trainen en bewegen; Balanza onthoudt wat je al ontdekte en laat eerst zien wat bij jouw doel en je week past. Geef je in de wekelijkse check-in aan dat je \u2019s avonds honger of trek had, dan stelt Balanza een eiwitrijke avondsnack voor die in je dagdoel past (kwark, skyr, h\u00fcttenk\u00e4se, eieren; plantaardig: sojayoghurt of edamame) en zet die met \u00e9\u00e9n tik de rest van de week in je planning, na het diner." },
     { title: "Jouw doel en je aanpak", body: "Je doel (Onderhoud, Vetverlies, Cutting, Spieropbouw of Atleet) bepaalt je hele aanpak. De tegel \u201cJouw doel\u201d op Start laat in \u00e9\u00e9n oogopslag zien hoe je ervoor staat: je aanpak in een regel (dagdoel, macro's, sport, beweging; tik voor uitleg), drie meters die bij je doel passen en alleen wat nu te doen is, zoals wegen, je check-in of een half uur bewegen. Tik op een meter of op \u201cJouw voortgang\u201d voor alles in detail. Ook je voortgang past bij je doel: bij afvallen je gewicht, middel en of je kracht blijft; bij spieropbouw hoe sterk je wordt per oefening; bij presteren je trainingen; bij onderhoud je Balans en een stabiel gewicht. Beweging telt voor elk doel: afgevinkte trainingen tellen vanzelf mee, de rest tik je erbij (+15 min, +30 min, +1 uur). Pas je je doel aan, dan gaat alles mee: dagdoel, macro's, Balans-scores, trainingsschema, beweegdoel en voortgang. Je ziet meteen wat er veranderd is. Een doelgewicht dat niet meer past (bijvoorbeeld afvallen terwijl je nu spieren opbouwt) stopt; je wegingen blijven bewaard." },
@@ -8504,6 +8527,183 @@
     showToast(placed ? placed + (placed === 1 ? " gerecht staat" : " gerechten staan") + " in je planning" + (left.length ? "; " + left.length + " paste" + (left.length === 1 ? "" : "n") + " niet meer in de komende 7 dagen." : ".") : "De komende 7 dagen zijn al vol voor deze momenten.");
     render();
   }
+  // ---------- Gerecht aanpassen (eigen scherm) ----------
+  // Naam, moment, ingrediënten en bereiding aanpassen. Macro's, Balans en de NEVO-berekening (RIVM) rekenen live mee;
+  // bij opslaan krijgt het gerecht de nieuwe waarden, ook op elke plek waar het in je planning staat.
+  var edCalcCache = {};
+  function editDishLines(st) { return st.ings.map(function (x) { return String(x || "").trim(); }).filter(Boolean); }
+  function nevoCalcLines(lines) {
+    var key = lines.join("\n");
+    if (edCalcCache[key]) return Promise.resolve(edCalcCache[key]);
+    return fetch("/api/nevo/calc", { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, authHeaders()), body: JSON.stringify({ ingredienten: lines }) })
+      .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+      .then(function (d) { edCalcCache[key] = d; return d; });
+  }
+  function openEditDish(item, from) {
+    if (!item || !item.day || item.day.prep) return;
+    if (item.week && item.week.id === "community") { showToast("Bewaar het gerecht eerst bij je gerechten; dan kun je het aanpassen."); return; }
+    if (readOnlyMode()) { requirePlus("Gerechten aanpassen"); return; }
+    goto("editdish", { weekId: item.week.id, dayId: item.day.id, dayBackView: from || state.view });
+  }
+  function plannedCount(dayId) {
+    var n = 0; plannedWeeks.forEach(function (pw) { Object.keys(pw.slots || {}).forEach(function (k) { if (pw.slots[k] && pw.slots[k].dayId === dayId) n++; }); }); return n;
+  }
+  function renderEditDish() {
+    var week = findWeek(state.weekId), day = week ? findDay(week, state.dayId) : null;
+    if (!day) { var f0 = findDayAnywhere(state.dayId); if (f0) { week = f0.week; day = f0.day; } }
+    if (!day) { goto("library"); return; }
+    var app = document.getElementById("app"); app.innerHTML = "";
+    var back = function () { state.edit = null; navBack("library"); };
+    app.appendChild(renderTopbar("Gerecht aanpassen", true, function () { if (st.dirty) askConfirm("Je wijzigingen weggooien?", back, "Weggooien", "Verder aanpassen"); else back(); }));
+    var main = document.createElement("main"); main.className = "ed-main";
+    var st = state.edit && state.edit.id === day.id ? state.edit : {
+      id: day.id, name: day.name, mealType: day.mealType || "Diner", dirty: false,
+      ings: (day.ingredienten || []).map(function (x) { return typeof x === "string" ? x : (x && (x.tekst || x.text)) || ""; }),
+      steps: (day.steps || []).map(function (s) { return { title: s.title || "", content: s.content || "" }; })
+    };
+    state.edit = st;
+    // Live: macro's, Balans en NEVO
+    var live = document.createElement("div"); live.className = "card ed-live"; live.id = "edLive";
+    live.innerHTML = '<div class="ed-live-top"><div><div class="eyebrow">Per portie</div><b class="ed-kcal" id="edKcal">–</b></div><span class="ed-seal"></span></div>' +
+      '<div class="ed-macros"><span id="edE"></span><span id="edK"></span><span id="edV"></span></div><div class="ed-src" id="edSrc"></div>';
+    main.appendChild(live);
+    var n = plannedCount(day.id);
+    if (n) { var pn = document.createElement("p"); pn.className = "acc-sub ed-note"; pn.id = "edPlannedNote"; pn.textContent = "Dit gerecht staat " + n + "× in je planning. Je wijzigingen gelden daar ook; wil je dat niet, bewaar het dan als kopie."; main.appendChild(pn); }
+    function lab(t, sub) { var h = document.createElement("div"); h.className = "qa-h"; h.textContent = t; main.appendChild(h); if (sub) { var s = document.createElement("p"); s.className = "acc-sub ed-sub"; s.textContent = sub; main.appendChild(s); } }
+    lab("Naam");
+    var nameIn = document.createElement("input"); nameIn.className = "textinput"; nameIn.id = "edName"; nameIn.maxLength = 80; nameIn.value = st.name;
+    nameIn.oninput = function () { st.name = nameIn.value; st.dirty = true; };
+    main.appendChild(nameIn);
+    lab("Moment");
+    var mrow = document.createElement("div"); mrow.className = "chiprow"; mrow.id = "edMoment";
+    PLAN_MEALS.forEach(function (m) {
+      var c = document.createElement("button"); c.type = "button"; c.className = "chip" + (st.mealType === m ? " selected" : ""); c.textContent = m; c.id = "edM-" + m;
+      c.onclick = function () { st.mealType = m; st.dirty = true; Array.prototype.forEach.call(mrow.children, function (x) { x.classList.toggle("selected", x === c); }); };
+      mrow.appendChild(c);
+    });
+    main.appendChild(mrow);
+    lab("Ingrediënten", "Voor één portie. Zet er grammen bij (bijvoorbeeld “150 g kipfilet”), dan rekent Balanza het precies uit met NEVO.");
+    var list = document.createElement("div"); list.className = "ed-ings"; list.id = "edIngs"; main.appendChild(list);
+    var addI = document.createElement("button"); addI.type = "button"; addI.className = "ghost-btn small ed-add"; addI.id = "edAddIng"; addI.textContent = "+ Ingrediënt";
+    addI.onclick = function () { st.ings.push(""); st.dirty = true; paintIngs(); var ins = list.querySelectorAll("input"); if (ins.length) ins[ins.length - 1].focus(); };
+    main.appendChild(addI);
+    lab("Bereiding");
+    var steps = document.createElement("div"); steps.className = "ed-steps"; steps.id = "edSteps"; main.appendChild(steps);
+    var addS = document.createElement("button"); addS.type = "button"; addS.className = "ghost-btn small ed-add"; addS.id = "edAddStep"; addS.textContent = "+ Stap";
+    addS.onclick = function () { st.steps.push({ title: "", content: "" }); st.dirty = true; paintSteps(); };
+    main.appendChild(addS);
+    var foot = document.createElement("div"); foot.className = "ed-foot";
+    var save = document.createElement("button"); save.type = "button"; save.className = "primary-btn"; save.id = "edSave"; save.textContent = "Opslaan";
+    var copy = document.createElement("button"); copy.type = "button"; copy.className = "ghost-btn"; copy.id = "edCopy"; copy.textContent = "Opslaan als kopie";
+    foot.appendChild(save); foot.appendChild(copy); main.appendChild(foot);
+    app.appendChild(main);
+    var last = null, timer = null;
+    function paintIngs() {
+      list.innerHTML = "";
+      st.ings.forEach(function (txt, i) {
+        var row = document.createElement("div"); row.className = "ed-ing"; row.id = "edIng-" + i;
+        var inp = document.createElement("input"); inp.className = "textinput"; inp.value = txt; inp.id = "edIngIn-" + i; inp.placeholder = "bijv. 150 g kipfilet"; inp.setAttribute("aria-label", "Ingrediënt " + (i + 1));
+        inp.oninput = function () { st.ings[i] = inp.value; st.dirty = true; schedule(); };
+        var del = document.createElement("button"); del.type = "button"; del.className = "ed-del"; del.setAttribute("aria-label", "Ingrediënt weghalen"); del.textContent = "×";
+        del.onclick = function () { st.ings.splice(i, 1); st.dirty = true; paintIngs(); schedule(); };
+        var info = document.createElement("small"); info.className = "ed-ing-info"; info.id = "edIngInfo-" + i;
+        row.appendChild(inp); row.appendChild(del); row.appendChild(info); list.appendChild(row);
+      });
+      paintInfo();
+    }
+    function paintSteps() {
+      steps.innerHTML = "";
+      st.steps.forEach(function (s, i) {
+        var row = document.createElement("div"); row.className = "ed-step";
+        var nr = document.createElement("span"); nr.className = "ed-step-nr"; nr.textContent = String(i + 1);
+        var ta = document.createElement("textarea"); ta.className = "textinput"; ta.rows = 2; ta.value = s.content; ta.id = "edStep-" + i; ta.setAttribute("aria-label", "Stap " + (i + 1));
+        ta.oninput = function () { s.content = ta.value; st.dirty = true; };
+        var del = document.createElement("button"); del.type = "button"; del.className = "ed-del"; del.setAttribute("aria-label", "Stap weghalen"); del.textContent = "×";
+        del.onclick = function () { st.steps.splice(i, 1); st.dirty = true; paintSteps(); };
+        row.appendChild(nr); row.appendChild(ta); row.appendChild(del); steps.appendChild(row);
+      });
+    }
+    // Per regel tonen wat NEVO ervan maakt
+    function paintInfo() {
+      var byText = {};
+      if (last && last.regels) last.regels.forEach(function (r) { byText[r.tekst] = r; });
+      st.ings.forEach(function (txt, i) {
+        var el = document.getElementById("edIngInfo-" + i); if (!el) return;
+        var r = byText[String(txt || "").trim()];
+        el.className = "ed-ing-info";
+        if (!String(txt || "").trim()) { el.textContent = ""; return; }
+        if (!r) { el.textContent = "…"; return; }
+        if (r.naam) { el.textContent = "✓ " + r.naam + " · " + Math.round(r.gram) + " g"; el.classList.add("ok"); }
+        else if (r.verwaarloosbaar) { el.textContent = "Telt niet mee (kruiden, zout of een snufje)"; el.classList.add("neutral"); }
+        else { el.textContent = r.gram ? "Niet gevonden in NEVO; probeer een andere naam" : "Zet er grammen bij, bijvoorbeeld “100 g " + String(txt).replace(/^\d+\s*/, "").slice(0, 24) + "”"; el.classList.add("miss"); }
+      });
+    }
+    function paintLive() {
+      var kEl = document.getElementById("edKcal"), src = document.getElementById("edSrc"), seal = live.querySelector(".ed-seal");
+      if (!last) { kEl.textContent = day.kcal + " kcal"; src.textContent = "Even doorrekenen…"; return; }
+      if (!last.available) { kEl.textContent = day.kcal + " kcal"; src.textContent = "NEVO is nu niet beschikbaar; bij opslaan schat Balanza de macro's."; return; }
+      var full = last.totaal > 0 && last.gedekt === last.totaal, k = last.kcal || 0;
+      var kh = k ? Math.round(last.khG * 400 / k) : 0, ei = k ? Math.round(last.eiwitG * 400 / k) : 0, ve = k ? Math.round(last.vetG * 900 / k) : 0;
+      kEl.textContent = k ? (full ? "" : "≥ ") + k + " kcal" : "– kcal";
+      document.getElementById("edE").innerHTML = "<b>" + last.eiwitG + " g</b> eiwit"; document.getElementById("edK").innerHTML = "<b>" + last.khG + " g</b> koolh."; document.getElementById("edV").innerHTML = "<b>" + last.vetG + " g</b> vet";
+      seal.innerHTML = ""; if (k) seal.appendChild(balSeal(computeBalance(kh, ei, ve), "edSeal"));
+      src.className = "ed-src" + (full ? " ok" : " part");
+      src.textContent = full ? "Berekend met NEVO (RIVM): alle " + last.totaal + " ingrediënten herkend." : "NEVO (RIVM): " + last.gedekt + " van " + last.totaal + " ingrediënten herkend. Bij opslaan rekent Balanza de rest voor je uit.";
+    }
+    function recalc() {
+      var lines = editDishLines(st);
+      if (!lines.length) { last = { available: true, kcal: 0, eiwitG: 0, khG: 0, vetG: 0, gedekt: 0, totaal: 0, regels: [] }; paintLive(); paintInfo(); return Promise.resolve(last); }
+      return nevoCalcLines(lines).then(function (d) { last = d; paintLive(); paintInfo(); return d; }, function () { last = { available: false }; paintLive(); return last; });
+    }
+    function schedule() { clearTimeout(timer); timer = setTimeout(recalc, 450); }
+    // Opslaan: NEVO waar mogelijk; ontbreekt er iets, dan rekent de AI het om naar grammen en daarna NEVO (zoals bij herberekenen)
+    function apply(asCopy) {
+      var name = (st.name || "").trim(); if (!name) { showToast("Geef het gerecht een naam."); nameIn.focus(); return; }
+      var lines = editDishLines(st); if (!lines.length) { showToast("Voeg minstens één ingrediënt toe."); return; }
+      save.disabled = copy.disabled = true; busyStart("Gerecht doorrekenen…");
+      recalc().then(function (d) {
+        var full = d && d.available && d.totaal > 0 && d.gedekt === d.totaal && d.kcal > 0;
+        if (full) return { kcal: d.kcal, khG: d.khG, eiwitG: d.eiwitG, vetG: d.vetG, bron: "nevo", nevo: { versie: d.versie, gedekt: d.gedekt, totaal: d.totaal, ontbreekt: [] }, ings: lines };
+        return claude.use("sample").then(function (sample) {
+          if (!sample) throw new Error("geen ai");
+          return sample.json({ action: "nevo-recalc", dishes: [{ id: day.id, ingredienten: lines }] }, { modelTier: "default" }).then(function (res) {
+            var r = (extractDishArray(res) || [])[0];
+            if (r && r.macroBron === "nevo" && Number(r.kcal) > 0) return { kcal: Number(r.kcal), khG: Number(r.kh_g) || 0, eiwitG: Number(r.eiwit_g) || 0, vetG: Number(r.vet_g) || 0, bron: "nevo", nevo: r.nevo || null, ings: Array.isArray(r.ingredienten) && r.ingredienten.length ? r.ingredienten.map(String) : lines };
+            if (r && Number(r.kcal) > 0) return { kcal: Number(r.kcal), khG: Number(r.kh_g) || 0, eiwitG: Number(r.eiwit_g) || 0, vetG: Number(r.vet_g) || 0, bron: "schatting", nevo: r.nevo || null, ings: lines };
+            throw new Error("geen uitkomst");
+          });
+        }).catch(function () {
+          // Geen AI: tel wat NEVO herkende, en schat de rest naar verhouding van het oude gerecht
+          if (d && d.available && d.kcal > 0 && d.gedekt >= d.totaal * 0.6) return { kcal: d.kcal, khG: d.khG, eiwitG: d.eiwitG, vetG: d.vetG, bron: "schatting", nevo: { versie: d.versie, gedekt: d.gedekt, totaal: d.totaal, ontbreekt: d.ontbreekt }, ings: lines };
+          return { kcal: day.kcal, khG: day.khG || Math.round(day.kcal * day.kh / 400), eiwitG: day.eiwitG || Math.round(day.kcal * day.eiwit / 400), vetG: day.vetG || Math.round(day.kcal * day.vet / 900), bron: "schatting", nevo: null, ings: lines, kept: true };
+        });
+      }).then(function (m) {
+        busyEnd();
+        var target = asCopy ? JSON.parse(JSON.stringify(day)) : day;
+        if (asCopy) { target.id = "ed" + Date.now(); delete target.communityId; delete target.rating; delete target.qaHidden; }
+        target.name = name.slice(0, 80); target.mealType = st.mealType;
+        target.ingredienten = m.ings;
+        target.steps = st.steps.filter(function (s) { return String(s.content || "").trim(); }).map(function (s, i) { return { title: s.title || ("Stap " + (i + 1)), content: String(s.content).trim() }; });
+        target.kcal = Math.round(m.kcal); target.khG = Math.round(m.khG); target.eiwitG = Math.round(m.eiwitG); target.vetG = Math.round(m.vetG);
+        var k = target.kcal || 1;
+        target.kh = Math.round(target.khG * 400 / k); target.eiwit = Math.round(target.eiwitG * 400 / k); target.vet = Math.round(target.vetG * 900 / k);
+        target.balans = computeBalance(target.kh, target.eiwit, target.vet);
+        target.macroBron = m.bron; target.nevo = m.nevo; target.aangepast = new Date().toISOString();
+        if (asCopy) { addToCacheLibrary([target]); persistDishesToDb([target]); }
+        else {
+          updateStoredDishesInDb([target]);
+          plannedWeeks.forEach(function (pw) { Object.keys(pw.slots || {}).forEach(function (key) { var s = pw.slots[key]; if (s && s.dayId === target.id) { s.name = target.name; s.balans = target.balans; } }); });
+          savePlannedWeeks();
+        }
+        state.edit = null; st.dirty = false;
+        showToast((asCopy ? "Kopie bewaard: " : "Opgeslagen: ") + target.name + " · " + target.kcal + " kcal · Balans " + target.balans + "%" + (m.bron === "nevo" ? " (NEVO)" : m.kept ? " (macro's ongewijzigd, doorrekenen lukte niet)" : " (geschat)"), "ok");
+        goto("day", { weekId: asCopy ? "cache" : (findDayAnywhere(target.id) || { week: week }).week.id, dayId: target.id, dayBackView: state.dayBackView || "library" });
+      }).catch(function () { busyEnd(); save.disabled = copy.disabled = false; showToast("Opslaan lukte niet. Probeer het opnieuw."); });
+    }
+    save.onclick = function () { apply(false); };
+    copy.onclick = function () { apply(true); };
+    paintIngs(); paintSteps(); paintLive(); recalc();
+  }
   // ---------- Eén gerecht op meerdere dagen en momenten tegelijk inplannen ----------
   // Te openen vanuit je gerechten, het recept, de planner ("Ook op andere dagen") en je dag op Start.
   // Standaard alleen lege plekken; wat er al staat vervang je alleen als je dat aanzet. Alles in één keer ongedaan te maken.
@@ -8665,6 +8865,7 @@
         list.appendChild(b);
       }
       act("plan", "calendar", "Inplannen", "Op één of meer dagen en momenten tegelijk", function () { if (requirePlus("Gerechten inplannen")) return; closeSheet(ov); openMultiPlan(item); }, false, "Gerechten inplannen");
+      if (!day.prep && item.week.id !== "community") act("edit", "pencil", "Aanpassen", "Ingrediënten, hoeveelheden of bereiding; macro's en Balans rekenen mee", function () { closeSheet(ov); openEditDish(item, "library"); });
       if (day.steps && day.steps.length) act("cook", "pot", "Nu koken", "Start meteen de kookmodus", function () { closeSheet(ov); goto("cook", { weekId: item.week.id, dayId: day.id, stepIndex: 0, dayBackView: "library" }); });
       var fav = day.rating === 1;
       act("fav", "heart", fav ? "Geen favoriet meer" : "Favoriet", fav ? "Haalt het uit je favorieten" : "Bovenaan bij je favorieten, en Balanza leert je smaak", function () {
@@ -9417,6 +9618,7 @@
     }
     item("smChange", "Ander gerecht kiezen", "", function () { goto("planpick", { pickFilter: null, planWeekId: pw.id, planSlotKey: key }); });
     var resA = resolveAssignedDish(a);
+    if (resA && !resA.day.prep) item("smEdit", "Gerecht aanpassen", "Ingrediënten of hoeveelheden; macro's en Balans rekenen mee", function () { openEditDish(resA, "planweek"); });
     if (resA) item("smRepeat", "Ook op andere dagen", "Zet dit gerecht in één keer op meer dagen of momenten", function () { openMultiPlan(resA, { skipKey: isoDateKey(planDayDate(pw, d)) + "|" + slot }); });
     var moveRow = document.createElement("div"); moveRow.className = "slotmenu-move";
     var ml = document.createElement("span"); ml.textContent = "Verplaats naar"; moveRow.appendChild(ml);
@@ -12472,7 +12674,11 @@
       planBtn.innerHTML = iconSvg("calendar", 18) + "<span>Inplannen</span><small>op één of meer dagen</small>";
       planBtn.onclick = function () { openMultiPlan({ week: week, day: day }); };
       if (readOnlyMode && readOnlyMode()) lockEl(planBtn, "Gerechten inplannen");
-      main.appendChild(planBtn);
+      var edBtn = document.createElement("button"); edBtn.type = "button"; edBtn.className = "ghost-btn mp-recipe-btn"; edBtn.id = "recipeEditBtn";
+      edBtn.innerHTML = iconSvg("pencil", 18) + "<span>Aanpassen</span><small>macro's rekenen mee</small>";
+      edBtn.onclick = function () { openEditDish({ week: week, day: day }, "day"); };
+      var dbRow = document.createElement("div"); dbRow.className = "recipe-acts"; dbRow.appendChild(planBtn); dbRow.appendChild(edBtn);
+      main.appendChild(dbRow);
     }
     var commBlock = communityRecipeBlock(week, day);
     if (commBlock) main.appendChild(commBlock);
@@ -18634,6 +18840,7 @@
       else if (state.view === "shopping") renderShopping();
       else if (state.view === "planshopping") renderPlanShopping();
       else if (state.view === "day") renderDay();
+      else if (state.view === "editdish") renderEditDish();
       else if (state.view === "cook") renderCook();
       else renderWeeks();
       try { refreshGoalSheet(); } catch (e2) {}
