@@ -1927,6 +1927,8 @@
   .hz-act { position: relative; display: flex; flex-direction: column; align-items: center; gap: 7px; padding: 12px 4px 11px; border-radius: 16px; border: 1px solid var(--line); background: var(--surface, #fff); color: var(--ink); font: inherit; cursor: pointer; }
   .hz-act-ic { position: relative; width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; background: var(--nevo-bg); color: var(--nevo-ink); }
   .hz-act b { font-size: 12.5px; font-weight: 600; }
+  .hz-snel.one .hz-act { flex-direction: row; justify-content: flex-start; gap: 12px; padding: 10px 14px; }
+  .hz-snel.one .hz-act b { font-size: 14px; }
   .hz-badge { position: absolute; top: -6px; right: -10px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--accent); color: #fff; font-size: 10.5px; font-weight: 700; font-style: normal; display: inline-flex; align-items: center; justify-content: center; box-shadow: 0 0 0 2px var(--card); }
   .hz-ed-head h2 { font-family: Fraunces, serif; margin: 4px 0; } .hz-ed-head p { margin: 0 0 12px; color: var(--muted); font-size: 14px; line-height: 1.5; }
   .hz-ed { display: flex; flex-direction: column; gap: 10px; }
@@ -6621,7 +6623,7 @@
       items: [["deze", "Deze week"], ["volgende", "Volgende week"], ["boodschappen", "Boodschappen"]] },
     ontdek: { label: "Ontdekken", desc: "Eén kaart tegelijk: veeg door weetjes, seizoen en ideeën",
       items: [["weetje", "Weetje van de dag"], ["voorjou", "Voor jou"], ["seizoen", "Seizoen en momenten"], ["recent", "Laatst gemaakt"], ["community", "Community"], ["tip", "Tip"]] },
-    snel: { label: "Snel", desc: "Kleine knoppen voor wat je vaak doet",
+    snel: { label: "Snel", desc: "Kleine knoppen voor wat je vaak doet. Wat al ergens anders op Start of in de balk onderin staat, wordt niet herhaald",
       items: [["toevoegen", "Toevoegen"], ["genereren", "Genereren"], ["foto", "Gerecht van foto"], ["lijst", "Boodschappenlijst"], ["training", "Training"], ["community", "Community"]] }
   };
   var HZ_ORDER = ["vandaag", "doel", "week", "ontdek", "snel"];
@@ -6838,13 +6840,22 @@
       training: ["dumbbell", "Training", function () { if (training()) openTrainingWeek(0); else openTrainingSetup(); }, function () { return true; }],
       community: ["heart", "Community", function () { goto("community"); }, function () { return communityOn(); }]
     };
-    var list = (z.items.snel || []).filter(function (k) { return acts[k] && acts[k][3](); });
+    // Alleen wat nergens anders al in beeld staat: geen dubbele knoppen
+    var tabs = visibleTabs().map(function (t) { return t[0]; });
+    var elsewhere = {
+      toevoegen: hasAnyDishes() || healthOk(),                                              // Vandaag heeft al "+ Toevoegen"
+      genereren: tabs.indexOf("ontwerpen") > -1,                                            // tabblad Ontwerpen
+      lijst: tabs.indexOf("lijst") > -1 || hzHas("week", "boodschappen"),                   // tabblad Lijst of Je week
+      training: hzHas("doel", "training"),                                                  // Jouw doel
+      community: hzHas("ontdek", "community")                                               // Ontdekken
+    };
+    var list = (z.items.snel || []).filter(function (k) { return acts[k] && acts[k][3]() && !elsewhere[k]; });
     if (!list.length) return;
-    var wrap = document.createElement("section"); wrap.className = "hz-snel"; wrap.id = "zoneSnel";
+    var wrap = document.createElement("section"); wrap.className = "hz-snel" + (list.length === 1 ? " one" : ""); wrap.id = "zoneSnel";
     var grid = document.createElement("div"); grid.className = "hz-acts"; grid.style.gridTemplateColumns = "repeat(" + (list.length <= 4 ? list.length : list.length <= 6 ? 3 : 4) + ", 1fr)";   // altijd volle rijen: 6 = 3+3
     list.forEach(function (k) {
       var a = acts[k], b = document.createElement("button"); b.type = "button"; b.className = "hz-act"; b.id = "zSnel-" + k;
-      b.innerHTML = '<span class="hz-act-ic" aria-hidden="true">' + iconSvg(a[0], 20) + '</span><b></b>'; b.querySelector("b").textContent = a[1];
+      b.innerHTML = '<span class="hz-act-ic" aria-hidden="true">' + iconSvg(a[0], 20) + '</span><b></b>'; b.querySelector("b").textContent = list.length === 1 ? ({ foto: "Gerecht maken van een foto", genereren: "Nieuwe gerechten maken", toevoegen: "Iets toevoegen wat je at", lijst: "Naar je boodschappenlijst", training: "Je training", community: "Recepten van anderen" }[k] || a[1]) : a[1];
       if (k === "lijst") { var n = openShoppingCount(); if (n) { var bd = document.createElement("i"); bd.className = "hz-badge"; bd.textContent = n > 99 ? "99+" : n; b.querySelector(".hz-act-ic").appendChild(bd); b.setAttribute("aria-label", "Lijst, " + n + " open"); } }
       if (k === "genereren" && (state.generating || quotaBlocked())) b.disabled = true;
       b.onclick = a[2]; grid.appendChild(b);
