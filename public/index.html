@@ -1090,6 +1090,9 @@
   @media (min-width: 1000px) { .wk-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; } .wk-past-toggle { grid-column: 1 / -1; } }
   .wk-past-toggle { appearance: none; display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 14px; border: 1px dashed var(--line); background: transparent; color: var(--muted); font: inherit; font-size: 13.5px; cursor: pointer; }
   .wk-past-toggle b { color: var(--accent2); font-size: 13px; }
+  .day-panel.dp-tracker { padding: 0; overflow: hidden; border-radius: 26px; gap: 0; }
+  .dp-tracker .dp-title { font-family: "Fraunces", serif; font-weight: 600; font-size: 19px; padding: 18px 18px 0; }
+  .dp-tracker .dp-advice { margin: 0 18px 18px; }
   /* Compacte weekweergave: kleinere kop op één regel, strakke regels, balans als klein zegel (niet uitgerekt) */
   .wk-day { gap: 6px; padding: 10px 12px; }
   .wk-head { gap: 10px; }
@@ -5814,7 +5817,17 @@
     if (!sources.length) { showToast("Er staat vandaag nog niets in je dag."); return; }
     openNutrientSheet("Alle voedingswaarden", "Vandaag · alles wat gepland staat of erbij kwam", sources);
   }
-  function renderDayTracker(body, agg, target, t, live, extras) {
+  // Dezelfde tellers als op Start, voor elke dag (ook in Plannen). opts: { pw, dayName, isToday }
+  function dayTrackerRows(pw, dayName) {
+    var repl = pw ? replacedSlots(pw, dayName) : {}, rows = [];
+    if (pw) PLAN_SLOTS.forEach(function (slot) {
+      var a = pw.slots[dayName + "|" + slot]; if (!a) return;
+      var res = resolveAssignedDish(a); if (res && !repl[dayName + "|" + slot]) rows.push({ slot: slot, a: a, dish: res.day, mt: SLOT_TO_MEALTYPE[slot] });
+    });
+    return rows;
+  }
+  function renderDayTracker(body, agg, target, t, live, extras, opts) {
+    opts = opts || {}; var isToday = opts.isToday !== false;
     // Wat is er gegeten, wat staat er nog gepland, en hoeveel heb je nog over tot je dagdoel?
     var eaten = 0, planned = 0, perMt = {}, anyTodo = false;
     live.filter(function (r) { return r.a.cooked !== false; }).forEach(function (r) {
@@ -5835,7 +5848,7 @@
       '<circle cx="60" cy="60" r="' + R + '" class="dt-eat" stroke-dasharray="' + (fe * C).toFixed(1) + ' ' + C.toFixed(1) + '"/></svg>' +
       '<div class="dt-c"><b></b><small></small></div></div>' +
       '<div class="dt-nums"><div class="dt-n"><span>Gegeten</span><b id="dtEaten"></b></div>' + (planned ? '<div class="dt-n"><span>Nog gepland</span><b id="dtPlanned"></b></div>' : '') +
-      '<div class="dt-n"><span>Doel vandaag</span><b id="dtGoal"></b></div><div class="dt-n dt-big' + (over ? ' over' : '') + '"><span></span><b id="dtLeft"></b></div></div>';
+      '<div class="dt-n"><span>' + (isToday ? 'Doel vandaag' : 'Dagdoel') + '</span><b id="dtGoal"></b></div><div class="dt-n dt-big' + (over ? ' over' : '') + '"><span></span><b id="dtLeft"></b></div></div>';
     hero.querySelector(".dt-c b").textContent = Math.abs(left);
     hero.querySelector(".dt-c small").textContent = over ? "kcal te veel" : "kcal over";
     hero.querySelector("#dtEaten").textContent = eaten;
@@ -5858,7 +5871,8 @@
       var seg = document.createElement("span"); seg.style.width = Math.max(1, Math.min(100, (x.kcal || 0) * mealPortion(x) / target * 100)) + "%"; seg.style.background = "#8C8C8C"; bar.appendChild(seg);
     });
     bw.appendChild(bar);
-    if (pace > 0 && pace < 1) { var pm = document.createElement("span"); pm.className = "dt-pace"; pm.style.left = (pace * 100).toFixed(1) + "%"; pm.innerHTML = "<i>nu</i>"; pm.title = "Waar je rond deze tijd ongeveer zit"; bw.appendChild(pm); }
+    if (!isToday) pace = eaten + planned >= target ? 1 : 0;   // andere dag: geen "nu"-streepje en geen tijd-adviezen
+    if (isToday && pace > 0 && pace < 1) { var pm = document.createElement("span"); pm.className = "dt-pace"; pm.style.left = (pace * 100).toFixed(1) + "%"; pm.innerHTML = "<i>nu</i>"; pm.title = "Waar je rond deze tijd ongeveer zit"; bw.appendChild(pm); }
     body.appendChild(bw);
     // Legenda met kcal per moment
     var leg = document.createElement("div"); leg.className = "hh-legend"; leg.id = "hhLegend";
@@ -5869,13 +5883,14 @@
     });
     if (extras.length) { var ie = document.createElement("span"); ie.innerHTML = "<i></i>"; ie.querySelector("i").style.background = "#8C8C8C"; ie.appendChild(document.createTextNode("erbij " + exK)); leg.appendChild(ie); }
     if (anyTodo) { var nt = document.createElement("span"); nt.className = "hh-legend-note"; nt.textContent = "licht = nog niet gegeten"; leg.appendChild(nt); }
-    if (!live.length && !extras.length) leg.textContent = "Nog niets gepland of gegeten vandaag";
+    if (!live.length && !extras.length) leg.textContent = isToday ? "Nog niets gepland of gegeten vandaag" : "Nog niets gepland voor deze dag";
     body.appendChild(leg);
     // Eén zin met de stand, plus de Balans
     var st = document.createElement("div"); st.className = "dt-status"; st.id = "dtStatus";
     var msg = document.createElement("span"), ef = eaten / target, kind = "ok";
     if (eaten > target * 1.03) { msg.textContent = "Let op: " + (eaten - target) + " kcal boven je doel"; kind = "warn"; }
     else if (eaten + planned > target * 1.05) { msg.textContent = "Met je planning kom je " + (eaten + planned - target) + " kcal boven je doel"; kind = "mid"; }
+    else if (!isToday) { var lf = target - eaten - planned; msg.textContent = lf > 150 ? "Nog " + lf + " kcal ruimte op deze dag" : "Mooi in balans met je dagdoel"; kind = lf > 150 ? "mid" : "ok"; }
     else if (ef - pace > 0.2) { msg.textContent = "Je loopt wat voor op je dag"; kind = "mid"; }
     else if (hrs >= 13 && pace - ef > 0.3 && !planned) { msg.textContent = "Je hebt nog veel ruimte: vergeet niet te eten"; kind = "mid"; }
     else msg.textContent = ef < 0.05 && hrs < 10 ? "Je dag begint: alles nog open" : "Op schema";
@@ -5896,7 +5911,7 @@
     });
     body.appendChild(mac);
     var nuB = document.createElement("button"); nuB.type = "button"; nuB.className = "hh-link nu-open"; nuB.id = "nutrOpen"; nuB.textContent = "Alle voedingswaarden \u203a";
-    nuB.onclick = function () { var nw = new Date(); openDayNutrients(plannedWeeks.filter(function (w) { return w.weekStart === isoDateKey(getMonday(nw)); })[0], PLAN_DAYS[(nw.getDay() + 6) % 7]); };
+    nuB.onclick = function () { if (opts.pw) { openDayNutrients(opts.pw, opts.dayName); return; } var nw = new Date(); openDayNutrients(plannedWeeks.filter(function (w) { return w.weekStart === isoDateKey(getMonday(nw)); })[0], PLAN_DAYS[(nw.getDay() + 6) % 7]); };
     body.appendChild(nuB);
   }
   function renderHomeHero(main) {
@@ -10914,35 +10929,22 @@
     var planTrial = planStatusBanner();
     if (planTrial) main.appendChild(planTrial);
     plannerExtras(main, pw);
-    var card = document.createElement("div"); card.className = "day-panel card";
+    var left = target ? target - agg.kcal : 0;   // ook gebruikt voor de suggesties bij lege momenten
+    var card = document.createElement("div"); card.className = "day-panel card dp-tracker";
     var isToday = isoDateKey(date) === isoDateKey(new Date());
-    card.innerHTML = '<div class="dp-head"><b></b><span class="dp-kcal"></span></div><div class="dp-bar"><i></i></div><div class="dp-macros"></div><div class="dp-advice"></div>';
-    card.querySelector(".dp-head b").textContent = d + " " + date.getDate() + " " + MONTHS_SHORT[date.getMonth()] + (isToday ? " · vandaag" : "");
-    card.querySelector(".dp-kcal").innerHTML = "<b>" + agg.kcal + "</b>" + (target ? " / " + target + " kcal" : " kcal");
-    if (agg.kcal) { var dpb = balPill(dayBal(agg), "dpBal"); card.querySelector(".dp-head").appendChild(dpb); }
-    var kb = card.querySelector(".dp-bar i");
-    kb.style.width = (target ? Math.min(100, Math.round(agg.kcal / target * 100)) : (agg.kcal ? 100 : 0)) + "%";
-    if (target && agg.kcal > target + 150) kb.className = "over";
-    var mac = card.querySelector(".dp-macros");
-    [["Eiwit", Math.round(agg.eiwitG), t.eiwit, 4, "var(--bar-eiwit, #1F8A55)"], ["Koolh.", Math.round(agg.khG), t.kh, 4, "var(--bar-kh, #E3A22F)"], ["Vet", Math.round(agg.vetG), t.vet, 9, "var(--bar-vet, #3C8DCB)"]].forEach(function (m) {
-      var goal = target ? Math.round(target * m[2] / 100 / m[3]) : null;
-      var el = document.createElement("div"); el.className = "dp-mac";
-      el.innerHTML = "<span></span><div><i></i></div>";
-      el.querySelector("span").innerHTML = m[0] + " <b>" + m[1] + (goal ? "/" + goal : "") + "g</b>";
-      var ib = el.querySelector("i"); ib.style.background = m[4]; ib.style.width = (goal ? Math.min(100, Math.round(m[1] / goal * 100)) : 0) + "%";
-      mac.appendChild(el);
-    });
-    var adv = card.querySelector(".dp-advice");
-    var empties = MAIN_SLOTS.filter(function (s) { return !pw.slots[d + "|" + s]; });
-    var left = target ? target - agg.kcal : 0;
-    var tone = "muted", msg;
-    if (isPastDay(pw, d)) msg = "Deze dag is voorbij. Je kunt hem nog bekijken of aanpassen.";
-    else if (!agg.kcal) msg = "Nog niets gepland. Kies hieronder een gerecht, of vul de rest van de week in één keer.";
-    else if (!target) msg = "Vul lengte, gewicht en leeftijd in bij Mijn voorkeuren om te zien of deze dag bij je dagdoel past.";
-    else if (left > 150) { tone = "warn"; msg = "Nog " + left + " kcal over" + (empties.length ? ": vul je " + empties.join(" en ").toLowerCase() + " aan." : ": ruimte voor een snack."); }
-    else if (left < -150) { tone = "warn"; msg = (-left) + " kcal boven je dagdoel: kies een lichter gerecht of een kleinere portie."; }
-    else { tone = "ok"; msg = "Mooi in balans met je dagdoel."; }
-    adv.textContent = msg; adv.className = "dp-advice " + tone;
+    var dh = document.createElement("div"); dh.className = "dp-title"; dh.textContent = d + " " + date.getDate() + " " + MONTHS_SHORT[date.getMonth()] + (isToday ? " · vandaag" : "");
+    card.appendChild(dh);
+    if (target) {
+      // Dezelfde tellers als op Start: ring met wat over is, gegeten/gepland/doel, balk per maaltijd en macro-tegels
+      var tb = document.createElement("div"); tb.className = "hh-body";
+      renderDayTracker(tb, agg.kcal ? agg : null, target, t, dayTrackerRows(pw, d), dayExtras(pw, d), { pw: pw, dayName: d, isToday: isToday });
+      card.appendChild(tb);
+      if (isPastDay(pw, d)) { var pa = document.createElement("div"); pa.className = "dp-advice muted"; pa.textContent = "Deze dag is voorbij. Je kunt hem nog bekijken of aanpassen."; card.appendChild(pa); }
+    } else {
+      var na = document.createElement("div"); na.className = "dp-advice muted";
+      na.textContent = agg.kcal ? agg.kcal + " kcal gepland. Vul lengte, gewicht en leeftijd in bij Mijn voorkeuren om te zien of deze dag bij je dagdoel past." : "Nog niets gepland. Kies hieronder een gerecht, of vul de rest van de week in één keer.";
+      card.appendChild(na);
+    }
     main.appendChild(card);
     var trT2 = training(), trS2 = trT2 ? trSessionFor(trT2, planDayDate(pw, d)) : null;
     if (trS2) {
