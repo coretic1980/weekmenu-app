@@ -1090,6 +1090,8 @@
   @media (min-width: 1000px) { .wk-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; } .wk-past-toggle { grid-column: 1 / -1; } }
   .wk-past-toggle { appearance: none; display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 14px; border: 1px dashed var(--line); background: transparent; color: var(--muted); font: inherit; font-size: 13.5px; cursor: pointer; }
   .wk-past-toggle b { color: var(--accent2); font-size: 13px; }
+  .hh-qa-main { width: 100%; margin-top: 4px; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 16px; padding: 15px 18px; }
+  .hh-qa-main span { font-size: 20px; line-height: 1; }
   .day-panel.dp-tracker { padding: 0; overflow: hidden; border-radius: 26px; gap: 0; }
   .dp-tracker .dp-title { font-family: "Fraunces", serif; font-weight: 600; font-size: 19px; padding: 18px 18px 0; }
   .dp-tracker .dp-advice { margin: 0 18px 18px; }
@@ -5970,12 +5972,14 @@
         if (weekEmpty) { go.className = "ghost-btn hh-fill-week"; go.textContent = "\u2728 Vul mijn hele week in \u00e9\u00e9n keer"; go.id = "fillWeekBtn"; go.onclick = fillThisWeek; }
         else { go.className = "ghost-btn hh-fill-week"; go.textContent = "Hele dag plannen"; go.onclick = planToday; }
       } else { go.textContent = "Maak mijn eerste gerechten"; go.onclick = function () { goto("prefs"); }; }
-      card.appendChild(go);
+      // Toevoegen wat je at is de hoofdactie (vol, groot), het plannen van de week de tweede knop eronder
       if (hasAnyDishes() || healthOk()) {
-        var qa = document.createElement("button"); qa.type = "button"; qa.className = "hh-link"; qa.id = "qaEmpty"; qa.textContent = "\uFF0B Snel iets toevoegen wat je at";
+        var qa = document.createElement("button"); qa.type = "button"; qa.className = "primary-btn hh-qa-main"; qa.id = "qaEmpty";
+        qa.innerHTML = '<span aria-hidden="true">\uFF0B</span> Toevoegen wat je at';
         qa.onclick = function () { openQuickAdd({}); };
         card.appendChild(qa);
       }
+      card.appendChild(go);
 
       if (target) { var tb = document.createElement("div"); tb.className = "hh-body hh-body-empty"; renderDayTracker(tb, agg, target, t, [], extras); card.appendChild(tb); } else { var tb2 = document.createElement("div"); tb2.className = "hh-body hh-body-empty"; tb2.appendChild(dayTargetInvite()); card.appendChild(tb2); }
       renderWaterRow(card);
