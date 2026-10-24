@@ -5548,7 +5548,9 @@ function offnlEnsure() {
     var failedRecently = offnl.status.failedAt && Date.now() - offnl.status.failedAt < 6 * 3600000;
     var h = new Date().getUTCHours();
     var veryStale = offnl.items && Date.now() - offnl.at > OFFNL_MAX_AGE_MS + 2 * 86400000;
-    if (stale && !failedRecently && (!offnl.items || veryStale || h >= 1 && h <= 4)) offnlImport();
+    // Automatisch verversen staat uit: past niet in het geheugen, en is niet nodig (ontbrekende producten en de
+    // extra voedingswaarden komen live binnen als iemand erom vraagt). Alleen nog met de hand, of met OFFNL_AUTO=1.
+    if (process.env.OFFNL_AUTO === "1" && stale && !failedRecently && (!offnl.items || veryStale || h >= 1 && h <= 4)) offnlImport();
   });
 }
 function handleFoodSearch(req, res, url) {
@@ -5651,15 +5653,16 @@ function handleFoodSearch(req, res, url) {
     .catch(function (e) { sendJSON(res, 200, { items: [], error: true, tries: debug ? tries : undefined }); });
 }
 // GET /api/foods/barcode/<ean> — productgegevens van Open Food Facts (open data, ODbL), 30 dagen bewaard.
-function handleFoodBarcode(req, res, ean) {
+// full=1: ook de overige voedingswaarden (vezel, suiker, verzadigd vet, zout); die worden pas opgehaald als iemand erom vraagt.
+function handleFoodBarcode(req, res, ean, full) {
   if (!/^\d{8,14}$/.test(ean)) return sendJSON(res, 400, { code: "bad_request", message: "Dit is geen geldige streepjescode." });
   if (!barcodeLimiter("b:" + clientIp(req))) return sendJSON(res, 429, { code: "rate_limited", message: "Even te veel gescand. Probeer het zo opnieuw." });
   var loc = offnlByEan(ean);
-  if (loc && loc.img) return sendJSON(res, 200, { food: loc, source: "Open Food Facts" });   // zonder foto: live aanvullen hieronder
+  if (loc && loc.img && (!full || loc.n)) return sendJSON(res, 200, { food: loc, source: "Open Food Facts" });   // zonder foto (of zonder gevraagde voedingswaarden): live aanvullen hieronder
   var key = "foods/ean/" + ean;
   return dbGetDoc(key).then(function (r) {
     var v = r.exists ? r.value : null;
-    if (v && (!v.found || v.v === 4) && Date.now() - v.at < (v.found ? FOOD_BARCODE_TTL_MS : FOOD_BARCODE_MISS_MS)) return v;
+    if (v && (!v.found || v.v === 4) && !(full && v.found && !v.food.n) && Date.now() - v.at < (v.found ? FOOD_BARCODE_TTL_MS : FOOD_BARCODE_MISS_MS)) return v;
     var base = process.env.OFF_BASE_URL || "https://world.openfoodfacts.org";
     var ctl = new AbortController(), t = setTimeout(function () { ctl.abort(); }, 8000);
     return fetch(base + "/api/v2/product/" + ean + ".json?fields=product_name,product_name_nl,generic_name_nl,brands,stores,nutriments,serving_quantity,serving_size,quantity,image_front_small_url,image_small_url",
@@ -5677,7 +5680,7 @@ function handleFoodBarcode(req, res, ean) {
   }).then(function (doc) {
     logRequest({ ts: new Date().toISOString(), type: "estimate", action: "streepjescode", ok: !!doc.found, status: doc.found ? 200 : 404, ip: clientIp(req) });
     if (!doc.found && loc) return sendJSON(res, 200, { food: loc, source: "Open Food Facts" });
-    if (doc.found && loc && !doc.food.img) doc.food = loc;
+    if (doc.found && loc && !doc.food.img) doc.food = Object.assign({}, loc, { n: doc.food.n || loc.n || null });
     if (!doc.found) return sendJSON(res, 404, { code: "not_found", message: "Dit product staat (nog) niet in Open Food Facts. Zoek het op naam of voeg het zelf toe." });
     sendJSON(res, 200, { food: doc.food, source: "Open Food Facts" });
   }).catch(function () { if (loc) return sendJSON(res, 200, { food: loc, source: "Open Food Facts" }); sendJSON(res, 502, { code: "error", message: "De productgegevens konden niet worden opgehaald. Probeer het zo opnieuw of zoek op naam." }); });
@@ -8458,7 +8461,7 @@ var server = http.createServer(function (req, res) {
   if (req.method === "GET" && url.pathname === "/api/foods/search") return handleFoodSearch(req, res, url);
   if (req.method === "GET" && url.pathname.indexOf("/api/foods/img/") === 0) return handleFoodImg(req, res, url.pathname.slice("/api/foods/img".length), url.searchParams.get("debug") === "1");
   var eanM = url.pathname.match(/^\/api\/foods\/barcode\/([0-9]{1,20})$/);
-  if (req.method === "GET" && eanM) return handleFoodBarcode(req, res, eanM[1]);
+  if (req.method === "GET" && eanM) return handleFoodBarcode(req, res, eanM[1], url.searchParams.get("full") === "1");
   if ((req.method === "GET" || req.method === "POST") && url.pathname === "/api/autoplan") return handleAutoPlan(req, res);
   if ((req.method === "GET" || req.method === "POST") && url.pathname === "/api/suggestions") return handleSuggestions(req, res);
   if ((req.method === "GET" && url.pathname === "/api/inbox") || (req.method === "POST" && url.pathname === "/api/inbox/read")) return handleInbox(req, res);

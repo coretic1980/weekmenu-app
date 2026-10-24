@@ -5634,6 +5634,25 @@
     if (it.n && typeof it.n === "object") return nutrFromRow(function (k) { return it.n[k] == null ? null : it.n[k] * f; });
     return null;
   }
+  // Producten met een streepjescode: de extra etiketwaarden (vezel, suiker, verzadigd vet, zout) pas ophalen als
+  // iemand "Alle voedingswaarden" opent. Eén keer per product; bewaard bij je eigen producten.
+  var eanNutrCache = {};
+  function fillEanNutr(sources) {
+    var need = {};
+    sources.forEach(function (s) { (s.items || []).forEach(function (it) { if (it && !it.code && !it.n && it.ean && /^\d{8,14}$/.test(it.ean)) need[it.ean] = true; }); });
+    var eans = Object.keys(need).slice(0, 12); if (!eans.length) return Promise.resolve();
+    return Promise.all(eans.map(function (ean) {
+      if (eanNutrCache[ean] !== undefined) return Promise.resolve();
+      return fetch("/api/foods/barcode/" + ean + "?full=1").then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
+        eanNutrCache[ean] = d && d.food && d.food.n && typeof d.food.n === "object" ? d.food.n : null;
+      }, function () {});
+    })).then(function () {
+      var changed = false;
+      sources.forEach(function (s) { (s.items || []).forEach(function (it) { if (it && !it.n && it.ean && eanNutrCache[it.ean]) it.n = eanNutrCache[it.ean]; }); });
+      myFoods().forEach(function (m) { if (m.ean && !m.n && eanNutrCache[m.ean]) { m.n = eanNutrCache[m.ean]; changed = true; } });
+      if (changed) savePrefs();
+    });
+  }
   // Een gerecht: via de ingrediënten (server rekent met NEVO), één keer per gerecht
   function dishNutr(d) {
     var ings = Array.isArray(d.ingredienten) ? d.ingredienten.map(function (x) { return typeof x === "string" ? x : (x && x.tekst) || ""; }).filter(Boolean) : [];
@@ -5674,7 +5693,7 @@
   function openNutrientSheet(title, sub, sources) {
     var sh = openSimpleSheet("nutrSheet", title, sub), body = sh.body;
     body.innerHTML = '<div class="nu-load">Voedingswaarden berekenen…</div>';
-    loadNutrTable().then(function () {
+    Promise.all([loadNutrTable(), fillEanNutr(sources)]).then(function () {
       return Promise.all(sources.map(function (s) {
         if (s.items) {
           var per = s.items.map(itemNutr), out = { v: {}, cover: {}, total: s.items.length, name: s.name };
