@@ -3463,9 +3463,12 @@
   var NAV_PAGES = { account: 1, myprefs: 1, settings: 1, guide: 1, journey: 1, plans: 1, upgrade: 1, planpick: 1 };   // planpick: na kiezen terug naar waar je vandaan kwam (Start, dag- of weekweergave)
   var NAV_KEYS = ["view", "weekId", "dayId", "dayServings", "dayBackView", "dayBackWeekId", "dayBackDayName", "planWeekId", "planDayName", "planDayFor", "tab", "settingsPage", "reviewWeekId", "reviewIdx", "recap", "prefsBack"];
   var navStack = [], navGoingBack = false;
+  var NAV_SKIP_FROM = { wizard: 1, cook: 1 };
   function navSnapshot() { var o = {}; NAV_KEYS.forEach(function (k) { o[k] = state[k] === undefined ? null : state[k]; }); o.scrollY = window.scrollY || 0; return o; }
   function navBack(fallbackView, fallbackExtra) {
     var snap = navStack.pop();
+    // Snapshots van het scherm waar je nu al bent overslaan (bijv. na de kookmodus)
+    while (snap && snap.view === state.view && snap.weekId === (state.weekId == null ? null : state.weekId) && snap.dayId === (state.dayId == null ? null : state.dayId) && snap.planWeekId === (state.planWeekId == null ? null : state.planWeekId)) snap = navStack.pop();
     if (!snap) { goto(fallbackView || "weeks", fallbackExtra); return; }
     var extra = {}; NAV_KEYS.forEach(function (k) { if (k !== "view") extra[k] = snap[k]; });
     navGoingBack = true;
@@ -3486,7 +3489,10 @@
     if (typeof stopVoice === "function") stopVoice(true);
     var fromKey = screenKey(); scrollMem[fromKey] = window.scrollY || 0;
     if (screenHist[screenHist.length - 1] !== fromKey) screenHist.push(fromKey);
-    if (NAV_PAGES[view] && state.view !== view && !navGoingBack) { navStack.push(navSnapshot()); if (navStack.length > 12) navStack.shift(); }
+    // Overal "terug naar waar je vandaan kwam": elke overgang naar een ander scherm komt op de stapel (behalve vanuit
+    // tussenstappen zoals de wizard of de kookmodus). Start is de basis: daar begint de stapel opnieuw.
+    if (state.view !== view && !navGoingBack && !NAV_SKIP_FROM[state.view] && view !== "weeks") { navStack.push(navSnapshot()); if (navStack.length > 30) navStack.shift(); }
+    if (view === "weeks" && !navGoingBack) navStack = [];
     // Rechtstreeks een onderdeel van Instellingen geopend (bijv. vanuit een tip)? Dan brengt Terug je meteen terug.
     if (view === "settings" && state.view !== "settings") state.settingsEntry = extra && extra.settingsPage ? extra.settingsPage : null;
     if (view !== "library" && view !== "day" && librarySelect.on) { librarySelect.on = false; librarySelect.ids = {}; }
@@ -7904,7 +7910,7 @@
   function renderPrefs() {
     var app = document.getElementById("app");
     app.innerHTML = "";
-    app.appendChild(renderTopbar("Nieuwe gerechten", true, function () { savePrefs(); state.genSuccess = null; goto("weeks"); }));
+    app.appendChild(renderTopbar("Nieuwe gerechten", true, function () { savePrefs(); state.genSuccess = null; navBack("weeks"); }));
     var main = document.createElement("main");
     main.className = "gen-main";
 
@@ -9419,7 +9425,7 @@
     if (!communityOn()) { goto("library"); return; }
     var app = document.getElementById("app");
     app.innerHTML = "";
-    app.appendChild(renderTopbar("Community", true, function () { goto("weeks"); }));
+    app.appendChild(renderTopbar("Community", true, function () { navBack("weeks"); }));
     var main = document.createElement("main");
     main.appendChild(gerechtenSwitch("community"));
     var intro = document.createElement("p"); intro.className = "comm-intro";
@@ -10196,7 +10202,7 @@
     app.innerHTML = "";
     var all = libraryItems();
     var favCount = all.filter(function (it) { return it.day.rating === 1; }).length;
-    var head = renderTopbar("Gerechten", true, function () { goto("weeks"); });
+    var head = renderTopbar("Gerechten", true, function () { navBack("weeks"); });
     app.appendChild(head);
     var main = document.createElement("main"); main.className = "lib-main";
     var gsw = gerechtenSwitch("library");
@@ -10858,7 +10864,7 @@
     var d = state.planDayName;
     var app = document.getElementById("app");
     app.innerHTML = "";
-    app.appendChild(renderTopbar("Plannen", true, function () { goto("weeks"); }));
+    app.appendChild(renderTopbar("Plannen", true, function () { navBack("weeks"); }));
     var main = document.createElement("main");
     main.className = "planner";
 
@@ -11092,7 +11098,7 @@
     var prep = pw.dynamicPrep;
     var app = document.getElementById("app");
     app.innerHTML = "";
-    app.appendChild(renderTopbar(prep ? prep.name : "Prepdag", true, function () { goto("planweek", { planWeekId: pw.id }); }));
+    app.appendChild(renderTopbar(prep ? prep.name : "Prepdag", true, function () { navBack("planweek", { planWeekId: pw.id }); }));
     var main = document.createElement("main");
 
     if (!prep) {
@@ -11353,7 +11359,7 @@
     var week = findWeek(state.weekId);
     var app = document.getElementById("app");
     app.innerHTML = "";
-    app.appendChild(renderTopbar(week.title, true, function () { goto("weeks"); }));
+    app.appendChild(renderTopbar(week.title, true, function () { navBack("weeks"); }));
     var main = document.createElement("main");
 
     var eyebrow = document.createElement("div");
@@ -13252,7 +13258,7 @@
 
   function renderShopping() {
     var week = findWeek(state.weekId);
-    renderShoppingList(week.title, buildDayEntries(week), function () { goto("week", { weekId: week.id }); });
+    renderShoppingList(week.title, buildDayEntries(week), function () { navBack("week", { weekId: week.id }); });
   }
 
   // Periode van de lijst: hele week, vanaf vandaag (alleen deze week) of zelf gekozen dagen.
@@ -13302,7 +13308,7 @@
       });
       box.appendChild(days);
     }
-    renderShoppingList(title, entries, function () { goto("planweek", { planWeekId: pw.id }); }, { headerExtra: box });
+    renderShoppingList(title, entries, function () { navBack("planweek", { planWeekId: pw.id }); }, { headerExtra: box });
   }
 
   // ---------- Foto's in de PDF ----------
@@ -13754,21 +13760,21 @@
     app.innerHTML = "";
     var backFn;
     if (state.dayBackView === "planday" || state.dayBackView === "planweek") {
-      backFn = function () { goto("planday", { planWeekId: state.dayBackWeekId, planDayName: state.dayBackDayName }); };
+      backFn = function () { navBack("planday", { planWeekId: state.dayBackWeekId, planDayName: state.dayBackDayName }); };
     } else if (state.dayBackView === "genresult") {
-      backFn = function () { goto("genresult"); };
+      backFn = function () { navBack("genresult"); };
     } else if (state.dayBackView === "library") {
-      backFn = function () { goto("library"); };
+      backFn = function () { navBack("library"); };
     } else if (state.dayBackView === "community" || week.id === "community") {
-      backFn = function () { goto("community"); };
+      backFn = function () { navBack("community"); };
     } else if (state.dayBackView === "weeks") {
-      backFn = function () { goto("weeks"); };
+      backFn = function () { navBack("weeks"); };
     } else if (state.dayBackView === "recap") {
-      backFn = function () { goto("recap"); };
+      backFn = function () { navBack("recap"); };
     } else if (state.dayBackView === "review") {
-      backFn = function () { goto("review"); };
+      backFn = function () { navBack("review"); };
     } else {
-      backFn = function () { goto("week", { weekId: week.id }); };
+      backFn = function () { navBack("week", { weekId: week.id }); };
     }
     app.appendChild(renderTopbar(day.prep ? day.label : (day.mealType || day.label), true, backFn));
     var main = document.createElement("main");
@@ -14747,7 +14753,7 @@
   function renderReview() {
     var pw = plannedWeeks.filter(function (w) { return w.id === state.reviewWeekId; })[0];
     var app = document.getElementById("app"); app.innerHTML = "";
-    app.appendChild(renderTopbar("Je week bekijken", true, function () { goto(pw ? "planweek" : "weeks", pw ? { planWeekId: pw.id } : {}); }));
+    app.appendChild(renderTopbar("Je week bekijken", true, function () { navBack(pw ? "planweek" : "weeks", pw ? { planWeekId: pw.id } : {}); }));
     var main = document.createElement("main"); main.className = "review";
     app.appendChild(main);
     var keys = pw ? reviewKeys(pw) : [];
@@ -16148,7 +16154,7 @@
     var weeks = rc.trial ? trialWeeks() : [weekByStart(rc.week)].filter(Boolean);
     var r = weekRecap(weeks), t = goalTarget(), target = dailyKcalTarget();
     var app = document.getElementById("app"); app.innerHTML = "";
-    app.appendChild(renderTopbar(rc.trial ? "Je proefweek" : "Terugblik", true, function () { goto("weeks"); }));
+    app.appendChild(renderTopbar(rc.trial ? "Je proefweek" : "Terugblik", true, function () { navBack("weeks"); }));
     var main = document.createElement("main"); main.className = "recap";
     var eb = document.createElement("div"); eb.className = "eyebrow";
     eb.textContent = rc.trial ? "Wat je met Balanza deed" : "Week van " + formatWeekLabel(new Date(rc.week + "T00:00:00"));
