@@ -5390,6 +5390,7 @@ var OFFNL_DUMP_URL = process.env.OFF_DUMP_URL || "https://static.openfoodfacts.o
 var OFFNL_MAX_AGE_MS = 7 * 86400000;
 var OFFNL_VER = 3;   // ophogen als het formaat verandert (2: met productfoto): dan meteen opnieuw ophalen
 var OFFNL_CHUNK = 6 * 1024 * 1024;   // ruim onder de 16 MB per MongoDB-document
+var OFFNL_RSS_LIMIT = (Number(process.env.OFFNL_RSS_MB) || 330) * 1048576;   // daarboven stopt het ophalen, in plaats van dat de server crasht
 var OFFNL_FILE = path.join(__dirname, "data", "offnl.json.gz");
 var offnl = { items: null, byEan: null, at: 0, count: 0, status: { state: "leeg" } };
 function offnlNorm(x) { return String(x || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, " ").trim(); }
@@ -5494,6 +5495,9 @@ function offnlImport() {
       gunzip.on("error", reject);
       rl.on("line", function (line) {
         st.lines++;
+        if (st.lines % 2000 === 0 && process.memoryUsage().rss > OFFNL_RSS_LIMIT) {
+          st.memAbort = true; reject(new Error("te weinig geheugen (" + Math.round(process.memoryUsage().rss / 1048576) + " MB)")); rows.length = 0; seen.clear(); rl.close(); src.destroy(); ctl.abort(); return;
+        }
         if (!col) { col = {}; line.split("\t").forEach(function (h, i) { col[h] = i; }); if (col.code === undefined || col.countries_tags === undefined) { rl.close(); reject(new Error("onbekend formaat")); } return; }
         if (line.indexOf("en:netherlands") === -1) return;
         var c = line.split("\t");
@@ -5525,7 +5529,8 @@ function offnlImport() {
     });
   }).catch(function (e) {
     clearTimeout(idle);
-    offnl.status = { state: "fout", error: String(e && e.message || e).slice(0, 120), at: offnl.at, count: offnl.count, failedAt: Date.now() };
+    offnl.status = { state: "fout", error: String(e && e.message || e).slice(0, 120), at: offnl.at, count: offnl.count, failedAt: Date.now(), ver: offnl.ver };
+    if (st.memAbort) { dbSetDoc("offnl/block", { at: Date.now(), why: offnl.status.error }).catch(function () {}); if (global.gc) try { global.gc(); } catch (e2) {} }
     console.warn("[offnl] export mislukt: " + offnl.status.error);
     return false;
   });
@@ -5535,12 +5540,14 @@ function offnlEnsure() {
   // Voorlopig alleen met OFFNL_ENABLE=1: het verwerken van de volledige export kan op een kleine server te veel geheugen kosten
   if (process.env.OFFNL_ENABLE !== "1" || process.env.OFFNL_DISABLE === "1" || offnl.status.state === "bezig") return;
   var p = offnl.items ? Promise.resolve(true) : offnlLoad();
-  p.then(function () {
+  p.then(function () { return dbGetDoc("offnl/block").then(function (b) { return b.exists && b.value && Date.now() - b.value.at < 7 * 86400000; }).catch(function () { return true; }); }).then(function (blocked) {
+    // Ophalen is zwaar: niet vlak na het opstarten, niet als het eerder door geheugengebrek stopte (7 dagen),
+    // en een oudere versie van de kopie blijft gewoon bruikbaar (geen gedwongen verversing meer).
+    if (blocked || process.uptime() < 600) return;
     var stale = !offnl.items || Date.now() - offnl.at > OFFNL_MAX_AGE_MS;
     var failedRecently = offnl.status.failedAt && Date.now() - offnl.status.failedAt < 6 * 3600000;
     var h = new Date().getUTCHours();
-    var veryStale = offnl.items && (Date.now() - offnl.at > OFFNL_MAX_AGE_MS + 2 * 86400000 || offnl.ver !== OFFNL_VER);
-    if (offnl.items && offnl.ver !== OFFNL_VER) stale = true;
+    var veryStale = offnl.items && Date.now() - offnl.at > OFFNL_MAX_AGE_MS + 2 * 86400000;
     if (stale && !failedRecently && (!offnl.items || veryStale || h >= 1 && h <= 4)) offnlImport();
   });
 }
