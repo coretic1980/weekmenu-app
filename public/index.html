@@ -1885,6 +1885,15 @@
   .hz-ontdek > .hz-h, .hz-snel > .hz-h { padding: 0 4px; }
   .hz-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 0; border: 0; border-top: 1px solid var(--line); background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
   .hz-h + .hz-row { border-top: 0; }
+  .hz-train { border-top: 1px solid var(--line); padding: 12px 0 10px; }
+  .hz-train-h { display: flex; align-items: center; gap: 12px; }
+  .hz-train-h .hz-tx { flex: 1; min-width: 0; }
+  .hz-train-p { display: block; margin: 10px 0 4px; color: var(--muted); font-size: 13px; }
+  .hz-train-bar { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; margin: 6px 0 10px; }
+  .hz-train-bar i { display: block; height: 100%; background: var(--accent2); border-radius: 3px; transition: width .3s; }
+  .hz-train .tr-dots { margin: 0 0 10px; }
+  .hz-train-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+  .hz-train-acts .hh-link:last-child { margin-left: auto; }
   .hz-goal-t { appearance: none; border: 0; background: none; font: inherit; font-size: 17px; font-weight: 700; color: var(--ink); padding: 2px 0 10px; text-align: left; cursor: pointer; }
   .hz-goal-prog { padding-bottom: 10px; }
   .hz-goal-prog .gp-alert, .hz-goal-prog .gp-todos { margin-top: 10px; }
@@ -6669,8 +6678,34 @@
       var t = training();
       if (t) {
         var s = trSessionFor(t, new Date());
-        if (s) { var kc = trKcal(t, s); hzRow(box, "zTraining", "🏋️", (trIsDone(t, isoDateKey(new Date())) ? "✓ " : "Vandaag: ") + s.name, "±" + trMinutes(t, s) + " min" + (kc ? " · ≈ " + kc.kcal + " kcal" : ""), function () { openWorkout(t, s); }); }
-        else hzRow(box, "zTraining", "🏋️", "Rustdag", "Tik voor je weekoverzicht", function () { openTrainingWeek(0); });
+        var wc = trWeekCount(t), stk = trStreak(t), nx = s ? null : trNext(t), tk = isoDateKey(new Date()), done = s && trIsDone(t, tk);
+        var prog = "Deze week " + wc.done + " van " + wc.n + (stk >= 2 ? " · " + stk + " weken op rij alles gedaan" : stk === 1 ? " · vorige week alles gedaan" : "");
+        var tb = document.createElement("div"); tb.className = "hz-train"; tb.id = "zTrainBlock";
+        var th = document.createElement("div"); th.className = "hz-train-h";
+        th.innerHTML = '<span class="hz-ic" aria-hidden="true">🏋️</span><span class="hz-tx"><b></b><small></small></span>';
+        var kc = s ? trKcal(t, s) : null;
+        th.querySelector("b").textContent = s ? (done ? "✓ Gedaan: " : "Vandaag: ") + s.name : nx ? "Rustdag · volgende: " + nx.s.name + " " + TR_DAYNAMES[nx.date.getDay()] : "Rustdag";
+        th.querySelector("small").textContent = s ? "±" + trMinutes(t, s) + " min" + (kc ? " · ≈ " + kc.kcal + " kcal" : "") : prog;
+        tb.appendChild(th);
+        // Voortgang van de week: balk en bolletjes
+        var bar = document.createElement("div"); bar.className = "hz-train-bar"; bar.setAttribute("role", "progressbar"); bar.setAttribute("aria-label", prog);
+        bar.innerHTML = "<i></i>"; bar.firstChild.style.width = (wc.n ? Math.round(wc.done / wc.n * 100) : 0) + "%";
+        var pl = document.createElement("small"); pl.className = "hz-train-p"; pl.textContent = prog;
+        if (s) { tb.appendChild(pl); }
+        tb.appendChild(bar);
+        tb.appendChild(trDotsEl(t));
+        var acts = document.createElement("div"); acts.className = "hz-train-acts";
+        if (s) {
+          var op = document.createElement("button"); op.type = "button"; op.className = done ? "ghost-btn small" : "primary-btn small"; op.id = "zTraining"; op.textContent = "Bekijk training";
+          op.onclick = function () { openWorkout(t, s); }; acts.appendChild(op);
+          var dn = document.createElement("button"); dn.type = "button"; dn.className = "ghost-btn small"; dn.id = "zTrainDone"; dn.textContent = done ? "Gedaan ✓" : "Gedaan";
+          dn.onclick = function () { trToggleDone(t, tk); }; acts.appendChild(dn);
+        }
+        var gc = document.createElement("button"); gc.type = "button"; gc.className = "hh-link"; gc.id = "zTrainClass"; var clT = trClassOn(t, tk);
+        gc.textContent = clT ? "✓ " + gcById(clT.id).name : "+ Groepsles"; gc.onclick = function () { openClassSheet(tk); }; acts.appendChild(gc);
+        var wk = document.createElement("button"); wk.type = "button"; wk.className = "hh-link"; wk.id = "zTrainWeek"; wk.textContent = "Week ›"; wk.onclick = function () { openTrainingWeek(0); }; acts.appendChild(wk);
+        tb.appendChild(acts);
+        box.appendChild(tb);
       } else hzRow(box, "zTraining", "🏋️", "Trainingsschema kiezen", "Kracht en cardio die bij je doel passen", function () { openTrainingSetup(); });
       n++;
     }
@@ -18328,6 +18363,20 @@
     return null;
   }
   // Tegel op Start
+  // De week in zeven bolletjes: trainingsdagen, gedaan (vinkje) en vandaag
+  function trDotsEl(t) {
+    var dots = document.createElement("div"); dots.className = "tr-dots";
+    var mon = getMonday(new Date());
+    for (var i = 0; i < 7; i++) {
+      var d = new Date(mon); d.setDate(d.getDate() + i); var on = (t.days || []).indexOf(d.getDay()) > -1, k = isoDateKey(d);
+      var ses = on ? trSessionFor(t, d) : null; if (!ses) on = false;
+      var sp = document.createElement(ses ? "button" : "span"); sp.className = "tr-dot" + (on ? " train" : "") + (on && trIsDone(t, k) ? " done" : "") + (k === isoDateKey(new Date()) ? " today" : "");
+      sp.textContent = TR_DAYS[d.getDay()];
+      if (ses) { sp.type = "button"; sp.id = "trDot-" + k; sp.setAttribute("aria-label", "Training " + ses.name + " op " + TR_DAYNAMES[d.getDay()]); (function (x) { sp.onclick = function () { openWorkout(t, x); }; })(ses); }
+      dots.appendChild(sp);
+    }
+    return dots;
+  }
   function renderTrainingCard(main) {
     var t = training();
     var card = document.createElement("div"); card.className = "card tr-card"; card.id = "homeTraining";
@@ -18349,17 +18398,7 @@
     head.querySelector(".wg-sub").textContent = "Deze week " + wc.done + " van " + wc.n + (stk >= 2 ? " \u00b7 " + stk + " weken op rij alles gedaan" : stk === 1 ? " \u00b7 vorige week alles gedaan" : "") + " \u00b7 " + TR_FOCUS[trFocus()] + " \u00b7 " + (t.place === "sportschool" ? "sportschool" : "thuis");
     var ed = document.createElement("button"); ed.type = "button"; ed.className = "hh-link"; ed.id = "trEdit"; ed.textContent = "Aanpassen"; ed.onclick = function () { openTrainingSetup(); };
     head.appendChild(ed); card.appendChild(head);
-    var dots = document.createElement("div"); dots.className = "tr-dots";
-    var mon = getMonday(new Date());
-    for (var i = 0; i < 7; i++) {
-      var d = new Date(mon); d.setDate(d.getDate() + i); var on = (t.days || []).indexOf(d.getDay()) > -1, k = isoDateKey(d);
-      var ses = on ? trSessionFor(t, d) : null; if (!ses) on = false;   // voor de start van je schema telt een dag nog niet mee
-      var sp = document.createElement(ses ? "button" : "span"); sp.className = "tr-dot" + (on ? " train" : "") + (on && trIsDone(t, k) ? " done" : "") + (k === isoDateKey(new Date()) ? " today" : "");
-      sp.textContent = TR_DAYS[d.getDay()];
-      if (ses) { sp.type = "button"; sp.id = "trDot-" + k; sp.setAttribute("aria-label", "Training " + ses.name + " op " + TR_DAYNAMES[d.getDay()]); (function (x) { sp.onclick = function () { openWorkout(t, x); }; })(ses); }
-      dots.appendChild(sp);
-    }
-    card.appendChild(dots);
+    card.appendChild(trDotsEl(t));
     var s = today || (nx && nx.s);
     if (s) {
       var acts = document.createElement("div"); acts.className = "nudge-actions";
