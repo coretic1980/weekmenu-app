@@ -1885,6 +1885,10 @@
   .hz-ontdek > .hz-h, .hz-snel > .hz-h { padding: 0 4px; }
   .hz-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 0; border: 0; border-top: 1px solid var(--line); background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
   .hz-h + .hz-row { border-top: 0; }
+  .hz-goal-t { appearance: none; border: 0; background: none; font: inherit; font-size: 17px; font-weight: 700; color: var(--ink); padding: 2px 0 10px; text-align: left; cursor: pointer; }
+  .hz-goal-prog { padding-bottom: 10px; }
+  .hz-goal-prog .gp-alert, .hz-goal-prog .gp-todos { margin-top: 10px; }
+  .hz-goal-prog + .hz-row { border-top: 1px solid var(--line); }
   .hz-h-acts { display: inline-flex; gap: 14px; text-transform: none; letter-spacing: 0; }
   .hz-row.accent .hz-ic { background: rgba(217,148,30,.15); }
   .hz-ic { flex: none; width: 34px; height: 34px; border-radius: 11px; background: color-mix(in srgb, var(--accent) 10%, transparent); display: inline-flex; align-items: center; justify-content: center; font-size: 17px; }
@@ -6656,9 +6660,9 @@
     var acts = document.createElement("span"); acts.className = "hz-h-acts"; acts.appendChild(aan); acts.appendChild(vg);
     hzHead(box, "Jouw doel", acts);
     if (hzHas("doel", "doel")) {
-      var m = gpMeters()[0];
-      hzRow(box, "zDoel", "🎯", p.title, m ? m[1] + ": " + m[2] + " " + m[3] : p.sub || "", function () { if (m && m[0] === "doel" && !weightGoal()) openWeightGoalSheet(); else if (m) openGoalProgress(m[5]); else openGoalPlanSheet(); });
-      var al = gpAlert(); if (al) hzRow(box, "zDoelAlert", "⚠️", al[0], al[1], function () { openGoalProgress(al[2]); }, true);
+      var dt = document.createElement("button"); dt.type = "button"; dt.className = "hz-goal-t"; dt.id = "zDoel"; dt.textContent = p.title; dt.onclick = function () { openGoalPlanSheet(); };
+      box.appendChild(dt);
+      var pb = document.createElement("div"); pb.className = "hz-goal-prog"; gpProgressBlock(pb); box.appendChild(pb);
       n++;
     }
     if (hzHas("doel", "training")) {
@@ -17244,24 +17248,8 @@
     if (gk === "cutting" && g && g.startWeek && wgWeeksBetween(g.startWeek, mondayKeyOffset(0)) >= 10) return ["Al lang aan het cutten", "Tijd voor een pauze?", "gpCutLong"];
     return null;
   }
-  function renderGoalHome(main) {
-    var gk = goalKey(), p = gpPlan();
-    var card = document.createElement("div"); card.className = "card gp-card gp-home"; card.id = "homeGoal";
-    var head = document.createElement("div"); head.className = "wg-head";
-    head.innerHTML = '<div><div class="eyebrow">Jouw doel</div><b class="gp-title"></b></div>';
-    head.querySelector(".gp-title").textContent = p.title;
-    var ed = document.createElement("button"); ed.type = "button"; ed.className = "hh-link"; ed.id = "gpPlanOpen"; ed.textContent = "Aanpak"; ed.onclick = function () { openGoalPlanSheet(); };
-    head.appendChild(ed); card.appendChild(head);
-    renderCycleChip(card);
-    // Aanpak in één regel: tik voor uitleg
-    var chips = document.createElement("div"); chips.className = "gp-chips";
-    [["voeding", gpShort("voeding").replace(/, .*$/, "")], ["macros", gpShort("macros")], ["sport", gpShort("sport")], ["beweging", gpPlan().move + " min/week"]].forEach(function (x) {
-      var b = document.createElement("button"); b.type = "button"; b.className = "gp-chip"; b.id = "gpChip-" + x[0]; b.textContent = x[1];
-      b.setAttribute("aria-label", { voeding: "Voeding", macros: "Macro's", sport: "Sport", beweging: "Beweging" }[x[0]] + ": " + x[1]);
-      b.onclick = function () { openGoalPlanSheet(x[0]); };
-      chips.appendChild(b);
-    });
-    card.appendChild(chips);
+  // De drie meters, een eventuele waarschuwing en wat nu te doen is (op Start: kaart Jouw doel en zone Jouw doel)
+  function gpProgressBlock(card) {
     // Drie meters
     var row = document.createElement("div"); row.className = "gp-meters";
     gpMeters().forEach(function (m) {
@@ -17293,6 +17281,26 @@
       });
       card.appendChild(tr);
     }
+  }
+  function renderGoalHome(main) {
+    var gk = goalKey(), p = gpPlan();
+    var card = document.createElement("div"); card.className = "card gp-card gp-home"; card.id = "homeGoal";
+    var head = document.createElement("div"); head.className = "wg-head";
+    head.innerHTML = '<div><div class="eyebrow">Jouw doel</div><b class="gp-title"></b></div>';
+    head.querySelector(".gp-title").textContent = p.title;
+    var ed = document.createElement("button"); ed.type = "button"; ed.className = "hh-link"; ed.id = "gpPlanOpen"; ed.textContent = "Aanpak"; ed.onclick = function () { openGoalPlanSheet(); };
+    head.appendChild(ed); card.appendChild(head);
+    renderCycleChip(card);
+    // Aanpak in één regel: tik voor uitleg
+    var chips = document.createElement("div"); chips.className = "gp-chips";
+    [["voeding", gpShort("voeding").replace(/, .*$/, "")], ["macros", gpShort("macros")], ["sport", gpShort("sport")], ["beweging", gpPlan().move + " min/week"]].forEach(function (x) {
+      var b = document.createElement("button"); b.type = "button"; b.className = "gp-chip"; b.id = "gpChip-" + x[0]; b.textContent = x[1];
+      b.setAttribute("aria-label", { voeding: "Voeding", macros: "Macro's", sport: "Sport", beweging: "Beweging" }[x[0]] + ": " + x[1]);
+      b.onclick = function () { openGoalPlanSheet(x[0]); };
+      chips.appendChild(b);
+    });
+    card.appendChild(chips);
+    gpProgressBlock(card);
     var all = document.createElement("button"); all.type = "button"; all.className = "hh-link gp-all"; all.id = "gpAll"; all.textContent = "Jouw voortgang ›";
     all.onclick = function () { openGoalProgress(); };
     card.appendChild(all);
