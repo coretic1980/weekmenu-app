@@ -1910,11 +1910,17 @@
   .hz-pane .card, .hz-pane .wk-card { box-shadow: none !important; border: 0 !important; background: none !important; padding: 0 !important; margin: 0 !important; }
   .hz-shop { margin: 4px 0 10px; font-size: 14px; color: var(--ink); }
   .hz-ontdek { margin: 6px 0 14px; }
-  .hz-track { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; padding: 2px 2px 4px; margin: 0 -2px; }
-  .hz-track::-webkit-scrollbar { display: none; }
-  .hz-slide { flex: 0 0 88%; scroll-snap-align: start; min-width: 0; display: flex; }
+  .hz-track { overflow: hidden; touch-action: pan-y; padding: 2px 2px 6px; margin: 0 -2px; user-select: none; -webkit-user-select: none; }
+  .hz-rail { display: flex; align-items: flex-start; will-change: transform; }
+  .hz-slide { flex: 0 0 100%; min-width: 0; display: flex; padding: 0 2px; box-sizing: border-box; }
   .hz-slide > * { flex: 1; margin: 0 !important; min-width: 0; }
-  .hz-slide:only-child { flex-basis: 100%; }
+  .hz-multi { display: flex; flex-direction: column; gap: 10px; }
+  .hz-multi > * { margin: 0 !important; }
+  .hz-multi .home-h h2 { font-size: 20px; }
+  .hz-nav { display: inline-flex; align-items: center; gap: 4px; text-transform: none; letter-spacing: 0; font-weight: 600; color: var(--muted); }
+  .hz-arrow { appearance: none; width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--line); background: var(--card, transparent); color: var(--ink); font: inherit; font-size: 18px; line-height: 1; cursor: pointer; display: grid; place-items: center; padding: 0 0 2px; }
+  .hz-arrow:disabled { opacity: .35; cursor: default; }
+  .hz-count { font-size: 12.5px; min-width: 44px; text-align: center; }
   .hz-dots { display: flex; justify-content: center; gap: 5px; margin-top: 8px; } .hz-dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--line); } .hz-dots i.on { background: var(--accent); }
   .hz-snel { margin: 6px 0 14px; }
   .hz-acts { display: grid; gap: 8px; }
@@ -6549,7 +6555,7 @@
     main.appendChild(wrap);
   }
   // "Voor jou": alles wat aandacht vraagt (melding, gekookt?, reis, conceptweek, terugblik, seizoen) op één plek, één tegelijk.
-  function renderForYou(main) {
+  function renderForYou(main, flat) {
     var pool = document.createElement("div");
     try {
       renderCookedCard(pool);
@@ -6573,6 +6579,7 @@
     } catch (e) {}
     var items = Array.prototype.slice.call(pool.childNodes);
     if (!items.length) return;
+    if (flat) { items.forEach(function (it) { main.appendChild(it); }); return; }   // Ontdekken: elke kaart een eigen plek in de carrousel
     // Eén hoofdknop per scherm: staat "Plan vandaag" er al, dan worden de knoppen hier rustiger.
     if (main.querySelector("#planTodayBtn")) items.forEach(function (it) {
       Array.prototype.forEach.call(it.querySelectorAll(".primary-btn"), function (b) { b.classList.remove("primary-btn"); b.classList.add("ghost-btn"); });
@@ -6751,28 +6758,71 @@
     paint();
     main.appendChild(box);
   }
-  // ---- Zone: Ontdekken (één kaart tegelijk, vegen) ----
+  // ---- Zone: Ontdekken (één kaart tegelijk, vegen of met de pijltjes) ----
   function renderZoneOntdek(main) {
     var z = homeZones(), ids = (z.items.ontdek || []).filter(function (id) { return HOME_TILES[id] && HOME_TILES[id].available(); });
     if (!ids.length) return;
-    var wrap = document.createElement("section"); wrap.className = "hz-ontdek"; wrap.id = "zoneOntdek";
-    hzHead(wrap, "Ontdekken");
-    var track = document.createElement("div"); track.className = "hz-track"; wrap.appendChild(track);
+    var cards = [];
     ids.forEach(function (id) {
-      var slide = document.createElement("div"); slide.className = "hz-slide"; slide.id = "zOntdek-" + id;
-      try { HOME_TILES[id].render(slide); } catch (e) { console.warn("Ontdekken", id, e); }
-      if (slide.childNodes.length) track.appendChild(slide);
+      var tmp = document.createElement("div");
+      try { if (id === "voorjou") renderForYou(tmp, true); else HOME_TILES[id].render(tmp); } catch (e) { console.warn("Ontdekken", id, e); }
+      var kids = Array.prototype.slice.call(tmp.children);
+      if (id === "voorjou") kids.forEach(function (el, i) { cards.push({ id: id + (i ? "-" + i : ""), el: el }); });   // elke suggestie een eigen kaart
+      else if (kids.length === 1) cards.push({ id: id, el: kids[0] });
+      else if (kids.length) { tmp.className = "hz-multi"; cards.push({ id: id, el: tmp }); }   // kop + inhoud (zoals Laatst gemaakt) bij elkaar houden
     });
-    if (!track.childNodes.length) return;
-    if (track.childNodes.length > 1) {
-      var dots = document.createElement("div"); dots.className = "hz-dots"; wrap.appendChild(dots);
-      for (var i = 0; i < track.childNodes.length; i++) { var d = document.createElement("i"); if (!i) d.className = "on"; dots.appendChild(d); }
-      track.addEventListener("scroll", function () {
-        var w = track.firstChild.getBoundingClientRect().width + 10, k = Math.round(track.scrollLeft / w);
-        Array.prototype.forEach.call(dots.childNodes, function (d, j) { d.className = j === k ? "on" : ""; });
-      }, { passive: true });
+    if (!cards.length) return;
+    var wrap = document.createElement("section"); wrap.className = "hz-ontdek"; wrap.id = "zoneOntdek";
+    var nav = null, count = null, prev = null, next = null;
+    if (cards.length > 1) {
+      nav = document.createElement("span"); nav.className = "hz-nav";
+      prev = document.createElement("button"); prev.type = "button"; prev.className = "hz-arrow"; prev.id = "zOntdekPrev"; prev.setAttribute("aria-label", "Vorige"); prev.textContent = "‹";
+      count = document.createElement("span"); count.className = "hz-count"; count.id = "zOntdekCount";
+      next = document.createElement("button"); next.type = "button"; next.className = "hz-arrow"; next.id = "zOntdekNext"; next.setAttribute("aria-label", "Volgende"); next.textContent = "›";
+      nav.appendChild(prev); nav.appendChild(count); nav.appendChild(next);
     }
+    hzHead(wrap, "Ontdekken", nav);
+    var track = document.createElement("div"); track.className = "hz-track"; wrap.appendChild(track);
+    var rail = document.createElement("div"); rail.className = "hz-rail"; track.appendChild(rail);
+    cards.forEach(function (c) { var sl = document.createElement("div"); sl.className = "hz-slide"; sl.id = "zOntdek-" + c.id; sl.appendChild(c.el); rail.appendChild(sl); });
+    var idx = Math.min(state.hzOntdekIdx || 0, cards.length - 1), dots = null;
+    if (cards.length > 1) {
+      dots = document.createElement("div"); dots.className = "hz-dots"; wrap.appendChild(dots);
+      cards.forEach(function () { dots.appendChild(document.createElement("i")); });
+    }
+    var posFor = function (i) { var el = rail.children[i]; return el ? -el.offsetLeft : 0; };
+    var setX = function (x, anim) { rail.style.transition = anim ? "transform .3s cubic-bezier(.2,.8,.2,1)" : "none"; rail.style.transform = "translate3d(" + Math.round(x) + "px,0,0)"; };
+    var goTo = function (n, anim) {
+      idx = Math.max(0, Math.min(n, cards.length - 1)); state.hzOntdekIdx = idx; setX(posFor(idx), anim);
+      var cur = rail.children[idx]; if (cur) { track.style.transition = anim ? "height .3s ease" : "none"; track.style.height = (cur.offsetHeight + 8) + "px"; }
+      Array.prototype.forEach.call(rail.children, function (el, i) { el.classList.toggle("is-current", i === idx); el.setAttribute("aria-hidden", i === idx ? "false" : "true"); });
+      if (count) { count.textContent = (idx + 1) + " van " + cards.length; prev.disabled = idx === 0; next.disabled = idx === cards.length - 1; }
+      if (dots) Array.prototype.forEach.call(dots.childNodes, function (d, j) { d.className = j === idx ? "on" : ""; });
+    };
+    if (prev) { prev.onclick = function () { goTo(idx - 1, true); }; next.onclick = function () { goTo(idx + 1, true); }; }
+    // Vegen: de kaart volgt je vinger; verticaal scrollen van de pagina blijft werken (touch-action: pan-y)
+    var drag = null;
+    var innerScroll = function (el) { for (; el && el !== track; el = el.parentElement) if (el.scrollWidth > el.clientWidth + 4 && /auto|scroll/.test(getComputedStyle(el).overflowX)) return true; return false; };
+    track.addEventListener("pointerdown", function (e) { if (cards.length < 2 || e.pointerType === "mouse" && e.button !== 0 || innerScroll(e.target)) return; drag = { x: e.clientX, y: e.clientY, base: posFor(idx), horiz: null, id: e.pointerId }; });
+    track.addEventListener("pointermove", function (e) {
+      if (!drag || e.pointerId !== drag.id) return;
+      var dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+      if (drag.horiz === null) { if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return; drag.horiz = Math.abs(dx) > Math.abs(dy); if (drag.horiz) try { track.setPointerCapture(e.pointerId); } catch (x) {} }
+      if (!drag.horiz) { drag = null; return; }
+      var edge = (idx === 0 && dx > 0) || (idx === cards.length - 1 && dx < 0);
+      setX(drag.base + (edge ? dx / 3 : dx), false); drag.dx = dx;
+    });
+    var end = function (e) {
+      if (!drag || e.pointerId !== drag.id) return;
+      var dx = drag.dx || 0, w = track.clientWidth; drag.moved = Math.abs(dx) > 8; var wasHoriz = drag.horiz; drag = null;
+      if (!wasHoriz) return;
+      goTo(dx < -Math.min(60, w * 0.18) ? idx + 1 : dx > Math.min(60, w * 0.18) ? idx - 1 : idx, true);
+      if (Math.abs(dx) > 8) { var stop = function (ev) { ev.stopPropagation(); ev.preventDefault(); track.removeEventListener("click", stop, true); }; track.addEventListener("click", stop, true); setTimeout(function () { track.removeEventListener("click", stop, true); }, 350); }
+    };
+    track.addEventListener("pointerup", end); track.addEventListener("pointercancel", end);
     main.appendChild(wrap);
+    requestAnimationFrame(function () { goTo(idx, false); });
+    window.addEventListener("resize", function () { if (document.body.contains(wrap)) goTo(idx, false); });
   }
   // ---- Zone: Snel (kleine knoppen) ----
   function renderZoneSnel(main) {
