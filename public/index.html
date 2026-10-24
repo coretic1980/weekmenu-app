@@ -7481,17 +7481,17 @@
     var fresh = w.mode === "new", tmpI = { goal: st.goal, uses: st.uses, auto: st.auto, situation: st.situation };
     var dishesNow = dishesWanted(tmpI), dishesBefore = w.before && dishesWanted(w.before);
     if (dishesNow && (fresh || !dishesBefore)) out.push("dishes", "avoid", "more");
-    if (bodyWanted(tmpI) && (fresh || !healthOk() || !Number(prefs.weightKg) || !Number(prefs.heightCm) || !Number(prefs.age) || !(w.before && bodyWanted(w.before)))) out.push("body");
+    if (bodyWanted(tmpI) && (fresh || w.mode === "change" || !healthOk() || !Number(prefs.weightKg) || !Number(prefs.heightCm) || !Number(prefs.age) || !(w.before && bodyWanted(w.before)))) out.push("body");
     if (st.uses.indexOf("coach") > -1 && !expectingIn(tmpI) && wgAllowed()) out.push("coach");
     if ((st.goal === "spierbehoud" || st.goal === "spier") && !expectingIn(tmpI)) out.push("strength");
     out.push("done");
     return out;
   }
-  function startWizard(mode) {
+  function startWizard(mode, back) {
     var i = intent();
     var st = i ? { goal: i.goal || intentGoalFromPrefs(), uses: (i.uses || []).slice(), auto: i.auto === undefined ? null : i.auto, situation: (i.situation || []).slice(), strength: i.strength || null }
       : { goal: intentGoalFromPrefs(), uses: mode === "new" ? [] : guessUses(), auto: null, situation: prefs.familyMode ? ["gezin"] : [], strength: null };
-    state.wiz = { mode: mode, st: st, before: i ? JSON.parse(JSON.stringify(i)) : (mode === "new" ? null : { goal: st.goal, uses: st.uses.slice(), auto: null, situation: [] }) };
+    state.wiz = { mode: mode, back: back || null, st: st, before: i ? JSON.parse(JSON.stringify(i)) : (mode === "new" ? null : { goal: st.goal, uses: st.uses.slice(), auto: null, situation: [] }) };
     goto("wizard", { wizardStep: 0 });
   }
   function renderWizard() {
@@ -7503,7 +7503,7 @@
     var app = document.getElementById("app");
     app.innerHTML = "";
     app.appendChild(renderTopbar(w.mode === "change" ? "Doel en gebruik" : "Welkom", state.wizardStep > 0 || w.mode === "change", function () {
-      if (state.wizardStep > 0) { state.wizardStep -= 1; render(); } else goto("myprefs", { prefsBack: null });
+      if (state.wizardStep > 0) { state.wizardStep -= 1; render(); } else { var bk = w.back; state.wiz = null; if (bk) goto(bk); else goto("myprefs", { prefsBack: null }); }
     }));
     var main = document.createElement("main"); main.className = "wiz-main"; main.setAttribute("data-step", step);
     var progress = document.createElement("div"); progress.className = "wizard-progress";
@@ -17091,7 +17091,7 @@
     var wjb = document.createElement("button"); wjb.type = "button"; wjb.className = "ghost-btn small"; wjb.id = "gpWeetjes"; wjb.textContent = "Weetjes (" + weetjesFound() + "/" + WEETJES.length + ")";
     wjb.onclick = function () { closeSheet(sh.ov); openWeetjes(); }; acts.appendChild(wjb);
     var ch = document.createElement("button"); ch.type = "button"; ch.className = "ghost-btn small"; ch.id = "gpChangeGoal"; ch.textContent = "Ander doel kiezen";
-    ch.onclick = function () { closeSheet(sh.ov); state.prefsOpen = "doel"; goto("myprefs", { prefsBack: state.view || "weeks" }); };
+    ch.onclick = function () { closeSheet(sh.ov); startWizard("change", state.view || "weeks"); };   // dezelfde stappen als bij de start
     acts.appendChild(ch); body.appendChild(acts);
     if (focus) setTimeout(function () { var f = document.getElementById("gpPart-" + focus); if (f && f.scrollIntoView) f.scrollIntoView({ block: "nearest" }); }, 60);
   }
