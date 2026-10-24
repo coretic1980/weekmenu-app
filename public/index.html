@@ -6623,7 +6623,7 @@
       items: [["deze", "Deze week"], ["volgende", "Volgende week"], ["boodschappen", "Boodschappen"]] },
     ontdek: { label: "Ontdekken", desc: "Eén kaart tegelijk: veeg door weetjes, seizoen en ideeën",
       items: [["weetje", "Weetje van de dag"], ["voorjou", "Voor jou"], ["seizoen", "Seizoen en momenten"], ["recent", "Laatst gemaakt"], ["community", "Community"], ["tip", "Tip"]] },
-    snel: { label: "Snel", desc: "Kleine knoppen voor wat je vaak doet. Wat al ergens anders op Start of in de balk onderin staat, wordt niet herhaald",
+    snel: { label: "Snel", desc: "Kleine knoppen voor wat je vaak doet",
       items: [["toevoegen", "Toevoegen"], ["genereren", "Genereren"], ["foto", "Gerecht van foto"], ["lijst", "Boodschappenlijst"], ["training", "Training"], ["community", "Community"]] }
   };
   var HZ_ORDER = ["vandaag", "doel", "week", "ontdek", "snel"];
@@ -6830,6 +6830,17 @@
     requestAnimationFrame(function () { goTo(idx, false); });
     window.addEventListener("resize", function () { if (document.body.contains(wrap)) goTo(idx, false); });
   }
+  // Snel toont alleen wat nergens anders al in beeld staat: per knop waar hij al staat (of niets)
+  function hzSnelElsewhere() {
+    var tabs = visibleTabs().map(function (t) { return t[0]; });
+    return {
+      toevoegen: hasAnyDishes() || healthOk() ? "bij Vandaag" : "",
+      genereren: tabs.indexOf("ontwerpen") > -1 ? "onderin bij Ontwerpen" : "",
+      lijst: tabs.indexOf("lijst") > -1 ? "onderin bij Lijst" : hzHas("week", "boodschappen") ? "bij Je week" : "",
+      training: hzHas("doel", "training") ? "bij Jouw doel" : "",
+      community: hzHas("ontdek", "community") ? "bij Ontdekken" : ""
+    };
+  }
   // ---- Zone: Snel (kleine knoppen) ----
   function renderZoneSnel(main) {
     var z = homeZones(), acts = {
@@ -6840,15 +6851,7 @@
       training: ["dumbbell", "Training", function () { if (training()) openTrainingWeek(0); else openTrainingSetup(); }, function () { return true; }],
       community: ["heart", "Community", function () { goto("community"); }, function () { return communityOn(); }]
     };
-    // Alleen wat nergens anders al in beeld staat: geen dubbele knoppen
-    var tabs = visibleTabs().map(function (t) { return t[0]; });
-    var elsewhere = {
-      toevoegen: hasAnyDishes() || healthOk(),                                              // Vandaag heeft al "+ Toevoegen"
-      genereren: tabs.indexOf("ontwerpen") > -1,                                            // tabblad Ontwerpen
-      lijst: tabs.indexOf("lijst") > -1 || hzHas("week", "boodschappen"),                   // tabblad Lijst of Je week
-      training: hzHas("doel", "training"),                                                  // Jouw doel
-      community: hzHas("ontdek", "community")                                               // Ontdekken
-    };
+    var elsewhere = hzSnelElsewhere();
     var list = (z.items.snel || []).filter(function (k) { return acts[k] && acts[k][3]() && !elsewhere[k]; });
     if (!list.length) return;
     var wrap = document.createElement("section"); wrap.className = "hz-snel" + (list.length === 1 ? " one" : ""); wrap.id = "zoneSnel";
@@ -6900,7 +6903,9 @@
         top.appendChild(mv); c.appendChild(top);
         if (def.items.length) {
           var chips = document.createElement("div"); chips.className = "chiprow hz-ed-items";
+          var dup = zid === "snel" ? hzSnelElsewhere() : {}, dupNotes = [];
           def.items.forEach(function (it) {
+            if (dup[it[0]]) { dupNotes.push(it[1] + " (" + dup[it[0]].replace(/^(bij|onderin bij) /, "") + ")"); return; }   // dubbele knoppen niet aanbieden
             var on = (z.items[zid] || []).indexOf(it[0]) > -1;
             var ch = document.createElement("button"); ch.type = "button"; ch.className = "chip" + (on ? " selected" : ""); ch.textContent = it[1]; ch.id = "zEdIt-" + zid + "-" + it[0];
             ch.setAttribute("aria-pressed", on ? "true" : "false");
@@ -6911,8 +6916,9 @@
             };
             chips.appendChild(ch);
           });
-          c.appendChild(chips);
-          if (!(z.items[zid] || []).length) { var em = document.createElement("small"); em.className = "hz-ed-empty"; em.textContent = "Leeg: dit blok staat niet op je startscherm."; c.appendChild(em); }
+          if (chips.childNodes.length) c.appendChild(chips);
+          if (dupNotes.length) { var dn = document.createElement("small"); dn.className = "hz-ed-empty"; dn.id = "zEdDup"; dn.textContent = "Staan al ergens anders, dus niet hier: " + dupNotes.join(", ") + "."; c.appendChild(dn); }
+          if (!(z.items[zid] || []).filter(function (k) { return !dup[k]; }).length) { var em = document.createElement("small"); em.className = "hz-ed-empty"; em.textContent = "Leeg: dit blok staat niet op je startscherm."; c.appendChild(em); }
         } else { var al = document.createElement("small"); al.className = "hz-ed-empty"; al.textContent = "Staat er altijd."; c.appendChild(al); }
         list.appendChild(c);
       });
