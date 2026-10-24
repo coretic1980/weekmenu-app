@@ -1924,9 +1924,10 @@
   .hz-dots { display: flex; justify-content: center; gap: 5px; margin-top: 8px; } .hz-dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--line); } .hz-dots i.on { background: var(--accent); }
   .hz-snel { margin: 6px 0 14px; }
   .hz-acts { display: grid; gap: 8px; }
-  .hz-act { position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px 4px; border-radius: 16px; border: 1px solid var(--line); background: var(--surface, #fff); color: var(--ink); font: inherit; cursor: pointer; }
-  .hz-act span { font-size: 20px; line-height: 1; } .hz-act b { font-size: 12px; font-weight: 600; }
-  .hz-badge { position: absolute; top: 6px; right: 10px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--accent); color: #fff; font-size: 11px; font-style: normal; display: inline-flex; align-items: center; justify-content: center; }
+  .hz-act { position: relative; display: flex; flex-direction: column; align-items: center; gap: 7px; padding: 12px 4px 11px; border-radius: 16px; border: 1px solid var(--line); background: var(--surface, #fff); color: var(--ink); font: inherit; cursor: pointer; }
+  .hz-act-ic { position: relative; width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; background: var(--nevo-bg); color: var(--nevo-ink); }
+  .hz-act b { font-size: 12.5px; font-weight: 600; }
+  .hz-badge { position: absolute; top: -6px; right: -10px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--accent); color: #fff; font-size: 10.5px; font-weight: 700; font-style: normal; display: inline-flex; align-items: center; justify-content: center; box-shadow: 0 0 0 2px var(--card); }
   .hz-ed-head h2 { font-family: Fraunces, serif; margin: 4px 0; } .hz-ed-head p { margin: 0 0 12px; color: var(--muted); font-size: 14px; line-height: 1.5; }
   .hz-ed { display: flex; flex-direction: column; gap: 10px; }
   .hz-ed-zone { padding: 14px; }
@@ -3896,6 +3897,9 @@
   // Accountmenu (avatar rechtsboven), "Mijn profiel" en "Instellingen"
   // =====================================================================================
   var ICONS = {
+    plus: '<path d="M12 5v14M5 12h14"/>',
+    cart: '<circle cx="9.5" cy="19.5" r="1.4"/><circle cx="17.5" cy="19.5" r="1.4"/><path d="M2.5 3.5h2.4l2.4 11a1.6 1.6 0 0 0 1.6 1.3h8.4a1.6 1.6 0 0 0 1.5-1.2l1.7-7.1H6"/>',
+    dumbbell: '<path d="M6.5 6.5v11M17.5 6.5v11M3.5 9.5v5M20.5 9.5v5M6.5 12h11"/>',
     pencil: '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
     sparkle: '<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/>',
     calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/>',
@@ -6827,21 +6831,21 @@
   // ---- Zone: Snel (kleine knoppen) ----
   function renderZoneSnel(main) {
     var z = homeZones(), acts = {
-      toevoegen: ["＋", "Toevoegen", function () { openQuickAdd({}); }, function () { return true; }],
-      genereren: ["⟳", "Genereren", function () { startGenerateFlow(); }, function () { return moduleOn("generate"); }],
-      foto: ["📷", "Foto", function () { pickDishPhoto(); }, function () { return moduleOn("generate") && moduleOn("photo"); }],
-      lijst: ["🛒", "Lijst", function () { onTab("lijst"); }, function () { return true; }],
-      training: ["🏋️", "Training", function () { if (training()) openTrainingWeek(0); else openTrainingSetup(); }, function () { return true; }],
-      community: ["❤️", "Community", function () { goto("community"); }, function () { return communityOn(); }]
+      toevoegen: ["plus", "Toevoegen", function () { openQuickAdd({}); }, function () { return true; }],
+      genereren: ["sparkle", "Genereren", function () { startGenerateFlow(); }, function () { return moduleOn("generate"); }],
+      foto: ["camera", "Foto", function () { pickDishPhoto(); }, function () { return moduleOn("generate") && moduleOn("photo"); }],
+      lijst: ["cart", "Lijst", function () { onTab("lijst"); }, function () { return true; }],
+      training: ["dumbbell", "Training", function () { if (training()) openTrainingWeek(0); else openTrainingSetup(); }, function () { return true; }],
+      community: ["heart", "Community", function () { goto("community"); }, function () { return communityOn(); }]
     };
     var list = (z.items.snel || []).filter(function (k) { return acts[k] && acts[k][3](); });
     if (!list.length) return;
     var wrap = document.createElement("section"); wrap.className = "hz-snel"; wrap.id = "zoneSnel";
-    var grid = document.createElement("div"); grid.className = "hz-acts"; grid.style.gridTemplateColumns = "repeat(" + Math.min(4, list.length) + ", 1fr)";
+    var grid = document.createElement("div"); grid.className = "hz-acts"; grid.style.gridTemplateColumns = "repeat(" + (list.length <= 4 ? list.length : list.length <= 6 ? 3 : 4) + ", 1fr)";   // altijd volle rijen: 6 = 3+3
     list.forEach(function (k) {
       var a = acts[k], b = document.createElement("button"); b.type = "button"; b.className = "hz-act"; b.id = "zSnel-" + k;
-      b.innerHTML = '<span aria-hidden="true"></span><b></b>'; b.firstChild.textContent = a[0]; b.querySelector("b").textContent = a[1];
-      if (k === "lijst") { var n = openShoppingCount(); if (n) { var bd = document.createElement("i"); bd.className = "hz-badge"; bd.textContent = n > 99 ? "99+" : n; b.appendChild(bd); } }
+      b.innerHTML = '<span class="hz-act-ic" aria-hidden="true">' + iconSvg(a[0], 20) + '</span><b></b>'; b.querySelector("b").textContent = a[1];
+      if (k === "lijst") { var n = openShoppingCount(); if (n) { var bd = document.createElement("i"); bd.className = "hz-badge"; bd.textContent = n > 99 ? "99+" : n; b.querySelector(".hz-act-ic").appendChild(bd); b.setAttribute("aria-label", "Lijst, " + n + " open"); } }
       if (k === "genereren" && (state.generating || quotaBlocked())) b.disabled = true;
       b.onclick = a[2]; grid.appendChild(b);
     });
