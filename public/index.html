@@ -3455,7 +3455,7 @@
   }
 
   // Pagina's die je vanuit het gebruikersmenu (of vanuit elkaar) opent: met Terug kom je precies terug waar je vandaan kwam.
-  var NAV_PAGES = { account: 1, myprefs: 1, settings: 1, guide: 1, journey: 1, plans: 1, upgrade: 1 };
+  var NAV_PAGES = { account: 1, myprefs: 1, settings: 1, guide: 1, journey: 1, plans: 1, upgrade: 1, planpick: 1 };   // planpick: na kiezen terug naar waar je vandaan kwam (Start, dag- of weekweergave)
   var NAV_KEYS = ["view", "weekId", "dayId", "dayServings", "dayBackView", "dayBackWeekId", "dayBackDayName", "planWeekId", "planDayName", "planDayFor", "tab", "settingsPage", "reviewWeekId", "reviewIdx", "recap", "prefsBack"];
   var navStack = [], navGoingBack = false;
   function navSnapshot() { var o = {}; NAV_KEYS.forEach(function (k) { o[k] = state[k] === undefined ? null : state[k]; }); o.scrollY = window.scrollY || 0; return o; }
@@ -11167,7 +11167,7 @@
     var mealType = SLOT_TO_MEALTYPE[parts[1]] || parts[1];
     var app = document.getElementById("app");
     app.innerHTML = "";
-    app.appendChild(renderTopbar(parts[0] + " · " + parts[1], true, function () { goto("planday", { planWeekId: pw.id, planDayName: parts[0] }); }));
+    app.appendChild(renderTopbar(parts[0] + " · " + parts[1], true, function () { navBack("planday", { planWeekId: pw.id, planDayName: parts[0] }); }));
     var main = document.createElement("main");
 
     var eyebrow = document.createElement("div");
@@ -11179,7 +11179,7 @@
       var clearBtn = document.createElement("button");
       clearBtn.className = "ghost-btn";
       clearBtn.textContent = "Slot leegmaken";
-      clearBtn.onclick = function () { delete pw.slots[key]; savePlannedWeeks(); goto("planday", { planWeekId: pw.id, planDayName: parts[0] }); };
+      clearBtn.onclick = function () { delete pw.slots[key]; savePlannedWeeks(); navBack("planday", { planWeekId: pw.id, planDayName: parts[0] }); };
       lockEl(clearBtn, "Je planning aanpassen");
       main.appendChild(clearBtn);
     }
@@ -11332,7 +11332,7 @@
           pw.slots[key] = { name: d.name, weekId: it.week.id, dayId: d.id, balans: d.balans };
           if (prev && prev.servings) pw.slots[key].servings = prev.servings;
           savePlannedWeeks();
-          goto("planday", { planWeekId: pw.id, planDayName: parts[0] });
+          navBack("planday", { planWeekId: pw.id, planDayName: parts[0] });
         };
         list.appendChild(row);
       });
