@@ -5110,6 +5110,47 @@ function handleNutrientTable(req, res) {
   if (gz) { h["Content-Encoding"] = "gzip"; res.writeHead(200, h); return res.end(nevoNutrGz); }
   res.writeHead(200, h); res.end(zlib.gunzipSync(nevoNutrGz));
 }
+// ---- Startgerechten: vaste set voor nieuwe gebruikers (starter/starter_dishes.json) ----
+// Per doel een profiel (licht, balans, eiwit, sport), per maaltijdmoment 5 gerechten. De porties (gram/ml) worden
+// geschaald naar het dagdoel (meegestuurd, of een richtwaarde voor man/vrouw) en de macro's komen uit NEVO.
+var STARTER = (function () { try { return JSON.parse(fs.readFileSync(path.join(__dirname, "starter", "starter_dishes.json"), "utf8")); } catch (e) { return null; } })();
+var STARTER_SHARE = { Ontbijt: 0.25, Lunch: 0.3, Diner: 0.35, Snack: 0.1 };
+function starterProfile(goal) {
+  var g = String(goal || "").toLowerCase();
+  if (/afval|vetverlies|cutting/.test(g)) return "licht";
+  if (/spier/.test(g)) return "eiwit";
+  if (/fit|atleet|sport/.test(g)) return "sport";
+  return "balans";
+}
+function starterDish(d, meal, target) {
+  var items = d.ing.map(function (x) { return { tekst: x[0], gram: x[1], nevo: x[2] }; });
+  var base = nevoCalculate(items.filter(function (x) { return x.gram > 0; })), f = base.kcal > 0 ? Math.max(0.7, Math.min(1.6, target / base.kcal)) : 1;
+  if (Math.abs(f - 1) > 0.05) items = items.map(function (it) {
+    var m = it.tekst.match(/^(\d+(?:[.,]\d+)?)\s*(g|ml)\b/);
+    if (!m || !(it.gram > 0)) return it;   // stuks (een ei, een appel) blijven gelijk
+    var v = it.gram * f; v = v >= 30 ? Math.round(v / 5) * 5 : Math.max(1, Math.round(v));
+    return { tekst: it.tekst.replace(m[0], v + " " + m[2]), gram: v, nevo: it.nevo };
+  });
+  var calc = nevoCalculate(items.filter(function (x) { return x.gram > 0; })), full = calc.relevant > 0 && calc.covered === calc.relevant;   // kruiden en citroen (0 g) tellen niet mee
+  return {
+    name: d.name, mealType: meal, kcal: calc.kcal, eiwit_g: calc.eiwitG, kh_g: calc.khG, vet_g: calc.vetG,
+    bereidingstijd_minuten: d.tijd, foto_zoekterm: d.zoek, ingredienten: items.map(function (x) { return x.tekst; }),
+    steps: d.steps.map(function (t, i) { return { title: "Stap " + (i + 1), content: t }; }),
+    macroBron: full ? "nevo" : "schatting", nevo: { versie: NEVO_VERSION, gedekt: calc.covered, totaal: calc.relevant, ontbreekt: calc.missing }, starter: true
+  };
+}
+function handleStarterDishes(req, res, url) {
+  resolveUser(req).then(function (user) {
+    if (!user) return sendUnauthorized(res);
+    if (!STARTER || !nevoAvailable()) return sendJSON(res, 200, { available: false });
+    var goal = String(url.searchParams.get("goal") || ""), gender = String(url.searchParams.get("gender") || "");
+    var prof = starterProfile(goal), kcal = Number(url.searchParams.get("kcal"));
+    if (!(kcal >= 1200 && kcal <= 4500)) kcal = (/^man/i.test(gender) ? 2500 : /^vrouw/i.test(gender) ? 2000 : 2200) * ({ licht: 0.8, eiwit: 1.05, sport: 1.1 }[prof] || 1);
+    var meals = STARTER.profiles[prof] || {}, out = [];
+    Object.keys(STARTER_SHARE).forEach(function (m) { (meals[m] || []).forEach(function (d) { out.push(starterDish(d, m, kcal * STARTER_SHARE[m])); }); });
+    sendJSON(res, 200, { available: true, profile: prof, kcal: Math.round(kcal), dishes: out });
+  }).catch(function () { sendJSON(res, 500, { code: "error", message: "Startgerechten ophalen lukte niet." }); });
+}
 // Voedingsstoffen van een gerecht uit zijn ingrediëntregels (zelfde koppeling als de macro's)
 var nutrLimiter = makeHourlyLimiter(300);
 function handleNutrientsForIngredients(req, res) {
@@ -8456,6 +8497,7 @@ var server = http.createServer(function (req, res) {
   if (req.method === "POST" && url.pathname === "/api/nevo/calc") return handleNevoCalc(req, res);
   if (req.method === "GET" && url.pathname === "/api/foods/nutrients") return handleNutrientTable(req, res);
   if (req.method === "POST" && url.pathname === "/api/nutrients/ingredients") return handleNutrientsForIngredients(req, res);
+  if (req.method === "GET" && url.pathname === "/api/starter-dishes") return handleStarterDishes(req, res, url);
   if (req.method === "GET" && url.pathname === "/api/news") return handleNews(req, res);
   if (req.method === "GET" && url.pathname === "/api/foods") return handleFoods(req, res);
   if (req.method === "GET" && url.pathname === "/api/foods/search") return handleFoodSearch(req, res, url);

@@ -7727,6 +7727,22 @@
     nav.appendChild(nextBtn); main.appendChild(nav);
     app.appendChild(main);
   }
+  // Nieuwe gebruiker: meteen 5 gerechten per maaltijdmoment, passend bij het doel en de porties voor man/vrouw.
+  // Vaste set (starter/starter_dishes.json); de server schaalt de porties naar het dagdoel en rekent de macro's met NEVO.
+  function seedStarterDishes() {
+    var i = intent();
+    if (hasAnyDishes() || readOnlyMode() || (i && !dishesWanted(i)) || prefs.starterSeeded) return;
+    var q = "goal=" + encodeURIComponent((i && i.goal) || prefs.goal || "") + "&gender=" + encodeURIComponent(prefs.gender || "") + (dailyKcalTarget() ? "&kcal=" + Math.round(dailyKcalTarget()) : "");
+    fetch("/api/starter-dishes?" + q, { headers: authHeaders() }).then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
+      if (!d || !d.available || !Array.isArray(d.dishes) || !d.dishes.length || hasAnyDishes()) return;
+      var days = dishesFromGenerated(d.dishes, ["Ontbijt", "Lunch", "Diner", "Snack"]);
+      days.forEach(function (x) { x.starter = true; });
+      addToCacheLibrary(days); persistDishesToDb(days);
+      prefs.starterSeeded = new Date().toISOString(); savePrefs();
+      if (state.view === "weeks" || state.view === "library") render();
+      showToast(days.length + " gerechten staan klaar in Mijn gerechten, passend bij je doel.", "ok");
+    }).catch(function () {});
+  }
   function finishIntent(after) {
     var w = state.wiz, oldGoal = commitIntent(w.st), mode = w.mode;
     if (prefs.weightGoal) { var wzGoal = goalForWeightGoal(prefs.weightGoal); if (wzGoal && wzGoal !== prefs.goal && !expecting()) prefs.goal = wzGoal; }
@@ -7735,6 +7751,7 @@
     state.wiz = null; state.wizTarget = "";
     goto("weeks");
     if (after) after();
+    if (mode === "new") seedStarterDishes();
     var wantTrain = intentUses().indexOf("train") > -1 && !training();
     setTimeout(function () {
       if (wantTrain) { openTrainingSetup(); return; }
@@ -19866,6 +19883,7 @@
         cycleDismissed: !!prefs.cycleDismissed,
         intent: prefs.intent && typeof prefs.intent === "object" ? prefs.intent : null,
         homeZones: prefs.homeZones && typeof prefs.homeZones === "object" ? prefs.homeZones : null,
+        starterSeeded: prefs.starterSeeded || null,
         proteinOut: Array.isArray(prefs.proteinOut) ? prefs.proteinOut.slice(0, 20) : [],
         journey: prefs.journey && typeof prefs.journey === "object" ? prefs.journey : {},
         ageGroup: AGE_GROUPS.some(function (g) { return g[0] === prefs.ageGroup; }) ? prefs.ageGroup : "",
@@ -20394,7 +20412,7 @@
               return;
             }
             var pdata = psnap.data() || {};
-            ["name", "bringListLink", "cuisines", "flavors", "level", "dietStyle", "health", "leftovers", "coach", "water", "places", "proteinOut", "journey", "ageGroup", "student", "sugarMode", "cheeseMode", "familyMode", "equipment", "exclude", "count", "mealTypes", "gender", "heightCm", "weightKg", "age", "activityLevel", "goal", "homeLayout", "mealCounts", "withImages", "pantry", "communityName", "myFoods", "weightGoal", "weightGoalDismissed", "training", "trainingDismissed", "moveLog", "weetjes", "cycle", "cycleDismissed", "intent", "homeZones"].forEach(function (k) {
+            ["name", "bringListLink", "cuisines", "flavors", "level", "dietStyle", "health", "leftovers", "coach", "water", "places", "proteinOut", "journey", "ageGroup", "student", "sugarMode", "cheeseMode", "familyMode", "equipment", "exclude", "count", "mealTypes", "gender", "heightCm", "weightKg", "age", "activityLevel", "goal", "homeLayout", "mealCounts", "withImages", "pantry", "communityName", "myFoods", "weightGoal", "weightGoalDismissed", "training", "trainingDismissed", "moveLog", "weetjes", "cycle", "cycleDismissed", "intent", "homeZones", "starterSeeded"].forEach(function (k) {
               if (pdata[k] !== undefined) prefs[k] = deepClone(pdata[k]);
             });
             var mig = migrateExcludeTerms();
