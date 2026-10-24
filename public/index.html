@@ -2151,6 +2151,10 @@
   .wk-meal { position: relative; }
   .wk-bal { font-style: normal; font-size: 11.5px; font-weight: 700; color: var(--muted); margin-left: 6px; font-variant-numeric: tabular-nums; }
   .hh-meals { display: flex; flex-direction: column; margin-top: 4px; border-top: 1px solid var(--line); }
+  .hh-moment { display: flex; justify-content: space-between; align-items: baseline; padding: 14px 0 2px; }
+  .hh-meals .hh-moment b { font-size: 16px; font-weight: 700; color: var(--ink); letter-spacing: -0.01em; }
+  .hh-meals .hh-moment span { font-size: 13px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .hh-moment + .hh-meal, .hh-moment + * { border-top: 0; }
   .hh-meal { appearance: none; border: 0; border-bottom: 1px solid var(--line); background: none; padding: 11px 2px; display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; gap: 12px;
     align-items: center; text-align: left; font-family: inherit; color: var(--ink); cursor: pointer; }
   .hh-meal:last-child { border-bottom: 0; padding-bottom: 2px; }
@@ -5997,7 +6001,28 @@
     var dayItems = rows.map(function (r) { return { pos: PLAN_SLOTS.indexOf(r.slot), r: r }; })
       .concat(extras.map(function (x, i) { var p = x.replaces ? PLAN_SLOTS.indexOf(x.replaces.split("|")[1]) + 0.4 : MOMENT_POS[x.moment] !== undefined ? MOMENT_POS[x.moment] : 9; return { pos: p + i / 1000, x: x }; }))
       .sort(function (a, b) { return a.pos - b.pos; });
+    // Gegroepeerd per maaltijdmoment, met een vette kop en het totaal van dat moment
+    var momentOf = function (di) {
+      if (di.x) { var rp = di.x.replaces ? di.x.replaces.split("|")[1] : di.x.moment; return rp ? String(rp).replace(/^Snack na .*/, "Snack") : "Erbij"; }
+      return di.r.slot.replace(/^Snack na .*/, "Snack");
+    };
+    var momentKcal = {};
     dayItems.forEach(function (di) {
+      var m = momentOf(di), k = 0;
+      if (di.x) k = (di.x.kcal || 0) * mealPortion(di.x);
+      else if (!di.r.replacedBy && di.r.a.cooked !== false) k = di.r.dish.kcal * mealPortion(di.r.a);
+      momentKcal[m] = (momentKcal[m] || 0) + k;
+    });
+    var lastMoment = null;
+    dayItems.forEach(function (di) {
+      var mo = momentOf(di);
+      if (mo !== lastMoment) {
+        lastMoment = mo;
+        var mh = document.createElement("div"); mh.className = "hh-moment"; mh.id = "moment-" + mo.replace(/\s+/g, "-");
+        mh.innerHTML = "<b></b><span></span>"; mh.querySelector("b").textContent = mo;
+        mh.querySelector("span").textContent = momentKcal[mo] ? Math.round(momentKcal[mo]) + " kcal" : "";
+        list.appendChild(mh);
+      }
       if (di.x) { renderExtraRow(di.x); return; }
       var r = di.r;
       var skipped = r.a.cooked === false && !r.replacedBy;
@@ -6008,6 +6033,7 @@
       var tx = document.createElement("span"); tx.className = "hh-meal-txt";
       var b = document.createElement("b"); b.textContent = r.dish.name;
       var sm = document.createElement("small"); sm.textContent = r.replacedBy ? r.slot + ": anders gegeten" : skipped ? r.slot + ": niet gegeten" : r.slot.replace(/^Snack na .*/, "Snack") + (r === feat && r.a.cooked === undefined ? " \u00b7 " + when.toLowerCase() : "") + " \u00b7 " + Math.round(r.dish.kcal * mealPortion(r.a)) + " kcal" + portionNote(r.a) + (r.a.cooked === true ? " \u00b7 gegeten" : "") + (r.a.place ? " \u00b7 bij " + r.a.place : "");
+      (function () { var t = sm.textContent.replace(/^(Ontbijt|Lunch|Diner|Snack)(: | \u00b7 )/, ""); if (t && t !== sm.textContent) sm.textContent = t.charAt(0).toUpperCase() + t.slice(1); })();   // het moment staat al in de kop
       var qaProd = r.a.qa || r.dish.qaHidden || r.dish.quick || r.dish.label === "Zelf samengesteld";   // zelf toegevoegd: geen Balans per regel
       if (!r.replacedBy && !skipped && !qaProd) appendBal(sm, dishBal(r.dish), " ");
       tx.appendChild(b); tx.appendChild(sm);
@@ -6018,7 +6044,12 @@
       if (!r.replacedBy) row.appendChild(eatCheck(pw, dayName, r));
       list.appendChild(row);
     });
-    function renderExtraRow(x) { list.appendChild(extraRow(pw, dayName, x)); }
+    function renderExtraRow(x) {
+      var row = extraRow(pw, dayName, x), sm = row.querySelector("small");
+      // Het moment staat al in de kop: "Ontbijt · erbij · 914 kcal" wordt "Erbij · 914 kcal"
+      if (sm && sm.firstChild && sm.firstChild.nodeType === 3) sm.firstChild.nodeValue = sm.firstChild.nodeValue.replace(/^(Ontbijt|Lunch|Diner|Snack) \u00b7 erbij/, "Erbij").replace(/^(Ontbijt|Lunch|Diner|Snack): /, "");
+      list.appendChild(row);
+    }
     if (list.childNodes.length) body.appendChild(list);
     // Eén knop voor alles wat je toevoegt (zoeken, zin, foto, uit eten, scannen); "Wat past nog?" is een vraag, dus een link eronder.
     var acts = document.createElement("div"); acts.className = "hh-acts";
