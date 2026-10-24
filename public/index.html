@@ -20700,7 +20700,12 @@
     if (state.view === "prefs") { savePrefs(); state.genSuccess = null; }
     if (id === "start") goto("weeks", { tab: "start" });
     else if (id === "ontwerpen") goto("prefs", { tab: "ontwerpen" });
-    else if (id === "plannen") needDishesThen(function () { goto("plan", { tab: "plannen" }); });
+    else if (id === "plannen") needDishesThen(function () {
+      // Plannen opent altijd op vandaag: deze week, dagweergave, de dag van vandaag
+      var w = openOrCreateWeek(getMonday(new Date()));
+      setPlanView("dag"); state.planDayName = PLAN_DAYS[(new Date().getDay() + 6) % 7]; state.planDayFor = w.id;
+      goto("planweek", { planWeekId: w.id, tab: "plannen" }); try { window.scrollTo(0, 0); } catch (e) {}
+    });
     else if (id === "gerechten") {
       // Nog geen eigen gerechten: dan meteen de community laten zien, daar valt al wat te ontdekken.
       if (!hasAnyDishes() && communityOn()) goto("community", { tab: "gerechten" });
